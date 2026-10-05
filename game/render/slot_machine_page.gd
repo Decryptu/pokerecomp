@@ -52,6 +52,7 @@ const PAYOUT_ICON_FIRST_TILE: int = 0x25
 const TEXTBOX_AT: Vector2i = Vector2i(0, 12)
 const TEXTBOX_SIZE: Vector2i = Vector2i(20, 6)
 const TEXT_AT: Vector2i = Vector2i(1, 14)
+const WIN_INDENT: int = 4
 const TEXT_SPACING: int = 2
 
 ## `Slots_AskBet.MenuHeader`: `menu_coords 14, 10, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1`.
@@ -244,12 +245,27 @@ func render(machine: Gen2SlotMachine, state: Dictionary = {}) -> Image:
 				Vector2i(column * TILE, row * TILE)
 			)
 	_draw_boxes(indices, machine, state)
+	var scroll: int = _signed(int(machine.golem().get("shake", 0))) if machine != null else 0
+	if scroll != 0:
+		indices = _scrolled_rows(indices, scroll)
 
 	var image: Image = Gen2PicImage.from_attributes(
 		indices, WIDTH, HEIGHT, attributes(), SCREEN_COLUMNS, _background_palettes()
 	)
 	_draw_objects(image, machine, indices)
 	return image
+
+
+## `hSCY` (the Golem's roll writes +-2): the background moves, the objects do not.
+func _scrolled_rows(indices: PackedByteArray, scroll: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(indices.size())
+	for y: int in HEIGHT:
+		var from: int = y + scroll
+		if from >= 0 and from < HEIGHT:
+			for x: int in WIDTH:
+				out[y * WIDTH + x] = indices[from * WIDTH + x]
+	return out
 
 
 func _background_palettes() -> Array:
@@ -323,22 +339,35 @@ func _draw_boxes(
 			frame_style, into, WIDTH, TEXTBOX_AT.x * TILE, TEXTBOX_AT.y * TILE,
 			TEXTBOX_SIZE.x, TEXTBOX_SIZE.y
 		)
+		var win_box: bool = bool(state.get("win_box", false))
 		var line: int = 0
 		for row: String in text.split("\n"):
+			var indent: int = WIN_INDENT if win_box and line == 0 else 0
 			font.draw_text(
-				row, into, WIDTH, TEXT_AT.x * TILE,
+				row, into, WIDTH, (TEXT_AT.x + indent) * TILE,
 				(TEXT_AT.y + line * TEXT_SPACING) * TILE
 			)
 			line += 1
-	if machine != null and machine.matched() != Gen2SlotMachine.SLOTS_NO_MATCH \
-		and not text.is_empty():
-		_draw_payout_icon(into, machine.matched())
+		if win_box and machine != null:
+			_draw_win_box_extras(into, machine.matched(), int(state.get("blink", -1)))
 	var menu: int = int(state.get("menu", 0))
 	if menu > 0:
 		_draw_bet_menu(into, menu)
 	var yes_no: int = int(state.get("yes_no", 0))
 	if yes_no > 0:
 		_draw_yes_no(into, yes_no)
+
+
+## `.Text_PrintPayout`'s symbol and `▼`, which blinks once `WaitPressAorB_BlinkCursor` has it.
+func _draw_win_box_extras(into: PackedByteArray, matched: int, blink: int) -> void:
+	if matched != Gen2SlotMachine.SLOTS_NO_MATCH:
+		_draw_payout_icon(into, matched)
+	var period: int = Gen2CardFlipPage.BLINK_PERIOD
+	if blink < 0 or blink % period < period / 2:
+		font.draw_code(
+			Gen2CardFlipPage.BLINK_CODE, into, WIDTH,
+			Gen2CardFlipPage.BLINK_AT.x * TILE, Gen2CardFlipPage.BLINK_AT.y * TILE
+		)
 
 
 ## `.Text_PrintPayout`: `wSlotMatched + $25` and the three tiles behind it, down
@@ -439,7 +468,7 @@ func _draw_reel(
 
 
 ## `Slots_AnimateGolem`'s object: the frameset's own flips, the fall's y offset
-## and the roll's x, with `hSCY` moving the whole screen rather than the object.
+## and the roll's x.
 func _draw_golem(buffers: Dictionary, golem: Dictionary) -> void:
 	var frame: Array = GOLEM_FRAMES[
 		(int(golem.get("frames", 0)) / FRAME_LENGTH) % GOLEM_FRAMES.size()

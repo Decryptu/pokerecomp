@@ -170,6 +170,13 @@ func _print_out(host: Gen2StartMenuScreen) -> void:
 const QUESTION_PRESS_CAP: int = 12
 
 
+## A on a START row that opens a menu of its own: `FadeToMenu` runs before the
+## menu is up, so the world spends its frames first.
+func _enter_row(host: Gen2StartMenuScreen) -> void:
+	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
+
+
 func _spend_service_answer_hold(service: Gen2WorldServiceScreen) -> void:
 	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
 		service.advance_frame()
@@ -305,6 +312,83 @@ func test_mod_settings_use_the_hardware_option_screen() -> void:
 	Gen2ModHost.reset()
 
 
+## Mods name categories in `mod.json`. Two independent mods naming the same path
+## share one submenu whatever the case, a mod naming none stays at the top, and B
+## walks back up with the cursor on the row it left.
+func test_mods_naming_the_same_menu_path_share_one_nested_submenu() -> void:
+	var root: String = "user://menu_path_mods"
+	var paths: Dictionary = {
+		"plain": [], "alpha": ["Community Mods"], "beta": ["community mods"],
+		"wild": ["Community Mods", "SIRsparky Mods"],
+	}
+	var host_api: Gen2ModHost = Gen2ModHost.instance()
+	for id: String in paths:
+		var folder: String = "%s/%s" % [root, id]
+		DirAccess.make_dir_recursive_absolute(folder)
+		var file: FileAccess = FileAccess.open("%s/mod.json" % folder, FileAccess.WRITE)
+		file.store_string(JSON.stringify({
+			"id": id, "name": id.capitalize(), "version": "1.0.0", "entry": "mod.gd",
+			"api_version": PokeModManifest.API_VERSION, "menu_path": paths[id],
+		}))
+		file.close()
+	host_api.discover(root)
+	for id: String in paths:
+		assert_true(bool(host_api.register_option(StringName(id), {
+			"key": &"enabled", "label": "ENABLED", "values": [0, 1],
+		})["ok"]))
+	await _open_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_MODS)
+	host.handle_button(PokeButton.A)
+	assert_eq(_mod_labels(host), ["Community Mods", "Plain"])
+
+	host.handle_button(PokeButton.A)
+	assert_eq(_mod_labels(host), ["SIRsparky Mods", "Alpha", "Beta"])
+	host.handle_button(PokeButton.A)
+	assert_eq(_mod_labels(host), ["Wild"])
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.MOD_OPTIONS)
+	host.handle_button(PokeButton.RIGHT)
+	assert_eq(host_api.option(&"wild", &"enabled"), 1)
+
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.MODS)
+	assert_eq(_mod_labels(host), ["Wild"])
+	host.handle_button(PokeButton.B)
+	assert_eq(_mod_labels(host), ["SIRsparky Mods", "Alpha", "Beta"])
+	assert_eq(host.get("_mod_cursor"), 0)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mod_id"), &"beta")
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mod_cursor"), 2, "back lands on the mod that was opened")
+	host.handle_button(PokeButton.B)
+	assert_eq(_mod_labels(host), ["Community Mods", "Plain"])
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mod_id"), &"plain")
+	host.handle_button(PokeButton.B)
+	host.handle_button(PokeButton.B)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
+
+	Gen2ModHost.reset()
+	DirAccess.remove_absolute(PokeModOptions.PATH)
+	for id: String in paths:
+		DirAccess.remove_absolute("%s/%s/mod.json" % [root, id])
+		DirAccess.remove_absolute("%s/%s" % [root, id])
+	DirAccess.remove_absolute(root)
+
+
+func _mod_labels(host: Gen2StartMenuScreen) -> Array:
+	var labels: Array = []
+	for row: Dictionary in host.call("_mod_rows"):
+		labels.append(String(row["label"]))
+	return labels
+
+
 ## R36: `V` is behind `PokeDebugKeys.enabled`, so a shipped build had exactly
 ## one place to change the view and it was the launcher. The row is the host's
 ## own, it is in front of the mods' settings, and the entry is reachable with no
@@ -356,8 +440,8 @@ func test_long_mod_list_scrolls_the_hardware_option_screen() -> void:
 		host.handle_button(PokeButton.DOWN)
 	assert_eq(host.get("_mod_cursor"), 8)
 	var rows: Array = []
-	for id: StringName in host.get("_mod_ids") as Array[StringName]:
-		rows.append({"label": String(id), "value": ""})
+	for row: Dictionary in host.call("_mod_rows"):
+		rows.append({"label": String(row["label"]), "value": ""})
 	var window: Dictionary = host.call("_option_window", rows, 8)
 	assert_eq((window["rows"] as Array).size(), Gen2StartMenuPage.OPTIONS_VISIBLE_ROWS)
 	assert_eq((window["rows"] as Array)[7]["label"], "mod_08")
@@ -408,7 +492,7 @@ func test_pokemon_opens_the_embedded_party_screen_and_reopens_the_menu() -> void
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	assert_true(_kinds(host).has(Gen2WorldStartMenu.ITEM_POKEMON))
 	_select(host, Gen2WorldStartMenu.ITEM_POKEMON)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	assert_null(_world_screen._start_menu_host)
 	var party: Gen2PartyScreen = _world_screen._party_host
@@ -420,6 +504,7 @@ func test_pokemon_opens_the_embedded_party_screen_and_reopens_the_menu() -> void
 	# `StartMenu_Pokemon`'s `.return` reaches `CloseSubmenu` and returns 0, which
 	# `.MenuReturns` sends to `.Reopen`.
 	assert_not_null(_world_screen._start_menu_host, "the menu is drawn again")
+	Fixture.settle_menu_fade(_world_screen)
 	_world_screen._start_menu_host.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_true(_world_screen._objects_may_move())
@@ -431,7 +516,7 @@ func test_pack_lists_a_granted_item() -> void:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK)
 	assert_true((host.get("_view") as TextureRect).visible)
@@ -576,6 +661,7 @@ func test_a_field_item_closes_the_pack_and_answers_in_the_world() -> void:
 	var host: Gen2StartMenuScreen = await _open_pack(Gen2WorldPack.TYPE_KEY_ITEM)
 
 	_choose_action(host, Gen2WorldPack.ACTION_USE)
+	Fixture.settle_menu_fade(_world_screen)
 	await get_tree().process_frame
 
 	assert_null(_world_screen._start_menu_host, "the pack quit")
@@ -626,6 +712,7 @@ func test_a_rod_casts_from_the_pack_and_is_refused_away_from_water() -> void:
 	_world_screen._position_for_fishing_preview()
 	var host: Gen2StartMenuScreen = await _open_pack(Gen2WorldPack.TYPE_KEY_ITEM)
 	_choose_action(host, Gen2WorldPack.ACTION_USE)
+	Fixture.settle_menu_fade(_world_screen)
 	await get_tree().process_frame
 
 	assert_null(_world_screen._start_menu_host, "the pack quit")
@@ -660,7 +747,7 @@ func _open_pack(pocket: int = Gen2WorldPack.TYPE_ITEM) -> Gen2StartMenuScreen:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	var guard: int = host.get("_pack_pockets").size()
 	while int(host.get("_pack_pockets")[host.get("_pack_pocket_index")]["pocket"]) != pocket \
@@ -740,7 +827,7 @@ func _open_stone_pack() -> Gen2StartMenuScreen:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	var pockets: Array = host.get("_pack_pockets")
 	for index: int in pockets.size():
@@ -898,7 +985,7 @@ func _open_candy_pack() -> Gen2StartMenuScreen:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	var pockets: Array = host.get("_pack_pockets")
 	for index: int in pockets.size():
@@ -921,6 +1008,10 @@ func _candy_evolution(cancel: bool) -> void:
 	var host: Gen2StartMenuScreen = await _open_candy_pack()
 	await _use_stone_on_first_member(host)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT, "the level box first")
+	## `_GrewToLevelText` ends on `sound_dex_fanfare_50_79`, which the box plays.
+	var sounds: Array = Gen2TextStream.split_sounds(String(host.get("_pack_result")))["sounds"]
+	assert_eq(sounds.map(func(sound: Dictionary) -> int: return int(sound["id"])),
+		[Gen2Sfx.SFX_DEX_FANFARE_50_79])
 	assert_eq(save.party[0].level, level + 1)
 	assert_eq(save.party[0].species, 155, "nothing evolves behind the level box")
 	assert_null(_world_screen.get("_evolution_host"))
@@ -1016,7 +1107,7 @@ func _open_tmhm_pack() -> Gen2StartMenuScreen:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	var pockets: Array = host.get("_pack_pockets")
 	for index: int in pockets.size():
@@ -1064,6 +1155,44 @@ func test_the_pack_list_stops_at_both_ends() -> void:
 	assert_eq(host._pack_cursor, last, "CANCEL is the bottom")
 
 
+## Twelve rows in the ITEM pocket and twelve in the TM/HM pocket.
+func _write_long_pockets() -> Dictionary:
+	var items: Array = RomCache.read_json(RomCache.items_path(Fixture.directory()))
+	var owned: Dictionary = {}
+	for index: int in 24:
+		var number: int = items.size() + 1
+		var pocket: int = Gen2WorldPack.TYPE_ITEM if index < 12 else Gen2WorldPack.TYPE_TM_HM
+		items.append({
+			"number": number, "name": "ROW%d" % number, "permissions": 0, "pocket": pocket,
+			"field_menu": 0, "battle_menu": 0, "status_mask": 0, "heal_amount": 0,
+		})
+		owned[number] = 1
+	RomCache.write_json(RomCache.items_path(Fixture.directory()), items)
+	_data = GameData.open_directory(Fixture.directory())
+	return owned
+
+
+## The pack's ITEM pocket is a `ScrollingMenu`, which redraws and reads no pad
+## for five frames and then waits out `WaitBGMap`'s four. The TM/HM pocket runs
+## `StaticMenuJoypad` instead and repeats on `JoyTextDelay`'s own five. PyBoy on
+## Crystal measures nine for the first and the plain five beside it for neither.
+func test_a_held_direction_waits_out_every_move_of_the_pack_but_the_tm_pocket() -> void:
+	var owned: Dictionary = _write_long_pockets()
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {"items": owned})
+	var host: Gen2StartMenuScreen = await _open_pack()
+	var press: Callable = func() -> void: host.handle_button(PokeButton.DOWN)
+	var read: Callable = func() -> int: return host._pack_cursor
+	assert_eq(Fixture.hold_down(press, read, 60), [17, 26, 35, 44, 53])
+	host._pack_cursor = 0
+	host._cycle_pocket(1)
+	host._cycle_pocket(1)
+	host._cycle_pocket(1)
+	assert_eq(int(host._current_pocket()["pocket"]), Gen2WorldPack.TYPE_TM_HM)
+	host._pack_cursor = 0
+	assert_eq(Fixture.hold_down(press, read, 30), [15, 20, 25, 30])
+
+
 ## `InitPackBuffers` reads `wLastPocket` and each pocket's own saved row, which
 ## outlive the menu that was closed; `DepositSellInitPackBuffers` does not read
 ## the pocket.
@@ -1085,7 +1214,7 @@ func test_the_pack_reopens_on_the_pocket_and_row_it_was_left_on() -> void:
 	await get_tree().process_frame
 	host = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	assert_eq(host._pack_pocket_index, pocket)
 	host.handle_button(PokeButton.LEFT)
 	assert_eq(host._pack_cursor, 1, "the ITEM pocket kept its own row")
@@ -1138,6 +1267,40 @@ func test_tmhm_use_asks_before_teaching_and_a_yes_teaches_the_move() -> void:
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_RESULT)
 	assert_true(save.party[0].moves.has(HM_MOVE))
 	## IsHM returns before ConsumeTM, so the HM stays in the bag.
+	assert_eq(_world_screen._world.state.item_quantity(HM_ITEM), 1)
+
+
+## `ChooseMonToLearnTMHM.egg`: `SFX_WRONG`, its `WaitSFX`, and the party list again
+## with no box in between, where an egg once ended the USE on an invented line.
+func test_a_tm_on_an_egg_sounds_wrong_and_reopens_the_party_list() -> void:
+	_write_tmhm_item()
+	await _open_world()
+	var host: Gen2StartMenuScreen = await _open_tmhm_pack()
+	var save: Gen2SaveData = _world_screen._injected_save
+	save.party[0].is_egg = true
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	host.handle_button(PokeButton.A)
+	await get_tree().process_frame
+	_read_question(host)
+	host.handle_button(PokeButton.A)
+	_spend_answer_hold(host)
+	await get_tree().process_frame
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
+
+	var sounding: Array[bool] = [false]
+	host.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	host.sfx_requested.connect(func(index: int, _waited: bool) -> void:
+		sounding[0] = index == Gen2Sfx.SFX_WRONG)
+	var row: int = int(host.get("_target_cursor"))
+	host.handle_button(PokeButton.A)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.PACK_TARGET)
+	assert_true(host.handle_button(PokeButton.DOWN), "the list is not read behind the sound")
+	assert_eq(int(host.get("_target_cursor")), row)
+	sounding[0] = false
+	host.advance_frame()
+	host.handle_button(PokeButton.DOWN)
+	assert_ne(int(host.get("_target_cursor")), row)
 	assert_eq(_world_screen._world.state.item_quantity(HM_ITEM), 1)
 
 
@@ -1359,7 +1522,7 @@ func test_pokegear_reaches_the_existing_phone_list() -> void:
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	assert_true(_kinds(host).has(Gen2WorldStartMenu.ITEM_POKEGEAR))
 	_select(host, Gen2WorldStartMenu.ITEM_POKEGEAR)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	assert_null(_world_screen._start_menu_host)
 	assert_not_null(_world_screen._service_host)
@@ -1571,7 +1734,7 @@ func _open_pack_with_a_hurt_party() -> Gen2StartMenuScreen:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	return host
 
@@ -1735,7 +1898,7 @@ func test_using_an_item_with_nothing_to_do_reports_it_and_spends_nothing() -> vo
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	host.handle_button(PokeButton.A)
 	host.handle_button(PokeButton.A)
@@ -1775,7 +1938,7 @@ func _open_options_menu() -> Gen2StartMenuScreen:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_OPTION)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.OPTIONS)
 	return host
 
@@ -1816,6 +1979,16 @@ func test_b_returns_to_the_list_from_a_value_row() -> void:
 	assert_not_null(_world_screen._start_menu_host)
 
 
+## `_Option.joypad_loop`'s `PAD_START | PAD_B`, and Crystal's `.ExitOptions`
+## `SFX_TRANSACTION` behind a `WaitSFX`.
+func test_start_leaves_the_option_screen_with_crystals_exit_sound() -> void:
+	var host: Gen2StartMenuScreen = await _open_options_menu()
+	watch_signals(host)
+	host.handle_button(PokeButton.START)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
+	assert_signal_emitted_with_parameters(host, "sfx_requested", [Gen2Sfx.SFX_TRANSACTION, true])
+
+
 ## `StartMenu_Status`'s `farcall TrainerCard`, as an overlay the world screen
 ## owns the way it owns the party screen.
 func test_player_opens_the_trainer_card_and_b_reopens_the_start_menu() -> void:
@@ -1824,7 +1997,7 @@ func test_player_opens_the_trainer_card_and_b_reopens_the_start_menu() -> void:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PLAYER)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	assert_null(_world_screen._start_menu_host)
 	var card: Gen2TrainerCardScreen = _world_screen._trainer_card_host
@@ -1840,9 +2013,115 @@ func test_player_opens_the_trainer_card_and_b_reopens_the_start_menu() -> void:
 	assert_null(_world_screen._trainer_card_host)
 	# `StartMenu_Status` returns 0, which `.MenuReturns` sends to `.Reopen`.
 	assert_not_null(_world_screen._start_menu_host, "the menu is drawn again")
+	Fixture.settle_menu_fade(_world_screen)
 	_world_screen._start_menu_host.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_true(_world_screen._objects_may_move(), "and its own B is the way out")
+
+
+func _fade_is_over() -> bool:
+	return not _world_screen._menu_transition.active()
+
+
+## What the screen is drawn with on each frame until [param done] says so: the
+## order the map fades through, whether the whole screen is white, and the order
+## the START menu's box is drawn in.
+func _spend_until(done: Callable, cap: int = 120) -> Array:
+	var seen: Array = []
+	for _frame: int in cap:
+		if done.call():
+			break
+		var box: Gen2StartMenuScreen = _world_screen._start_menu_host
+		seen.append({
+			"order": _world_screen._draw_list.fade_order,
+			"white": _world_screen._screen._white.visible,
+			"box": box._fade_order if box != null else -1,
+		})
+		_world_screen.advance_frame()
+	return seen
+
+
+## `FadeToMenu` and `CloseSubmenu` around `StartMenu_Status`: the map and the box
+## standing on it fade out in four rows, the card opens on the frame the last
+## row has had its two, and its B comes back through all-white and the same four
+## rows run the other way, with the box in them.
+func test_a_menu_opens_behind_a_fade_out_and_closes_behind_a_fade_in() -> void:
+	await _open_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_PLAYER)
+	host.handle_button(PokeButton.A)
+
+	var out: Array = _spend_until(func() -> bool: return _world_screen._trainer_card_host != null)
+	var rows: Array = []
+	for step: Dictionary in out:
+		assert_false(step["white"], "the way out fades the map rather than whiting it")
+		assert_eq(step["order"], step["box"], "the box is faded with the map")
+		rows.append(step["order"])
+	var expected: Array = []
+	for order: int in Gen2WorldPalette.FADE_OUT_ORDERS:
+		for _frame: int in Gen2MenuTransition.FADE_STEP_FRAMES:
+			expected.append(order)
+	assert_eq(rows, expected)
+
+	_world_screen._trainer_card_host.handle_button(PokeButton.B)
+	var back: Array = _spend_until(_fade_is_over)
+	var white: int = 0
+	while white < back.size() and back[white]["white"]:
+		white += 1
+	assert_eq(white, Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"])
+	var fade_in: Array = []
+	for step: Dictionary in back.slice(white):
+		assert_false(step["white"])
+		assert_eq(step["order"], step["box"], "the box that comes back is faded with the map")
+		fade_in.append(step["order"])
+	expected = []
+	for order: int in Gen2WorldPalette.FADE_IN_ORDERS:
+		for _frame: int in Gen2MenuTransition.FADE_STEP_FRAMES:
+			expected.append(order)
+	assert_eq(fade_in, expected)
+	assert_not_null(_world_screen._start_menu_host)
+	assert_eq(_world_screen._draw_list.fade_order, Gen2WorldPalette.FADE_IDENTITY)
+
+
+## Generation 1 has no fade: `GBPalWhiteOut` is white at once, and the screen
+## stays white while the card is built and again while the menu is rebuilt.
+func test_a_generation_1_menu_holds_white_and_never_fades() -> void:
+	await _open_gen1_world()
+	_world_screen._open_start_menu()
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	_select(host, Gen2WorldStartMenu.ITEM_PLAYER)
+	host.handle_button(PokeButton.A)
+	assert_true(_world_screen._screen._white.visible, "white on the press")
+
+	var out: Array = _spend_until(func() -> bool: return _world_screen._trainer_card_host != null)
+	assert_gt(out.size(), 0)
+	_world_screen._trainer_card_host.handle_button(PokeButton.B)
+	var back: Array = _spend_until(_fade_is_over)
+	assert_gt(back.size(), 0)
+	for step: Dictionary in out + back:
+		assert_true(step["white"])
+		assert_eq(step["order"], Gen2WorldPalette.FADE_IDENTITY)
+	assert_false(_world_screen._screen._white.visible)
+	assert_not_null(_world_screen._start_menu_host)
+
+
+## A screen the world names that the Generation 1 tables do not know opens at once,
+## with no white, and Red and Yellow measure the same screens.
+func test_every_generation_1_screen_the_world_whites_out_has_frames_on_both_builds() -> void:
+	var named: Array = Gen2WorldScreen.GEN1_MENU_REQUESTS.values()
+	named.append_array([
+		Gen2WorldScreen.START_FADED_ROWS[Gen2WorldStartMenu.ITEM_TOWN_MAP], &"town_map",
+		&"naming_screen",
+	])
+	for screen: StringName in named:
+		assert_true(Gen2MenuTransition.GEN1_RED_FRAMES.has(screen), String(screen))
+		assert_true(Gen2MenuTransition.GEN1_YELLOW_FRAMES.has(screen), String(screen))
+	assert_eq(
+		Gen2MenuTransition.GEN1_RED_FRAMES.keys(), Gen2MenuTransition.GEN1_YELLOW_FRAMES.keys()
+	)
 
 
 ## `StartMenu_Pokedex`'s `farcall Pokedex`, as an overlay the world screen owns
@@ -1855,7 +2134,7 @@ func test_pokedex_opens_from_the_start_menu_and_b_reopens_the_start_menu() -> vo
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_POKEDEX)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	assert_null(_world_screen._start_menu_host)
 	var dex: Gen2PokedexScreen = _world_screen._pokedex_host
@@ -1874,9 +2153,90 @@ func test_pokedex_opens_from_the_start_menu_and_b_reopens_the_start_menu() -> vo
 	assert_null(_world_screen._pokedex_host)
 	# `StartMenu_Pokedex` returns 0 too.
 	assert_not_null(_world_screen._start_menu_host, "the menu is drawn again")
+	Fixture.settle_menu_fade(_world_screen)
 	_world_screen._start_menu_host.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_true(_world_screen._objects_may_move())
+
+
+## `Pokedex_InitDexEntryScreen` and `Pokedex_ReinitDexEntryScreen` each end in
+## `PlayMonCry`, which waits for the sound; `.exit` plays `SFX_READ_TEXT_2` and
+## waits for it too before the dex closes.
+func test_a_dex_entry_cries_on_open_and_on_each_step_and_the_exit_waits_for_its_sound() -> void:
+	await _open_world()
+	var state: Gen2WorldState = _world_screen._world.state
+	state.set_engine_flag(Gen2WorldStartMenu.ENGINE_POKEDEX)
+	state.set_species_seen(Fixture.TRAINER_SPECIES)
+	state.set_species_seen(Fixture.TRAINER_SPECIES + 1)
+	_world_screen._open_pokedex()
+	var dex: Gen2PokedexScreen = _world_screen._pokedex_host
+	var sounding: Array[bool] = [true]
+	dex.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(dex)
+	for _row: int in Gen2Layout.SPECIES_COUNT:
+		if dex.get("_dex").selected_species() == Fixture.TRAINER_SPECIES:
+			break
+		dex.handle_button(PokeButton.DOWN)
+	dex.handle_button(PokeButton.A)
+	assert_signal_emitted_with_parameters(dex, "cry_requested", [Fixture.TRAINER_SPECIES])
+	assert_false(dex.handle_button(PokeButton.RIGHT), "no press is read behind the cry")
+	assert_eq(dex.get("_entry_cursor"), 0)
+	sounding[0] = false
+	dex.advance_frame()
+	assert_true(dex.handle_button(PokeButton.RIGHT))
+	assert_eq(dex.get("_entry_cursor"), 1)
+
+	sounding[0] = true
+	dex.handle_button(PokeButton.DOWN)
+	assert_signal_emit_count(dex, "cry_requested", 2)
+	assert_signal_emitted_with_parameters(
+		dex, "cry_requested", [Fixture.TRAINER_SPECIES + 1], 1
+	)
+	assert_false(dex.handle_button(PokeButton.A), "the next entry's cry holds too")
+	sounding[0] = false
+	dex.advance_frame()
+	dex.handle_button(PokeButton.B)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.LIST)
+
+	sounding[0] = true
+	dex.handle_button(PokeButton.B)
+	assert_signal_emitted_with_parameters(dex, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2])
+	assert_signal_not_emitted(dex, "closed")
+	sounding[0] = false
+	dex.advance_frame()
+	assert_signal_emitted(dex, "closed")
+
+
+## `.Print` with no printer: the connection error under the printer's music until
+## B, and then the entry again with its cry.
+func test_the_dex_entry_screens_prnt_button_shows_the_printer_error_until_b() -> void:
+	await _open_world()
+	var state: Gen2WorldState = _world_screen._world.state
+	state.set_engine_flag(Gen2WorldStartMenu.ENGINE_POKEDEX)
+	state.set_species_seen(Fixture.TRAINER_SPECIES)
+	_world_screen._data.set("_printer_strings", {
+		Gen2DiplomaScreen.STATUS_CONNECTION_ERROR: "Printer Error 2", "press_b": "Press B to Cancel",
+	})
+	_world_screen._open_pokedex()
+	var dex: Gen2PokedexScreen = _world_screen._pokedex_host
+	dex.sound_busy = func(_watch: Dictionary) -> bool: return false
+	for _row: int in Gen2Layout.SPECIES_COUNT:
+		if dex.get("_dex").selected_species() == Fixture.TRAINER_SPECIES:
+			break
+		dex.handle_button(PokeButton.DOWN)
+	dex.handle_button(PokeButton.A)
+	for _step: int in 3:
+		dex.handle_button(PokeButton.RIGHT)
+	watch_signals(dex)
+	dex.handle_button(PokeButton.A)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.PRINT)
+	assert_signal_emitted_with_parameters(dex, "printer_music_requested", [true])
+	assert_false(dex.handle_button(PokeButton.A), "CheckCancelPrint reads B alone")
+
+	dex.handle_button(PokeButton.B)
+	assert_eq(dex.current_mode(), Gen2PokedexScreen.Mode.ENTRY)
+	assert_signal_emitted_with_parameters(dex, "printer_music_requested", [false], 1)
+	assert_signal_emitted_with_parameters(dex, "cry_requested", [Fixture.TRAINER_SPECIES])
 
 
 ## The entry screen's AREA, which is `Pokedex_GetArea` rather than a panel: it
@@ -2307,6 +2667,7 @@ func test_a_registered_item_is_used_by_the_select_button() -> void:
 	host.handle_button(PokeButton.A)
 	host.handle_button(PokeButton.B)
 	host.handle_button(PokeButton.B)
+	Fixture.settle_menu_fade(_world_screen)
 	await get_tree().process_frame
 	assert_null(_world_screen._start_menu_host)
 
@@ -2359,6 +2720,7 @@ func test_a_registered_pc_row_opens_storage_and_returns_to_the_menu() -> void:
 	await get_tree().process_frame
 	assert_true(_world_screen._walk_start_menu_to(&"qol"))
 	_world_screen._start_menu_host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	await get_tree().process_frame
 
 	assert_null(_world_screen._start_menu_host)
@@ -2373,6 +2735,7 @@ func test_a_registered_pc_row_opens_storage_and_returns_to_the_menu() -> void:
 	service.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_not_null(_world_screen._start_menu_host, "closing returns through the normal flow")
 	Gen2ModHost.reset()
 
@@ -2756,7 +3119,7 @@ func _gen1_pack() -> Gen2StartMenuScreen:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_PACK)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	await get_tree().process_frame
 	return host
 
@@ -2892,7 +3255,7 @@ func test_a_generation_1_option_row_opens_display_option_menu() -> void:
 	await get_tree().process_frame
 	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
 	_select(host, Gen2WorldStartMenu.ITEM_OPTION)
-	host.handle_button(PokeButton.A)
+	_enter_row(host)
 	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.OPTIONS)
 	var menu: Gen2WorldOptionsMenu = host.get("_options_menu")
 	assert_eq(menu.layout, Gen2WorldOptionsMenu.Layout.GEN1)

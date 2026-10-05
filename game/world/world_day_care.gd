@@ -5,8 +5,8 @@ extends RefCounted
 ## The two slots are world state rather than party members: `wBreedMon1` and
 ## `wBreedMon2` are boxmon structs beside the flag byte saying each is occupied.
 ## `wBreedMotherOrNonDitto` is set once in `DayCare_InitBreeding` and then read by
-## four routines picking different sides of it, so it is computed once here as
-## [method mother_or_non_ditto].
+## four routines picking different sides of it, so [method mother_or_non_ditto]
+## computes it once.
 
 ## `wDayCareMan`'s four bits (constants/ram_constants.asm).
 const MAN_HAS_MON: int = 1 << 0
@@ -268,11 +268,10 @@ static func price_to_retrieve(growth: int) -> int:
 	return RETRIEVE_BASE_PRICE + RETRIEVE_PRICE_PER_LEVEL * (growth & 0xFF)
 
 
-## `DayCareStep`, the whole of it: a point of experience for each occupied slot
-## and, once the pair is compatible, the counter that offers an egg.
-##
-## Returns true when this step set `DAYCAREMAN_HAS_EGG_F`, which is the one thing
-## outside the state a caller can observe.
+## `DayCareStep`, the whole of it: a point of experience for each occupied slot and,
+## once the pair is compatible, the counter that offers an egg. Returns true when
+## this step set `DAYCAREMAN_HAS_EGG_F`, the one thing outside the state a caller
+## can observe.
 static func step(state: Gen2WorldState, data: GameData, random: RandomNumberGenerator) -> bool:
 	if state == null or data == null:
 		return false

@@ -1,11 +1,10 @@
 class_name Gen2WorldScript
 extends RefCounted
 
-## Shared Generation 2 overworld script command definitions.
-## The cartridge stores one command byte followed by command-specific operands.
-## This file describes the byte layout for the commands used by the bounded
-## overworld runner. Unknown commands remain visible to the caller instead of
-## being guessed or skipped.
+## Shared Generation 2 overworld script command definitions. The cartridge stores
+## one command byte followed by command-specific operands. This file describes the
+## byte layout for the commands used by the bounded overworld runner. Unknown
+## commands remain visible to the caller instead of being guessed or skipped.
 
 const SCALL: int = 0x00
 const FARSCALL: int = 0x01
@@ -111,11 +110,10 @@ const GOLD_SCRIPTTALKAFTER: int = 0x64
 const GOLD_ENCOUNTERMUSIC: int = 0x7F
 
 const TEXT_START: int = 0x00
-## World text uses the source text-command stream. $50 is a page control;
-## $57 (done) ends the text box and $58 (prompt) pauses for a prompt.
-## `<PARA>`, which waits for a press and clears the box. $50 is `@`, the
-## terminator, and reading it as a page break walked `_OakText2` straight
-## into the two texts after it.
+## World text uses the source text-command stream. $50 is a page control; $57 (done)
+## ends the text box and $58 (prompt) pauses for a prompt. `<PARA>`, which waits for
+## a press and clears the box. $50 is `@`, the terminator, and reading it as a page
+## break walked `_OakText2` straight into the two texts after it.
 const TEXT_PAGE: int = 0x51
 const TEXT_TERMINATOR: int = 0x57
 const TEXT_PROMPT: int = 0x58
@@ -482,14 +480,11 @@ static func _later_command_name(opcode: int, crystal_commands: bool) -> StringNa
 	return LATER_COMMAND_NAMES.get(source_opcode(opcode, crystal_commands), &"")
 
 
-## Normalizes a raw command byte onto pokegold's numbering, which every width,
-## name and handler table here is keyed with. Crystal's stream inserts two commands
-## pokegold does not have, `farjumptext` at $52 and `verbosegiveitemvar` at $9f, so
-## Crystal is one ahead from $53 and two ahead from $a0, and the commands Crystal
-## added themselves have no source opcode: callers handle those from the raw byte
-## before asking. The low boundary is $56 rather than $53 because every caller
-## resolves farjumptext, jumptext, waitbutton and promptbutton from the raw opcode
-## first.
+## A raw command byte on pokegold's numbering, which every table here is keyed
+## with. Crystal inserts `farjumptext` at $52 and `verbosegiveitemvar` at $9f, so
+## it is one ahead from $53 and two from $a0; its own commands have no source
+## opcode and callers read them raw. The low boundary is $56 because callers
+## resolve farjumptext, jumptext, waitbutton and promptbutton raw first.
 static func source_opcode(opcode: int, crystal_commands: bool = true) -> int:
 	if not crystal_commands or opcode < 0x56:
 		return opcode
@@ -531,12 +526,11 @@ static func is_terminal(opcode: int, crystal_commands: bool = true) -> bool:
 
 
 ## pokegold-numbered opcodes whose handler reaches ScriptJump, Script_end or
-## Script_endall unconditionally, so the bytes after the command are never read
-## as one. Two near misses are deliberately absent: `endifjustbattled`'s
-## `jp Script_end` sits behind a `ret z`, and `reloadmapafterbattle` jumps only
-## on LOSE and otherwise falls into `Script_reloadmap`, whose `StopScript`
-## leaves the script pointer where it stands (Route30.asm resumes on the
-## `loadmem` after it).
+## Script_endall unconditionally, so the bytes after the command are never read as
+## one. Two near misses are deliberately absent: `endifjustbattled`'s `jp
+## Script_end` sits behind a `ret z`, and `reloadmapafterbattle` jumps only on LOSE
+## and otherwise falls into `Script_reloadmap`, whose `StopScript` leaves the script
+## pointer where it stands (Route30.asm resumes on the `loadmem` after it).
 const NON_RETURNING_SOURCE_OPCODES: Array[int] = [
 	0x03, 0x04, 0x05,  ## sjump, farsjump, memjump
 	0x0C,  ## jumpstd
@@ -960,11 +954,10 @@ static func decode_stone_table(data: PackedByteArray) -> Dictionary:
 	return {"ok": false, "reason": &"unterminated_stone_table", "rows": rows}
 
 
-## Decodes an `elevfloor` list: the floor count, then one row per floor until
-## the `db -1`. `Elevator.LoadFloors` reads the count and walks the rows at a
-## four-byte stride, and `Elevator_GoToFloor` copies a row's last three bytes
-## straight over `wBackupWarpNumber`, which is what the warp out of the car
-## then spends.
+## Decodes an `elevfloor` list: the floor count, then one row per floor until the
+## `db -1`. `Elevator.LoadFloors` reads the count and walks the rows at a four-byte
+## stride, and `Elevator_GoToFloor` copies a row's last three bytes straight over
+## `wBackupWarpNumber`, which is what the warp out of the car then spends.
 static func decode_elevator_floors(data: PackedByteArray) -> Dictionary:
 	if data.is_empty():
 		return {"ok": false, "reason": &"short_elevator_list"}

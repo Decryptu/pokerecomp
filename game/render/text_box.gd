@@ -1,18 +1,18 @@
 class_name Gen2TextBox
 extends TextureRect
 
-## A bordered text window at the games' own measurements: six frame tiles as
-## box-drawing characters, text one tile in on every second row, since a line
-## is eight pixels tall in a box whose rows are sixteen apart. It composes into
-## one index buffer, so a glyph and a Pokemon are lit by the same code.
-## [method advance] and [method finish] are plain methods as well as key
-## handlers, so a screen can be photographed mid-sentence.
+## A bordered text window at the games' own measurements: six frame tiles, text one tile in
+## on every second row, since a line is eight pixels tall in a box whose rows are sixteen apart.
+## It composes into one index buffer, so a glyph and a Pokemon are lit by the same code.
+## [method advance] and [method finish] are plain methods, so a screen can be photographed mid-sentence.
 
 ## Emitted when the last page has been shown and advanced past.
 signal finished
 ## A press answering `Paragraph`, `_ContText` or `PromptText`: `PromptButton`
 ## plays [param sfx], `SFX_READ_TEXT_2`. A caller's `JoyWaitAorB` plays nothing.
 signal prompt_answered(sfx: int)
+## `TextCommand_SOUND` reached: `{id, cry, wait}`, played by [method Gen2AudioPlayer.play_text_sound].
+signal sound_requested(sound: Dictionary)
 signal redrawn
 
 ## The standard box: twenty tiles across, six down, at the foot of the screen.
@@ -26,11 +26,9 @@ const TEXT_LEFT: int = 1
 const TEXT_TOP: int = 2
 const LINE_SPACING: int = 2
 
-## `LoadBlinkingCursor` writes '▼' at screen tile (18, 17) and
-## `UnloadBlinkingCursor` puts the '─' of the border back. The box's own top
-## row is 12, so that is column 18 of its bottom row, and the arrow is what
-## every wait for a button looks like: `Paragraph`, `_ContText` and
-## `PromptText` all load it before `PromptButton` and unload it after.
+## `LoadBlinkingCursor` writes '▼' at screen tile (18, 17), column 18 of the box's bottom row, and
+## `UnloadBlinkingCursor` puts the border's '─' back: `Paragraph`, `_ContText` and `PromptText`
+## all load it before `PromptButton` and unload it after.
 const CURSOR_CODE: int = 0xEE
 const CURSOR_COLUMN: int = 18
 ## `PromptButton.blink_cursor` reads `hVBlankCounter` and `and 1 << 4`, so the
@@ -39,10 +37,9 @@ const CURSOR_COLUMN: int = 18
 const CURSOR_BLINK_FRAMES: int = 16
 const FRAME_SECONDS: float = Gen2WorldAnimation.FRAME_SECONDS
 
-## `TextScroll` shifts the whole interior up one tile row, blanks the row it
-## leaves at the bottom and spends five frames. `_ContText` and
-## `_ContTextNoPause` both call it twice, which is one text line, since a box's
-## lines sit two rows apart.
+## `TextScroll` shifts the whole interior up one tile row, blanks the row it leaves at
+## the bottom and spends five frames. `_ContText` and `_ContTextNoPause` both call it
+## twice, which is one text line, since a box's lines sit two rows apart.
 const SCROLL_STEPS: int = 2
 const SCROLL_STEP_FRAMES: int = 5
 ## `Paragraph`'s cleared box and `DelayFrames 20` before the next page, both
@@ -63,12 +60,9 @@ var _prompted: bool = true
 ## spends. `PrintLetterDelay` answers either with a single `DelayFrame` whatever
 ## the speed setting says (`home/print_text.asm`): a letter a frame, no more.
 @export var accelerated: bool = false
-## Whether a host spends this box's hardware frames itself with
-## [method advance_frame]. The reveal is a frame count on the cartridge, so a
-## screen that already owns the frame drives the box on the same clock as
-## everything else it draws, and the box never runs a second one of its own.
-## Off leaves the box on real time, which is what a dev viewer with no frame
-## pump wants.
+## Whether a host spends this box's frames itself with [method advance_frame], on
+## the clock of everything else it draws: the reveal is a frame count on the
+## cartridge. Off is real time, for a dev viewer with no frame pump.
 var driven: bool = false:
 	set(value):
 		driven = value
@@ -81,10 +75,8 @@ var instant: bool = false
 ## `TEXT_DELAY_FAST` is one frame a letter, which is what a held A or B costs and
 ## also the fastest the speed setting goes.
 const ACCELERATED_SPEED: float = 60.0
-## Per-scanline background offsets for the box's own rows, empty when the
-## background is sitting still. A box is drawn into the background plane like
-## everything else, so a routine that scrolls the plane scrolls the box with it;
-## see [PokeRaster].
+## Per-scanline background offsets for the box's own rows, empty when the background
+## stands still: the box is in the background plane, so a scroll moves it; see [PokeRaster].
 @export var raster_scx: PackedInt32Array = PackedInt32Array():
 	set(value):
 		raster_scx = value
@@ -92,12 +84,10 @@ const ACCELERATED_SPEED: float = 60.0
 @export var columns: int = STANDARD_COLUMNS
 @export var rows: int = STANDARD_ROWS
 @export_range(0, 7) var frame_style: int = 0
-## How opaque the box's field is drawn. The cartridge has no alpha and needs
-## none: it draws a box over its own white background. Over a renderer on the
-## screen's native layer that same box is a slab across the map, so a renderer
-## may ask for the field to be drawn through; see
-## [constant Gen2ModHost.RENDERER_INTERFACE_OPACITY_METHOD]. The frame's lines
-## and the glyphs are ink and stay opaque whatever this is.
+## How opaque the box's field is drawn. The cartridge draws a box over its own white
+## background, which over a renderer's native layer is a slab across the map, so a
+## renderer may ask for the field to be drawn through; see
+## [constant Gen2ModHost.RENDERER_INTERFACE_OPACITY_METHOD]. Lines and glyphs stay opaque.
 @export_range(0.0, 1.0) var field_opacity: float = 1.0:
 	set(value):
 		var next: float = clampf(value, 0.0, 1.0)
@@ -132,6 +122,13 @@ var _scroll_elapsed: float = 0.0
 var _scroll_page: int = -1
 ## The clock an undriven box reveals on; see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
+## The page's sound and pause tokens not yet reached, and the frames of a pause left.
+var _beats: Array = []
+var _pause_frames: int = 0
+var _sound_hold: bool = false
+var _sound_watch: Dictionary = {}
+## `WaitSFX`'s test, for a caller that owns the audio.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
 
 
 ## A screen's own `PrintText` box, driven by that screen, in the OPTION settings.
@@ -144,6 +141,7 @@ static func for_screen(data: GameData) -> Gen2TextBox:
 	box.reveal_speed = options.text_reveal_speed()
 	box.place_at_bottom()
 	box.visible = false
+	box.play_sounds_from(data)
 	return box
 
 
@@ -153,16 +151,18 @@ static func for_page(data: GameData) -> Gen2TextBox:
 	return box
 
 
+func play_sounds_from(data: GameData) -> void:
+	sound_requested.connect(Gen2AudioPlayer.play_text_sound.bind(data))
+
+
 func _ready() -> void:
 	# Nearest, or the integer-scaled viewport is undone on the last hop.
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	set_process(false)
 
 
-## One hardware frame of the reveal, for a caller spending frames by hand rather
-## than by real time: the overworld's own pump while an overlay is up, a check, a
-## screenshot driver, a replay. `PrintLetterDelay` is a frame count on the
-## cartridge, so this is the same clock [method _process] converts real time into.
+## One hardware frame of the reveal, for a caller spending frames by hand: an overlay's pump,
+## a check, a screenshot driver, a replay. It is the clock [method _process] converts real time into.
 func advance_frame() -> void:
 	_advance()
 
@@ -181,10 +181,17 @@ func _advance() -> void:
 	if _paragraph_frames > 0:
 		_paragraph_frames -= 1
 		return
+	if _pause_frames > 0:
+		_pause_frames -= 1
+		return
+	if not _run_beats():
+		return
 	if _shown < float(_tiles_on_page):
-		var rate: float = _reveal_rate()
-		_shown = minf(_shown + FRAME_SECONDS * rate, float(_tiles_on_page))
+		var reach: float = float(_tiles_on_page) if _beats.is_empty() \
+			else float(int(_beats[0]["at"]))
+		_shown = minf(_shown + FRAME_SECONDS * _reveal_rate(), reach)
 		_redraw()
+		_run_beats()
 		return
 	if _pages.is_empty():
 		set_process(false)
@@ -201,18 +208,34 @@ func _advance() -> void:
 		_redraw()
 
 
+## False while a reached sound or pause holds the text.
+func _run_beats() -> bool:
+	while true:
+		if _sound_hold and bool(sound_busy.call(_sound_watch)):
+			return false
+		_sound_hold = false
+		if _beats.is_empty() or float(int(_beats[0]["at"])) > _shown:
+			return true
+		var beat: Dictionary = _beats.pop_front()
+		if not bool(beat.get("pause", false)):
+			sound_requested.emit(beat)
+			_sound_hold = bool(beat.get("wait", true))
+			_sound_watch = {}
+		elif not (accelerated or PokeButton.text_accelerating()):
+			## `TextCommand_PAUSE` reads the pad once, and a held A or B skips the wait.
+			_pause_frames = Gen2TextStream.PAUSE_FRAMES
+			return false
+	return true
+
+
 func place_at_bottom() -> void:
 	position = Vector2(0, STANDARD_TOP * TILE)
 
 
-## Lays [param text] out and starts revealing its first page. [param blink_cursor]
-## is whether the *last* page loads the arrow, which is not the same question as
-## whether it waits: `WaitPressAorB_BlinkCursor`'s own comment says the cursor has
-## to be shown before it is called or none is shown at all. Three routines show
-## it, so a page with another behind it always blinks and the last page blinks
-## only if the text ends in `prompt`. Two things therefore draw no arrow: a text
-## ending in `done`, which is why `SendOutMonText` runs on, and a caller that
-## waits with `JoyWaitAorB`, which is every page of `ProfOaksPCBoot`.
+## Lays [param text] out and starts revealing its first page. [param blink_cursor] is whether the
+## *last* page loads the arrow, which is not whether it waits: a page with another behind it always
+## blinks, the last only if the text ends in `prompt`. No arrow is drawn for a text ending in `done`
+## (`SendOutMonText` runs on) or a caller that waits with `JoyWaitAorB` (`ProfOaksPCBoot`).
 func show_text(text: String, blink_cursor: bool = true) -> void:
 	_pages = Gen2TextLayout.lay_out_pages(
 		text, text_columns(), text_rows(),
@@ -236,15 +259,11 @@ func set_blink_cursor(blink: bool) -> void:
 	_redraw()
 
 
-## How many hardware frames the box still owes before it reaches its
-## `PromptButton`: the rest of the page, or the rest of a `TextScroll`. Zero
-## while it is waiting on a press, which is what it is waiting on there.
-##
-## Public so a caller settling a screen by frames settles the text with it. A
-## screen that owns the frame has no other way to know a printing text is not
-## finished, and a press cannot shorten it.
+## How many hardware frames the box still owes before it reaches its `PromptButton`: the rest of
+## the page, a scroll or a pause. Zero while it waits on a press. Public so a caller settling a
+## screen by frames settles the text with it; a press cannot shorten it.
 func frames_left() -> int:
-	return _paragraph_frames + _printing_frames_left()
+	return _paragraph_frames + _pause_frames + _printing_frames_left()
 
 
 func _printing_frames_left() -> int:
@@ -273,7 +292,8 @@ func _reveal_rate() -> float:
 ## box cleared, or while the box is in the middle of a scroll: none of the three
 ## has reached its `PromptButton` yet.
 func is_revealing() -> bool:
-	return _scroll_page >= 0 or _paragraph_frames > 0 or _shown < float(_tiles_on_page)
+	return _scroll_page >= 0 or _paragraph_frames > 0 or _shown < float(_tiles_on_page) \
+		or _sound_hold or _pause_frames > 0 or not _beats.is_empty()
 
 
 func has_text_left() -> bool:
@@ -305,7 +325,10 @@ func finish() -> void:
 	if _scroll_page >= 0:
 		_end_scroll()
 	_paragraph_frames = 0
+	_pause_frames = 0
 	_shown = float(_tiles_on_page)
+	_beats = []
+	_sound_hold = false
 	set_process(false)
 	_redraw()
 
@@ -343,10 +366,9 @@ func set_frame_style(style: int) -> void:
 	_redraw()
 
 
-## The rectangle the box covers, in hardware pixels, and an empty one whenever
-## nothing is drawn. A renderer composing around the box reads this rather than
-## assuming the standard twenty by six at row twelve, since a box can be any
-## size and is not always on screen.
+## The rectangle the box covers, in hardware pixels, and an empty one whenever nothing
+## is drawn. A renderer composing around the box reads this rather than assuming the
+## standard twenty by six at row twelve, since a box can be any size.
 func occupied_rect() -> Rect2i:
 	if not visible or texture == null:
 		return Rect2i()
@@ -380,6 +402,7 @@ func _begin_scroll(next_page: int) -> void:
 	_scroll_elapsed = 0.0
 	_scroll_page = next_page
 	_lines = []
+	_beats = []
 	_tiles_on_page = 0
 	_shown = 0.0
 	set_process(not driven)
@@ -443,10 +466,16 @@ func _start_page() -> void:
 
 	_shown = float(already)
 	_blink = 0.0
+	_beats = (_pages[_page].get("beats", []) as Array).duplicate(true) \
+		if _page < _pages.size() else []
+	_sound_hold = false
+	_pause_frames = 0
 	_paragraph_frames = PARAGRAPH_FRAMES if _page > 0 and _enter_of(_page) == &"page" else 0
-	set_process((_tiles_on_page > 0 or _paragraph_frames > 0) and not driven)
+	set_process((_tiles_on_page > 0 or _paragraph_frames > 0 or not _beats.is_empty()) and not driven)
 	if reveal_speed <= 0.0 or instant:
 		_shown = float(_tiles_on_page)
+	if _paragraph_frames == 0:
+		_run_beats()
 	_redraw()
 
 
@@ -519,8 +548,7 @@ func glyphs() -> Array:
 ## rule for drawing it: a page still revealing has not reached its `PromptButton`,
 ## a `scroll_nowait` page turns itself, a last page nothing loaded the cursor for
 ## never shows one, and the blink is the other half of `hVBlankCounter`. Public
-## because it is a rule rather than a drawing step, and because a text that owes
-## no press is easy to draw an arrow over by accident.
+## because it is a rule rather than a drawing step.
 func cursor_visible() -> bool:
 	if _pages.is_empty() or is_revealing() or not _cursor_up():
 		return false

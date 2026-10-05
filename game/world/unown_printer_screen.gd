@@ -5,9 +5,8 @@ extends Control
 ## the vacant slot behind them, wrapping either way, B leaves and A sends the stamp
 ## to the printer. A therefore reaches `SendScreenToPrinter`, which prints whatever
 ## `CheckPrinterStatus` last found; with nothing on the link both printer variables
-## stay -1, which is PRINTER_ERROR_2, and B is the way back. There is no printer to
-## plug in, so that is the whole of what A can do here rather than a refusal
-## invented for it.
+## stay -1, which is PRINTER_ERROR_2, and B is the way back. There is no printer
+## to plug in, so that is the whole of what A can do here.
 
 signal closed()
 signal music_requested(index: int)

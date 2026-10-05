@@ -1,13 +1,10 @@
 class_name Gen2SaveEditor
 extends RefCounted
 
-## Edits a save slot while keeping it loadable. Every setter maintains the
-## invariants [Gen2SaveValidator] enforces rather than letting the player write a
-## value and discover at save time that the slot is dead: level and experience are
-## kept in agreement through the species' own growth curve, HP is clamped to the
-## recomputed maximum, PP follows the move it belongs to, and move slots stay
-## contiguous. The validator is still the gate on [method commit], so a bug here
-## costs a refused write rather than a corrupted slot. Scene free on purpose.
+## Edits a save slot while keeping it loadable. Every setter maintains what
+## [Gen2SaveValidator] enforces: level and experience agree through the growth
+## curve, HP is clamped to the recomputed maximum, PP follows its move and move
+## slots stay contiguous. The validator still gates [method commit]. Scene free.
 
 ## An empty move slot. The validator refuses any move after one of these, so
 ## removing a move compacts the list rather than leaving a hole.

@@ -330,12 +330,10 @@ static func create_development_save(data: GameData, slot: int) -> Gen2SaveData:
 	return development
 
 
-## Creates the source-shaped Crystal new-game save. Crystal initializes an empty
-## party before Elm's Lab and the imported GIVEPOKE script creates the first
-## member later; the fourth argument is accepted and ignored, so a new save
-## cannot skip the story handoff. [param random] rolls wPlayerID, the one roll
-## here that is an identity rather than a game event, so an absent generator
-## randomizes rather than being refused; pass one for a reproducible run.
+## Creates the source-shaped new-game save. Crystal starts with an empty party
+## and GIVEPOKE creates the first member later; the fourth argument is ignored so
+## a new save cannot skip that handoff. [param random] rolls wPlayerID, an identity
+## rather than a game event; pass one for a reproducible run.
 static func create_new_game(
 	data: GameData, slot: int, player_name: String, _starter_species: int = -1,
 	random: RandomNumberGenerator = null
@@ -468,6 +466,9 @@ static func _load_copy(path: String, slot: int, data: GameData) -> Dictionary:
 	var loaded_save: Gen2SaveData = Gen2SaveData.from_dict(migration["data"])
 	if loaded_save == null:
 		return _failure("save slot %d is not valid JSON data" % (slot + 1))
+	repair_gen1_starter(loaded_save, data)
+	if loaded_save.world != null:
+		loaded_save.world.world_state.battle_tower().on_load()
 	var validation: Dictionary = Gen2SaveValidator.validate(loaded_save, data)
 	if not validation["ok"]:
 		return _failure("save slot %d: %s" % [slot + 1, validation["message"]])
@@ -475,6 +476,15 @@ static func _load_copy(path: String, slot: int, data: GameData) -> Dictionary:
 		"ok": true, "message": "", "save": loaded_save,
 		"migrated": bool(migration.get("migrated", false)),
 	}
+
+
+## A Generation 1 save from before `starter_species` was stored has the internal index.
+static func repair_gen1_starter(loaded: Gen2SaveData, data: GameData) -> void:
+	if data == null or data.generation != RomRegistry.GEN1 or loaded.world == null:
+		return
+	var state: Gen2WorldState = loaded.world.world_state
+	if state.starter_species == 0:
+		state.starter_species = data.gen1_dex_of_index(state.gen1_starter("player"))
 
 
 ## Unsorted: the bag's pockets and the phone list keep their order as keys.

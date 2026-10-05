@@ -10,6 +10,7 @@ extends RefCounted
 ## `CAUGHT_EGG_LEVEL`: a hatchling's caught level is 1 whatever level it hatches
 ## at, so the stats page shows the egg rather than the hatch.
 const CAUGHT_EGG_LEVEL: int = 1
+const LUCKY_NUMBER_BOXES_GOLD_SILVER: int = 9
 ## `HatchEggs`' own `ld [hl], $78`, the happiness a hatchling starts on.
 const HATCHED_HAPPINESS: int = 0x78
 ## `BASE_HAPPINESS`, which `GeneratePartyMonStats` writes into every row it
@@ -65,11 +66,10 @@ const FRIEND_BALL_HAPPINESS: int = 200
 ## The Bug Contest's own ball. It is never in the bag: `wParkBallsRemaining` is
 ## what holds it and `BattleMenu_Pack`'s contest branch loads it by name.
 const ITEM_PARK_BALL: int = 0xB1
-## `StatExpItemPointerOffsets`: the five vitamins and the stat experience each
-## one raises. `MON_HP_EXP` and its four neighbours are words and the offsets
-## name the high byte, so `VitaminEffect` reads and writes that byte alone: it
-## refuses at 100 and adds 10 there, which is 25,600 and 2,560 of the flat value
-## kept here.
+## `StatExpItemPointerOffsets`: the five vitamins and the stat experience each one
+## raises. `MON_HP_EXP` and its four neighbours are words and the offsets name the
+## high byte, so `VitaminEffect` reads and writes that byte alone: it refuses at 100
+## and adds 10 there, which is 25,600 and 2,560 of the flat value kept here.
 const VITAMINS: Dictionary = {
 	0x1A: "hp", 0x1B: "attack", 0x1C: "defense", 0x1D: "speed", 0x1F: "special",
 }
@@ -184,10 +184,9 @@ const MAGIKARP_LENGTHS: Array = [
 	[65210, 5], [65410, 2], [65510, 1],
 ]
 
-## Every ball `PokeBallEffect` can be reached with, in ball-pocket order.
-## SAFARI_BALL is left out on purpose: it is `$08`, the same number as
-## MOON_STONE, so its `BallMultiplierFunctionTable` row is unreachable with any
-## item whose effect is `PokeBallEffect`.
+## Every ball `PokeBallEffect` can be reached with, in ball-pocket order. SAFARI_BALL
+## is left out on purpose: it is `$08`, the same number as MOON_STONE, so its
+## `BallMultiplierFunctionTable` row is unreachable with any `PokeBallEffect` item.
 const CAPTURE_BALLS: Array[int] = [
 	ITEM_POKE_BALL, ITEM_GREAT_BALL, ITEM_ULTRA_BALL, ITEM_MASTER_BALL,
 	ITEM_HEAVY_BALL, ITEM_LEVEL_BALL, ITEM_LURE_BALL, ITEM_FAST_BALL,
@@ -213,17 +212,14 @@ const HEAVY_BALL_LIGHT_PENALTY: int = 20
 ## ends and the cartridge locks up, so the fall-through below is its guard.
 const HEAVY_BALL_WRONG_BANK: Dictionary = {64: 20, 128: 40}
 
-## `FleeMons`' first three bytes, which is as far as `FastBallMultiplier`'s
-## `ld d, 3` reads: MAGNEMITE, GRIMER and TANGELA are the whole list the boost
-## can match (`docs/bugs_and_glitches.md`, "Fast Ball only boosts catch rate for
-## three Pokemon").
+## `FleeMons`' first three bytes, which is as far as `FastBallMultiplier`'s `ld d, 3`
+## reads: MAGNEMITE, GRIMER and TANGELA are the whole list the boost can match
+## (`docs/bugs_and_glitches.md`, "Fast Ball only boosts catch rate for three Pokemon").
 const FAST_BALL_SPECIES: Array[int] = [0x51, 0x58, 0x72]
 
-## `MOON_STONE_RED`, which is BURN_HEAL's number rather than MOON_STONE's, read
-## three bytes past the evolution method instead of one. Both halves of
-## `docs/bugs_and_glitches.md`'s "Moon Ball does not boost catch rate": the byte
-## reached is the next evolution's method or the list terminator, and no
-## evolution method is 10, so no species is ever boosted.
+## `MOON_STONE_RED`, which is BURN_HEAL's number rather than MOON_STONE's
+## (`docs/bugs_and_glitches.md`, "Moon Ball does not boost catch rate"). No evolution
+## method is 10, so [method _moon_ball] boosts no species.
 const MOON_BALL_STONE: int = 0x0A
 
 const WOBBLE_PROBABILITIES: Array = [
@@ -551,9 +547,8 @@ static func record_link_battle(
 
 ## `HealParty`'s own walk, without the transaction around it: full HP, no status
 ## and full PP for every party member that is not an egg. Answers how many rows
-## it moved, or -1 for a row the battle adapter cannot read.
-## Shared, because the whiteout heals the same party [method heal_party] does and
-## reaches it from a screen rather than from a `special`.
+## it moved, or -1 for a row the battle adapter cannot read. Shared with the
+## whiteout, which reaches it from a screen rather than from a `special`.
 static func heal_party_rows(data: GameData, save: Gen2SaveData) -> int:
 	if data == null or save == null:
 		return -1
@@ -1050,15 +1045,16 @@ static func apply_step_happiness(save: Gen2SaveData, times: int = 1) -> Array[in
 
 
 ## `Text_BreedHuh`: "Huh?" and then a `para` whose page is empty, because the
-## `text_asm` behind it is the animation rather than a line. The empty page is
-## what the sequence opens on, so the box waits for a press like any other
-## paragraph break.
+## `text_asm` behind it is the animation rather than a line. The box waits for a
+## press on it like any other paragraph break.
 const HUH_TEXT: String = "Huh?" + Gen2TextStream.PAGE_BREAK
 
 
-## `_BreedEggHatchText`, whose `wStringBuffer1` is the name the row now carries.
+## `_BreedEggHatchText` and its `sound_caught_mon`; `wStringBuffer1` is the name the row now carries.
 static func hatch_text(nickname: String) -> String:
-	return "%s came\nout of its EGG!" % nickname
+	return "%s came\nout of its EGG!%s" % [
+		nickname, Gen2TextStream.sound_token(Gen2Sfx.SFX_CAUGHT_MON),
+	]
 
 
 ## `_BreedAskNicknameText`, the `YesNoBox` after the hatch.
@@ -1098,10 +1094,9 @@ static func capture_nickname_question(
 	return "Give a nickname to\n%s?" % species_name
 
 
-## `_WasSentToBillsPCText` and `_BallSentToPCText`, the same words in the same
-## shape. The gift path's `wStringBuffer1` is the species name whatever the row
-## was called; the capture path's `wMonOrItemNameBuffer` is the name it ended up
-## with. A format, so each screen fills in its own.
+## `_WasSentToBillsPCText` and `_BallSentToPCText`, the same words in the same shape.
+## The gift path's `wStringBuffer1` is the species name whatever the row was called;
+## the capture path's `wMonOrItemNameBuffer` is the name it ended up with.
 const SENT_TO_BOX_FORMAT: String = "%s was\nsent to BILL's PC."
 
 
@@ -1126,16 +1121,17 @@ static func gen1_box_is_full_text() -> String:
 	]
 
 
-## `_GotMonText`, `SetPokedexOwnedFlag`'s own line.
+## `_GotMonText`, `SetPokedexOwnedFlag`'s own line, and its `sound_get_item_1`.
 static func gen1_got_mon_text(player_name: String, species_name: String) -> String:
-	return "%s got\n%s!" % [player_name, species_name]
+	return "%s got\n%s!%s" % [
+		player_name, species_name, Gen2TextStream.sound_token(Gen1Sfx.SFX_GET_ITEM_1),
+	]
 
 
 ## Where `GivePoke` would put one more Pokemon: `TryAddMonToParty` first, then
-## `SendMonIntoBox`, and `.FailedToGiveMon` when neither has room. Answered
-## without writing anything, because `GiveANickname_YesNo` stands between the
-## two on the cartridge and the prompt it opens is drawn before this port's own
-## transaction runs.
+## `SendMonIntoBox`, and `.FailedToGiveMon` when neither has room. Answered without
+## writing anything, because `GiveANickname_YesNo` stands between the two on the
+## cartridge and its prompt is drawn before this port's own transaction runs.
 static func gift_destination(save: Gen2SaveData) -> StringName:
 	if save == null:
 		return &"full"
@@ -1163,10 +1159,9 @@ static func apply_egg_steps(save: Gen2SaveData, times: int = 1) -> int:
 	return -1
 
 
-## `CheckPlayerPartyForFitMon`: the OR of every party slot's HP word, which is
-## why it needs no egg test of its own. `GiveEgg` zeroes an egg's HP after the
-## stats are generated, so an egg contributes nothing here and a party of
-## nothing but eggs is out of useable Pokemon.
+## `CheckPlayerPartyForFitMon`: the OR of every party slot's HP word, so it needs no
+## egg test of its own. `GiveEgg` zeroes an egg's HP after the stats are generated,
+## so an egg contributes nothing and a party of only eggs is out of useable Pokemon.
 static func party_has_fit_mon(save: Gen2SaveData) -> bool:
 	if save == null:
 		return false
@@ -1347,9 +1342,8 @@ static func capture_wild(
 	if not bool(opened.get("ok", false)):
 		return _failure(StringName(opened["reason"]), opened.get("details", {}))
 	## `SetCaughtData`'s own landmark, which is the area a Nuzlocke counts by:
-	## [param caught_location] is the caller's override for a catch whose
-	## landmark is not the map the player stands on, and every caller that has
-	## none passes 0 and takes the map's.
+	## [param caught_location] overrides it for a catch whose landmark is not the map
+	## the player stands on; callers with none pass 0 and take the map's.
 	var catch_landmark: int = caught_location if caught_location > 0 else world.landmark_backup()
 	var safari: bool = battle_type == Gen2Battle.BATTLETYPE_SAFARI
 	var refused: Dictionary = _capture_refusal(world, save, ball, catch_landmark, safari)
@@ -1447,10 +1441,9 @@ static func _capture_refusal(
 	)
 	if owned <= 0:
 		return _failure(&"insufficient_ball_quantity", {"ball": ball})
-	## The Nuzlocke's first rule, at the one place a ball is ever thrown: only
-	## the encounter that claimed this area may be thrown at, and
-	## [member Gen2WorldAPI.nuzlocke_area_open] is what the battle claimed when
-	## it opened.
+	## The Nuzlocke's first rule, at the one place a ball is ever thrown: only the
+	## encounter that claimed this area may be thrown at, and
+	## [member Gen2WorldAPI.nuzlocke_area_open] is what the battle claimed when it opened.
 	if world.rules != null and world.rules.is_nuzlocke() \
 		and world.nuzlocke_area_open != catch_landmark:
 		return _failure(&"nuzlocke_encounter_spent", {"landmark": catch_landmark})
@@ -1581,11 +1574,10 @@ static func _apply_contest_mon(
 	}
 
 
-## `InitNickname`, which `PokeBallEffect` runs once the row is already in the
-## party or the box: `NamingScreen` writes into `wPartyMonNicknames` or
-## `sBoxMonNicknames`, so the rename is its own write and not part of
-## [method capture_wild]'s transaction, whose answer [param destination] is. NO
-## and an empty entry both leave the species name, and neither writes anything.
+## `InitNickname`, which `PokeBallEffect` runs once the row is already in the party
+## or the box: `NamingScreen` writes into `wPartyMonNicknames` or `sBoxMonNicknames`,
+## so the rename is its own write, not part of [method capture_wild]'s transaction.
+## NO and an empty entry both leave the species name and write nothing.
 static func name_captured_mon(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1661,10 +1653,9 @@ static func _apply_party_request(
 	return {"ok": false, "reason": &"unsupported_party_request"}
 
 
-## `GivePokemon`, which the prize counter reaches with `GetPrizeMonLevel`'s
-## level: everything `givepoke` does with no script behind it. Neither the party
-## nor the box having room writes nothing, which is what `.giveMon`'s `ret nc`
-## leaves the coins on.
+## `GivePokemon`, which the prize counter reaches with `GetPrizeMonLevel`'s level:
+## everything `givepoke` does with no script behind it. Neither the party nor the box
+## having room writes nothing, which is what `.giveMon`'s `ret nc` leaves the coins on.
 static func give_pokemon(
 	world: Gen2WorldAPI,
 	save: Gen2SaveData,
@@ -1734,6 +1725,10 @@ static func _apply_pokemon_request(
 	)
 	if mon == null:
 		return {"ok": false, "reason": &"could_not_create_pokemon"}
+	## Oak's Lab hands Yellow's starter `LIGHT_BALL_GSC` after `AddPartyMon`.
+	if world.data.id == RomRegistry.YELLOW and species == Gen2WorldFieldMove.SPECIES_PIKACHU \
+			and StringName(values.get("routine", &"")) == &"add_party_mon":
+		mon.catch_rate = Gen1Layout.LIGHT_BALL_GSC
 	## `SetCaughtData` or `SetBoxMonCaughtData`: the map the player stands on.
 	set_caught_data(
 		world.data, mon, level, world.object_time_of_day, world.player_female(),
@@ -2424,11 +2419,10 @@ static func _apply_sacred_ash(data: GameData, save: Gen2SaveData) -> Dictionary:
 
 
 ## The one evolution a field item can cause. The method it runs is a fact on the
-## item row rather than a callback: a defined item that names an
-## [code]evolution[/code] method runs that method's predicate, and an item that
-## names none is a cartridge stone, dispatched through `EvoStoneEffect` the way
-## `.item` is. Everything past the predicate is shared, which is what keeps the
-## adapter, the HP delta and the move offers in one place.
+## item row, not a callback: a defined item that names an [code]evolution[/code]
+## method runs that method's predicate, and an item that names none is a cartridge
+## stone, dispatched through `EvoStoneEffect`. Everything past the predicate is
+## shared, which keeps the adapter, the HP delta and the move offers in one place.
 static func _item_evolution_row(data: GameData, mon: Gen2SaveMon, item: int) -> Dictionary:
 	var declared: Dictionary = data.item(item).get("evolution", {}) as Dictionary
 	var method: int = int(declared.get("method", 0))
@@ -2721,11 +2715,10 @@ static func _gen1_shakes(status: int, catch_rate: int, x: int, factor: int) -> i
 
 
 ## `wFinalCatchRate`: everything `PokeBallEffect` settles between `ld a,
-## [wEnemyMonCatchRate]` and the `call Random` that reads the answer. Split out
-## from the throw because the cartridge can be asked the same question directly,
-## which the oracle's `battle/catch_rate.py` does for a grid of cases; [param
-## case] is one row of that grid, keyed by the WRAM labels the routine reads its
-## bytes from.
+## [wEnemyMonCatchRate]` and the `call Random` that reads the answer. Split out from
+## the throw because the cartridge can be asked the same question directly, as the
+## oracle's `battle/catch_rate.py` does for a grid of cases; [param case] is one row
+## of that grid, keyed by the WRAM labels the routine reads its bytes from.
 static func final_catch_rate(data: GameData, ball: int, case: Dictionary) -> int:
 	var catch_rate: int = _ball_multiplier(data, ball, int(case["base_rate"]), case)
 	## `.skip_or_return_from_ball_fn`'s own `cp LEVEL_BALL`: a Level Ball jumps
@@ -2878,12 +2871,11 @@ static func _source_hp_catch_rate(max_hp: int, current_hp: int, catch_rate: int)
 	var divisor: int = three_max & 0xFF
 	var current_part: int = two_current & 0xFF
 	if divisor == 0:
-		## 342 and 683 max HP are the two values whose shifted divisor is a whole
-		## multiple of 256, and `_Divide`'s `.loop` never leaves on a zero
-		## divisor: the cartridge locks up here rather than answering. Measured,
-		## not read: a real cartridge never returns on
-		## either. Guarded with both operands untruncated, which is the ratio the
-		## routine was reaching for; there is no cartridge answer to match.
+		## 342 and 683 max HP are the two values whose shifted divisor is a whole multiple
+		## of 256, and `_Divide`'s `.loop` never leaves on a zero divisor: the cartridge
+		## locks up here rather than answering. Measured, not read: a real cartridge never
+		## returns on either. Guarded with both operands untruncated, the ratio the routine
+		## was reaching for; there is no cartridge answer to match.
 		divisor = three_max
 		current_part = two_current
 	var remaining: int = (divisor - current_part) & 0xFF if divisor <= 0xFF \
@@ -2892,12 +2884,11 @@ static func _source_hp_catch_rate(max_hp: int, current_hp: int, catch_rate: int)
 	return quotient if quotient > 0 else 1
 
 
-## How many times the ball rocks before it opens, which is
-## `GetPokeBallWobble`'s own count minus the call that ends it: the routine
-## increments `wThrownBallWobbleCount` before it rolls, so a throw that escapes
-## on the first roll has rocked no times at all and `.shake_and_break_free`
-## answers it with `BallBrokeFreeText`. Three is the whole run, which is both a
-## catch and the `cp 3 + 1` escape.
+## How many times the ball rocks before it opens, which is `GetPokeBallWobble`'s own
+## count minus the call that ends it: the routine increments `wThrownBallWobbleCount`
+## before it rolls, so a throw that escapes on the first roll has rocked no times at
+## all and `.shake_and_break_free` answers it with `BallBrokeFreeText`. Three is the
+## whole run, both a catch and the `cp 3 + 1` escape.
 static func _failed_wobbles(catch_rate: int, random: RandomNumberGenerator) -> int:
 	var chance: int = 63
 	for row: Array in WOBBLE_PROBABILITIES:
@@ -2918,6 +2909,10 @@ static func _caught_record(wild: Gen2BattleMon) -> Gen2SaveMon:
 	if out == null or not Gen2Substatus.has(wild.substatus, Gen2Substatus.TRANSFORMED):
 		return out
 	out.species = _caught_species(wild)
+	if wild.data.generation == RomRegistry.GEN1:
+		out.catch_rate = Gen1Layout.stored_catch_rate(
+			wild.data.id, out.species, int(wild.data.species(out.species).get("catch_rate", 0))
+		)
 	var moves: Array = wild.data.moves_at_level(out.species, out.level)
 	for slot: int in Gen2SaveMon.MAX_MOVES:
 		out.set_move(wild.data, slot, int(moves[slot]) if slot < moves.size() else 0)
@@ -3000,11 +2995,10 @@ static func rename_party_mon(
 	return {"ok": true, "party_index": party_index, "nickname": settled}
 
 
-## `HatchEggs` for one party slot: the egg becomes the Pokemon it was carrying.
-## Everything here is the source's own order, and every one of the seven writes
-## has a reader in this project, which is why none is left out.
-## Answers the summary the screen shows, or an empty dictionary when the slot is
-## not an egg that is ready.
+## `HatchEggs` for one party slot: the egg becomes the Pokemon it was carrying, in
+## the source's own order; every one of the seven writes has a reader in this project.
+## Answers the summary the screen shows, or an empty dictionary when the slot is not
+## an egg that is ready.
 static func hatch_egg(
 	world: Gen2WorldAPI, save: Gen2SaveData, index: int
 ) -> Dictionary:
@@ -3057,11 +3051,9 @@ static func _failure(reason: StringName, details: Dictionary) -> Dictionary:
 
 
 ## `GivePokerusAndConvertBerries`, the line `ExitBattle` runs one after
-## `EvolveAfterBattle`. Both halves are gated on
-## `STATUSFLAGS2_REACHED_GOLDENROD_F`, and both are pure party writes, so the
-## whole routine is one call the world boundary makes on a battle it won.
-## Returns what changed, for a caller that wants to say so: an empty dictionary
-## when neither half did anything.
+## `EvolveAfterBattle`. Both halves are gated on `STATUSFLAGS2_REACHED_GOLDENROD_F`
+## and are pure party writes, so the routine is one call the world boundary makes on
+## a battle it won. Returns what changed: an empty dictionary when neither half did anything.
 static func give_pokerus_and_convert_berries(
 	data: GameData, save: Gen2SaveData, world: Gen2WorldAPI,
 	random: RandomNumberGenerator
@@ -3181,10 +3173,10 @@ static func _random_byte(random: RandomNumberGenerator) -> int:
 	return random.randi_range(0, 0xFF)
 
 
-## `ApplyPokerusTick`, which `CheckPokerusTick` runs with the days elapsed since
-## the timer's start day: the low nibble is days remaining and floors at zero,
-## and the strain nibble is kept, which is what stops a recovered Pokemon from
-## catching it again. True when a byte moved.
+## `ApplyPokerusTick`, which `CheckPokerusTick` runs with the days elapsed since the
+## timer's start day: the low nibble is days remaining and floors at zero, and the
+## strain nibble is kept, so a recovered Pokemon cannot catch it again. True when a
+## byte moved.
 static func apply_pokerus_tick(save: Gen2SaveData, days: int) -> bool:
 	if save == null or days <= 0:
 		return false
@@ -3256,6 +3248,21 @@ static func magikarp_beats_record(length: Vector2i, record: Dictionary) -> bool:
 	if length.x != best_feet:
 		return length.x > best_feet
 	return length.y > int(record.get("inches", 0))
+
+
+## The boxes `CheckForLuckyNumberWinners` opens: the open one, then `.BoxesLoop`
+## up to `NUM_BOXES`, which pokegold stops at `NUM_BOXES_JP`.
+static func lucky_number_boxes(save: Gen2SaveData, crystal: bool) -> Array[Gen2SaveBox]:
+	var reached: int = Gen2SaveData.BOX_COUNT if crystal else LUCKY_NUMBER_BOXES_GOLD_SILVER
+	var order: Array[int] = [save.current_box]
+	for index: int in mini(reached, save.boxes.size()):
+		if index != save.current_box:
+			order.append(index)
+	var out: Array[Gen2SaveBox] = []
+	for index: int in order:
+		if index < save.boxes.size() and save.boxes[index] is Gen2SaveBox:
+			out.append(save.boxes[index] as Gen2SaveBox)
+	return out
 
 
 ## `CheckForLuckyNumberWinners`. [param stored_ids] and [param stored_species] are

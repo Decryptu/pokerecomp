@@ -22,6 +22,8 @@ var _frame: int = 0
 var _acted: bool = false
 ## Whether `WaitSFX` is still holding.
 var _waiting: bool = false
+## Effects played once the one before has ended (`WaitSFX` before `SFX_1ST_PLACE`).
+var _queued_sounds: Array = []
 ## `hJoyDown`, which the host can only say by pairing presses with releases. A
 ## direction walks the board while it is held, so this is what the repeat reads.
 var _held: Array[int] = []
@@ -100,6 +102,10 @@ func advance_frame() -> void:
 			_refresh()
 			return
 		_sfx_watch = {}
+		if not _queued_sounds.is_empty():
+			sfx_requested.emit(int(_queued_sounds.pop_front()), false)
+			_refresh()
+			return
 		_waiting = false
 	if not _acted:
 		_pass([], _held)
@@ -110,8 +116,10 @@ func advance_frame() -> void:
 ## One pass of `.loop`, and the exit it may reach.
 func _pass(pressed: Array, held: Array) -> void:
 	var result: Dictionary = _board.advance(pressed, held)
-	for index: int in result.get("sounds", []) as Array:
-		sfx_requested.emit(index, false)
+	var sounds: Array = (result.get("sounds", []) as Array).duplicate()
+	if not sounds.is_empty():
+		sfx_requested.emit(int(sounds.pop_front()), false)
+	_queued_sounds = sounds
 	if bool(result.get("wait_sfx", false)):
 		_waiting = true
 	if _board.finished():

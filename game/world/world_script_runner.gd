@@ -1,11 +1,10 @@
 class_name Gen2WorldScriptRunner
 extends RefCounted
 
-## Bounded, scene-free execution of the supported overworld script commands.
-## A runner owns one invocation, reads imported data and commits ordinary
-## command changes at END or ENDCALLBACK.
-## Text and explicit warps are returned as structured pauses for the screen or
-## another caller to acknowledge.
+## Bounded, scene-free execution of the supported overworld script commands. A
+## runner owns one invocation, reads imported data and commits ordinary command
+## changes at END or ENDCALLBACK. Text and explicit warps are returned as structured
+## pauses for the screen or another caller to acknowledge.
 
 var data: GameData = null
 var state: Gen2WorldState = null
@@ -79,12 +78,10 @@ var _last_item: int = 0
 var _staged_warp: Dictionary = {}
 var _script_value: int = 0
 var _command_count: int = 0
-## `RunScriptCommand`'s own artefact: every command executed, with the
-## `bank:address` the cartridge would have in wScriptBank:wScriptPos when it
-## ran. Collected only while `trace_commands` is on, which
-## `tools/trace_world_script.gd` turns on for every runner a world builds so a
-## walked conversation can be diffed against the same walk taken off a real
-## cartridge.
+## `RunScriptCommand`'s artefact: every command executed, with the `bank:address`
+## the cartridge would hold in wScriptBank:wScriptPos. Collected only while
+## `trace_commands` is on, which `tools/trace_world_script.gd` turns on so a walked
+## conversation can be diffed against the same walk off a real cartridge.
 static var trace_commands: bool = false
 var command_trace: Array[Dictionary] = []
 ## `Script_sdefer`'s own `RUN_DEFERRED_SCRIPT`, which is the only thing that
@@ -102,13 +99,11 @@ var _loaded_emote: int = -1
 ## delay and then calls `ShowEmoteScript`, whose middle command is `pause 0`.
 var _script_delay: int = 0
 var _trainer_intro_approach_pending: bool = false
-## Set while RockSmashScript's `playsound SFX_STRENGTH` is out with the host, so
-## its acknowledge continues into the earthquake, the disappear and the roll.
-## The same shape _trainer_intro_approach_pending has for encounter music.
-var _rock_smash_after_sound: bool = false
+## What the audio request out with the host continues into once answered: Rock
+## Smash's `WaitSFX`, its `playsound` and the earthquake, or Strength's `cry 0` and second box.
+var _audio_then: Callable = Callable()
 ## Set while a receipt's own `specialsound` is out with the host, so its
-## completion continues into `itemnotify`'s box. `{ item, finish }`, the same
-## shape _rock_smash_after_sound has.
+## completion continues into `itemnotify`'s box. `{ item, finish }`.
 var _item_notify_after_sound: Dictionary = {}
 var _battle_setup: Dictionary = {}
 var _loaded_battle_type: int = -1
@@ -126,10 +121,9 @@ var _rival_name: String = UNNAMED
 ## a trainer.
 var player_name: String = ""
 ## Everything this invocation rolls: the source RANDOM command and the phone
-## routines that pick a caller line or an unseen species. Injected like the rest
-## of the project's randomness, so a caller can reproduce a branch; a runner
-## started without one randomizes its own rather than reaching for the engine's
-## global generator, which no seed can reach.
+## routines that pick a caller line or an unseen species. Injected so a caller can
+## reproduce a branch; a runner started without one randomizes its own rather than
+## reaching for the engine's global generator, which no seed can reach.
 var _random := RandomNumberGenerator.new()
 ## wCurPartySpecies, which is not wScriptVar: `PartyMenuSelect` writes it from
 ## the row the player chose and `pokepic`, `givepoke` and `giveegg` from their
@@ -161,10 +155,9 @@ const SPECIAL_CHECK_PARTY_FULL_AFTER_CONTEST: int = 21
 const SPECIAL_CONTEST_DROP_OFF_MONS: int = 22
 const SPECIAL_CONTEST_RETURN_MONS: int = 23
 ## `WarpToSpawnPoint`, which clears `STATUSFLAGS2_SAFARI_GAME_F` and
-## `STATUSFLAGS2_BUG_CONTEST_TIMER_F` and does no warping at all. The four
-## escape scripts that call it are the port's own
-## ([method Gen2WorldAPI.warp_to_spawn_point]); this is the entry a decoded
-## script reaches it by.
+## `STATUSFLAGS2_BUG_CONTEST_TIMER_F` and does no warping at all. The four escape
+## scripts that call it are the port's own
+## ([method Gen2WorldAPI.warp_to_spawn_point]).
 const SPECIAL_WARP_TO_SPAWN_POINT: int = 0
 const SPECIAL_GIVE_PARK_BALLS: int = 24
 const SPECIAL_SELECT_RANDOM_BUG_CONTESTANTS: int = 71
@@ -218,9 +211,8 @@ const SPECIAL_SELECT_APRICORN_FOR_KURT: int = 86
 ## disagree on, so `special_index()` leaves it alone, and it owns the same shape
 ## `NameRater` does one house further on. Below, the Battle Tower's own six
 ## specials, Crystal's alone: `BattleTowerAction` is one routine reached with a
-## `setval` in front of it, two of them are the menus the receptionist opens, one
-## samples the next opponent and one fights it, and `CheckForBattleTowerRules` is
-## the party check in front of the whole challenge.
+## `setval`, two are the receptionist's menus, one samples the next opponent, one
+## fights it, and `CheckForBattleTowerRules` checks the party before the challenge.
 const SPECIAL_BATTLE_TOWER_ROOM_MENU: int = 116
 const SPECIAL_BATTLE_TOWER_BATTLE: int = 119
 const SPECIAL_LOAD_BATTLE_TOWER_OPPONENT: int = 122
@@ -234,12 +226,11 @@ const SPECIAL_CHALLENGE_MENU: int = 136
 const SPECIAL_TRY_QUICK_SAVE: int = 4
 const SPECIAL_RESET: int = 126
 
-## The cable club's own block of `SpecialsPointers`, in index order. Three
-## scripts reach it: the trade and battle receptionists on POKECENTER_2F, which
-## share one shape, and the Time Capsule's, which asks for no room at all. The
-## last three are the rooms themselves, reached from the console each one is
-## built around, and `CableClubCheckWhichChris` is the callback that decides
-## which of the two identical friends is standing in it.
+## The cable club's block of `SpecialsPointers`, in index order. Three scripts
+## reach it: the trade and battle receptionists on POKECENTER_2F, which share one
+## shape, and the Time Capsule's, which asks for no room at all. The last three are
+## the rooms, reached from the console each is built around;
+## `CableClubCheckWhichChris` decides which of the two identical friends is in it.
 const SPECIAL_SET_BITS_FOR_LINK_TRADE_REQUEST: int = 1
 const SPECIAL_WAIT_FOR_LINKED_FRIEND: int = 2
 const SPECIAL_CHECK_LINK_TIMEOUT_RECEPTIONIST: int = 3
@@ -294,11 +285,10 @@ const SPECIAL_MOVE_DELETION: int = 33
 ## `ChooseMonToLearnTMHM` opens and the `.loop` behind it, so the whole routine
 ## is one host request; the map script reads wScriptVar afterwards.
 const SPECIAL_MOVE_TUTOR: int = 131
-## The Day-Care's five, in Crystal's numbering (`special_index()` moves Gold's
-## two signs). `DayCareMan` and `DayCareLady` are the two counters;
-## `DayCareManOutside` brings the egg out and is the only one that writes
-## wScriptVar; `DayCareMon1` and `DayCareMon2` are the signs inside, each a line,
-## a cry and the pair's compatibility.
+## The Day-Care's five, in Crystal's numbering (`special_index()` moves Gold's two
+## signs). `DayCareMan` and `DayCareLady` are the counters; `DayCareManOutside`
+## brings the egg out and alone writes wScriptVar; `DayCareMon1` and `DayCareMon2`
+## are the signs inside, each a line, a cry and the pair's compatibility.
 const SPECIAL_DAY_CARE_MAN: int = 30
 const SPECIAL_DAY_CARE_LADY: int = 31
 const SPECIAL_DAY_CARE_MAN_OUTSIDE: int = 32
@@ -318,11 +308,10 @@ const DAY_CARE_ROLE_OF: Dictionary = {
 ## the party list `SelectMonFromParty` opens, so the whole routine is one host
 ## request; the map script's own `waitbutton` follows it.
 const SPECIAL_NAME_RATER: int = 87
-## `engine/events/haircut.asm`'s four routines, each of them
-## `SelectMonFromParty` and then a read. `BillsGrandfather` answers the chosen
-## member's *species*, since it names it with `GetPokemonName`; the three
-## grooming routines answer `HappinessData_*`'s own row and name the member with
-## `GetCurNickname`.
+## `engine/events/haircut.asm`'s four routines, each of them `SelectMonFromParty`
+## and then a read. `BillsGrandfather` answers the chosen member's *species*, since
+## it names it with `GetPokemonName`; the three grooming routines answer
+## `HappinessData_*`'s own row and name the member with `GetCurNickname`.
 const SPECIAL_BILLS_GRANDFATHER: int = 77
 const SPECIAL_OLDER_HAIRCUT_BROTHER: int = 97
 const SPECIAL_YOUNGER_HAIRCUT_BROTHER: int = 98
@@ -354,11 +343,9 @@ const MONEY_WINDOW_KIND_OF: Dictionary = {
 
 ## DisplayUnownWords, Crystal's alone: pokegold's table stops well before it and
 ## neither dump ships the words. The four wall patterns are Crystal bg events, two
-## per chamber, where Gold and Silver's cells carry only the puzzle sign. Not to be
-## read as 41, which is `UnownPuzzle` on both. That one is the sliding puzzle each
-## chamber opens, its `setval` naming the picture and its answer read by the
-## `iftrue`; 42 is `SlotMachine`, whose `setval` is what `Slots_InitBias` reads,
-## TRUE picking `.Lucky`'s own bias table. Both are under `special_index`'s split.
+## per chamber. Not 41, which is `UnownPuzzle` on both: the sliding puzzle each
+## chamber opens. 42 is `SlotMachine`, whose `setval` is what `Slots_InitBias`
+## reads, TRUE picking `.Lucky`'s bias table. Both are under `special_index`'s split.
 const SPECIAL_SLOT_MACHINE: int = 42
 ## `CardFlip`, the Game Corner's other machine. Both Game Corners reach it and
 ## neither puts a `setval` in front of it: the routine reads no `wScriptVar` and
@@ -444,11 +431,11 @@ const TRADE_GENDER_SYMBOLS: Dictionary = {
 	Gen2Layout.TRADE_GENDER_MALE: "\u2642", Gen2Layout.TRADE_GENDER_FEMALE: "\u2640",
 }
 ## `TradedForText`'s own tail in order: the `PlayMusic MUSIC_NONE` its `text_asm`
-## spends, the `sound_dex_fanfare_80_109` behind it, and the `RestartMapMusic`
-## `NPCTrade` runs before the last box. The movie leaves MUSIC_EVOLUTION playing.
+## spends, the `sound_dex_fanfare_80_109` and `text_pause` of `_NPCTradeFanfareText`, and the
+## `RestartMapMusic` `NPCTrade` runs before the last box. The movie leaves MUSIC_EVOLUTION playing.
 const TRADE_AFTER_TEXT_AUDIO: Array[Array] = [
 	[&"music", {"address": 0}],
-	[&"sound", {"address": 0x0A}],
+	[&"sound", {"address": 0x0A, "wait": true, "pause": Gen2TextStream.PAUSE_FRAMES}],
 	[&"map_music", {"restart": true}],
 ]
 
@@ -493,6 +480,7 @@ const FOUND_ITEM_TEXT: String = "<PLAYER> found\n%s!"
 const NO_SPACE_ITEM_TEXT: String = "<PLAYER> found\n%s!\nBut <PLAYER> has\nno space left…"
 ## `_ReceivedItemText`, `_PutItemInPocketText` and `_PocketIsFullText`.
 const RECEIVED_ITEM_TEXT: String = "<PLAYER> received\n%s."
+const MYSTERY_GIFT_ITEM_TEXT: String = "<PLAYER> received\n%s!%s"
 ## The pocket line's own `cont` is a scroll rather than a page, so the item it
 ## names is still on screen above it.
 const PUT_ITEM_TEXT: String = "<PLAYER> put the\n%s in" + Gen2TextStream.SCROLL_BREAK + "the %s."
@@ -516,12 +504,11 @@ const BATTLE_RESULT_WIN: int = 0
 const BATTLE_RESULT_LOSE: int = 1
 const BATTLE_RESULT_DRAW: int = 2
 const TEXT_STRING_BUFFER: int = 0x14
-## The two waits `ScriptEvents` spends frames in rather than asking for anything
-## (`engine/overworld/scripting.asm`). WAIT_MOVEMENT is SCRIPT_WAIT_MOVEMENT,
-## which runs until the stream an `applymovement` started clears
-## SCRIPTED_MOVEMENT_STATE_F; WAIT_FRAMES is the counted delay `Script_pause`,
-## `Script_wait` and `Script_deactivatefacing` spend. Neither takes a button, so
-## both resolve through complete_wait() rather than through advance().
+## The two waits `ScriptEvents` spends frames in (`engine/overworld/scripting.asm`).
+## WAIT_MOVEMENT is SCRIPT_WAIT_MOVEMENT, which runs until the stream an
+## `applymovement` started clears SCRIPTED_MOVEMENT_STATE_F; WAIT_FRAMES is the
+## counted delay `Script_pause`, `Script_wait` and `Script_deactivatefacing` spend.
+## Neither takes a button, so both resolve through complete_wait(), not advance().
 const WAIT_MOVEMENT: StringName = &"movement"
 const WAIT_FRAMES: StringName = &"frames"
 ## SCRIPT_WAIT_MOVEMENT, SCRIPT_WAIT and `StopScript`'s yield run `HandleMap`, so
@@ -605,6 +592,8 @@ const ITEM_FROM_MEM: int = 0xFF
 const SPECIAL_PRINT_TODAYS_LUCKY_NUMBER: int = 85
 const SPECIAL_TRAINER_HOUSE: int = 103
 const SPECIAL_PHOTO_STUDIO: int = 104
+## `PhotoStudio`'s `farcall PrintPartymon`; negative, as it is no special of the table.
+const SPECIAL_PRINT_PARTYMON: int = -104
 const SPECIAL_DIPLOMA: int = 107
 const SPECIAL_PRINT_DIPLOMA: int = 108
 ## `_GiveOddEgg`. The special itself sits in the mobile bank, but nothing in it
@@ -709,11 +698,10 @@ static func begin(
 	var trainer: Variant = request.get("trainer", {})
 	var started: bool = false
 	if not trainer_phase.is_empty():
-		## LoadTrainer_continue clears wRunningTrainerBattleScript for every
-		## trainer encounter, talked to or seen (home/trainers.asm), and only
-		## StartBattleWithMapTrainerScript's `loadmem` sets it again. Left set,
-		## `endifjustbattled` ends the after-battle script on every later
-		## conversation, which the hideout's two password grunts depend on.
+		## LoadTrainer_continue clears wRunningTrainerBattleScript for every trainer
+		## encounter (home/trainers.asm), and only StartBattleWithMapTrainerScript's
+		## `loadmem` sets it again. Left set, `endifjustbattled` ends the after-battle
+		## script on every later conversation, which the hideout's password grunts rely on.
 		runner._stage_just_battled(false)
 	if trainer_phase == &"initial" and trainer is Dictionary:
 		started = runner._push_frame(
@@ -984,8 +972,7 @@ func _resume_day_of_week_menu(choice: int) -> Dictionary:
 	return _waiting_result()
 
 
-## `Function17d246`: a row answers its own one-based number and B answers the
-## same 4 the routine writes before it opens the menu.
+## `Function17d246`: see [method _stage_challenge_menu] for the row and B answers.
 func _resume_challenge_menu(choice: int) -> Dictionary:
 	_pending = {}
 	_script_value = CHALLENGE_MENU_CANCEL if choice < 0 else choice + 1
@@ -1078,10 +1065,20 @@ func _resume_pocket_is_full(_choice: int) -> Dictionary:
 	return _waiting_result()
 
 
+## `Script_UsedStrength`'s `cry 0`, which `PlayMonCry` waits out, then `MoveBoulderText`.
 func _resume_strength_used(_choice: int) -> Dictionary:
-	_stage_internal_text(
-		Gen2WorldFieldMove.move_boulders_text(String(_pending.get("name", "#MON"))), true
-	)
+	var name: String = String(_pending.get("name", "#MON"))
+	var species: int = int(_pending.get("species", 0))
+	_pending = {}
+	if species <= 0:
+		return _strength_boulders_text(name)
+	_audio_then = _strength_boulders_text.bind(name)
+	_stage_audio_request(&"cry", {"species": species})
+	return _waiting_result()
+
+
+func _strength_boulders_text(name: String) -> Dictionary:
+	_stage_internal_text(Gen2WorldFieldMove.move_boulders_text(name), true)
 	return _waiting_result()
 
 
@@ -1243,9 +1240,20 @@ func _resume_rock_smash_choice(choice: int) -> Dictionary:
 ## on its encounter music.
 func _resume_rock_smash_used(_choice: int) -> Dictionary:
 	_pending = {}
-	_rock_smash_after_sound = true
+	_audio_then = _rock_smash_strike
+	_stage_audio_request(&"sound_wait", {})
+	return _waiting_result()
+
+
+func _rock_smash_strike() -> Dictionary:
+	_audio_then = _rock_smash_shaken
 	_stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_STRENGTH})
 	return _waiting_result()
+
+
+func _rock_smash_shaken() -> Dictionary:
+	_stage_rock_smash_shake()
+	return advance()
 
 
 ## The yesorno an Ask*Script offers behind the box it has just printed, carrying
@@ -1265,12 +1273,11 @@ func _stage_yes_or_no(tag: StringName, values: Dictionary) -> Dictionary:
 	return _waiting_result()
 
 
-## What answers each runtime request the host has finished, as the handler that
-## reads it. The key is the pending request's own kind. `_complete_plain_request`
-## puts the host's answer in wScriptVar and runs on, and for most of these that
-## answer is nothing: the routine drew a page, held for a button and wrote
-## nothing a script reads, and the map's own `waitbutton` presses what it left
-## standing. The five that do answer a value say so beside them.
+## What answers each finished runtime request, as the handler that reads it. The
+## key is the pending request's kind. `_complete_plain_request` puts the host's
+## answer in wScriptVar and runs on; for most of these that answer is nothing (the
+## routine drew a page, held for a button and wrote nothing a script reads, and the
+## map's own `waitbutton` presses what it left standing). Five answer a value.
 const COMPLETION_HANDLERS: Dictionary = {
 	&"catch_tutorial_requested": &"_complete_catch_tutorial",
 	&"swarm_requested": &"_complete_swarm",
@@ -1292,9 +1299,6 @@ const COMPLETION_HANDLERS: Dictionary = {
 	&"pc_requested": &"_complete_plain_request",
 	&"party_heal_requested": &"_complete_plain_request",
 	&"town_map_requested": &"_complete_plain_request",
-	## `BugContestJudging` answers with the placing, which the results script
-	## reads out of wScriptVar exactly as the marts and the PC do.
-	&"bug_contest_judging_requested": &"_complete_plain_request",
 	&"name_rater_requested": &"_complete_plain_request",
 	&"move_deleter_requested": &"_complete_plain_request",
 	## `MoveTutor` answers FALSE when the move was learned and -1 when the
@@ -1314,6 +1318,7 @@ const COMPLETION_HANDLERS: Dictionary = {
 	&"dratini_moveset_requested": &"_complete_plain_request",
 	&"diploma_requested": &"_complete_plain_request",
 	&"unown_printer_requested": &"_complete_plain_request",
+	&"party_print_requested": &"_complete_party_print",
 	## `TryQuickSave` answers TRUE for a save that was written and FALSE for
 	## one that was not, which is the branch both of its sites read.
 	&"quick_save_requested": &"_complete_plain_request",
@@ -1617,9 +1622,9 @@ func _complete_plain_request(
 	var approach_after_audio: bool = kind == &"audio_requested" \
 		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
 		== &"encounter_music" and _trainer_intro_approach_pending
-	var smash_after_sound: bool = kind == &"audio_requested" \
-		and StringName((request.get("values", {}) as Dictionary).get("kind", &"")) \
-		== &"sound" and _rock_smash_after_sound
+	var audio_then: Callable = _audio_then if kind == &"audio_requested" else Callable()
+	if kind == &"audio_requested":
+		_audio_then = Callable()
 	var notify_after_sound: Dictionary = _item_notify_after_sound \
 		if kind == &"audio_requested" else {}
 	var mom_after_sound: int = _bank_of_mom_after_sound \
@@ -1640,9 +1645,8 @@ func _complete_plain_request(
 	if approach_after_audio:
 		_trainer_intro_approach_pending = false
 		_stage_trainer_approach()
-	if smash_after_sound:
-		_rock_smash_after_sound = false
-		_stage_rock_smash_shake()
+	if audio_then.is_valid():
+		return audio_then.call()
 	if not notify_after_sound.is_empty():
 		_item_notify_after_sound = {}
 		_stage_item_notify(
@@ -1689,7 +1693,9 @@ func _complete_rival_name(
 			StringName(result.get("reason", &"runtime_request_failed")), result
 		)
 	var default_name: String = String(
-		(request.get("values", {}) as Dictionary).get("default_name", "SILVER")
+		(request.get("values", {}) as Dictionary).get(
+			"default_name", Gen2PlayerNameChoices.default_rival_name(data)
+		)
 	)
 	## `NameRival`'s `InitName` over `.DefaultName`.
 	_rival_name = Gen2NamingScreen.init_name(String(result.get("name", default_name)), default_name)
@@ -1770,10 +1776,8 @@ func _complete_battle(
 		_pending = {}
 		return advance()
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_RAN:
-		## `.can_escape` writes DRAW into wBattleResult, and the script carries
-		## on: `reloadmapafterbattle` only branches on LOSE. The eight corpus
-		## scripts that `iftrue` straight after `startbattle` are asking "did I
-		## not win", and a run answers yes.
+		## `.can_escape` writes DRAW into wBattleResult, and the script carries on:
+		## `reloadmapafterbattle` only branches on LOSE, so an `iftrue` after `startbattle` holds.
 		_stage_just_battled(true)
 		_script_value = BATTLE_RESULT_DRAW
 		_events.append({
@@ -1896,10 +1900,9 @@ func cancel_input() -> Dictionary:
 		}
 	var pending_type: StringName = StringName(_pending.get("type", &""))
 	## A box one of the built-in routines put up answers its own B rather than
-	## resuming: Mom falls to `.JustDoWhatYouCan`, and every `YesNoBox` among
-	## them reads it as its NO, which is the carry the routine returns. A
-	## `Script_yesorno` or `Script_verticalmenu` the cartridge staged is the
-	## false answer below.
+	## resuming: Mom falls to `.JustDoWhatYouCan`, and every `YesNoBox` among them reads
+	## it as its NO, the carry the routine returns. A `Script_yesorno` or
+	## `Script_verticalmenu` the cartridge staged is the false answer below.
 	if _pending_tag() in CANCEL_OWNED_PENDINGS:
 		return advance(true, -1)
 	if pending_type == &"choice" and _pending.has("contact"):
@@ -2519,10 +2522,9 @@ func _command_gettrainername(_opcode: int, command: Dictionary, _bank: int) -> D
 
 
 ## `Script_getstring` is `CopyName1`, which copies a plain character run up to its
-## `@`. It is not a text: the first byte of `PokegearName` is `#`, which the command
-## layer reads as an unknown command and refuses, so decoding this the way `writetext`
-## is decoded leaves every `getstring` buffer empty and prints "<PLAYER> received !"
-## with a hole where the name belongs.
+## `@`, not a text: the first byte of `PokegearName` is `#`, which the command layer
+## refuses as an unknown command, so decoding it as `writetext` does leaves every
+## `getstring` buffer empty and prints "<PLAYER> received !" with a hole in it.
 func _command_getstring(_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	var string_text: String = ""
 	if data != null:
@@ -2676,12 +2678,11 @@ func _command_checkpokemail(_opcode: int, command: Dictionary, _bank: int) -> Di
 	return _check_poke_mail(command)
 
 
-## A command whose numbers a mod may have moved, substituted before it runs.
-## The site is addressed by the byte it sits at, `frame.address + offset`, which
-## is exactly the id [Gen2WorldCatalog] gave it. Only the OPERANDS change: the
-## command still runs, its script still sets its own completion flag, prints its
-## own dialogue and takes its own money, and nothing here can replace any of
-## that. A cartridge with no mod patch pays one dictionary read.
+## A command whose numbers a mod may have moved, substituted before it runs. The
+## site is addressed by the byte it sits at, `frame.address + offset`, the id
+## [Gen2WorldCatalog] gave it. Only the OPERANDS change: the command still runs, its
+## script still sets its own completion flag, prints its own dialogue and takes its
+## own money. A cartridge with no mod patch pays one dictionary read.
 func _catalogued(command: Dictionary, frame: Dictionary) -> Dictionary:
 	if data == null or not data.has_content_overlay():
 		return command
@@ -3071,8 +3072,7 @@ func _command_loademote(_source_opcode: int, command: Dictionary, _bank: int) ->
 ## Script_showemote is `ScriptCall ShowEmoteScript`: loademote, an applymovement that
 ## shows the emote, `pause 0` over the delay this command just wrote, and an
 ## applymovement that hides it again. The two one-command movements are folded into
-## the emote event and its hide; the pause is the wait, and it is what the operand
-## measures.
+## the emote event and its hide; the pause is the wait the operand measures.
 func _command_showemote(_source_opcode: int, command: Dictionary, _bank: int) -> Dictionary:
 	var emote_id: int = int(command.get("value", _loaded_emote))
 	if emote_id == 0xFF:
@@ -3340,8 +3340,7 @@ func _command_trade(_source_opcode: int, command: Dictionary, _bank: int) -> Dic
 
 ## `GetTradeMonNames`, run in front of every box: the wanted species into
 ## `wStringBuffer1` with the row's gender symbol on it, the offered one into
-## `wStringBuffer2`, and the wanted name again, plain, into
-## `wMonOrItemNameBuffer`.
+## `wStringBuffer2`, and the wanted name again, plain, into `wMonOrItemNameBuffer`.
 func _set_trade_names(record: Dictionary) -> void:
 	if data == null:
 		return
@@ -3640,13 +3639,12 @@ func _execute_object_command(source_opcode: int, command: Dictionary) -> Diction
 			})
 			_stage_object_event_flag(int(command.get("object_id", 0)), false)
 		0x6F, 0x76:
-			## `StartFollow` takes the FIRST operand through `SetLeaderIfVisible`
-			## and the second through `SetFollowerIfVisible`, which is the object
-			## that takes SPRITEMOVEDATA_FOLLOWING. So the first leads and the
-			## second follows; the macro's own operand comments say the reverse.
-			## Reading them the other way round leaves the player standing where
-			## `NewBarkTown_TeacherBringsYouBackMovement` should have walked them
-			## and steps the rival out of the cell he pushed the player from.
+			## `StartFollow` takes the FIRST operand through `SetLeaderIfVisible` and the
+			## second through `SetFollowerIfVisible`, the object that takes
+			## SPRITEMOVEDATA_FOLLOWING: the first leads and the second follows, though
+			## the macro's operand comments say the reverse. Read the other way round, the
+			## player stands where `NewBarkTown_TeacherBringsYouBackMovement` should have
+			## walked them and the rival steps out of the cell he pushed them from.
 			_emit_object_event(&"object_follow", {
 				"object_index": _object_index_from_id(int(command.get("object_id_2", 0))),
 				"target_index": _object_index_from_id(int(command.get("object_id", 0))),
@@ -3702,9 +3700,10 @@ func _stage_mystery_gift_item(special: int) -> Dictionary:
 	_set_text_buffer(
 		Gen2Layout.STRING_BUFFER_4, item_name, &"item_name", {"item": item}
 	)
-	return _stage_internal_text(RECEIVED_ITEM_TEXT % item_name, false, {
-		"special": special, "item": item,
-	})
+	return _stage_internal_text(
+		MYSTERY_GIFT_ITEM_TEXT % [item_name, Gen2TextStream.sound_token(Gen2Sfx.SFX_ITEM)],
+		false, {"special": special, "item": item}
+	)
 
 func _stage_item_delta(item: int, delta: int) -> Dictionary:
 	if item > 0:
@@ -3741,12 +3740,10 @@ func _stage_item_delta(item: int, delta: int) -> Dictionary:
 	return {"ok": true}
 
 
-## `GiveMoney` and `TakeMoney` (`engine/events/money.asm`). Neither refuses and
-## neither leaves the account alone: a gift past `MAX_MONEY` writes the ceiling
-## and a payment past the balance writes zero, both returning the carry that
-## only `BankOfMom` reads. `Script_givemoney` and `Script_takemoney` write no
-## wScriptVar of their own, so what they answer is the balance rather than a
-## rejection.
+## `GiveMoney` and `TakeMoney` (`engine/events/money.asm`). Neither refuses: a gift
+## past `MAX_MONEY` writes the ceiling and a payment past the balance writes zero,
+## both returning the carry that only `BankOfMom` reads. `Script_givemoney` and
+## `Script_takemoney` write no wScriptVar, so what they answer is the balance.
 func _stage_money_delta(account: int, amount: int, give: bool) -> Dictionary:
 	if account < 0 or amount < 0:
 		return {"ok": false, "reason": &"invalid_money_command"}
@@ -4086,12 +4083,11 @@ func _var_kenji_break_timer() -> Variant:
 		else (state.kenji_break_timer() if state != null else 0)
 
 
-## `writevar`, which is `_GetVarAction` for a RETVAR_ADDR_DE row and then a
-## store of wScriptVar into the address it answered. Only those rows can be
-## written: every other entry hands back a copy in wStringBuffer2 or runs a
-## routine, so a `writevar` naming one writes nothing the script can read back.
-## Every `writevar` in either game is RadioTower2F's own award of a Blue Card
-## point, which stopped the script here until this existed.
+## `writevar` is `_GetVarAction` for a RETVAR_ADDR_DE row and then a store of
+## wScriptVar into the address it answered. Only those rows can be written: every
+## other entry hands back a copy in wStringBuffer2 or runs a routine. Every
+## `writevar` in either game is RadioTower2F's award of a Blue Card point, which
+## stopped the script here until this existed.
 func _write_runtime_variable(variable: int) -> Dictionary:
 	match variable:
 		0x18: # VAR_BLUECARDBALANCE
@@ -4182,10 +4178,8 @@ func _clock_day() -> int:
 ## `HealMachineAnim`'s sounds and the frame of its own wait each is played on.
 ## `.LoadBallsOntoMachine` plays one effect a ball and then delays thirty frames,
 ## so ball zero sounds on the frame the routine starts. `.PlayHealMusic` starts
-## `MUSIC_HEAL` under `.FlashPalettes8Times` rather than after it; the Hall of
-## Fame's sequence plays one effect there instead and a second once the flashes
-## are done. Its `WaitSFX` between the two is not spent, like the other two the
-## world leaves unspent.
+## `MUSIC_HEAL` under `.FlashPalettes8Times`; the Hall of Fame plays one effect
+## there and a second after the flashes, once the first has ended (`WaitSFX`).
 static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 	if balls <= 0:
 		return []
@@ -4201,7 +4195,7 @@ static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 			"frame": flashes_at, "kind": &"sound", "index": Gen2Sfx.SFX_GAME_FREAK_LOGO_GS,
 		})
 		schedule.append({
-			"frame": flashes_at + HEAL_MACHINE_FLASH_FRAMES,
+			"frame": flashes_at + HEAL_MACHINE_FLASH_FRAMES, "wait": true,
 			"kind": &"sound", "index": Gen2Sfx.SFX_BOOT_PC,
 		})
 	else:
@@ -4209,11 +4203,10 @@ static func heal_machine_sounds(machine_type: int, balls: int) -> Array:
 	return schedule
 
 
-## `ItemFinder.ItemfinderSound`, which its found branch runs as a `callasm`
-## before the line: four passes of `WaitPlaySFX SFX_SECOND_PART_OF_ITEMFINDER`
-## and `WaitPlaySFX SFX_TRANSACTION`. Each holds until the four effect channels
-## are free, so the eight are a run rather than eight sounds on one frame, and
-## `.Script_FoundNothing` has none of it.
+## `ItemFinder.ItemfinderSound`, which its found branch runs as a `callasm` before
+## the line: four passes of `WaitPlaySFX SFX_SECOND_PART_OF_ITEMFINDER` and
+## `WaitPlaySFX SFX_TRANSACTION`. Each holds until the four effect channels are
+## free, so the eight are a run, not one frame; `.Script_FoundNothing` has none.
 static func itemfinder_sounds() -> Array:
 	var schedule: Array = []
 	for _pass: int in ITEMFINDER_SFX_PASSES:
@@ -4348,6 +4341,7 @@ const SPECIAL_HANDLERS: Dictionary = {
 	SPECIAL_POKE_SEER: &"_special_poke_seer",
 	SPECIAL_CHECK_MAGIKARP_LENGTH: &"_special_party_selection",
 	SPECIAL_PHOTO_STUDIO: &"_special_party_selection",
+	SPECIAL_PRINT_PARTYMON: &"_special_print_partymon",
 	SPECIAL_RETURN_SHUCKIE: &"_special_party_selection",
 	SPECIAL_GIVE_SHUCKLE: &"_special_give_shuckle",
 	SPECIAL_ASK_REMEMBER_PASSWORD: &"_special_ask_remember_password",
@@ -4448,9 +4442,15 @@ func _special_set_bits_for_time_capsule_request(_special: int) -> Dictionary:
 
 
 func _special_wait_for_linked_friend(special: int) -> Dictionary:
-	_script_value = _link_session().wait_for_linked_friend(_link_transport())
+	var session: Gen2LinkSession = _link_session()
+	var asked: bool = session.player_link_action != Gen2LinkSession.CABLECLUBROOM_NULL
+	_script_value = session.wait_for_linked_friend(_link_transport())
 	if _script_value == 0:
-		return {"ok": true}
+		return _stage_frame_wait(
+			Gen2LinkSession.WAIT_FOR_FRIEND_TIMEOUT_FRAMES
+				+ (Gen2LinkSession.WAIT_FOR_FRIEND_SETUP_FRAMES if asked else 0),
+			{"special": special, "kind": &"link_wait"}
+		)
 	return _stage_frame_wait(
 		Gen2LinkSession.WAIT_FOR_FRIEND_CONNECTED_FRAMES,
 		{"special": special, "kind": &"link_wait"}
@@ -4520,10 +4520,9 @@ func _special_link_room(special: int) -> Dictionary:
 
 
 ## `CheckMobileAdapterStatusSpecial` answers whether a Mobile Adapter GB is plugged
-## in, and none is: there is no such peripheral on any platform this runs on. FALSE is
-## what both Crystal receptionists branch on to reach `.NoMobile`, which is the cable
-## club proper, so this is the answer that opens the room rather than the one that
-## closes it.
+## in, and none is: no platform this runs on has one. FALSE is what both Crystal
+## receptionists branch on to reach `.NoMobile`, the cable club proper, so this
+## answer opens the room.
 func _special_check_mobile_adapter_status(_special: int) -> Dictionary:
 	_script_value = 0
 	return {"ok": true}
@@ -4588,7 +4587,7 @@ func _special_fade_out_music(special: int) -> Dictionary:
 
 func _special_rival_name(special: int) -> Dictionary:
 	return _stage_runtime_request(&"rival_name_requested", {
-		"special": special, "default_name": "SILVER",
+		"special": special, "default_name": Gen2PlayerNameChoices.default_rival_name(data),
 	})
 
 
@@ -4600,9 +4599,8 @@ func _special_heal_party(special: int) -> Dictionary:
 
 ## wScriptVar selects the machine's screen position: 0 Pokemon Center, 1 Elm's Lab, 2
 ## Hall of Fame. A preceding SETVAL loads it. Nothing here changes state, but the
-## routine is not free: it spends thirty frames a ball and `.FlashPalettes8Times`'
-## eighty, with a sound on each ball, so the script waits for it the way the cartridge
-## does.
+## routine spends thirty frames a ball and `.FlashPalettes8Times`' eighty, with a
+## sound on each ball, so the script waits for it.
 func _special_heal_machine_anim(special: int) -> Dictionary:
 	var machine_type: int = clampi(_script_value, 0, HEAL_MACHINE_HALL_OF_FAME)
 	var balls: int = int((_request.get("party", {}) as Dictionary).get("count", 0))
@@ -4669,10 +4667,9 @@ func _special_snorlax_awake(_special: int) -> Dictionary:
 
 ## `FadeOutToWhite` is 46 in both pins, since Crystal's inserted `BattleTowerFade`
 ## sits at 47; `FadeInFromWhite` is 49 here and 48 in Gold/Silver, which
-## `special_index()` already normalizes. Each of the five is `GetTimePalFade` and then
-## four rows of the fade table, and none is free: `ConvertTimePals*HL` spends `ld c,
-## 2` on every row, so the script holds for the whole walk the way it does on the
-## cartridge. `FillWhiteBGColor` is the two white fades' alone.
+## `special_index()` normalizes. Each of the five is `GetTimePalFade` and four rows
+## of the fade table, none free: `ConvertTimePals*HL` spends `ld c, 2` on every row,
+## so the script holds for the whole walk. `FillWhiteBGColor` is the white fades' alone.
 func _special_palette_fade(special: int) -> Dictionary:
 	var orders: Array[int] = FADE_ORDERS_OF[special]
 	var step_frames: int = Gen2WorldPalette.BATTLE_TOWER_FADE_STEP_FRAMES \
@@ -4689,13 +4686,12 @@ func _special_palette_fade(special: int) -> Dictionary:
 	})
 
 
-## Sprite reload, palette reload and the dummied trainer-ranking bookkeeping affect
-## presentation or source-only counters rather than scene-free state.
-## `LoadUsedSpritesGFX`, `UpdateSprites`, `UpdatePlayerSprite`,
-## `ReloadSpritesNoPalettes` and `RefreshSprites` reload the sprite set a
-## `variablesprite` just changed; `ClearBGPalettes`, `UpdateTimePals`,
-## `SetPlayerPalette` and `LoadMapPalettes` are the palette pair the day/night scripts
-## open with, and the renderer takes its palettes from the map and the clock.
+## Sprite reload, palette reload and the dummied trainer-ranking bookkeeping touch
+## presentation or source-only counters, not scene-free state. `LoadUsedSpritesGFX`,
+## `UpdateSprites`, `UpdatePlayerSprite`, `ReloadSpritesNoPalettes` and `RefreshSprites`
+## reload the sprite set a `variablesprite` changed; `ClearBGPalettes`,
+## `UpdateTimePals`, `SetPlayerPalette` and `LoadMapPalettes` open the day/night
+## scripts, and the renderer takes palettes from the map and clock.
 func _special_presentation_only(special: int) -> Dictionary:
 	_emit_runtime_event(&"presentation_special_applied", {"special": special})
 	return {"ok": true}
@@ -4703,10 +4699,9 @@ func _special_presentation_only(special: int) -> Dictionary:
 
 ## `PlaySlowCry` (95) is `LoadCry` with the record's own pitch lowered by `$140` and
 ## its length raised by `$60`, and `PlayCurMonCry` (100) is `PlayMonCry` straight.
-## Neither writes anything back, so what they owe is the sound and the `WaitSFX` each
-## ends on. They do not read the same byte: 95 is `ld a, [wScriptVar]`, which the
-## `setval` in front of it has just set, and 100 is `ld a, [wCurPartySpecies]`, all
-## four of whose scripts are a grooming routine's.
+## Neither writes anything back, so they owe the sound and the `WaitSFX` each ends
+## on. 95 reads `ld a, [wScriptVar]`, which the `setval` in front of it has just set,
+## and 100 `ld a, [wCurPartySpecies]`, all four of whose scripts are a grooming routine's.
 func _special_cry(special: int) -> Dictionary:
 	return _stage_audio_request(&"cry", {
 		"special": special,
@@ -4874,6 +4869,13 @@ func _special_move_tutor(special: int) -> Dictionary:
 	})
 
 
+## The keys and effects of `ContestJudging_*PlaceText`, first place to third.
+const BUG_CONTEST_PLACES: Array[String] = ["first", "second", "third"]
+const BUG_CONTEST_PLACE_SFX: Array[int] = [
+	Gen2Sfx.SFX_1ST_PLACE, Gen2Sfx.SFX_2ND_PLACE, Gen2Sfx.SFX_3RD_PLACE,
+]
+
+
 ## The host answers with the apricorn and how many, and B with `wScriptVar = 0`.
 func _special_select_apricorn_for_kurt(special: int) -> Dictionary:
 	return _stage_runtime_request(&"apricorn_selection_requested", {
@@ -4891,7 +4893,10 @@ func _special_give_park_balls(special: int) -> Dictionary:
 ## Five of the ten contestant flags set, which is both who competes in the judging and
 ## which sprites the park does not draw.
 func _special_select_random_bug_contestants(special: int) -> Dictionary:
-	_emit_runtime_event(&"bug_contestants_selected", {"special": special})
+	_emit_runtime_event(&"bug_contestants_selected", {
+		"special": special,
+		"withdrawn": Gen2WorldBugContest.select_withdrawn(_random).keys(),
+	})
 	return {"ok": true}
 
 
@@ -4930,12 +4935,72 @@ func _special_check_party_full_after_contest(special: int) -> Dictionary:
 	})
 
 
-## The judging prints three placings and leaves the player's own in wScriptVar, which
-## the results script branches on.
+## `_BugContestJudging`: the player's score ranked against the contestants who turned up, drawn from
+## the injected generator in the cartridge's order. Third, second and first place are a `PrintText`
+## each, and the player's place is left in wScriptVar.
 func _special_bug_contest_judging(special: int) -> Dictionary:
-	return _stage_runtime_request(&"bug_contest_judging_requested", {
-		"special": special,
+	if state == null or data == null:
+		return _fail(&"missing_world_state", {"special": special})
+	var caught: Dictionary = state.contest_mon()
+	var score: int = Gen2WorldBugContest.score(caught)
+	var judged: Dictionary = Gen2WorldBugContest.judge(
+		int(caught.get("species", 0)), score, data.bug_contestants(),
+		state.withdrawn_bug_contestants(), _random
+	)
+	var placings: Array = judged["placings"]
+	var announced: Array = []
+	for place: int in range(placings.size() - 1, -1, -1):
+		var text: String = _judging_text(place, placings[place] as Dictionary)
+		if text.is_empty():
+			return _fail(&"missing_special_text", {"special": special})
+		announced.append(text)
+	_script_value = int(judged["player_place"])
+	_emit_runtime_event(&"bug_contest_judged", {
+		"special": special, "placings": placings.duplicate(true),
+		"player_place": _script_value, "score": score,
 	})
+	if announced.is_empty():
+		return {"ok": true}
+	var head: String = String(announced.pop_front())
+	return _stage_internal_text(head, false, {} if announced.is_empty() else {
+		"next_internal_texts": announced,
+	})
+
+
+## `ContestJudging_FirstPlaceText`: the winner and Pokemon, the effect, then the score text.
+func _judging_text(place: int, entry: Dictionary) -> String:
+	var key: String = BUG_CONTEST_PLACES[place]
+	var text: String = data.special_text("bug_contest", key)
+	var score_text: String = data.special_text("bug_contest", key + "_score")
+	var buffers: Array[int] = data.string_buffer_addresses()
+	if text.is_empty() or score_text.is_empty() or buffers.size() <= Gen2Layout.STRING_BUFFER_1:
+		return ""
+	text = Gen2TextStream.fill_all_markers(
+		text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, data.special_text_ram("bug_contest_winner_name")],
+		_contestant_name(int(entry["id"]))
+	)
+	text = Gen2TextStream.fill_all_markers(
+		text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, buffers[Gen2Layout.STRING_BUFFER_1]],
+		String(data.species(int(entry["species"])).get("name", ""))
+	)
+	score_text = Gen2TextStream.fill_marker(
+		score_text, Gen2TextStream.NUMBER_MARKER, str(int(entry["score"]))
+	)
+	return text + Gen2TextStream.sound_token(BUG_CONTEST_PLACE_SFX[place]) + score_text
+
+
+## `LoadContestantName`: the player's own, or a contestant's class and name. Entry zero of
+## `BugContestantPointers` is the player, so a contestant's row is two behind its id.
+func _contestant_name(contestant_id: int) -> String:
+	if contestant_id == Gen2WorldBugContest.PLAYER_ID:
+		return player_name
+	var row: Array = data.bug_contestants()
+	var contestant: Dictionary = row[contestant_id - 2] if contestant_id - 2 < row.size() else {}
+	var trainer_class: int = int(contestant.get("trainer_class", 0))
+	return "%s %s" % [
+		data.trainer_name(trainer_class),
+		String(data.trainer_party(trainer_class, int(contestant.get("trainer", 0)) - 1).get("name", "")),
+	]
 
 
 func _special_activate_fishing_swarm(special: int) -> Dictionary:
@@ -5258,6 +5323,28 @@ func _special_diploma(special: int) -> Dictionary:
 	})
 
 
+var _photo_slot: int = -1
+
+
+func _special_print_partymon(special: int) -> Dictionary:
+	return _stage_runtime_request(&"party_print_requested", {
+		"special": special, "slot": _photo_slot,
+	})
+
+
+## `hPrinter` is set, so `PhotoStudio` takes `.cancel`.
+func _complete_party_print(
+	_kind: StringName, _asked: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(StringName(result.get("reason", "party_print_failed")), result)
+	_pending = {}
+	var no_photo: String = _special_box("photo_studio", "no_photo")
+	if no_photo.is_empty():
+		return {"ok": false, "reason": &"missing_special_text", "special": SPECIAL_PHOTO_STUDIO}
+	return _stage_internal_text(no_photo, false, {"special": SPECIAL_PHOTO_STUDIO})
+
+
 ## A loop with its own windows, run whole by [Gen2WorldServiceScreen].
 func _special_buena_prize(special: int) -> Dictionary:
 	return _stage_runtime_request(&"buena_prize_requested", {"special": special})
@@ -5480,12 +5567,10 @@ func _special_box(run: String, name: String) -> String:
 
 
 ## `BankOfMom`'s jumptable, one index at a time (`engine/events/mom.asm`). Every
-## state either prints a box, opens her menu or opens the dial, so the source's
-## `.loop` is the chain of pendings each of them leaves behind. `DSTChecks` is the
-## one branch not built, and it is a save-format bump: `.nope` asks whether to move
-## the clock an hour, which needs a saved `wDST` bit and the `wStartHour` shift
-## behind it. The branch taken instead is `.JustDoWhatYouCan`, which is what a
-## clock nowhere near a boundary reaches.
+## state prints a box, opens her menu or opens the dial, so the source's `.loop` is
+## the chain of pendings each leaves behind. `DSTChecks` is the one branch not built,
+## being a save-format bump: `.nope` needs a saved `wDST` bit and the `wStartHour`
+## shift. `.JustDoWhatYouCan` is taken, as a clock near no boundary reaches it.
 func _bank_of_mom(index: int) -> Dictionary:
 	match index:
 		MOM_CHECK_INITIALIZED:
@@ -5570,12 +5655,10 @@ func _mom_yes_no(name: String, state_index: int) -> Dictionary:
 
 
 ## `.StoreMoney`'s tail and `.TakeMoney`'s, which differ only in which account is
-## which. Three things the source does that a rewrite loses: `GiveMoney` adds into
-## `wStringBuffer2` rather than into an account, so the ceiling is tested against
+## which. `GiveMoney` adds into `wStringBuffer2`, so the ceiling is tested against
 ## the balance the transaction would leave and nothing is written when it fails;
 ## both refusals `ret` with `wJumptableIndex` unchanged, so her question is asked
-## again and the dial reopens; and a dial left at zero is `.CancelDeposit`, the
-## same branch B takes.
+## again and the dial reopens; and a dial left at zero is `.CancelDeposit`, as B is.
 func _finish_mom_bank_dial(mode: StringName, amount: int) -> Dictionary:
 	var deposit: bool = mode == MOM_DIAL_DEPOSIT
 	var state_index: int = MOM_STORE_MONEY if deposit else MOM_TAKE_MONEY
@@ -5596,7 +5679,7 @@ func _finish_mom_bank_dial(mode: StringName, amount: int) -> Dictionary:
 	_move_mom_money(from_account, to_account, amount)
 	_bank_of_mom_after_sound = MOM_EXIT
 	_mom_receipt_box = "stored_money" if deposit else "taken_money"
-	return _stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_TRANSACTION})
+	return _stage_audio_request(&"sound", {"address": Gen2Sfx.SFX_TRANSACTION, "wait": true})
 
 
 ## The `TakeMoney`/`GiveMoney` pair the transaction is, without the wScriptVar
@@ -5677,18 +5760,19 @@ func _check_time_capsule_compatibility() -> Dictionary:
 	_script_value = int(verdict["value"])
 	if _script_value == Gen2LinkSession.TIME_CAPSULE_OK:
 		return {"ok": true}
+	## The move goes in `wStringBuffer2`, the species name (never the nickname) in `wStringBuffer1`.
 	if _script_value == Gen2LinkSession.TIME_CAPSULE_MOVE_TOO_NEW and data != null:
 		_set_text_buffer(
-			Gen2Layout.STRING_BUFFER_1,
+			Gen2Layout.STRING_BUFFER_2,
 			String(data.move(int(verdict["move"])).get("name", "")),
 			&"time_capsule_move", {"move": int(verdict["move"])}
 		)
-	var names: Array = party.get("names", [])
-	var slot: int = int(verdict["slot"])
-	if slot >= 0 and slot < names.size():
+	var species: int = int(verdict["species"])
+	if int(verdict["slot"]) >= 0 and data != null:
 		_set_text_buffer(
-			Gen2Layout.STRING_BUFFER_3, String(names[slot]), &"time_capsule_mon",
-			{"slot": slot, "species": int(verdict["species"])}
+			Gen2Layout.STRING_BUFFER_1,
+			"EGG" if species == Gen2Layout.EGG_SPECIES else String(data.species(species).get("name", "")),
+			&"time_capsule_mon", {"slot": int(verdict["slot"]), "species": species}
 		)
 	return {"ok": true}
 
@@ -5719,10 +5803,9 @@ func _battle_tower_random(offset: int) -> RandomNumberGenerator:
 	return random
 
 
-## The item pocket as `BattleTower_GiveReward` walks it, staged rows over the
-## saved ones. A row staged to zero is one the script has just spent and is not
-## in the pack any more.
-## `wNumItems`' own pocket, which `BattleTower_GiveReward` counts.
+## The item pocket as `BattleTower_GiveReward` walks it, staged rows over the saved
+## ones. A row staged to zero is one the script has just spent and is not in the
+## pack any more. `wNumItems`' own pocket, which `BattleTower_GiveReward` counts.
 func _item_pocket() -> Dictionary:
 	var pocket: Dictionary = {}
 	var pack: Dictionary = _pack_items()
@@ -6281,9 +6364,9 @@ func _decode_bcd(bytes: PackedByteArray) -> int:
 ## `engine/events/haircut.asm` past its `farcall SelectMonFromParty`. The carry
 ## the party list answers a B press or its CANCEL row with is `.nope`/`.cancel`,
 ## `xor a` in all four; an EGG is `.egg`'s own 1, tested by the three grooming
-## routines alone, since `BillsGrandfather` answers EGG as a species like any
-## other. `GetCurNickname` names the member for the three and `GetPokemonName`
-## the species for the fourth, both into wStringBuffer3.
+## routines alone, since `BillsGrandfather` answers EGG as a species like any other.
+## `GetCurNickname` names the member for the three and `GetPokemonName` the species
+## for the fourth, both into wStringBuffer3.
 func _finish_party_selection(request: Dictionary, result: Dictionary) -> Dictionary:
 	var values: Dictionary = request.get("values", {})
 	var special: int = int(values.get("special", 0))
@@ -6341,9 +6424,8 @@ func _finish_party_selection(request: Dictionary, result: Dictionary) -> Diction
 	return advance()
 
 
-## The four routines whose whole body is `SelectMonFromParty` and a branch on
-## the row it answered with. Each writes wScriptVar, and two of them write
-## something else besides.
+## The four routines of [constant PARTY_SELECTION_ROUTINE_OF]. Each writes
+## wScriptVar, and two of them write something else besides.
 func _finish_deferred_party_selection(
 	routine: StringName, special: int, result: Dictionary, values: Dictionary = {}
 ) -> Dictionary:
@@ -6362,10 +6444,10 @@ func _finish_deferred_party_selection(
 			## `PrintPartymon` is a Game Boy Printer transfer, and `hPrinter`
 			## reports an error for every attempt made without one attached, so
 			## `.cancel` is the branch this project can reach and the picture is
-			## never taken.
+			## never taken: the printer's screen holds until B, then `.cancel`'s box.
+			_photo_slot = int(result.get("party_index", -1))
 			return _stage_internal_text(photo_box, false, {
-				"special": special,
-				"next_internal_texts": [_special_box("photo_studio", "no_photo")],
+				"special": special, "special_after_text": SPECIAL_PRINT_PARTYMON,
 			})
 		&"magikarp_length":
 			if species != Gen2WorldPartyHost.SPECIES_MAGIKARP:
@@ -6429,11 +6511,9 @@ func _finish_deferred_party_selection(
 
 ## `Script_givepokemail`, which copies the pointer's `db item` and the
 ## `MAIL_MSG_LENGTH` bytes behind it into `wMonMailMessageBuffer`, and
-## `GivePokeMail`, which hangs both on the last party member. Nothing is asked and
-## nothing is answered: the routine writes no wScriptVar and cannot fail, so the
-## write is an event the way a happiness change is. The mail's author, ID and
-## species are the member's own, so the screen reads the first two off the row it
-## is writing and the runner carries the third.
+## `GivePokeMail`, which hangs both on the last party member. It writes no wScriptVar
+## and cannot fail, so the write is an event the way a happiness change is. The
+## author and ID come off the row the screen is writing; the runner carries the species.
 func _give_poke_mail(command: Dictionary) -> Dictionary:
 	var bytes: PackedByteArray = _mail_bytes(int(command.get("address", 0)))
 	if bytes.size() < Gen2SaveMail.MESSAGE_LENGTH + 1:
@@ -6489,10 +6569,9 @@ func _finish_check_poke_mail(result: Dictionary, values: Dictionary) -> Dictiona
 	if not _mail_message_matches(expected, carried):
 		_script_value = Gen2WorldPartyHost.POKEMAIL_WRONG_MAIL
 		return advance()
-	## `CheckCurPartyMonFainted`: carry when every other slot is fainted, so
-	## handing this one over would black the player out. An egg is HP 0 and
-	## counts as fainted here, which is the routine reading `wPartyMon1HP` and
-	## nothing else.
+	## `CheckCurPartyMonFainted`: carry when every other slot is fainted, so handing
+	## this one over would black the player out. An egg is HP 0 and counts as
+	## fainted here, which is the routine reading `wPartyMon1HP` and nothing else.
 	var fainted: Array = result.get("party_fainted", [])
 	var healthy_elsewhere: bool = false
 	for index: int in fainted.size():
@@ -6532,10 +6611,9 @@ func _byte_array(raw: Variant) -> PackedByteArray:
 	return out
 
 
-## `ReadCaughtData` and `SeerAction`, which are one reading of the row and then
-## the boxes that reading picked.
-## Nothing here writes anything: every branch is a run of `PrintText`s and the
-## five buffers they read, so the whole routine is text.
+## `ReadCaughtData` and `SeerAction`, which are one reading of the row and then the
+## boxes that reading picked. Nothing here writes anything: every branch is a run of
+## `PrintText`s and the five buffers they read, so the whole routine is text.
 func _finish_poke_seer(special: int, result: Dictionary) -> Dictionary:
 	if int(result.get("species", 0)) == SPECIES_EGG:
 		return _seer_boxes(special, ["egg"])
@@ -6656,11 +6734,9 @@ func _emit_object_event(event_type: StringName, values: Dictionary) -> void:
 
 ## engine/events/overworld.asm's AskStrengthScript, synthesized. StrengthBoulderScript
 ## is `farsjump AskStrengthScript`, whose first command is `callasm TryStrengthOW`;
-## `callasm` has no runner here and its operand is a link-time address absent from
-## the pinned disassemblies, so the seam sits on the standard-script index instead,
-## which is 14 in both pins and verified by the imported table. The synthesized
-## body is the same shape trainer object dispatch takes. Every branch of
-## AskStrengthScript terminates, so this never returns to a caller.
+## that operand is a link-time address absent from the pins, so the seam is the
+## standard-script index, 14 in both and verified by the imported table. Every
+## branch of AskStrengthScript terminates, so this never returns to a caller.
 func _stage_strength_boulder() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
@@ -6691,12 +6767,11 @@ func _stage_strength_boulder() -> Dictionary:
 
 
 ## engine/events/misc_scripts.asm's FindItemInBallScript, synthesized. An item
-## ball's script pointer is not code but the `itemball` macro's
-## `db item, quantity`, copied into wItemBallData before PLAYEREVENT_ITEMBALL is
-## raised, so the seam is the object type rather than a script address. Source
-## order is receive, `disappear LAST_TALKED`, then the text, so the ball is gone
-## when the box is drawn; its `pause 60` is the acknowledge here. The receive
-## seam preserves the no-room branch without committing anything.
+## ball's script pointer is the `itemball` macro's `db item, quantity`, copied into
+## wItemBallData before PLAYEREVENT_ITEMBALL, so the seam is the object type. Source
+## order is receive, `disappear LAST_TALKED`, then the text, so the ball is gone when
+## the box is drawn; its `pause 60` is the acknowledge here. The receive seam keeps
+## the no-room branch without committing anything.
 func _stage_item_ball() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var quantity: int = maxi(1, int(_request.get("quantity", 1)))
@@ -6722,12 +6797,11 @@ func _stage_item_ball() -> Dictionary:
 	})
 
 
-## `FruitTreeScript` (`engine/events/fruit_trees.asm`). Like an item ball it is
-## a script rather than a host request: `fruittree` is the whole of the object's
-## own script, and the routine below it is text, a flag and a `giveitem`.
-## The first pause is `FruitBearingTreeText`; `TryResetFruitTrees` and
-## `CheckFruitTree` run on its acknowledge, since the source's own `callasm`s sit
-## behind the `promptbutton`.
+## `FruitTreeScript` (`engine/events/fruit_trees.asm`). Like an item ball it is a
+## script rather than a host request: `fruittree` is the whole of the object's own
+## script, and the routine below it is text, a flag and a `giveitem`. The first
+## pause is `FruitBearingTreeText`; `TryResetFruitTrees` and `CheckFruitTree` run on
+## its acknowledge, since the source's own `callasm`s sit behind the `promptbutton`.
 func _stage_fruit_tree(tree_id: int) -> Dictionary:
 	if data == null:
 		return _fail(&"missing_world_data", {"tree_id": tree_id})
@@ -6786,13 +6860,12 @@ func _fruit_tree_picked(tree_id: int) -> bool:
 	return state.fruit_tree_picked(tree_id)
 
 
-## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer
-## is the `hiddenitem` macro's `dwb event, item`, handed over the way an item
-## ball's two bytes are. It differs from [method _stage_item_ball] in the flag and
-## the object: nothing is hidden, and the flag `callasm SetMemEvent` writes is the
-## record's rather than the object's. `_PlayerFoundItemText` is `_FoundItemText`'s
-## wording, so the two share a constant. The source writes the text before
-## `giveitem` and sets the flag after it, so a full pocket changes neither.
+## HiddenItemScript, the BGEVENT_ITEM half of the same source area. The pointer is
+## the `hiddenitem` macro's `dwb event, item`, handed over as an item ball's two
+## bytes are. It differs from [method _stage_item_ball] in the flag and the object:
+## nothing is hidden, and the flag `callasm SetMemEvent` writes is the record's.
+## `_PlayerFoundItemText` shares `_FoundItemText`'s constant. The text comes before
+## `giveitem` and the flag after, so a full pocket changes neither.
 func _stage_hidden_item() -> Dictionary:
 	var item: int = int(_request.get("item", 0))
 	var flag: int = int(_request.get("flag", -1))
@@ -6862,7 +6935,7 @@ func _stage_strength_used(slot: int) -> Dictionary:
 		),
 		"internal_text": true,
 		"prompt": false,
-		"cry": int(species[slot]) if slot >= 0 and slot < species.size() else 0,
+		"species": int(species[slot]) if slot >= 0 and slot < species.size() else 0,
 		"special": &"strength_used",
 		"name": name,
 		"source": _request.duplicate(true),
@@ -6873,11 +6946,10 @@ func _stage_strength_used(slot: int) -> Dictionary:
 
 ## engine/overworld/events.asm's TryTileCollisionEvent, from `.cut` on: the five
 ## field-move branches a faced tile can reach, each a `Try*OW` gate and then an
-## `Ask*Script`. Synthesized for the reason AskStrengthScript is, and dispatched
-## on the request kind rather than a standard-script index because these are
-## reached through `CallScript`. Which move the tile offers is [Gen2WorldAPI]'s
-## answer; what is left here is the party and the badge. TryHeadbuttOW and
-## TrySurfOW have no refusal text: they return no carry and nothing is shown.
+## `Ask*Script`. Synthesized as AskStrengthScript is, and dispatched on the request
+## kind because these are reached through `CallScript`. [Gen2WorldAPI] answers which
+## move the tile offers; the party and the badge are left. TryHeadbuttOW and
+## TrySurfOW have no refusal text: nothing is shown.
 func _stage_field_move_prompt() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():
@@ -6956,13 +7028,12 @@ func _field_move_prompt_refusal(move: int) -> String:
 	return ""
 
 
-## engine/events/overworld.asm's AskRockSmashScript, synthesized for the same
-## reason AskStrengthScript is: SmashRockScript is `farsjump AskRockSmashScript`
-## and its first command is `callasm HasRockSmash`, whose operand is a link-time
-## address absent from the pins, so the seam is the standard-script index, 15 in
-## both. `HasRockSmash` is CheckPartyMove and nothing else, so unlike the boulder
-## there is no badge and no already-active flag to check: the whole gate is whether
-## a party member knows ROCK SMASH.
+## engine/events/overworld.asm's AskRockSmashScript, synthesized as AskStrengthScript
+## is: SmashRockScript is `farsjump AskRockSmashScript` and its first command is
+## `callasm HasRockSmash`, a link-time address absent from the pins, so the seam is
+## the standard-script index, 15 in both. `HasRockSmash` is CheckPartyMove alone, so
+## unlike the boulder there is no badge or already-active flag: the whole gate is
+## whether a party member knows ROCK SMASH.
 func _stage_smash_rock() -> Dictionary:
 	var party: Dictionary = _request.get("party", {})
 	if party.is_empty():

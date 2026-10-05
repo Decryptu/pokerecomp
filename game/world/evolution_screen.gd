@@ -3,12 +3,10 @@ extends Control
 
 ## `EvolveAfterBattle`'s `.proceed` and the `EvolutionAnimation` it farcalls, for
 ## one plan at a time out of [method Gen2Evolution.after_battle], or Generation
-## 1's `.doEvolution` and `EvolveMon` over the same plans. Presentation only:
-## nothing here writes a party row, and each plan is announced with [signal
-## resolved] where `.proceed` writes the new species, so the caller applies it in
-## the source's own order. `.PlayEvolvedSFX`'s thirty-two balls of light are
-## sprite-anim objects and this project has no such layer outside the intro, so
-## their frames are spent and the screen holds the new picture through them.
+## 1's `.doEvolution` and `EvolveMon`. Presentation only: each plan is announced
+## with [signal resolved] where `.proceed` writes the new species. The thirty-two
+## balls of light of `.PlayEvolvedSFX` are sprite-anim objects with no layer here,
+## so the screen holds the new picture through their frames.
 
 signal resolved(plan: Dictionary, canceled: bool)
 signal closed()
@@ -263,6 +261,9 @@ func _advance_crystal(pressed_b: bool) -> void:
 		Phase.EVOLVING:
 			if _spend():
 				_open_animation()
+		Phase.CRY:
+			if not _still_waiting():
+				_begin_music()
 		Phase.HOLD:
 			if _spend():
 				_begin_flash()
@@ -276,8 +277,11 @@ func _advance_crystal(pressed_b: bool) -> void:
 				_open_frontpic_animation()
 		Phase.ANIMATE:
 			_advance_frontpic_animation()
+		Phase.CRY_NEW:
+			if not _still_waiting():
+				_show_stopped_text()
 		Phase.CONGRATULATIONS:
-			if _spend():
+			if not _still_waiting() and _spend():
 				_finish_plan()
 		Phase.CANCELED:
 			## `StoppedEvolvingText` ends in `prompt`, so this one waits on a
@@ -292,8 +296,8 @@ func _spend() -> bool:
 
 
 ## `EvolutionAnimation` up to its `ld c, 80`: the map is cleared, the OLD pic is
-## placed, the cry plays unless the Pokemon is statused, and the evolution track
-## takes over from whatever was playing.
+## placed, the cry plays and finishes unless the Pokemon is statused, and the
+## evolution track takes over from whatever was playing.
 func _open_animation() -> void:
 	var plan: Dictionary = current_plan()
 	_text_box.visible = false
@@ -301,8 +305,15 @@ func _open_animation() -> void:
 	_pic.visible = true
 	_draw_species(int(plan.get("old_species", 0)))
 	music_requested.emit(MUSIC_NONE)
-	if not bool(plan.get("statused", false)):
-		cry_requested.emit(int(plan.get("old_species", 0)))
+	if bool(plan.get("statused", false)):
+		_begin_music()
+		return
+	cry_requested.emit(int(plan.get("old_species", 0)))
+	_begin_wait()
+	_phase = Phase.CRY
+
+
+func _begin_music() -> void:
 	music_requested.emit(MUSIC_EVOLUTION)
 	_enter(Phase.HOLD, MUSIC_FRAMES)
 
@@ -368,10 +379,19 @@ func _cancel() -> void:
 		cry_requested.emit(int(plan.get("old_species", 0)))
 	if _gen1:
 		_apply_gen1_palette(_data.palette(int(plan.get("old_species", 0))))
-	_phase = Phase.CANCELED
 	_backdrop.visible = true
+	## `PlayMonCry`'s `WaitSFX` ends before `EvolveMon` prints the text.
+	if not _gen1 and not bool(plan.get("statused", false)):
+		_begin_wait()
+		_phase = Phase.CRY_NEW
+		return
+	_show_stopped_text()
+
+
+func _show_stopped_text() -> void:
+	_phase = Phase.CANCELED
 	_show_text(_line("stopped_evolving", Gen2Evolution.stopped_evolving_text(
-		String(plan.get("evolving_name", ""))
+		String(current_plan().get("evolving_name", ""))
 	)))
 
 
@@ -422,6 +442,7 @@ func _open_congratulations() -> void:
 	))
 	music_requested.emit(MUSIC_NONE)
 	sfx_requested.emit(Gen2Sfx.SFX_CAUGHT_MON)
+	_begin_wait()
 	_frames = CAUGHT_FRAMES
 
 

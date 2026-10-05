@@ -194,10 +194,14 @@ const GEN1_TEXT_FALLBACKS: Dictionary = {TEXT_NO_MON: "You don't have\nany #MON!
 
 ## The pack's submenus: `MenuHeader_UsableKeyItem` and its five siblings differ
 ## only in where the box starts, `menu_coords 13, y, SCREEN_WIDTH - 1, TEXTBOX_Y - 1`
-## with y `TEXTBOX_Y - 1 - 2 * items`, so the rows end on the text box.
+## with y `TEXTBOX_Y - 1 - 2 * items`, so the rows end on the text box. pokegold
+## puts them at columns 0 to 6, and gives its five-row header a bottom of `TEXTBOX_Y`.
 const ITEM_MENU_LEFT: int = 13
 const ITEM_MENU_RIGHT: int = 19
 const ITEM_MENU_BOTTOM: int = 11
+const GOLD_ITEM_MENU_LEFT: int = 0
+const GOLD_ITEM_MENU_RIGHT: int = 6
+const USABLE_KEY_ITEM_ROWS: int = 5
 ## [method Gen2MenuBox.yes_no]'s box: left 14, right 19, top 7, bottom 11.
 const YES_NO_AT: Vector2i = Vector2i(14, 7)
 const YES_NO_SPAN: Vector2i = Vector2i(5, 4)
@@ -256,9 +260,8 @@ var _box_owes_press: bool = false
 ## What runs when the last page of the box is pressed past, instead of the pack
 ## coming back: the next move an evolution has to offer.
 var _pack_result_next: Callable = Callable()
-## AskTeachTMHM's resolved prompt, held while its yes/no is on screen, and
-## whether the party list that follows is ChooseMonToLearnTMHM's rather than
-## `.Party`'s.
+## AskTeachTMHM's resolved prompt, held while its yes/no is on screen, and whether
+## the party list that follows is ChooseMonToLearnTMHM's rather than `.Party`'s.
 var _teach_prompt: Dictionary = {}
 var _teach_cursor: int = 0
 var _teaching: bool = false
@@ -291,9 +294,8 @@ var _using_registered: bool = false
 ## An entry point asked for before the panel was built, run once it is.
 var _pending_entry: Callable = Callable()
 
-## ForgetMove's list and the two yes/no boxes around it. The party index is held
-## because the second teach_tm_hm() call has to name the same Pokémon the first
-## one refused.
+## ForgetMove's list and the two yes/no boxes around it. The party index is held because the
+## second teach_tm_hm() call has to name the same Pokémon the first one refused.
 var _forget_moves: Array = []
 ## `RestorePPEffect`'s own `MoveSelectionScreen`: which item asked and which
 ## party member it is being used on, held while the move list is up.
@@ -325,17 +327,24 @@ var _save_frames: int = 0
 var _save_clock := Gen2WorldAnimation.FrameClock.new()
 ## `SaveMenu`'s own sequence while one is up, and null the rest of the time.
 var _save_prompt: Gen2SavePrompt = null
+## `WaitSFX` behind `_Option.ExitOptions` and `PartyMenuSelect`'s click.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_holding: bool = false
+var _sound_watch: Dictionary = {}
+var _sound_then: Callable = Callable()
 
 var _options_menu: Gen2WorldOptionsMenu = null
 
 ## The two kinds of row the MODS entry holds: see [method _mod_rows].
 const MOD_ROW_VIEW: StringName = &"view"
 const MOD_ROW_MOD: StringName = &"mod"
+const MOD_ROW_CATEGORY: StringName = &"category"
 
 ## The MODS entry: which mod is being configured and where each cursor sits.
 ## The rows are the host's registrations, read fresh on every render so a value
 ## changed from the launcher is never shown stale; see [method _mod_rows].
-var _mod_ids: Array[StringName] = []
+var _mod_path: Array[String] = []
+var _mod_trail: Array[int] = []
 var _mod_cursor: int = 0
 var _mod_id: StringName = &""
 var _mod_option_cursor: int = 0
@@ -352,6 +361,8 @@ var _mail_target: int = -1
 var _mail_swap: bool = false
 var _view: TextureRect = null
 var _page: Gen2StartMenuPage = null
+var menu_transition: Gen2MenuTransition = null
+var _fade_order: int = Gen2WorldPalette.FADE_IDENTITY
 ## `LoadPartyMenuGFX`: the target list is the party menu, so it is drawn by the
 ## page that draws the party menu everywhere else.
 var _target_page: Gen2PartyMenuPage = null
@@ -406,6 +417,32 @@ func set_party_context(save: Gen2SaveData, persist: bool = true) -> void:
 ## way the source's wBattleMenuCursorPosition survives a reopen.
 func cursor() -> int:
 	return _menu.cursor if _menu != null else 0
+
+
+func set_fade_order(order: int) -> void:
+	if order == _fade_order:
+		return
+	_fade_order = order
+	if _page != null:
+		_page.palette = Gen2WorldPalette.text_palette(order)
+	_render_hardware()
+
+
+func _fade_to_menu(opening: Callable) -> void:
+	if menu_transition == null:
+		opening.call()
+		return
+	menu_transition.fade_to_menu(opening)
+
+
+## `CloseSubmenu`: the list comes back under the white, [param done] once the map has.
+func _close_submenu(done: Callable = Callable()) -> void:
+	_open_list_mode()
+	if menu_transition == null:
+		if done.is_valid():
+			done.call()
+		return
+	menu_transition.close_submenu(done)
 
 
 ## `GiveTakePartyMonItem`'s GIVE, which opens the pack over a Pokemon the player
@@ -503,6 +540,8 @@ func _select_pack_item(item: int) -> bool:
 
 
 func handle_button(button: int) -> bool:
+	if _sound_holding:
+		return true
 	## The mail keyboard owns all 160x144 while it is up, the way BILL'S PC's
 	## own does over the box screen.
 	if _naming != null:
@@ -522,7 +561,9 @@ func handle_button(button: int) -> bool:
 		_render_hardware()
 		return pressed
 	if PokeButton.is_direction(button):
+		var before: Vector2i = _list_position(button)
 		_move(PokeButton.vector(button))
+		Gen2ScrollingMenu.after_press(_gen1_pack(), before, _list_position(button))
 		_render_hardware()
 		return true
 	match button:
@@ -543,9 +584,10 @@ func handle_button(button: int) -> bool:
 		## `.MenuData`'s STATICMENU_ENABLE_START, which `ContinueGettingMenuJoypad`
 		## answers as B; Generation 1's `RedisplayStartMenu` tests `PAD_B | PAD_START`.
 		PokeButton.START:
-			if _mode != Mode.LIST:
+			if _mode != Mode.LIST and _mode != Mode.OPTIONS:
 				return false
 			_cancel()
+			_render_hardware()
 			return true
 	return false
 
@@ -570,10 +612,10 @@ func _apply_switch_press() -> void:
 	if next_order != order and _world != null:
 		Gen2WorldBagHost.reorder(_world, _pack_save, next_order, false, _pack_persist)
 		_open_pack_mode(false)
-		## `.place_insert` asks for the same effect twice through `WaitPlaySFX`.
+		## `.place_insert`'s two `WaitPlaySFX`: the first ends before the second.
 		if not gen1:
 			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
-			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+			_hold_for_sound(sfx_requested.emit.bind(Gen2Sfx.SFX_SWITCH_POKEMON, true))
 	_pack_switch = int(answer["held"])
 
 
@@ -709,29 +751,32 @@ func _move_mod_options(direction: Vector2i) -> void:
 		_adjust_mod_option(rows, direction.x)
 
 ## `hInMenu`: the pack's `ScrollingMenu`, the OPTION screen and the dials'
-## `JoyTextDelay_ForcehJoyDown`.
-func menu_repeats() -> bool:
-	return _mode in [
-		Mode.PACK, Mode.OPTIONS, Mode.MODS, Mode.MOD_OPTIONS, Mode.PACK_TOSS_QUANTITY,
-	]
+## `JoyTextDelay_ForcehJoyDown`. Only `OptionsControl` reads `hJoyLast`; every
+## `Options_*` handler tests `hJoyPressed`, so a held LEFT or RIGHT acts once.
+func menu_repeats(button: int) -> bool:
+	if _mode == Mode.OPTIONS:
+		return button in [PokeButton.UP, PokeButton.DOWN]
+	return _mode in [Mode.PACK, Mode.MODS, Mode.MOD_OPTIONS, Mode.PACK_TOSS_QUANTITY]
 
 
 ## `StartMenu.GetInput`'s click on A, the pack's and `PartyMenuSelect`'s on either.
-func _menu_click(button: int) -> void:
+## Whether the click is one `WaitSFX` follows, which is `PartyMenuSelect`'s.
+func _menu_click(button: int) -> bool:
 	if _mode == Mode.PACK_TARGET:
 		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not _gen1_pack())
-		return
+		return not _gen1_pack()
 	var clicks: bool = _mode in [Mode.PACK, Mode.PACK_ITEM] \
 		or (_mode == Mode.LIST and (button == PokeButton.A or _gen1_pack()))
 	if clicks:
 		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	return false
 
 
 func _confirm() -> void:
-	_menu_click(PokeButton.A)
-	if _hold_yes_no(_confirm_now):
-		return
-	_confirm_now()
+	if _menu_click(PokeButton.A):
+		_hold_for_sound(_confirm_now)
+	elif not _hold_yes_no(_confirm_now):
+		_confirm_now()
 
 
 func _confirm_now() -> void:
@@ -748,6 +793,10 @@ func _confirm_now() -> void:
 			## the same way it answers B.
 			if _target_cursor >= _party_targets().size():
 				_open_item_mode()
+			elif _world != null and _target_cursor == _world.gen1_sleeping_starter_slot():
+				_show_pack_result(
+					_data.special_text("bills_pc_sleeping", "no_response"), _open_item_mode
+				)
 			elif _teaching:
 				_teach_selected_item(_target_cursor)
 			elif _giving:
@@ -759,13 +808,11 @@ func _confirm_now() -> void:
 		## Options_Cancel is the only handler that reads A.
 		Mode.OPTIONS:
 			if _options_menu.is_cancel():
-				_open_list_mode()
+				_exit_options()
 		## The VIEW row is read with left and right, the way a value row is, so
 		## A does nothing on it.
 		Mode.MODS:
-			var chosen: Dictionary = _mod_row()
-			if StringName(chosen.get("kind", &"")) == MOD_ROW_MOD:
-				_open_mod_options_mode(StringName(chosen["id"]))
+			_open_mod_row(_mod_row())
 
 
 ## A pack opened over one Pokemon has no menu to go back to; A and B agree.
@@ -804,10 +851,10 @@ func _confirm_pack() -> void:
 
 
 func _cancel() -> void:
-	_menu_click(PokeButton.B)
-	if _hold_yes_no(_cancel_now):
-		return
-	_cancel_now()
+	if _menu_click(PokeButton.B):
+		_hold_for_sound(_cancel_now)
+	elif not _hold_yes_no(_cancel_now):
+		_cancel_now()
 
 
 func _cancel_now() -> void:
@@ -823,8 +870,10 @@ func _cancel_now() -> void:
 				battle_item_chosen.emit(0)
 			elif _depositing_or_selling() or _battling:
 				closed.emit()
-			else:
+			elif _give_target >= 0:
 				_open_list_mode()
+			else:
+				_close_submenu()
 		Mode.PACK_ITEM, Mode.PACK_TEACH:
 			_open_pack_mode(false)
 		Mode.PACK_RESULT:
@@ -841,7 +890,11 @@ func _cancel_now() -> void:
 			_open_target_mode()
 		Mode.PACK_TARGET:
 			_remember_target()
-			_open_item_mode()
+			## `UseRegisteredItem.Party` has no item menu behind its list.
+			if _using_registered:
+				closed.emit()
+			else:
+				_open_item_mode()
 		## B at the yes/no is `YesNoBox`'s no, which is the carry `TossMenu`
 		## returns on. The submenu is already closed by then, so it lands back on
 		## the pocket list rather than on the item's own menu.
@@ -851,8 +904,10 @@ func _cancel_now() -> void:
 		Mode.SAVE_FAILED, Mode.QUIT_ASK, Mode.LAUNCHER_ASK, Mode.RESET_ASK:
 			_cancel_save()
 		## `_Option.joypad_loop` exits on PAD_START | PAD_B from any row.
-		Mode.OPTIONS, Mode.MODS, Mode.FIELD_MOVES:
-			_open_list_mode()
+		Mode.OPTIONS:
+			_exit_options()
+		Mode.MODS, Mode.FIELD_MOVES:
+			_leave_mods_level()
 		Mode.MOD_OPTIONS:
 			_open_mods_mode()
 
@@ -868,7 +923,7 @@ func _confirm_list() -> void:
 				and _world.gen1_link_state() == Gen1Layout.LINK_STATE_IN_CABLE_CLUB:
 				_show_pack_result(_pack_text(TEXT_CANNOT_USE_ITEMS), _open_list_mode)
 				return
-			_open_pack_mode()
+			_fade_to_menu(_open_pack_mode)
 		Gen2WorldStartMenu.ITEM_SAVE:
 			_open_save_confirm_mode()
 		Gen2WorldStartMenu.ITEM_RESET:
@@ -876,9 +931,9 @@ func _confirm_list() -> void:
 		Gen2WorldStartMenu.ITEM_QUIT:
 			_enter_save_mode(Mode.QUIT_ASK, QUIT_ASK_LINES, 0)
 		Gen2WorldStartMenu.ITEM_OPTION:
-			_open_options_mode()
+			_fade_to_menu(_open_options_mode)
 		Gen2WorldStartMenu.ITEM_MODS:
-			_open_mods_mode()
+			_open_mods_root()
 		Gen2WorldStartMenu.ITEM_FIELD_MOVES:
 			_open_field_moves_mode()
 		Gen2WorldStartMenu.ITEM_EXIT:
@@ -982,6 +1037,40 @@ func _open_options_mode() -> void:
 	_render_options_menu()
 
 
+## `_Option.ExitOptions`: Crystal's `SFX_TRANSACTION` and `WaitSFX` (pokegold has
+## none); Red and Blue's `.exitMenu` `SFX_PRESS_AB` (Yellow plays nothing).
+func _exit_options() -> void:
+	match Gen2WorldOptionsMenu.layout_for(_data):
+		Gen2WorldOptionsMenu.Layout.GEN1:
+			sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+		Gen2WorldOptionsMenu.Layout.YELLOW:
+			pass
+		_:
+			if Gen2WorldState.is_crystal_profile(_data):
+				sfx_requested.emit(Gen2Sfx.SFX_TRANSACTION, true)
+				_hold_for_sound(_close_submenu)
+				return
+	_close_submenu()
+
+
+func _hold_for_sound(then: Callable = Callable()) -> void:
+	_sound_watch = {}
+	_sound_then = then
+	_sound_holding = true
+	_release_sound()
+
+
+func _release_sound() -> void:
+	if not _sound_holding or bool(sound_busy.call(_sound_watch)):
+		return
+	_sound_holding = false
+	var then: Callable = _sound_then
+	_sound_then = Callable()
+	if then.is_valid():
+		then.call()
+	_render_hardware()
+
+
 ## Written on every change, matching the launcher card and the cartridge, which
 ## commits each press to `wOptions` rather than on the way out.
 func _persist_options() -> void:
@@ -993,26 +1082,51 @@ func _render_options_menu() -> void:
 	_render_hardware()
 
 
-## The MODS entry: the mods that registered a setting, one row each. Only
-## reachable when there is at least one, which is what puts the entry in the list
-## at all.
+func _open_mods_root() -> void:
+	_mod_path = []
+	if not _mod_trail.is_empty():
+		_mod_cursor = _mod_trail[0]
+	_mod_trail = []
+	_open_mods_mode()
+
+
+## The MODS entry: the mods that registered a setting, one row each. Only reachable
+## when there is at least one, which is what puts the entry in the list at all.
 func _open_mods_mode() -> void:
 	_mode = Mode.MODS
-	_mod_ids = Gen2ModHost.instance().option_mod_ids()
 	_mod_cursor = clampi(_mod_cursor, 0, maxi(_mod_rows().size() - 1, 0))
 	_render_mods()
 
 
-## The rows MODS shows: the host's own VIEW row where there is more than one
-## view, then one row per mod that registered a setting. `V` is behind
+## The rows MODS shows: the host's own VIEW row at the top level where there is
+## more than one view, then the host's categories and mods. `V` is behind
 ## [method PokeDebugKeys.enabled], so this is where a shipped build changes it.
 func _mod_rows() -> Array:
 	var rows: Array = []
-	if Gen2ModHost.instance().view_ids().size() > 1:
-		rows.append({"kind": MOD_ROW_VIEW, "id": &""})
-	for id: StringName in _mod_ids:
-		rows.append({"kind": MOD_ROW_MOD, "id": id})
+	if _mod_path.is_empty() and Gen2ModHost.instance().view_ids().size() > 1:
+		rows.append({"kind": MOD_ROW_VIEW, "id": &"", "label": "VIEW"})
+	rows.append_array(Gen2ModHost.instance().option_menu(_mod_path))
 	return rows
+
+
+func _open_mod_row(row: Dictionary) -> void:
+	match StringName(row.get("kind", &"")):
+		MOD_ROW_MOD:
+			_open_mod_options_mode(StringName(row["id"]))
+		MOD_ROW_CATEGORY:
+			_mod_trail.append(_mod_cursor)
+			_mod_path.append(String(row["label"]))
+			_mod_cursor = 0
+			_render_mods()
+
+
+func _leave_mods_level() -> void:
+	if _mode != Mode.MODS or _mod_path.is_empty():
+		_open_list_mode()
+		return
+	_mod_path.pop_back()
+	_mod_cursor = _mod_trail.pop_back()
+	_render_mods()
 
 
 func _mod_row() -> Dictionary:
@@ -1072,15 +1186,6 @@ func _field_move_labels() -> Array:
 	for row: Dictionary in _field_move_rows:
 		out.append(String(_data.move(int(row["move"])).get("name", "")) if _data != null else "")
 	return out
-
-
-## The name the player installed, falling back to the id for a mod registered
-## without a manifest, which is what a test or the built-in host does.
-func _mod_name(id: StringName) -> String:
-	for manifest: PokeModManifest in Gen2ModHost.instance().manifests():
-		if manifest.id == id:
-			return manifest.name
-	return String(id)
 
 
 func _open_mod_options_mode(id: StringName) -> void:
@@ -1227,6 +1332,16 @@ func _cycle_pocket(delta: int) -> void:
 	)
 	_remember_pack()
 	_render_pack()
+
+
+## The pack's row and window as [Gen2ScrollingMenu] reads them. The TM/HM pocket
+## runs `StaticMenuJoypad` and left and right change pocket, so neither stalls.
+func _list_position(button: int) -> Vector2i:
+	var sideways: bool = button == PokeButton.LEFT or button == PokeButton.RIGHT
+	if _mode != Mode.PACK or _pack_pockets.is_empty() or sideways \
+			or int(_current_pocket().get("pocket", 0)) == Gen2WorldPack.TYPE_TM_HM:
+		return Gen2ScrollingMenu.NOT_A_LIST
+	return Vector2i(_pack_cursor, _pack_scroll[_pack_pocket_index])
 
 
 ## `ScrollingMenuJoyAction`'s `.d_up` and `.d_down`, which move the cursor
@@ -1388,9 +1503,15 @@ func _pack_yes_no(cursor_index: int) -> Image:
 ## `MenuHeader_UsableKeyItem` and its five siblings, which are one box whose top
 ## is chosen so [param count] rows end on the text box.
 func _item_menu_box(count: int) -> Gen2MenuBox:
+	if Gen2WorldState.is_crystal_profile(_data):
+		return Gen2MenuBox.from_coords(
+			ITEM_MENU_LEFT, ITEM_MENU_BOTTOM - 2 * maxi(count, 0),
+			ITEM_MENU_RIGHT, ITEM_MENU_BOTTOM, SUBMENU_FLAGS
+		)
+	var bottom: int = ITEM_MENU_BOTTOM + int(count == USABLE_KEY_ITEM_ROWS)
 	return Gen2MenuBox.from_coords(
-		ITEM_MENU_LEFT, ITEM_MENU_BOTTOM - 2 * maxi(count, 0),
-		ITEM_MENU_RIGHT, ITEM_MENU_BOTTOM, SUBMENU_FLAGS
+		GOLD_ITEM_MENU_LEFT, bottom - 2 * maxi(count, 0),
+		GOLD_ITEM_MENU_RIGHT, bottom, SUBMENU_FLAGS
 	)
 
 
@@ -1594,6 +1715,7 @@ func _register_selected_item() -> void:
 			"Could not register that (%s)." % String(result.get("reason", ""))
 		)
 		return
+	sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, true)
 	_show_pack_result(Gen2WorldPack.registered_text(String(result.get("name", ""))))
 
 
@@ -1842,7 +1964,11 @@ func _use_field_item(item: int) -> void:
 		return
 	## `.CheckIfRegistered`: the Bicycle's two scripts each have a silent copy.
 	request["registered"] = _using_registered
-	field_item_used.emit(request)
+	## `.used_item`'s `ExitAllMenus`, which SELECT and a Generation 1 box never reach.
+	if _using_registered or _gen1_pack():
+		field_item_used.emit(request)
+		return
+	_close_submenu(field_item_used.emit.bind(request))
 
 
 ## One `ItemEffects` entry each, in the order `Gen2WorldPack.FIELD_EFFECTS` names
@@ -1929,6 +2055,7 @@ func _party_targets() -> Array:
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
 			"quality": _target_quality_text(mon),
+			"hidden": _world != null and targets.size() == _world.gen1_sleeping_starter_slot(),
 		})
 	return targets
 
@@ -2039,6 +2166,12 @@ func _teach_selected_item(party_index: int) -> void:
 				return
 		if reason == &"not_compatible":
 			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
+		## `ChooseMonToLearnTMHM.egg`: `SFX_WRONG`, waited out, and the list again.
+		if reason == &"cannot_teach_egg":
+			_teaching = true
+			sfx_requested.emit(Gen2Sfx.SFX_WRONG, false)
+			_hold_for_sound()
+			return
 		## `ItemUseTMHM`'s refusals `jr .chooseMon`; `TeachTMHM`'s `.nope` returns to the pack.
 		var again: Callable = Callable()
 		if _gen1_pack() and (reason == &"not_compatible" or reason == &"already_knows_move"):
@@ -2116,12 +2249,11 @@ func _confirm_forget() -> void:
 		)
 		return
 	var target_name: String = _target_name(_forget_party_index)
-	if _gen1_pack():
-		gen1_sfx_requested.emit(Gen1Sfx.SFX_SWAP)
-	else:
-		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, false)
 	_show_pack_result("%s%s%s" % [
-		Gen2MoveForget.forgot_text(target_name, String(entry.get("name", "")), _data.generation),
+		Gen2MoveForget.forgot_text(
+			target_name, String(entry.get("name", "")), _data.generation,
+			_data.id == RomRegistry.YELLOW
+		),
 		Gen2TextStream.PAGE_BREAK,
 		Gen2MoveForget.learned_text(target_name, _forget_move_name, _data.generation),
 	], _offer_next_evolution_move if _learning_move > 0 else Callable(),
@@ -2174,8 +2306,6 @@ func _teach_refusal(reason: StringName, party_index: int) -> String:
 			return Gen2MoveForget.cant_forget_hm_text(_data.generation)
 		&"invalid_forget_slot":
 			return "%s can't forget that move." % target_name
-		&"cannot_teach_egg":
-			return "An EGG can't learn anything."
 	return "Can't teach that: %s" % String(reason)
 
 
@@ -2227,6 +2357,10 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 				_open_pp_move_list.bind(number, party_index)
 			)
 			return
+		## Red and Blue sound the stone before they know it does nothing; Yellow asks the species first.
+		if _gen1_pack() and _data.id != RomRegistry.YELLOW \
+				and number in Gen2Evolution.stone_items(_data):
+			gen1_sfx_requested.emit(Gen1Sfx.SFX_HEAL_AILMENT)
 		## `NoEffectMessage` is `PrintText` over the party list.
 		_show_pack_result(
 			_use_refusal(StringName(result.get("reason", &"")), number), Callable(),
@@ -2256,6 +2390,8 @@ func _use_selected_item(party_index: int, move_slot: int = -1) -> void:
 			"new_species": int(result.get("new_species", 0)),
 			"evolving_name": String(result.get("evolving_name", "")),
 		}, true)
+		if _gen1_pack():
+			shown["pre_sound"] = Gen1Sfx.SFX_HEAL_AILMENT
 		evolution_animation_requested.emit(shown, _offer_next_evolution_move)
 		return
 	if party_index >= 0:
@@ -2291,15 +2427,20 @@ func _show_party_result(
 	elif kind == Gen2ItemActionText.LEVEL:
 		## Both texts end in `text_promptbutton`, and `PrintTempMonStats`' box is
 		## drawn behind that press with no `DelayFrames` in front.
-		sfx_requested.emit(Gen2Sfx.SFX_DEX_FANFARE_50_79, true)
 		party["stats_after_press"] = _party_stats(party_index)
-	else:
-		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, false)
+	elif not _pp_up_is_silent(result):
+		sfx_requested.emit(Gen2Sfx.SFX_FULL_HEAL, true)
 	if kind != &"" and not party.has("anim") and kind != Gen2ItemActionText.LEVEL:
 		party["hold"] = Gen2ItemActionText.HOLD_FRAMES
 	if bool(result.get("bitter", false)):
 		next = _say_bitter.bind(next)
 	_show_pack_result(_party_result_text(item, result, party_index, kind), next, party)
+
+
+## `.PPNotMaxedOut` is silent in Red and Blue; Yellow added `SFX_HEAL_AILMENT`.
+func _pp_up_is_silent(result: Dictionary) -> bool:
+	return StringName(result.get("effect", &"")) == &"pp_up" \
+		and _data.generation == RomRegistry.GEN1 and _data.id != RomRegistry.YELLOW
 
 
 ## `LooksBitterMessage`, over the list the action line left behind.
@@ -2781,6 +2922,7 @@ func _open_save_confirm_mode() -> void:
 		_pack_save.player_name if _pack_save != null else "",
 		_save_action, _pack_save == null or _pack_save.save_file_exists
 	)
+	_save_prompt.sound_busy = Gen2AudioPlayer.sound_wait
 	_sync_save_prompt()
 
 
@@ -2811,8 +2953,7 @@ func _sync_save_prompt() -> void:
 		closed.emit()
 		return
 	if _save_prompt.take_sfx():
-		## `SavedTheGame` reaches it through `WaitPlaySFX`; the wait behind it is
-		## not spent, for the reason the intro cry's is not.
+		## `SavedTheGame`'s `WaitPlaySFX`; [Gen2SavePrompt] spends the `WaitSFX`.
 		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	_mode = SAVE_PROMPT_MODES[_save_prompt.step]
 	_save_lines = _save_prompt.lines.duplicate()
@@ -2906,6 +3047,9 @@ func ask_soft_reset() -> void:
 
 ## One hardware frame of the box, a held YES/NO answer or the save's timed modes.
 func advance_frame() -> void:
+	if _sound_holding:
+		_release_sound()
+		return
 	if _box_up:
 		_box.advance_frame()
 		if _sale_sfx >= 0 and not _box.has_text_left():
@@ -3092,11 +3236,18 @@ func _save_text() -> String:
 	]
 
 
+func _new_page() -> Gen2StartMenuPage:
+	var page: Gen2StartMenuPage = Gen2StartMenuPage.from_data(_data)
+	if page != null:
+		page.palette = Gen2WorldPalette.text_palette(_fade_order)
+	return page
+
+
 func _hardware_image() -> Image:
 	if _data == null:
 		return null
 	if _page == null:
-		_page = Gen2StartMenuPage.from_data(_data)
+		_page = _new_page()
 	if _page == null:
 		return null
 	match _mode:
@@ -3242,7 +3393,7 @@ func _mod_rows_image() -> Image:
 			var host: Gen2ModHost = Gen2ModHost.instance()
 			rows.append({"label": "VIEW", "value": host.view_label(host.selected_view())})
 			continue
-		rows.append({"label": _mod_name(StringName(row["id"])), "value": ""})
+		rows.append({"label": String(row["label"]), "value": ""})
 	var window: Dictionary = _option_window(rows, _mod_cursor)
 	return _page.render_options(window["rows"], window["cursor"])
 

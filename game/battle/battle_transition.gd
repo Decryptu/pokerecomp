@@ -293,9 +293,8 @@ static func create(
 
 
 ## The scatter outro on its own, for a cover that is not a battle: no ball, no
-## flash and no BG map of squares, because nothing is being transitioned to.
-## `StartTrainerBattle_SetUpForRandomScatterOutro` and `..._SpeckleToBlack` are
-## the whole of it, which is what a view switch is dressed in.
+## flash and no BG map of squares. `StartTrainerBattle_SetUpForRandomScatterOutro`
+## and `..._SpeckleToBlack` are the whole of it, which is what a view switch wears.
 static func create_outro(rng: RandomNumberGenerator = null) -> Gen2BattleTransition:
 	var out := Gen2BattleTransition.new()
 	out._scene = [&"scatter_setup", &"scatter"]

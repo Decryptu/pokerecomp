@@ -801,9 +801,8 @@ static func _verify_title_run(
 ## names a tile inside `TownMapGFX`'s 48, which no unrelated 360-byte run does,
 ## and each ends on its own `-1`. The palette map is checked the same way and the
 ## palette run by the off-white all six open on. The landmark table checks both
-## ends and every name pointer between: `SPECIAL` sits at (0,0) with the only
-## zeroed record, the last row is the Fast Ship, and a pointer that leaves the
-## table's bank is not a name.
+## ends and every name pointer: `SPECIAL` sits at (0,0) with the only zeroed
+## record, the last row is the Fast Ship, and a pointer leaving the bank is no name.
 static func verify_town_map(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if (layout.get("town_map", {}) as Dictionary).is_empty():
 		return {"ok": true, "message": "No region map on this cartridge."}
@@ -1270,6 +1269,7 @@ const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 	"poke_seer": ["see_all", "I see all."],
 	"buena_prize": ["ask_which_prize", "Which prize would"],
 	"mystery_gift": ["canceled", "The link has been"],
+	"bug_contest": ["first", "This Bug-Catching"],
 	## Four of the trade's boxes open on a `text_ram` marker whose address
 	## differs by profile, so the anchor is the one that opens on a literal.
 	"trade": ["take_good_care", "Take good care of"],
@@ -2535,11 +2535,9 @@ static func read_menu_descriptions(rom: RomFile, layout: Dictionary) -> Array[St
 ## data/text/name_input_chars.asm, pinned by content at both ends of every table:
 ## row 0 has to be the nine letters the table opens with and the last row the
 ## command row, which `NamingScreen_GetCursorPosition` reads by column. A run of
-## text bytes elsewhere passes neither.
-## Below it, `StringBufferPointers` checked against `ram/wram.asm` rather than an
-## address this project chose: `wStringBuffer1..5` are five consecutive
-## `ds STRING_BUFFER_LENGTH` runs, so the five general entries must sit one stride
-## apart in the order `data/text_buffers.asm` lists them.
+## text bytes elsewhere passes neither. Below it, `StringBufferPointers` against
+## `ram/wram.asm`: `wStringBuffer1..5` are five consecutive `ds STRING_BUFFER_LENGTH`
+## runs, so the five general entries sit one stride apart in `data/text_buffers.asm`'s order.
 static func verify_string_buffer_pointers(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout.get("string_buffer_pointers", -1))
 	var bytes: int = Gen2Layout.STRING_BUFFER_POINTER_COUNT * Gen2Layout.STRING_BUFFER_POINTER_SIZE
@@ -2597,10 +2595,9 @@ const MAIL_PALETTE_FIRST: Array[int] = [
 ## `MailItems`' own eleven bytes, the two mail keyboards at both ends, the flat
 ## tiles `gfx/mail.asm` begins and ends on, and `mail.pal`'s first colour per row
 ## with black behind every one. The icon is checked for bounds alone, eight 2bpp
-## tiles with no structure a wrong offset would fail, and `tools/checks/mail.gd`
-## looks at it. Below, the two mystery gift tables resolved through their own
-## constant blocks rather than read back out of a dump, which is what says the
-## pins are the tables and not some other pair of adjacent runs.
+## tiles with no structure a wrong offset would fail; `tools/checks/mail.gd` looks
+## at it. Below, the two mystery gift tables resolved through their own constant
+## blocks, which says the pins are the tables and not some other adjacent runs.
 const MYSTERY_GIFT_ITEM_NUMBERS: Array[int] = [
 	0xAD, 0x4E, 0x54, 0x50, 0x4F, 0x4A, 0x29, 0x33, 0x31, 0x53, 0x2C, 0x35,
 	0x21, 0xB9, 0xBA, 0xBC, 0x6D, 0xAE, 0x27, 0x04, 0x2A, 0x2B, 0x41, 0x3F,
@@ -4323,9 +4320,8 @@ static func _trainer_palette_check(
 ## table, which is the class every gym leader shares ("LEADER") rather than the
 ## trainer inside it ("FALKNER"). Nothing in a class's bytes says where its group
 ## ends, so its span is bounded by the next class's pointer and the last is walked
-## until a byte that cannot open a name. One class per game shares its pointer
-## with the next, the one class never sent into battle, and its honest span is
-## empty: see [constant Gen2Layout.EMPTY_TRAINER_CLASS].
+## until a byte that cannot open a name. One class per game shares its pointer with
+## the next, never being sent into battle: [constant Gen2Layout.EMPTY_TRAINER_CLASS].
 static func read_trainer_parties(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = Gen2Layout.trainer_class_count(layout)
 	var table: int = int(layout["trainer_parties"])
@@ -7635,13 +7631,12 @@ func _import_pics(
 	# front pic is loaded. It gets an atlas of its own because there is no
 	# species record to hang it on: EGG is a party species, not a Pokemon.
 	var egg_front: Dictionary = PokeTiles.new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, 1)
+	var egg_front_anim: Dictionary = PokeTiles.new_atlas(Gen2Layout.FRONTPIC_MAX_TILES, 1)
 	var egg_side: int = Gen2Layout.EGG_PIC_TILES
 	## Gold and Silver's table stops at NUM_POKEMON, so `_GetFrontpic` answers
 	## EGG with `ld hl, EggPic` and the pic is at an address like a back pic.
 	## Their picture is a different one.
-	## Crystal's run carries two animation frames that nothing reads:
-	## `GetEggFrontpic` is `GetMonFrontpic`, not `GetAnimatedFrontpic`, and
-	## `AnimateMon_CheckIfPokemon` refuses EGG before any script is read.
+	## Crystal's run also carries the frames `StatsScreen_AnimateEgg` loads.
 	var egg_at: int = int(layout.get("egg_pic", -1))
 	if egg_at >= 0:
 		_decode_lz_into(rom, egg_at, egg_side, egg_side, egg_front, 0)
@@ -7650,6 +7645,12 @@ func _import_pics(
 			rom, layout, Gen2Layout.pic_pointer_offset(layout, Gen2Layout.EGG_SPECIES, false),
 			egg_side, egg_side, egg_front, 0
 		)
+		if not Gen2Layout.pic_anim(layout).is_empty():
+			_decode_into(
+				rom, layout,
+				Gen2Layout.pic_pointer_offset(layout, Gen2Layout.EGG_SPECIES, false),
+				egg_side, egg_side, egg_front_anim, 0, egg_side * egg_side
+			)
 	var trainer_classes: int = Gen2Layout.trainer_class_count(layout)
 	var trainers: Dictionary = PokeTiles.new_atlas(
 		Gen2Layout.TRAINER_PIC_TILES, trainer_classes
@@ -7748,6 +7749,7 @@ func _import_pics(
 	if animated:
 		atlases["front_anim"] = front_anim
 		atlases["unown_front_anim"] = unown_front_anim
+		atlases["egg_front_anim"] = egg_front_anim
 	var written: Dictionary = {}
 	for name: String in atlases:
 		var atlas: Dictionary = atlases[name]
@@ -7861,6 +7863,15 @@ func _import_pic_anims(rom: RomFile, layout: Dictionary, species: Array) -> Dict
 		if record.is_empty():
 			return {}
 		(out["unown"] as Array).append(record)
+
+	# The egg's four tables follow the last species in each.
+	var egg: Dictionary = _read_pic_anim_at(
+		rom, Gen2Layout.EGG_PIC_TILES, int(pins["egg_script"]), int(pins["egg_idle_script"]),
+		int(pins["egg_bitmasks"]), int(pins["egg_frames"]), int(pins["johto_frame_bank"])
+	)
+	if egg.is_empty():
+		return {}
+	out["egg"] = egg
 	return out
 
 
@@ -7878,11 +7889,27 @@ func _read_pic_anim(
 	frame_pointer: int,
 	frame_bank: int
 ) -> Dictionary:
+	if not rom.in_bounds(script_pointer, 2) or not rom.in_bounds(idle_pointer, 2):
+		return {}
+	return _read_pic_anim_at(
+		rom, height,
+		RomFile.linear(script_bank, rom.u16le(script_pointer)),
+		RomFile.linear(script_bank, rom.u16le(idle_pointer)),
+		RomFile.linear(bitmask_bank, rom.u16le(bitmask_pointer)),
+		RomFile.linear(frame_bank, rom.u16le(frame_pointer)), frame_bank
+	)
+
+
+## [method _read_pic_anim] with every table an address; the egg's are inline.
+func _read_pic_anim_at(
+	rom: RomFile, height: int, script_at: int, idle_at: int, masks: int, table: int,
+	frame_bank: int
+) -> Dictionary:
 	var mask_bytes: int = Gen2Layout.pic_anim_bitmask_bytes(height)
 	if mask_bytes <= 0:
 		return {}
-	var script: PackedByteArray = _read_pic_anim_script(rom, script_bank, script_pointer)
-	var idle: PackedByteArray = _read_pic_anim_script(rom, script_bank, idle_pointer)
+	var script: PackedByteArray = _pic_anim_script_at(rom, script_at)
+	var idle: PackedByteArray = _pic_anim_script_at(rom, idle_at)
 	if script.is_empty() or idle.is_empty():
 		return {}
 
@@ -7894,8 +7921,6 @@ func _read_pic_anim(
 		for at: int in range(0, run.size(), 2):
 			if run[at] < PIC_ANIM_DOREPEAT:
 				count = maxi(count, int(run[at]))
-	var table: int = RomFile.linear(frame_bank, rom.u16le(frame_pointer))
-	var masks: int = RomFile.linear(bitmask_bank, rom.u16le(bitmask_pointer))
 	if not rom.in_bounds(table, count * 2):
 		return {}
 
@@ -7934,10 +7959,7 @@ const PIC_ANIM_DOREPEAT: int = 0xFD
 const PIC_ANIM_MAX_COMMANDS: int = 256
 
 
-func _read_pic_anim_script(rom: RomFile, bank: int, pointer: int) -> PackedByteArray:
-	if not rom.in_bounds(pointer, 2):
-		return PackedByteArray()
-	var at: int = RomFile.linear(bank, rom.u16le(pointer))
+func _pic_anim_script_at(rom: RomFile, at: int) -> PackedByteArray:
 	for index: int in PIC_ANIM_MAX_COMMANDS:
 		if not rom.in_bounds(at + index * 2, 2):
 			return PackedByteArray()

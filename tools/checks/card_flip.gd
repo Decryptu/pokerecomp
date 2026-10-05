@@ -3,11 +3,10 @@ extends RefCounted
 ## Sweeps `_CardFlip` on freshly imported real caches, all three cartridges. Every
 ## expectation is transcribed from pokecrystal's own engine/games/card_flip.asm
 ## rather than read back out of the implementation, which is the only way the topic
-## can go red. The class of bug it exists to catch is a bet that pays the wrong
-## cell: `CardFlip_CheckWinCondition` is a jumptable of forty-eight, most of whose
-## entries differ from their neighbour by one bit test, so a cursor read one cell
-## out still pays something. It therefore drives the whole forty-eight by
-## twenty-four grid rather than sampling, and whole games on a pinned seed.
+## can go red. It exists to catch a bet that pays the wrong cell:
+## `CardFlip_CheckWinCondition` is a jumptable of forty-eight whose entries mostly
+## differ by one bit test, so a cursor one cell out still pays something. It drives
+## the whole forty-eight by twenty-four grid, and whole games on a pinned seed.
 
 ## `_CardFlip`'s own loads: which run is decompressed to how many tiles.
 const SECTION: Dictionary = {

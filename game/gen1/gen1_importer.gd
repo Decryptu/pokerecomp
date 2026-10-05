@@ -153,6 +153,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_intro,
 	_verify_world,
 	_verify_gym_gates,
+	_verify_nurse_movements,
 ]
 
 ## The opening's art, each strip under its layout pin; a pin a cartridge lacks
@@ -260,6 +261,8 @@ const FACILITY_TEXT_RUNS: Dictionary = {
 	"oaks_aide": ["oaks_aide_text", Gen1Layout.OAKS_AIDE_TEXT_AT],
 	"evolution": ["evolution_text", Gen1Layout.EVOLUTION_TEXT_AT],
 	"stone_refusal": ["stone_refusal_text", Gen1Layout.STONE_REFUSAL_TEXT_AT],
+	"pokecenter_pikachu": ["pokecenter_pikachu_text", Gen1Layout.POKECENTER_PIKACHU_TEXT_AT],
+	"print_box": ["print_box_text", Gen1Layout.PRINT_BOX_TEXT_AT],
 	"trade_anim": ["trade_anim_text", Gen1Layout.TRADE_ANIM_TEXT_AT],
 	"link": ["link_text", Gen1Layout.LINK_TEXT_AT],
 	"link_version": ["link_version_text", Gen1Layout.LINK_VERSION_TEXT_AT],
@@ -903,6 +906,16 @@ static func _verify_gym_gates(rom: RomFile, layout: Dictionary) -> Dictionary:
 		if rom.u8(at) >= 10 or rom.u8(at + 1) >= 9 \
 			or rom.u8(at + 2) not in [0x54, 0x5F] or rom.u8(at + 3) != 0:
 			return _fail("CinnabarGymGateCoords contains an invalid gate.")
+	return _ok()
+
+
+## Each script opens on the init and look-up commands and ends on `ret`.
+static func _verify_nurse_movements(rom: RomFile, layout: Dictionary) -> Dictionary:
+	if not layout.has("pikachu_nurse_movements"):
+		return _ok()
+	for script: Array in Gen1WorldImporter.read_nurse_movements(rom, layout):
+		if script.size() < 3 or script.slice(0, 2) != [0x00, 0x36] or script[-1] != 0x3F:
+			return _fail("PikachuWalksToNurseJoy's movement data does not decode at $%05X." % int(layout["pikachu_nurse_movements"]))
 	return _ok()
 
 

@@ -830,9 +830,8 @@ func _stage_level_evolution() -> void:
 
 
 ## `OverworldHatchEgg`, driven the same way and for the same reason: the sequence is
-## five hundred frames of picture, so the first number is how far into it to
-## photograph and the second is the species inside the egg, 0 for the first the cache
-## holds.
+## five hundred frames, so the first number is how far into it to photograph and the
+## second is the species inside the egg, 0 for the first the cache holds.
 func _stage_trade_animation() -> void:
 	_screen.preview_trade_animation(maxi(_cell.x, 0), maxi(_cell.y, 0))
 
@@ -891,10 +890,8 @@ func _stage_whiteout() -> void:
 ## `special UnownPuzzle`, which no fixture cell reaches. The first number is how many
 ## frames into the board to photograph and the second which picture: 0 Kabuto, 1
 ## Omanyte, 2 Aerodactyl, 3 Ho-Oh. The empty cursor blinks off `hVBlankCounter`, so a
-## frame with bit 4 clear photographs a board with no cursor on it. 4 to 7 are the
-## same four pictures with the board walked into `.SolvedPuzzleConfiguration` through
-## the screen's own presses, which is the only way to photograph the assembled
-## picture.
+## frame with bit 4 clear shows no cursor. 4 to 7 are the same four pictures with
+## the board walked into `.SolvedPuzzleConfiguration` through the screen's own presses.
 func _stage_unown_puzzle() -> void:
 	_screen.preview_unown_puzzle(
 		maxi(_cell.y, 0) % Gen2Layout.UNOWN_PUZZLE_PICTURES.size(),
@@ -992,8 +989,7 @@ func _stage_day_care() -> void:
 ## `special NameRater` and `special MoveDeletion`, neither of which any fixture cell
 ## reaches. The first number is how many presses into the routine to photograph: 2 is
 ## the introduction's last page with its YES/NO up, 4 the party list, and so on.
-## Presses are spent only once the box owes no frames, since nothing shortens a
-## printing text.
+## Presses are spent only once the box owes no frames, since nothing shortens a printing text.
 func _stage_party_routine() -> void:
 	if _kind == &"name_rater" and _screen._data != null \
 		and _screen._data.generation == RomRegistry.GEN1:

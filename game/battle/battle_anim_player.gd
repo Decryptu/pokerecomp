@@ -866,7 +866,6 @@ func _gen1_side(flipped: bool) -> bool:
 ## `AnimationHideMonPic` and `AnimationShowMonPic`, which are `ClearScreenArea`
 ## and `CopyPicTiles` over the box the picture was last drawn in. The report
 ## beside it is what a renderer with no background plane reads.
-## `AnimationShowMonPic` and its siblings copy the picture to its own square.
 func _gen1_draw_battler(player_side: bool, visible: bool) -> void:
 	_gen1_clear_battler(player_side)
 	_background.report_battler(player_side, visible)

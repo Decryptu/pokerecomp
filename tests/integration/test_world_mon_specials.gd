@@ -36,6 +36,9 @@ func after_each() -> void:
 	RomCache.clear(Fixture.directory())
 
 
+const RIVAL_NAME_SPECIAL: int = 36
+
+
 func _write_name_rater_script(
 	special: int = Gen2WorldScriptRunner.SPECIAL_NAME_RATER
 ) -> void:
@@ -79,6 +82,7 @@ func _run_script() -> void:
 	_world_screen._show_script_results(
 		_world_screen._world.dispatch_script_events(TALK_CELL)
 	)
+	Fixture.settle_menu_fade(_world_screen)
 
 
 func _host() -> Gen2NameRaterScreen:
@@ -468,6 +472,7 @@ func test_a_learned_move_answers_false_and_costs_happiness() -> void:
 	_run_script()
 	_tutor().party_screen().handle_button(PokeButton.A)
 	assert_null(_tutor())
+	Fixture.settle_menu_fade(_world_screen)
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	assert_eq(mon.moves, [1, TUTOR_MOVE, 0, 0])
 	assert_eq(mon.happiness, 71)
@@ -481,6 +486,7 @@ func test_backing_out_of_the_list_answers_minus_one() -> void:
 	_run_script()
 	_tutor().party_screen().handle_button(PokeButton.B)
 	assert_null(_tutor())
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(_world_screen.active_save().party[0].moves, [1, 0, 0, 0])
 	assert_eq(_world_screen._world._active_script._script_value, Gen2MoveTutor.SCRIPT_VALUE_CANCELLED)
 
@@ -528,6 +534,7 @@ func test_a_full_moveset_asks_and_refuses_an_hm_without_closing_the_list() -> vo
 	_world_screen.press_button(PokeButton.DOWN)
 	_world_screen.press_button(PokeButton.A)
 	assert_null(_tutor())
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(_world_screen.active_save().party[0].moves[1], TUTOR_MOVE)
 	assert_eq(_world_screen._world._active_script._script_value, Gen2MoveTutor.SCRIPT_VALUE_LEARNED)
 
@@ -566,6 +573,12 @@ func _selection_list() -> Gen2PartyScreen:
 	return _world_screen._party_host
 
 
+## A press on the list, and the `ReturnToMapWithSpeechTextbox` that follows it spent.
+func _choose(button: int) -> void:
+	_selection_list().handle_button(button)
+	Fixture.settle_menu_fade(_world_screen)
+
+
 func test_a_grooming_special_opens_the_party_list_with_no_box_of_its_own() -> void:
 	await _run_haircut(Gen2WorldScriptRunner.SPECIAL_OLDER_HAIRCUT_BROTHER)
 	assert_not_null(_selection_list())
@@ -574,12 +587,54 @@ func test_a_grooming_special_opens_the_party_list_with_no_box_of_its_own() -> vo
 	assert_false(_world_screen.move_player(Vector2i.RIGHT))
 
 
+## `SelectMonFromParty` opens with `ClearBGPalettes` and no `FadeToMenu`, and
+## `ReturnToMapWithSpeechTextbox` shows the map whole once its own white is over.
+func test_the_party_list_loads_white_and_the_map_returns_without_a_fade() -> void:
+	_write_name_rater_script(Gen2WorldScriptRunner.SPECIAL_YOUNGER_HAIRCUT_BROTHER)
+	await _open_world()
+	_world_screen._show_script_results(_world_screen._world.dispatch_script_events(TALK_CELL))
+	assert_null(_selection_list(), "drawn once the screen is clear")
+	assert_eq(
+		Fixture.white_frames(_world_screen),
+		Gen2MenuTransition.CLEAR_FRAMES[&"party_select"][&"crystal"]
+	)
+	assert_not_null(_selection_list())
+	_selection_list().handle_button(PokeButton.B)
+	var spent: int = 0
+	while _world_screen._menu_transition.active():
+		_world_screen.advance_frame()
+		spent += 1
+	assert_eq(spent, Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"], "white, then the map")
+
+
+## `NameRival`'s `_NamingScreen` is the same pair around the rival's keyboard.
+func test_the_rival_keyboard_loads_white_and_the_map_returns_without_a_fade() -> void:
+	_write_name_rater_script(RIVAL_NAME_SPECIAL)
+	await _open_world()
+	_world_screen._show_script_results(_world_screen._world.dispatch_script_events(TALK_CELL))
+	assert_null(_world_screen._rival_name_host)
+	assert_eq(
+		Fixture.white_frames(_world_screen),
+		Gen2MenuTransition.CLEAR_FRAMES[&"rival_naming"][&"crystal"]
+	)
+	var model: Gen2NamingScreen = _world_screen._rival_name_host.model()
+	model.press_a()
+	model.column = Gen2NamingScreen.LAST_COLUMN
+	model.row = model.command_row()
+	_world_screen.press_button(PokeButton.A)
+	var spent: int = 0
+	while _world_screen._menu_transition.active():
+		_world_screen.advance_frame()
+		spent += 1
+	assert_eq(spent, Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"], "white, then the map")
+
+
 ## `.nope`: the carry a B press or the CANCEL row answers with is `xor a`, which
 ## is the `ifequal $0` both haircut scripts refuse on.
 func test_cancelling_the_list_answers_zero_and_changes_no_happiness() -> void:
 	await _run_haircut(Gen2WorldScriptRunner.SPECIAL_YOUNGER_HAIRCUT_BROTHER)
 	var before: int = _world_screen.active_save().party[0].happiness
-	_selection_list().handle_button(PokeButton.B)
+	_choose(PokeButton.B)
 	assert_null(_selection_list())
 	assert_eq(_world_screen._world._active_script._script_value, 0)
 	assert_eq(_world_screen.active_save().party[0].happiness, before)
@@ -592,7 +647,7 @@ func test_an_egg_answers_one_and_is_not_groomed() -> void:
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	mon.is_egg = true
 	var before: int = mon.happiness
-	_selection_list().handle_button(PokeButton.A)
+	_choose(PokeButton.A)
 	assert_eq(_world_screen._world._active_script._script_value, 1)
 	assert_eq(mon.happiness, before)
 
@@ -609,7 +664,7 @@ func test_grooming_raises_happiness_and_leaves_the_chosen_species_standing() -> 
 	## walk lives. Pin the roll so this case is the row and not the overrun.
 	var script: Gen2WorldScriptRunner = _world_screen._world._active_script
 	script._random.seed = 1
-	_selection_list().handle_button(PokeButton.A)
+	_choose(PokeButton.A)
 	var runner: Gen2WorldScriptRunner = _world_screen._world._active_script
 	assert_gt(mon.happiness, 100, "HAPPINESS_GROOMING is a rise at every threshold")
 	assert_eq(runner._cur_party_species, mon.species)
@@ -623,7 +678,7 @@ func test_bills_grandfather_answers_the_chosen_species() -> void:
 	await _run_haircut(Gen2WorldScriptRunner.SPECIAL_BILLS_GRANDFATHER)
 	var mon: Gen2SaveMon = _world_screen.active_save().party[0]
 	var before: int = mon.happiness
-	_selection_list().handle_button(PokeButton.A)
+	_choose(PokeButton.A)
 	assert_eq(_world_screen._world._active_script._script_value, mon.species)
 	assert_eq(mon.happiness, before, "no row is walked here")
 
@@ -757,7 +812,7 @@ func test_checkpokemail_answers_refused_when_the_list_is_backed_out_of() -> void
 		Gen2WorldScript.CHECKPOKEMAIL, _mail_message(MAIL_LINE_1, MAIL_LINE_2)
 	)
 	assert_not_null(_selection_list())
-	_selection_list().handle_button(PokeButton.B)
+	_choose(PokeButton.B)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_REFUSED
@@ -768,7 +823,7 @@ func test_checkpokemail_answers_no_mail_for_an_empty_hand() -> void:
 	await _run_mail_script(
 		Gen2WorldScript.CHECKPOKEMAIL, _mail_message(MAIL_LINE_1, MAIL_LINE_2)
 	)
-	_selection_list().handle_button(PokeButton.A)
+	_choose(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_NO_MAIL
@@ -782,7 +837,7 @@ func test_checkpokemail_answers_wrong_mail_for_another_message() -> void:
 	_carry_mail(
 		_world_screen.active_save().party[0], _mail_message(MAIL_LINE_1, "somewhere else")
 	)
-	_selection_list().handle_button(PokeButton.A)
+	_choose(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_WRONG_MAIL
@@ -797,7 +852,7 @@ func test_checkpokemail_answers_last_mon_when_no_other_member_can_fight() -> voi
 	await _run_mail_script(Gen2WorldScript.CHECKPOKEMAIL, message)
 	_leave_one_member()
 	_carry_mail(_world_screen.active_save().party[0], message)
-	_selection_list().handle_button(PokeButton.A)
+	_choose(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_LAST_MON
@@ -811,7 +866,7 @@ func test_checkpokemail_hands_the_member_over_on_the_right_message() -> void:
 	var save: Gen2SaveData = _world_screen.active_save()
 	var mate: Gen2SaveMon = save.party[1]
 	_carry_mail(save.party[0], message)
-	_selection_list().handle_button(PokeButton.A)
+	_choose(PokeButton.A)
 	assert_eq(
 		_world_screen._world._active_script._script_value,
 		Gen2WorldPartyHost.POKEMAIL_CORRECT

@@ -1,14 +1,11 @@
 class_name Gen2PokedexScreen
 extends Control
 
-## The Pokedex (engine/pokedex/pokedex.asm), embedded in the overworld the way the
-## start menu and its own submenus are. Drawn on the hardware's own tile grid:
-## [Gen2Pokedex] owns the listing, the cursor and the mode and [Gen2PokedexPage]
-## the picture. All six of the source's states are here, and the OPTION screen
-## draws three rows until the Ruins of Alph research centre has set the flag. The
-## entry screen's AREA is the exception to that split: `Pokedex_GetArea` is the
-## cartridge's own region map, so it opens [Gen2TownMapScreen], which carries a
-## hardware screen of its own.
+## The Pokedex (engine/pokedex/pokedex.asm), embedded in the overworld like the
+## start menu and drawn on the hardware's own tile grid: [Gen2Pokedex] owns the
+## listing, the cursor and the mode and [Gen2PokedexPage] the picture. AREA is
+## `Pokedex_GetArea`'s own region map, so it opens [Gen2TownMapScreen]. PRNT has
+## no printer to talk to and ends on the connection error.
 
 ## Set by [method open_entry]: `NewPokedexEntry` has no listing behind it, so B
 ## on the entry closes the dex rather than going back to one.
@@ -16,16 +13,17 @@ var _entry_only: bool = false
 
 signal closed  ## Emitted on B from the listing, which is where `DEXSTATE_EXIT` lands.
 
-## Emitted by the entry screen's CRY button, since this screen owns no audio
-## player: the overworld's own answers it, the way it answers a script's cry.
+## Every entry page's load (`PlayMonCry` / `PlayCry`) and the CRY button; the
+## overworld's player answers it, as for a script's cry.
 signal cry_requested(species: int)
 
-## `PlaySFX`, for the one sound this screen makes of its own:
-## `Pokedex_DisplayChangingModesMessage`'s. Answered by the overworld's player
-## the way [signal cry_requested] is.
+## `PlaySFX`: the changing-modes message's, the exit's and Generation 1's page turn.
 signal sfx_requested(index: int)
 
-enum Mode { LIST, ENTRY, OPTION, SEARCH, SEARCH_RESULTS, AREA, UNOWN, SIDE }
+## The printer's music for as long as PRNT's error box is up.
+signal printer_music_requested(on: bool)
+
+enum Mode { LIST, ENTRY, OPTION, SEARCH, SEARCH_RESULTS, AREA, UNOWN, SIDE, PRINT }
 
 ## The dex is drawn in hardware pixels and the start menu it opens over is
 ## ordinary UI at window resolution, so it carries a [Gen2Screen] of its own the
@@ -47,21 +45,43 @@ const _SEARCH_ANIMATION_FRAMES: int = \
 const SEARCH_FRAMES: int = _SEARCH_ANIMATION_FRAMES + Gen2PokedexPage.SLOWPOKE_SETTLE
 const TYPE_NOT_FOUND_FRAMES: int = 0x80  ## `Pokedex_DisplayTypeNotFoundMessage`'s own `ld c, $80`.
 
-## `DexEntryScreen_ArrowCursorData`'s four positions, in its own order. PRNT
-## wants a printer, which is deliberately out, so it is drawn and refuses.
+## `DexEntryScreen_ArrowCursorData`'s four positions, in its own order.
 const ENTRY_BUTTONS: Array[String] = ["PAGE", "AREA", "CRY", "PRNT"]
 const ENTRY_BUTTON_PAGE: int = 0
 const ENTRY_BUTTON_AREA: int = 1
 const ENTRY_BUTTON_CRY: int = 2
+const ENTRY_BUTTON_PRNT: int = 3
+
+## Frames from one input read to the next, measured with PyBoy on Crystal (Gold
+## is within two). The screen draws on the press and then reads no pad for the
+## gap ([method Gen2InputRuntime.stall]). Opening from START adds `Pokedex` and
+## `InitPokedex`'s 24 to `Pokedex_InitMainScreen`'s 40.
+const OPEN_FRAMES: int = 64
+const LISTING_FRAMES: int = 41
+const LISTING_MOVE_FRAMES: int = 16
+## Frames behind `PlayMonCry` on a new entry page and on a step to the next.
+const ENTRY_OPEN_FRAMES: int = 13
+const ENTRY_STEP_FRAMES: int = 23
+const PAGE_FRAMES: int = 6
+const OPTION_FRAMES: int = 14
+const SEARCH_OPEN_FRAMES: int = 13
+const AREA_FRAMES: int = 35
+const AREA_BACK_FRAMES: int = 23
+const PRINT_BACK_FRAMES: int = 25
+
+## `wDexArrowCursorDelayCounter`'s `ld a, 12`: repeats are ignored for this long
+## after the arrow moves; a fresh press always moves.
+const ARROW_CURSOR_DELAY_FRAMES: int = 12
 
 var _dex: Gen2Pokedex = null
 var _world: Gen2WorldAPI = null
 var _data: GameData = null
-## `Pokedex_InitDexEntryScreen`'s `LowVolume` holds while the entry page is up.
+## `Pokedex_InitDexEntryScreen`'s `LowVolume` holds through AREA and PRNT: only the
+## way back to the listing calls `MaxVolume`.
 var _mode: Mode = Mode.LIST:
 	set(value):
-		if (value == Mode.ENTRY) != (_mode == Mode.ENTRY):
-			Gen2AudioPlayer.hold_low_volume(value == Mode.ENTRY)
+		if _low_volume_mode(value) != _low_volume_mode(_mode):
+			Gen2AudioPlayer.hold_low_volume(_low_volume_mode(value))
 		_mode = value
 ## `ShowPokedexMenu` is a listing, a side menu and an entry page and none of the
 ## other five states, so every branch below reads this rather than the cache.
@@ -91,6 +111,15 @@ var _search_result: int = 0
 var _message_frames: int = 0
 
 var _area: Gen2TownMapScreen = null
+## `PlayMonCry`'s and the exit's `WaitSFX`; [member sound_busy] answers whether it
+## still sounds, given the wait's watch.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_holding: bool = false
+var _sound_watch: Dictionary = {}
+var _sound_then: Callable = Callable()
+## `wDexArrowCursorDelayCounter`.
+var _arrow_delay: int = 0
+var _listing_opened: bool = false
 
 var _page: Gen2PokedexPage = null
 var _screen: Gen2Screen = null
@@ -178,9 +207,14 @@ func current_mode() -> Mode:
 	return _mode
 
 
+## Generation 1's side-menu AREA and PRNT sit on the listing, at full volume.
+func _low_volume_mode(mode: Mode) -> bool:
+	return mode == Mode.ENTRY or (not _gen1 and (mode == Mode.AREA or mode == Mode.PRINT))
+
+
 func handle_button(button: int) -> bool:
 	if _dex == null or _changing_modes_frames > 0 or _search_frames > 0 \
-		or _message_frames > 0:
+		or _message_frames > 0 or _sound_holding:
 		return false
 	if _mode == Mode.AREA:
 		return _area.handle_button(button)
@@ -189,6 +223,8 @@ func handle_button(button: int) -> bool:
 			return _handle_gen1_list(button) if _gen1 else _handle_list(button)
 		Mode.SIDE:
 			return _handle_gen1_side(button)
+		Mode.PRINT:
+			return _handle_print(button)
 		Mode.ENTRY:
 			return _handle_entry(button)
 		Mode.OPTION:
@@ -222,20 +258,17 @@ func _handle_list(button: int) -> bool:
 			return true
 		PokeButton.SELECT:
 			_open_option_mode()
+			_spend(OPTION_FRAMES)
 			return true
 		PokeButton.START:
 			_open_search_mode()
+			_spend(SEARCH_OPEN_FRAMES)
 			return true
-	if _dex.move_listing(button):
-		_refresh()
-	return PokeButton.is_direction(button)
+	return _move_listing(button)
 
 
-## `Pokedex_UpdateDexEntryScreen`: B returns to the listing, A turns the page,
-## and up and down step to the neighbouring entry.
-## The source's four-button row is PAGE, AREA, CRY and PRNT; only PAGE is built,
-## so A always turns the page rather than moving a cursor along a row whose
-## other three entries would refuse.
+## `Pokedex_UpdateDexEntryScreen`: left and right move the arrow, A takes the
+## button, B returns to the listing, up and down step to the next entry.
 func _handle_entry(button: int) -> bool:
 	if _gen1:
 		return _handle_gen1_entry(button)
@@ -258,8 +291,9 @@ func _handle_entry(button: int) -> bool:
 		PokeButton.LEFT, PokeButton.RIGHT:
 			## `DexEntryScreen_ArrowCursorData` allows left and right only, over
 			## four positions, and stops at either end.
-			var next: int = _entry_cursor + (1 if button == PokeButton.RIGHT else -1)
-			_entry_cursor = clampi(next, 0, ENTRY_BUTTONS.size() - 1)
+			_entry_cursor = _arrow_move(
+				_entry_cursor, 1 if button == PokeButton.RIGHT else -1, ENTRY_BUTTONS.size()
+			)
 			_refresh()
 			return true
 		PokeButton.UP, PokeButton.DOWN:
@@ -268,8 +302,36 @@ func _handle_entry(button: int) -> bool:
 				## so a new entry opens on PAGE whatever the last one ended on.
 				_entry_cursor = 0
 				_refresh()
+				_play_entry_cry(ENTRY_STEP_FRAMES)
 			return true
 	return false
+
+
+func _move_listing(button: int) -> bool:
+	if _dex.move_listing(button):
+		_refresh()
+		_spend(LISTING_MOVE_FRAMES)
+	return PokeButton.is_direction(button)
+
+
+## Reads no pad for [param frames]; see [constant OPEN_FRAMES].
+func _spend(frames: int) -> void:
+	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
+	if input != null and frames > 0:
+		input.stall(frames)
+
+
+## `Pokedex_MoveArrowCursor`: the arrow's row after [param step], unmoved at an
+## end or for a repeat inside `Pokedex_ArrowCursorDelay`; a move arms the delay.
+func _arrow_move(at: int, step: int, count: int) -> int:
+	var to: int = clampi(at + step, 0, count - 1)
+	if to == at:
+		return at
+	var input: Gen2InputRuntime = Gen2InputRuntime.instance()
+	if _arrow_delay > 0 and input != null and input.press_is_repeat:
+		return at
+	_arrow_delay = ARROW_CURSOR_DELAY_FRAMES
+	return to
 
 
 ## `NewPokedexEntry` runs no jumptable: `WaitPressAorB_BlinkCursor`, page 2, that
@@ -285,14 +347,13 @@ func _handle_new_entry(button: int) -> bool:
 	return true
 
 
-## `DexEntryScreen_MenuActionJumptable`. `.Print` needs a printer and does
-## nothing rather than refusing out loud, since the cartridge's own row has no
-## refusal for it either.
+## `DexEntryScreen_MenuActionJumptable`.
 func _entry_action() -> void:
 	match _entry_cursor:
 		ENTRY_BUTTON_PAGE:
 			_dex.toggle_page()
 			_refresh()
+			_spend(PAGE_FRAMES)
 		ENTRY_BUTTON_AREA:
 			_open_area()
 		ENTRY_BUTTON_CRY:
@@ -300,6 +361,8 @@ func _entry_action() -> void:
 			## less one straight into `PokemonCries`, not a lookup through the
 			## cry table: the row and the species share an index.
 			cry_requested.emit(_dex.selected_species())
+		ENTRY_BUTTON_PRNT:
+			_open_print()
 
 
 ## `.Area`: `wDexCurLocation` is where the player is standing, and the nests are
@@ -319,6 +382,7 @@ func _open_area() -> void:
 	host.closed.connect(_on_area_closed)
 	_area = host
 	_mode = Mode.AREA
+	_spend(AREA_FRAMES)
 
 
 ## `predef LoadTownMap_Nest` on a Generation 1 cartridge, whose nests are one
@@ -353,6 +417,7 @@ func _on_area_closed() -> void:
 	## `.Area` redisplays the entry it left, cursor and page included.
 	_mode = Mode.ENTRY
 	_refresh()
+	_spend(AREA_BACK_FRAMES)
 
 
 ## `Pokedex_UpdateOptionScreen`: SELECT and B both return to the listing, and A
@@ -368,8 +433,9 @@ func _handle_option(button: int) -> bool:
 		PokeButton.UP, PokeButton.DOWN:
 			## `.ArrowCursorData` allows up and down only, and
 			## `Pokedex_MoveArrowCursor` stops at either end rather than wrapping.
-			var next: int = _option_cursor + (1 if button == PokeButton.DOWN else -1)
-			_option_cursor = clampi(next, 0, _mode_rows.size() - 1)
+			_option_cursor = _arrow_move(
+				_option_cursor, 1 if button == PokeButton.DOWN else -1, _mode_rows.size()
+			)
 			_refresh()
 			return true
 	return false
@@ -401,9 +467,11 @@ func _choose_mode() -> void:
 
 
 ## `.exit` writes the mode back to `wLastDexMode` before it leaves.
+## `SFX_READ_TEXT_2` and its `WaitSFX` come first.
 func _exit() -> void:
 	_world.state.set_last_dex_mode(_dex.mode)
-	closed.emit()
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2)
+	_hold_for_sound(closed.emit)
 
 
 ## `Pokedex_InitMainScreen`, whose own `ld a, 7` is what puts the listing height
@@ -414,6 +482,9 @@ func _open_list_mode() -> void:
 	_side_cursor = -1
 	_dex.listing_height = Gen2Pokedex.LISTING_HEIGHT
 	_refresh()
+	if not _gen1:
+		_spend(LISTING_FRAMES if _listing_opened else OPEN_FRAMES)
+		_listing_opened = true
 
 
 ## `HandlePokedexListMenu`: B leaves, A opens the side menu, the rest walks.
@@ -433,7 +504,6 @@ func _handle_gen1_list(button: int) -> bool:
 	return PokeButton.is_direction(button)
 
 
-## `HandlePokedexSideMenu`'s own four rows, whose watched keys are A and B.
 func _handle_gen1_side(button: int) -> bool:
 	match button:
 		PokeButton.B:
@@ -444,25 +514,56 @@ func _handle_gen1_side(button: int) -> bool:
 			return true
 		PokeButton.UP, PokeButton.DOWN:
 			var next: int = _side_cursor + (1 if button == PokeButton.DOWN else -1)
-			_side_cursor = clampi(next, 0, Gen2Pokedex.GEN1_SIDE_ROWS.size() - 1)
+			_side_cursor = clampi(next, 0, _page.gen1_side_rows.size() - 1)
 			_refresh()
 			return true
 	return false
 
 
-## What each row leaves `b` as: DATA and AREA answer 0 and redraw the listing,
-## QUIT answers 1 and closes the dex, and CRY stays in the menu.
+## What each row leaves `b` as: DATA and AREA redraw the listing, PRNT goes round
+## `.loop`, QUIT closes the dex and CRY stays.
 func _gen1_side_action() -> void:
-	match _side_cursor:
-		Gen2Pokedex.GEN1_SIDE_DATA:
+	match _page.gen1_side_rows[_side_cursor]:
+		"DATA":
 			_dex.open_entry()
 			_open_entry_mode(Mode.LIST)
-		Gen2Pokedex.GEN1_SIDE_CRY:
+		"CRY":
 			cry_requested.emit(_dex.selected_species())
-		Gen2Pokedex.GEN1_SIDE_AREA:
+		"AREA":
 			_open_area()
-		Gen2Pokedex.GEN1_SIDE_QUIT:
+		"PRNT":
+			_open_print()
+		"QUIT":
 			closed.emit()
+
+
+## `PrintDexEntry` and `PrintPokedexEntry` with no printer: `Printer Error 2` until
+## B. `CheckCancelPrint` reads B alone.
+func _open_print() -> void:
+	if _printer_status().is_empty():
+		return
+	_mode = Mode.PRINT
+	printer_music_requested.emit(true)
+	_refresh()
+
+
+## Generation 1 goes round `.loop` to the listing. `.Print` redisplays the entry
+## and ends in `PlayMonCry`.
+func _handle_print(button: int) -> bool:
+	if button != PokeButton.B:
+		return false
+	printer_music_requested.emit(false)
+	if _gen1:
+		_open_list_mode()
+		return true
+	_mode = Mode.ENTRY
+	_refresh()
+	_play_entry_cry(PRINT_BACK_FRAMES)
+	return true
+
+
+func _printer_status() -> String:
+	return _data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
 
 
 func _open_gen1_side() -> void:
@@ -504,10 +605,14 @@ func _gen1_entry_pages() -> int:
 ## `ShowPokedexMenu`'s listing and `ShowPokedexDataInternal`'s page.
 func _render_gen1() -> Image:
 	if _mode != Mode.ENTRY:
-		return _page.image(_page.gen1_list_map(
+		var printing: bool = _mode == Mode.PRINT
+		var map: PackedInt32Array = _page.gen1_list_map(
 			_dex.gen1_rows(), _dex.seen_count(), _dex.caught_count(),
-			_listing_cursor(), _side_cursor
-		))
+			-1 if printing else _listing_cursor(), -1 if printing else _side_cursor
+		)
+		if printing:
+			_page.gen1_status_box(map, _printer_status(), _data.printer_status_string("press_b"))
+		return _page.image(map)
 	var species: int = _dex.selected_species()
 	var entry: Dictionary = _dex.entry()
 	var page: int = int(entry["page"])
@@ -536,17 +641,47 @@ func _gen1_entry_pic(species: int) -> Image:
 	)
 
 
+## `Pokedex_InitDexEntryScreen`, `_NewPokedexEntry` and pokered's
+## `ShowPokedexDataInternal`, which each end by playing the cry and waiting.
 func _open_entry_mode(from: Mode = Mode.LIST) -> void:
 	_message = ""
 	_entry_from = from
 	_mode = Mode.ENTRY
 	_entry_cursor = 0
+	_arrow_delay = 0
 	_refresh()
+	_play_entry_cry(ENTRY_OPEN_FRAMES)
+
+
+## `PlayMonCry` behind a freshly drawn page: no press is read until it ends, and
+## [param frames_after] more are spent (unmeasured on Generation 1).
+func _play_entry_cry(frames_after: int) -> void:
+	cry_requested.emit(_dex.selected_species())
+	_hold_for_sound(_spend.bind(0 if _gen1 else frames_after))
+
+
+## `WaitSFX`: [param then] runs once the effect has ended, at once if none sounds.
+func _hold_for_sound(then: Callable = Callable()) -> void:
+	_sound_watch = {}
+	_sound_then = then
+	_sound_holding = true
+	_release_sound()
+
+
+func _release_sound() -> void:
+	if not _sound_holding or bool(sound_busy.call(_sound_watch)):
+		return
+	_sound_holding = false
+	var then: Callable = _sound_then
+	_sound_then = Callable()
+	if then.is_valid():
+		then.call()
 
 
 func _open_option_mode() -> void:
 	_message = ""
 	_mode = Mode.OPTION
+	_arrow_delay = 0
 	_mode_rows = Gen2Pokedex.mode_rows(_dex.unown_unlocked())
 	## `Pokedex_InitOptionScreen` points the cursor at the current mode, which
 	## it can do directly because the modes are the row indices.
@@ -591,8 +726,10 @@ func _handle_search(button: int) -> bool:
 			_confirm_search_row()
 			return true
 		PokeButton.UP, PokeButton.DOWN:
-			var next: int = _dex.search_cursor + (1 if button == PokeButton.DOWN else -1)
-			_dex.search_cursor = clampi(next, 0, Gen2Pokedex.SEARCH_ROWS.size() - 1)
+			_dex.search_cursor = _arrow_move(
+				_dex.search_cursor, 1 if button == PokeButton.DOWN else -1,
+				Gen2Pokedex.SEARCH_ROWS.size()
+			)
 			_refresh()
 			return true
 		PokeButton.LEFT, PokeButton.RIGHT:
@@ -633,9 +770,7 @@ func _handle_search_results(button: int) -> bool:
 				_dex.open_entry()
 				_open_entry_mode(Mode.SEARCH_RESULTS)
 			return true
-	if _dex.move_listing(button):
-		_refresh()
-	return PokeButton.is_direction(button)
+	return _move_listing(button)
 
 
 ## `Pokedex_InitSearchScreen`, which resets both type rows every time.
@@ -648,6 +783,7 @@ func _open_search_mode() -> void:
 	_search_frames = 0
 	_search_result = 0
 	_mode = Mode.SEARCH
+	_arrow_delay = 0
 	_dex.open_search()
 	_refresh()
 
@@ -694,6 +830,8 @@ func render() -> Image:
 		return _area.render()
 	if _gen1:
 		return _render_gen1()
+	if _mode == Mode.PRINT:
+		return _page.print_image(_printer_status())
 	## `Pokedex_BlinkArrowCursor`'s own off phase, and the same answer on every
 	## frame for a screen that is being read rather than walked.
 	var cursor: int = -1 if _read_only or _blink >= CURSOR_BLINK_FRAMES else 0
@@ -844,6 +982,10 @@ func _process(delta: float) -> void:
 
 
 func advance_frame() -> void:
+	if _sound_holding:
+		_release_sound()
+		return
+	_arrow_delay = maxi(_arrow_delay - 1, 0)
 	if _changing_modes_frames > 0:
 		_changing_modes_frames -= 1
 		if _changing_modes_frames == CHANGING_MODES_FRAMES:

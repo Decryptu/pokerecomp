@@ -174,9 +174,7 @@ const CONE: float = 2.0
 ## The control [param direction] reaches. Three rules on top of the distance,
 ## each a defect before it was a rule: a candidate starts past the edge being
 ## left rather than past its centre, one lined up with what is being left beats
-## one that is not, and nothing outside [constant CONE] is reached. The settings
-## rail broke all three: 507 across, level with the rows, and the only thing
-## below the last of them.
+## one that is not, and nothing outside [constant CONE] is reached.
 static func _neighbor(
 	current: Control, direction: Vector2, controls: Array[Control]
 ) -> Control:

@@ -37,10 +37,8 @@ static func from_data(data: GameData) -> Gen2MenuPage:
 
 
 ## Draws [param box] with [param options] into [param indices], a buffer
-## [param width] pixels across, with the arrow on [param cursor]. A negative
-## cursor draws no arrow, which is what a menu without STATICMENU_CURSOR is.
-##
-## [param extras] are `PlaceString` calls the caller makes at absolute tile
+## [param width] pixels across, with the arrow on [param cursor]; a negative
+## cursor draws none, as a menu without STATICMENU_CURSOR. [param extras] are `PlaceString` calls the caller makes at absolute tile
 ## coordinates, as [code]{"text": String, "at": Vector2i}[/code] with an optional
 ## [code]max_tiles[/code]: the battle's `MoveInfoBox` writes its type and PP into
 ## a plain `Textbox` that way rather than as menu items.
@@ -146,11 +144,9 @@ func _scroll_arrows(box: Gen2MenuBox, indices: PackedByteArray, width: int) -> v
 ## The same menu as an image of its frame alone, for a screen that composes
 ## layers: drawn into a screen-sized buffer at its own coordinates and cropped
 ## back, so [method draw]'s placement stays the one piece of arithmetic. Opaque,
-## because `MenuBox` fills its interior.
-##
-## [param palette] is the four colours the box is drawn with, and defaults to
-## `PAL_BG_TEXT`'s black on white. A box a CGB layout fills with a palette of the
-## map's own passes that one instead, which is what `_CGB_Pokepic` does.
+## because `MenuBox` fills its interior. [param palette] defaults to `PAL_BG_TEXT`'s
+## black on white; a box a CGB layout fills with the map's own passes that one
+## instead, as `_CGB_Pokepic` does.
 func render(
 	box: Gen2MenuBox, options: Array, cursor: int,
 	title: String = "", title_indent: int = 0, extras: Array = [],

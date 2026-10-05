@@ -6,9 +6,7 @@ extends Control
 ## Its own screen rather than a state of the overworld because that is where the
 ## cartridge puts it: `NewGame` reaches `InitializeWorld` only after both have
 ## returned. Nothing is written to disk until the run is over, so
-## `Gen2SaveStore.create_new_game` is called once, at the end. That is also why
-## `Gen2SaveValidator`'s rule that a save has a trainer needs no exception: the
-## save does not exist until there is one.
+## `Gen2SaveStore.create_new_game` is called once, at the end.
 
 ## Emitted with the written save, for a driver that hosts this screen itself.
 ## The scene's own handler changes to the overworld.

@@ -419,6 +419,23 @@ func test_gen1_the_payout_is_walked_over_one_coin_at_a_time() -> void:
 	assert_eq(machine.lcd.obp0, Gen1SlotMachine.PALETTE_NORMAL)
 
 
+## `YeahText` ends on a `text_pause`, not a press: thirty frames of `DelayFrames` that a held A
+## or B skips, after which `SlotReward300Func` runs by itself.
+func test_gen1_yeah_is_a_pause_and_not_a_press() -> void:
+	for held: bool in [false, true]:
+		var machine: Gen1SlotMachine = _gen1_machine()
+		machine.pad_held = held
+		machine._accept_match(0)
+		assert_eq(machine.state(), Gen1SlotMachine.State.YEAH)
+		assert_eq(machine.prompt(), Gen2SlotMachine.Prompt.NONE, "no arrow and no press")
+		var frames: int = 0
+		while machine.state() == Gen1SlotMachine.State.YEAH and frames < FRAME_CAP:
+			machine.advance()
+			frames += 1
+		assert_eq(frames, 1 if held else Gen2TextStream.PAUSE_FRAMES)
+		assert_eq(machine.state(), Gen1SlotMachine.State.FLASH)
+
+
 ## `OutOfCoinsSlotMachineText` and `ld c, 60`: no coins left ends the loop
 ## without the YES/NO box.
 func test_gen1_running_out_of_coins_ends_the_game_without_asking() -> void:

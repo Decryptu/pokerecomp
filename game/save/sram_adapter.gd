@@ -2,7 +2,7 @@ class_name Gen2SramAdapter
 extends RefCounted
 
 ## Boundary between an original Generation 2 SRAM image and the project's
-## party-focused save model.
+## party-focused save model. Red, Blue and Yellow are [Gen1SramAdapter]'s.
 ## Only an existing, checksummed cartridge image is written. The canonical save
 ## model does not own map, options, inventory, PC boxes or event flags, so
 ## creating those bytes from scratch would invent game state. Bytes outside the
@@ -21,19 +21,12 @@ const PP_MASK: int = 0x3F
 const PP_UP_MASK: int = 0xC0
 const PP_UP_SHIFT: int = 6
 
-## `wPlayerGender` is the first byte of `wCrystalData`, and bit 0 is the whole of
-## it: 0 male, 1 female. The other six bytes of the run are the mobile profile's
-## age, prefecture and postal code, which nothing here owns.
+## `wPlayerGender`: bit 0 is the whole byte; the six after it are the mobile profile's.
 const PLAYER_GENDER_MASK: int = 0x01
 
-## `player_id` is wPlayerID, the two big-endian bytes wPlayerData opens with in
-## both pins, which is why it shares an address with `primary_data_start`.
-## `player_gender` is Crystal's alone and sits nowhere near the rest: it is
-## `sCrystalData`, its own SRAM section past the Active Box, Link Battle and Hall
-## of Fame ones, so no checksum covers it and `_SaveData` is the only routine that
-## writes it. `01:be3d` in `pokecrystal11.sym`, bank 1 offset `0x3E3D` in a 32 KiB
-## image, from a build byte identical to the cartridge this project verifies. Gold
-## and Silver have no such section: their player is always male.
+## `player_id` is wPlayerID, which opens `primary_data_start`. `player_gender` is
+## Crystal's `sCrystalData`, its own section at `01:be3d` in `pokecrystal11.sym`
+## that no checksum covers; Gold and Silver have none and are always male.
 const LAYOUTS: Dictionary = {
 	"gold": {
 		"primary_check_1": 0x2008,
@@ -135,6 +128,8 @@ static func import_bytes(
 	raw: PackedByteArray,
 	data: GameData = null
 ) -> Dictionary:
+	if RomRegistry.generation_for(game_id) == RomRegistry.GEN1:
+		return Gen1SramAdapter.import_bytes(game_id, rom_sha1, slot, raw, data)
 	var layout: Dictionary = _layout_for(game_id)
 	var gate: Dictionary = _validate_request(game_id, rom_sha1, slot, raw, layout)
 	if not gate["ok"]:
@@ -180,6 +175,8 @@ static func export_bytes(
 ) -> Dictionary:
 	if save == null:
 		return _failure("the save is missing")
+	if RomRegistry.generation_for(save.game_id) == RomRegistry.GEN1:
+		return Gen1SramAdapter.export_bytes(save, raw, data)
 	var layout: Dictionary = _layout_for(save.game_id)
 	var gate: Dictionary = _validate_request(save.game_id, save.rom_sha1, save.slot, raw, layout)
 	if not gate["ok"]:
@@ -189,7 +186,7 @@ static func export_bytes(
 	var validation: Dictionary = Gen2SaveValidator.validate(save, data)
 	if not validation["ok"]:
 		return _failure("save cannot be exported: %s" % validation["message"])
-	var mod_content: Dictionary = _mod_content_refusal(save)
+	var mod_content: Dictionary = mod_content_refusal(save)
 	if not mod_content["ok"]:
 		return mod_content
 
@@ -215,13 +212,10 @@ static func export_bytes(
 	}
 
 
-## Refuses a save holding content a cartridge byte cannot name.
-## Every species, item and move on the hardware is one byte, and
-## [constant Gen2ContentOverlay.FIRST_MOD_NUMBER] sits past that on purpose. So a
-## mod's own content has no representation here: truncating it would write a
-## different Pokémon into a real cartridge, which is worse than refusing. The
-## project's own JSON save carries it either way.
-static func _mod_content_refusal(save: Gen2SaveData) -> Dictionary:
+## Refuses a save holding content a cartridge byte cannot name: species, items
+## and moves are one byte, and [constant Gen2ContentOverlay.FIRST_MOD_NUMBER] is
+## past it, so truncating a mod's content would write a different Pokémon.
+static func mod_content_refusal(save: Gen2SaveData) -> Dictionary:
 	var mons: Array = save.party.duplicate()
 	for raw_box: Variant in save.boxes:
 		if raw_box is Gen2SaveBox:

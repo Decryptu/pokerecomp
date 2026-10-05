@@ -2,7 +2,6 @@ class_name PokeApu
 extends RefCounted
 
 ## DMG audio processing unit: the four hardware channels behind $ff10-$ff3f.
-##
 ## Everything audible is decided here; the sound engine only writes registers.
 ## Ported from MiniGBS by way of minigb_apu, the path suiCune renders pokecrystal
 ## through, so a register trace from either lands on the same samples. One

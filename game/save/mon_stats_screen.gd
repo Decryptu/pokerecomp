@@ -1,12 +1,10 @@
 class_name Gen2MonStatsScreen
 extends RefCounted
 
-## The stats screen's model: which member of a list is shown, which page is open,
-## and what each page has to say about it. The pages are the cartridge's three plus
-## whatever mods have registered, and [Gen2StatsScreenPage] draws the answer.
-## `StatsScreenInit` is opened over whatever screen asked for it and hands control
-## back on the way out, so this owns no nodes, and the caller redraws after every
-## press. The mons are passed in because `wMonType` picks the party or a box.
+## The stats screen's model: which member is shown, which page is open and what
+## it says. The pages are the cartridge's three plus the mods', and
+## [Gen2StatsScreenPage] draws them. It owns no nodes, the caller redraws after
+## every press, and the mons are passed in because `wMonType` picks party or box.
 
 ## `StatsScreen_Exit`: B, or A on the last page.
 signal closed
@@ -14,9 +12,13 @@ signal closed
 ## and not when a page is turned. Emitted rather than played: the audio player
 ## belongs to whoever embedded this.
 signal cry_requested(species: int)
+## `EggStatsScreen`'s `SFX_2_BOOPS`.
+signal sfx_requested(index: int)
 ## Yellow's `StatusScreen`: `PikachuCry17` for the starter in place of its cry.
 signal pikachu_clip_requested(index: int)
 const PIKACHU_CLIP_STATUS: int = 16
+const EGG_SOON_STEPS: int = 6
+const EGG_CLOSE_STEPS: int = 11
 
 const PINK_PAGE: int = Gen2StatsScreenPage.PINK_PAGE
 
@@ -27,10 +29,15 @@ var _save: Gen2SaveData = null
 var _cursor: int = 0
 ## `wStatsScreenFlags`' page bits, `StatsScreenMain` opening on `PINK_PAGE`.
 var _page: int = PINK_PAGE
-## `.AnimateEgg`'s `ANIM_MON_MENU` and the strip it walks. Crystal alone ships
-## them, so both stay empty on Gold and Silver.
+## `ANIM_MON_MENU` (`ANIM_MON_EGG1` and `2` for an egg) and its strip; empty on
+## Gold and Silver.
 var _animation: Gen2PicAnimation = null
 var _animation_pixels: PackedByteArray = PackedByteArray()
+## `StatsScreenWaitCry` and `EggStatsScreen`'s `WaitSFX`: no press is read while
+## this load's cry or boops sound.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_held: bool = false
+var _sound_watch: Dictionary = {}
 
 
 static func create(
@@ -46,6 +53,14 @@ static func create(
 	return out
 
 
+## [method snapshot] of one Pokemon with no screen up: no `LowVolume`, cry or animation.
+static func snapshot_of(data: GameData, mon: Gen2SaveMon) -> Dictionary:
+	var out := Gen2MonStatsScreen.new()
+	out._data = data
+	out._mons = [mon]
+	return out.snapshot()
+
+
 ## `StatsScreen_PlaceFrontpic`, called once the screen is up and again by
 ## [method handle_button] on every UP or DOWN. Crystal's cry is `ANIM_MON_MENU`'s
 ## opening `PokeAnim_CryNoWait`, so a Pokemon `CheckFaintedFrzSlp` answers yes
@@ -54,11 +69,17 @@ static func create(
 func announce() -> void:
 	_animation = null
 	_animation_pixels = PackedByteArray()
+	_sound_held = false
+	_sound_watch = {}
 	var mon: Gen2SaveMon = current()
-	if mon == null or mon.is_egg or _data == null:
+	if mon == null or _data == null:
+		return
+	if mon.is_egg:
+		_announce_egg(mon)
 		return
 	var record: Dictionary = _data.pic_animation(mon.species, _unown_form(mon))
 	if record.is_empty():
+		_sound_held = true
 		if _data.id == RomRegistry.YELLOW and Gen1Pikachu.is_starter_of(_save, mon):
 			pikachu_clip_requested.emit(PIKACHU_CLIP_STATUS)
 		else:
@@ -67,6 +88,7 @@ func announce() -> void:
 	if mon.hp <= 0 or Gen2Status.has(mon.status, Gen2Status.FREEZE) \
 		or Gen2Status.is_asleep(mon.status):
 		return
+	_sound_held = true
 	var mirrored: bool = Gen2StatsScreenPage.pic_mirrored(mon.species, false)
 	_animation = Gen2PicAnimation.new(
 		record, Gen2PicAnimation.ANIM_MON_MENU, mirrored
@@ -76,6 +98,23 @@ func announce() -> void:
 		Gen2PicAnimation.BOX, true,
 		_data.species_pic_animation(mon.species, _unown_form(mon)), mirrored
 	)
+
+
+## `EggStatsScreen`: boops below six steps (`wTempMonHappiness`), and on Crystal
+## `StatsScreen_AnimateEgg`'s `ANIM_MON_EGG1` below six, `ANIM_MON_EGG2` below 11.
+func _announce_egg(mon: Gen2SaveMon) -> void:
+	var kind: int = Gen2PicAnimation.ANIM_MON_EGG1 if mon.happiness < EGG_SOON_STEPS \
+		else Gen2PicAnimation.ANIM_MON_EGG2 if mon.happiness < EGG_CLOSE_STEPS else -1
+	var record: Dictionary = _data.egg_pic_animation()
+	if kind >= 0 and not record.is_empty():
+		_animation = Gen2PicAnimation.new(record, kind, true)
+		_animation_pixels = Gen2BattleRenderer.padded_pic(
+			_data, _data.egg_pic(), Gen2PicAnimation.BOX, true,
+			_data.egg_pic_animation_cell(), true
+		)
+	if mon.happiness < EGG_SOON_STEPS:
+		_sound_held = true
+		sfx_requested.emit(Gen2Sfx.SFX_2_BOOPS)
 
 
 ## One hardware frame of `StatsScreen_WaitAnim`'s `SetUpPokeAnim`, which stops on
@@ -116,13 +155,17 @@ func cursor() -> int:
 	return _cursor
 
 
-## `StatsScreen_JoypadAction`. Returns whether the button was used.
 func _close() -> void:
 	Gen2AudioPlayer.hold_low_volume(false)
 	closed.emit()
 
 
+## `StatsScreen_JoypadAction`. Returns whether the button was used.
 func handle_button(button: int) -> bool:
+	if _sound_held:
+		if bool(sound_busy.call(_sound_watch)):
+			return true
+		_sound_held = false
 	## `StatusScreen` and `StatusScreen2` each end in
 	## `WaitForTextScrollButtonPress`, which reads A and B and nothing else: one
 	## press turns to the second page and the next returns.

@@ -14,10 +14,13 @@ signal sfx_requested(sfx: int, waited: bool)
 enum Phase {
 	BEFORE_TEXT,
 	ASK,
+	CLEARING,
 	NAMING,
 	AFTER_TEXT,
 	DONE,
 }
+
+var menu_transition: Gen2MenuTransition = null
 
 var _data: GameData = null
 ## `wStringBuffer1`, the species name `GetPokemonName` left there.
@@ -36,12 +39,8 @@ var _after_name: String = ""
 var _question: String = ""
 ## `GotMonText` in front of the question, its `sound_get_item_1` holding the box.
 var _before_text: String = ""
-var _before_sfx: int = -1
-var _before_sounded: bool = false
 ## `_BoxIsFullText`, the whole routine.
 var _before_alone: bool = false
-var _audio: Gen2AudioPlayer = null
-var _wait_watch: Dictionary = {}
 ## Whether the YES/NO is skipped and the keyboard opened outright, which is the
 ## Nuzlocke's "every Pokemon is nicknamed": a question with one allowed answer
 ## is worse than no question.
@@ -71,14 +70,9 @@ func set_context(
 		else Gen2WorldPartyHost.caught_nickname_question(species_name)
 
 
-func set_before_text(text: String, sfx: int = -1, alone: bool = false) -> void:
+func set_before_text(text: String, alone: bool = false) -> void:
 	_before_text = text
-	_before_sfx = sfx
 	_before_alone = alone
-
-
-func set_audio_player(player: Gen2AudioPlayer) -> void:
-	_audio = player
 
 
 ## `.Pokemon`'s icon. [param dvs] is `GetGender`'s input; -1 leaves the sign off.
@@ -145,7 +139,7 @@ func naming_screen() -> Gen2NamingScreenScreen:
 
 
 func advance_frame() -> void:
-	if _phase in [Phase.DONE, Phase.NAMING]:
+	if _phase in [Phase.DONE, Phase.CLEARING, Phase.NAMING]:
 		return
 	if _yes_no.is_open():
 		_yes_no.advance_frame()
@@ -160,18 +154,9 @@ func advance_frame() -> void:
 		_yes_no.open()
 
 
-## `TextCommand_SOUND` and its `WaitForSoundToFinish`.
 func _advance_before_text() -> void:
-	if _text_owes_frames() or _before_alone:
-		return
-	if not _before_sounded:
-		_before_sounded = true
-		if _before_sfx >= 0:
-			sfx_requested.emit(_before_sfx, false)
-		return
-	if _audio != null and _audio.still_waiting(_wait_watch):
-		return
-	_ask()
+	if not _text_owes_frames() and not _before_alone:
+		_ask()
 
 
 func _text_owes_frames() -> bool:
@@ -225,6 +210,14 @@ func _answer_question(yes: bool) -> void:
 	if not yes:
 		_after_question()
 		return
+	_phase = Phase.CLEARING
+	if menu_transition == null:
+		_open_naming()
+		return
+	menu_transition.clear_screen(_open_naming, &"naming_screen")
+
+
+func _open_naming() -> void:
 	_naming = Gen2NamingScreenScreen.new()
 	if not _naming.open(
 		_data,
@@ -243,13 +236,18 @@ func _answer_question(yes: bool) -> void:
 
 
 ## `InitName`, which keeps the species name when the entry came back empty.
+## `ExitAllMenus` follows, before the box that says where the Pokemon went.
 func _on_named(entered: String) -> void:
 	Gen2Screen.drop(_naming)
 	_naming = null
 	_answer = Gen2NamingScreen.init_name(
 		entered, _answer, _data != null and _data.generation == RomRegistry.GEN1
 	)
-	_after_question()
+	_phase = Phase.CLEARING
+	if menu_transition == null:
+		_after_question()
+		return
+	menu_transition.close_submenu(_after_question, &"naming_screen")
 
 
 func _after_question() -> void:

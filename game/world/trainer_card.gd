@@ -1,10 +1,9 @@
 class_name Gen2TrainerCard
 extends RefCounted
 
-## What the trainer card prints (`engine/menus/trainer_card.asm`), as pages a
-## screen can draw.
-## Everything here comes from the save and the world the card is opened over:
-## `wPlayerName`, `wPlayerID` and `wMoney` on the top half, `wPokedexCaught`'s
+## What the trainer card prints (`engine/menus/trainer_card.asm`), as pages a screen
+## can draw. Everything here comes from the save and the world the card is opened
+## over: `wPlayerName`, `wPlayerID` and `wMoney` on the top half, `wPokedexCaught`'s
 ## set bits and `wGameTimeHours`/`wGameTimeMinutes` on page 1, and the two badge
 ## bytes behind pages 2 and 3.
 
@@ -57,9 +56,8 @@ static func page(
 	}
 
 
-## `DrawTrainerInfo`'s three lines and `DrawBadges`' eight bits.
-## `wObtainedBadges` is the Kanto half of the shared badge order, which is what
-## page 3 already reads.
+## `DrawTrainerInfo`'s three lines and `DrawBadges`' eight bits. `wObtainedBadges`
+## is the Kanto half of the shared badge order, which is what page 3 already reads.
 static func gen1_page(save: Gen2SaveData, world: Gen2WorldAPI) -> Dictionary:
 	var out: Dictionary = page(save, world, PAGE_3)
 	if out.is_empty():

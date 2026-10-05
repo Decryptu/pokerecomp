@@ -133,6 +133,14 @@ const PARTY_RESULT_LINES: Dictionary = {
 const POTION_HEAL: int = 20
 
 
+func _press_a(host: Gen2StartMenuScreen) -> void:
+	host.handle_button(PokeButton.A)
+	for _frame: int in Gen2AudioPlayer.WAIT_CAP_FRAMES:
+		if not bool(host.get("_sound_holding")):
+			return
+		host.advance_frame()
+
+
 func _verify_party_results() -> void:
 	var generation: int = _r.data.generation
 	var items: Dictionary = PARTY_RESULT_ITEMS[generation]
@@ -159,10 +167,10 @@ func _verify_party_results() -> void:
 	for step: int in 3:
 		var item: int = int(items.values()[step])
 		host.call("_select_pack_item", item)
-		host.handle_button(PokeButton.A)
-		host.handle_button(PokeButton.A)
+		_press_a(host)
+		_press_a(host)
 		if step < 2:
-			host.handle_button(PokeButton.A)
+			_press_a(host)
 		var want: String = String(lines[step]).replace("<MON>", lead_name).replace(
 			"<N>", str(healed)).replace("<PLAYER>", save.player_name)
 		var party: Dictionary = host.get("_party_result")
@@ -187,7 +195,7 @@ func _verify_party_results() -> void:
 					break
 				host.advance_party_result()
 		_read_box(host)
-		host.handle_button(PokeButton.A)
+		_press_a(host)
 		_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK,
 			"%s: the pocket did not come back behind %s." % [_r.game_id, items.keys()[step]])
 	_r.check(save.party[0].hp == 1 + healed and save.party[0].status == 0
@@ -218,7 +226,7 @@ func _read_box(host: Gen2StartMenuScreen) -> int:
 		if host._box.is_revealing():
 			host.advance_frame()
 		else:
-			host.handle_button(PokeButton.A)
+			_press_a(host)
 			presses += 1
 	return presses
 
@@ -240,12 +248,12 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 	host.sfx_requested.connect(func(sfx: int, _waited: bool) -> void: sounds.append(sfx))
 	if not _r.check(host.call("_select_pack_item", machine), "%s: no TM %d in the pack." % [_r.game_id, machine]):
 		return
-	host.handle_button(PokeButton.A)
-	host.handle_button(PokeButton.A)
+	_press_a(host)
+	_press_a(host)
 	var pages_turned: int = _read_box(host)
-	host.handle_button(PokeButton.A)
+	_press_a(host)
 	host.advance_frames(Gen2WorldMenu.ANSWER_HOLD_FRAMES)
-	host.handle_button(PokeButton.A)
+	_press_a(host)
 	var gen1: bool = _r.data.generation == RomRegistry.GEN1
 	var want: String = Gen2WorldTMHM.not_compatible_text(
 		lead_name, String(_r.data.move(Gen2WorldTMHM.move_for_item(_r.data, machine)).get("name", "")),
@@ -258,13 +266,13 @@ func _verify_machine_refusal(host: Gen2StartMenuScreen, lead_name: String, machi
 			_r.game_id, host.get("_pack_result"), host.get("_mode"), sounds])
 	## `PrintText` pages the two sentences, and the `prompt` owes the last press.
 	_read_box(host)
-	host.handle_button(PokeButton.A)
+	_press_a(host)
 	var mode: int = host.get("_mode")
 	_r.check(mode == (Gen2StartMenuScreen.Mode.PACK_TARGET if gen1 else Gen2StartMenuScreen.Mode.PACK),
 		"%s: the refusal's press landed in mode %d." % [_r.game_id, mode])
 
 
-## `_GrewToLevelText` and `RareCandyText`: three clicks, the line under its waited
+## `_GrewToLevelText` and `RareCandyText`: three clicks, the line ending on its own
 ## sound, the stats box behind the `text_promptbutton`, a press before the pocket.
 func _verify_rare_candy(
 	screen: Gen2WorldScreen, host: Gen2StartMenuScreen, lead_name: String, candy: int
@@ -275,24 +283,29 @@ func _verify_rare_candy(
 	host.sfx_requested.connect(func(sfx: int, waited: bool) -> void: sounds.append([sfx, waited]))
 	host.call("_select_pack_item", candy)
 	for _press: int in 3:
-		host.handle_button(PokeButton.A)
+		_press_a(host)
 	_read_box(host)
 	var want: String = String(GREW_LINES[_r.data.generation]).replace(
 		"<MON>", lead_name).replace("<L>", str(level + 1))
 	var party: Dictionary = host.get("_party_result")
-	_r.check(String(host.get("_pack_result")) == want and not party.has("stats")
+	var line: Dictionary = Gen2TextStream.split_sounds(String(host.get("_pack_result")))
+	var fanfare: int = Gen1Sfx.SFX_GET_ITEM_1 if _r.data.generation == RomRegistry.GEN1 \
+		else Gen2Sfx.SFX_DEX_FANFARE_50_79
+	_r.check(line["sounds"].map(func(sound: Dictionary) -> int: return int(sound["id"])) == [fanfare],
+		"%s: the RARE CANDY's line carries %s." % [_r.game_id, line["sounds"]])
+	_r.check(String(line["text"]) == want and not party.has("stats")
 		and party.has("stats_after_press") and not host.party_result_holding(),
 		"%s: the RARE CANDY printed %s over %s with no press owed." % [
 			_r.game_id, host.get("_pack_result"), party.keys()])
 	var click: int = Gen2Sfx.SFX_READ_TEXT_2
 	_r.check(sounds == [[click, false], [click, false],
-		[click, _r.data.generation != RomRegistry.GEN1], [Gen2Sfx.SFX_DEX_FANFARE_50_79, true]],
+		[click, _r.data.generation != RomRegistry.GEN1]],
 		"%s: the RARE CANDY's line sounded %s." % [_r.game_id, sounds])
-	host.handle_button(PokeButton.A)
+	_press_a(host)
 	_r.check(host.get("_mode") == Gen2StartMenuScreen.Mode.PACK_RESULT
 		and (host.get("_party_result") as Dictionary).has("stats"),
 		"%s: the first press did not draw the stats box." % _r.game_id)
-	host.handle_button(PokeButton.A)
+	_press_a(host)
 	## `LearnLevelMoves` behind the box: `LearnMove`'s own line for each move the
 	## level owes into an empty slot.
 	var mon: Gen2SaveMon = save.party[0]
@@ -305,7 +318,7 @@ func _verify_rare_candy(
 		_r.check(String(host.get("_pack_result")) == learned,
 			"%s: the level's move printed %s." % [_r.game_id, host.get("_pack_result")])
 		_read_box(host)
-		host.handle_button(PokeButton.A)
+		_press_a(host)
 	_r.check(host.get("_mode") != Gen2StartMenuScreen.Mode.PACK_RESULT
 		and save.party[0].level == level + 1,
 		"%s: the RARE CANDY left mode %d at level %d." % [
@@ -561,9 +574,8 @@ func _battle_effect_branch(item: int, definition: Dictionary, data: GameData) ->
 		or int(definition.get("status_mask", 0)) != 0
 
 
-## The branches `_apply_item_effect` picks between, read off the host's own
-## tables, so a table that loses a row takes this check red with it. Both
-## generations are swept through the same seam they run through.
+## The branches `_apply_item_effect` picks between, off the host's own tables like
+## [method _battle_effect_branch]; both generations are swept through the same seam.
 func _party_effect_branch(item: int, definition: Dictionary, data: GameData) -> bool:
 	var effects: Dictionary = Gen2WorldPartyHost.item_effects(data)
 	if item == int(effects["rare_candy"]) or item == int(effects["pp_up"]):

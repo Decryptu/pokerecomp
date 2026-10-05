@@ -623,6 +623,9 @@ var _fled: bool = false
 var _forced_out: bool = false
 var _forced_out_side: int = -1  ## Which side was blown out, for a screen that has to say who left.
 
+## `RemoveFaintedPlayerMon` writes `wBattleResult` 1 and `FaintEnemyPokemon` 0.
+var _gen1_result: int = 0
+
 ## The half-run turn a question stopped, as [code]{"acting": Array, "actions":
 ## Dictionary, "index": int, "acted": bool}[/code], which its answer finishes.
 var _pending_turn: Dictionary = {}
@@ -907,6 +910,11 @@ func note_faint(side: int, events: Array, extra: Dictionary = {}) -> void:
 		event["pursuit"] = true
 		event["index"] = party(side).active
 		return
+	## An enemy already down is `FaintEnemyPokemon` calling it before its own 0.
+	if side == PLAYER and not mon(ENEMY).is_fainted():
+		_gen1_result = 1
+	elif side == ENEMY and not party(PLAYER).is_wiped():
+		_gen1_result = 0
 	## Both `UpdateFaintedPlayerMon` and the enemy's faint end the survivor's loop.
 	mon(opponent_of(side)).substatus &= ~Gen2Substatus.IN_LOOP
 	_charge_faint_happiness(side)
@@ -1074,6 +1082,14 @@ func forced_out_side() -> int:
 ## line of its own rather than `BattleText_GotAwaySafely`.
 func was_forced_out() -> bool:
 	return _forced_out
+
+
+## Generation 1's `wBattleResult`, which gates Pay Day and Yellow's mood update on
+## zero. A run writes 2 (a ball too, the caller's); a wild mon that left, nothing.
+func gen1_battle_result() -> int:
+	if _fled:
+		return 2
+	return 1 if party(PLAYER).is_wiped() else _gen1_result
 
 
 ## Whether the player ran, one of the endings [method is_draw] answers.
@@ -2485,11 +2501,10 @@ func _tick_weather(events: Array) -> void:
 ## health, the player always first. The turn the counter empties is the release
 ## and costs nothing, so three to six rolled turns are two to five of damage.
 func _tick_wrap(events: Array) -> void:
-	## Generation 1 has no `ResidualDamage` entry for a trapping move: the
-	## counter is spent by `.MultiturnMoveCheck` repeating the move instead, and
-	## `CheckNumAttacksLeft` at the end of the whole turn is what lets go. So the
-	## turn the counter empties still holds the target, whichever side moves
-	## first on it.
+	## Generation 1 has no `ResidualDamage` entry for a trapping move: the counter
+	## is spent by `.MultiturnMoveCheck` repeating the move, and `CheckNumAttacksLeft`
+	## at the end of the whole turn lets go. So the turn the counter empties still holds
+	## the target, whichever side moves first on it.
 	if is_gen1():
 		for side: int in [PLAYER, ENEMY]:
 			if mon(side).trapped_turns <= 0:
@@ -2963,6 +2978,11 @@ func _use_trainer_item(side: int, item: int, events: Array) -> void:
 		return
 	enemy_items.erase(item)
 	var user: Gen2BattleMon = mon(side)
+	if not is_gen1():
+		# `AI_TryItem`'s used-item block; `wLastEnemyCounterMove` is Crystal's alone.
+		_reset_action_counters(side, -1)
+		if Gen2WorldState.is_crystal_profile(data):
+			user.last_counter_move = 0
 	var effect: Dictionary = Gen1TrainerAI.apply_item(self, user, item) if is_gen1() \
 		else Gen2AIItems.apply(user, item)
 	var used: Dictionary = {
@@ -3143,6 +3163,8 @@ func _apply_party_item(
 		_faint_charged.erase(target.get_instance_id())
 		return _with_bitterness(target, item, {"ok": true, "revived": true, "healed": target.hp})
 	if (roles["pp_restore"] as Dictionary).has(item):
+		if pp_item_refused(item, party(PLAYER).active if active else -1):
+			return {"ok": false, "reason": &"item_not_usable_here"}
 		return _restore_pp(target, item, move_slot, active)
 	if target.is_fainted():
 		return {"ok": false, "reason": &"item_has_no_effect"}
@@ -3198,6 +3220,15 @@ func _cure_confusion() -> Dictionary:
 	user.substatus &= ~Gen2Substatus.CONFUSED
 	user.confusion_turns = 0
 	return {"ok": true, "unconfused": true}
+
+
+## Yellow's `ItemUsePPRestore.chooseMove`: `ItemUseNotTime` for the Transformed
+## Pokemon out, before a move is asked for. Red and Blue have no such test.
+func pp_item_refused(item: int, target_index: int) -> bool:
+	if data == null or data.id != RomRegistry.YELLOW or target_index != party(PLAYER).active:
+		return false
+	var rows: Dictionary = Gen2WorldPartyHost.item_effects(data)["pp_restore"]
+	return rows.has(item) and Gen2Substatus.has(mon(PLAYER).substatus, Gen2Substatus.TRANSFORMED)
 
 
 ## Whether a PP item asks which slot to fill: the two Elixers fill every slot and

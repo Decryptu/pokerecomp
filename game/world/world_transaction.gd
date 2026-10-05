@@ -100,14 +100,11 @@ static func copy_into(target: Gen2SaveData, source: Gen2SaveData) -> void:
 	target.run_options = source.run_options.duplicate(true)
 	target.run_rules = source.run_rules.duplicate_rules() if source.run_rules != null else null
 	target.boxes_shape_valid = source.boxes_shape_valid
-	## `game_time` is the one field the live save owns rather than the candidate:
-	## the screen has been counting frames into it since the candidate was cloned,
-	## and copying the clone back loses them. This list is deliberately named field
-	## by field rather than delegated to [method Gen2SaveData.copy_from], which
-	## round-trips through `to_dict` and would rebuild every party member on every
-	## commit. `test_the_transaction_write_back_carries_every_field_but_the_live_clock`
-	## keeps the two lists in step: a field added to the save and forgotten here
-	## fails there.
+	## `game_time` is the live save's own: the screen has counted frames into it
+	## since the clone. The fields are named one by one because
+	## [method Gen2SaveData.copy_from] would rebuild every party member on each
+	## commit; `test_the_transaction_write_back_carries_every_field_but_the_live_clock`
+	## fails on a field added to the save and forgotten here.
 
 
 static func failure(reason: StringName, details: Dictionary) -> Dictionary:

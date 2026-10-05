@@ -23,6 +23,7 @@ const WORDING: Dictionary = {
 	&"invalid_dependency_range": "The dependency range is invalid (%s).",
 	&"invalid_games": "%s's games must be a list of cartridge ids.",
 	&"invalid_game": "\"%s\" is not a usable cartridge id.",
+	&"invalid_menu_path": "%s's menu_path must be up to 3 names of 1 to 17 characters.",
 	&"missing_entry": "The mod names no entry script.",
 	&"entry_not_gdscript": "A mod's entry script has to be GDScript (%s).",
 	&"entry_escapes_mod": "The entry script points outside the mod folder (%s).",

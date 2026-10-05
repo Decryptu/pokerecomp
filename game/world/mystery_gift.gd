@@ -190,13 +190,12 @@ static func receive_decoration(section: Dictionary, deco: int) -> bool:
 	return true
 
 
-## `CopyMysteryGiftReceivedDecorationsToPC`, run once per Continue: every flag
-## the array carries becomes the decoration's own event flag, which is where
-## ownership lives ([Gen2WorldDecoration]). The array holds `DECOFLAG_*` indices
-## and the walk is `SetSpecificDecorationFlag`, so `GetDecorationID` maps each
-## one onto a decoration first. The array is not cleared, so the
-## walk is idempotent and a decoration received while a different slot was
-## loaded still arrives.
+## `CopyMysteryGiftReceivedDecorationsToPC`, run once per Continue: every flag the
+## array carries becomes the decoration's own event flag, which is where ownership
+## lives ([Gen2WorldDecoration]). The array holds `DECOFLAG_*` indices and the walk
+## is `SetSpecificDecorationFlag`, so `GetDecorationID` maps each one onto a
+## decoration first. The array is not cleared, so the walk is idempotent and a
+## decoration received while a different slot was loaded still arrives.
 static func copy_decorations_to_pc(
 	section: Dictionary, data: GameData, state: Gen2WorldState
 ) -> int:
@@ -217,10 +216,9 @@ static func gift_at(table: Array, index: int) -> int:
 	return int(table[index]) & 0xFF
 
 
-## `StageDataForMysteryGift`: the twenty bytes this Game Boy holds out to the
-## other one. Every field is read at the moment the window opens, so the item
-## and the decoration a partner offers are rolled here rather than by whoever
-## receives them.
+## `StageDataForMysteryGift`: the twenty bytes this Game Boy holds out to the other
+## one. Every field is read at the moment the window opens, so the item and the
+## decoration a partner offers are rolled here rather than by whoever receives them.
 static func stage_player_data(
 	save: Gen2SaveData, section: Dictionary, dex_caught: int,
 	random: RandomNumberGenerator
@@ -244,11 +242,10 @@ static func stage_player_data(
 	}
 
 
-## `StageDataForMysteryGift.RandomSample`, which is four weighted bands rather
-## than an index: about 90% of the time a row of the table's first sixteen,
-## then eight, then eight, then one of the last two. The player's own ID picks
-## the odd row inside a band, so two players sitting down together do not offer
-## the same thing.
+## `StageDataForMysteryGift.RandomSample`, which is four weighted bands rather than
+## an index: about 90% of the time a row of the table's first sixteen, then eight,
+## then eight, then one of the last two. The player's own ID picks the odd row
+## inside a band, so two players sitting down together do not offer the same thing.
 static func _random_sample(
 	high: int, low: int, random: RandomNumberGenerator
 ) -> int:
@@ -272,13 +269,12 @@ static func _rotated_bit(count: int) -> int:
 
 
 ## `DoMysteryGift` from the exchange down: every refusal in the routine's own
-## order, and the gift behind the last of them. The section is written in place,
-## which is what the cartridge does to SRAM between one box and the next: the
-## partner ID is added and the trainer name saved before the gift is chosen, so a
-## partner who offers a decoration this side already owns still counts against
-## both daily limits. Answers `{ outcome, name, item, deco, retry }`, where
-## `outcome` names one of the eight `text_far` stubs and `retry` is
-## `.CommunicationError`'s own `jp DoMysteryGift`.
+## order, and the gift behind the last of them. The section is written in place, as
+## the cartridge does to SRAM between boxes: the partner ID is added and the name
+## saved before the gift is chosen, so a decoration this side already owns still
+## counts against both daily limits. Answers `{ outcome, name, item, deco, retry }`:
+## `outcome` names one of the eight `text_far` stubs, `retry` is
+## `.CommunicationError`'s `jp DoMysteryGift`.
 static func exchange(
 	section: Dictionary, transport: Gen2MysteryGiftTransport,
 	player: Dictionary, tables: Dictionary, data: GameData = null

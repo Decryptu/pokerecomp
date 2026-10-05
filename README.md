@@ -154,10 +154,14 @@ device whose charge cannot be read shows none rather than a full cell.
 
 Play opens the save screen: validated slots, naming, export and import, `.sav`
 import, party inspection, and a save editor that cannot produce a save the game
-will not load. A new game asks which mode it is played in, then opens on the
-cartridge's own splash, GameFreak animation, intro movie and title screen, then
-the gender question and Oak's speech. Continue enters the overworld. See
-[docs/SAVES.md](docs/SAVES.md).
+will not load. A Red, Blue or Yellow `.sav` comes over whole (party, boxes, bag,
+map and position, flags, Pokedex, Hall of Fame); a Gold, Silver or Crystal one
+brings the player and party. [docs/SAVES.md](docs/SAVES.md) lists what each
+carries and what is refused.
+
+A new game asks which mode it is played in, then opens on the cartridge's own
+splash, GameFreak animation, intro movie and title screen, then the gender
+question and Oak's speech. Continue enters the overworld.
 
 ### Vanilla, Hard and Nuzlocke
 

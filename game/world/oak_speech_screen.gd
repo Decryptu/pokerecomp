@@ -3,11 +3,10 @@ extends Control
 
 ## `OakSpeech` drawn: a pic above the standard text box, advanced with A, with
 ## `NamePlayer`'s menu and keyboard where the source puts them. The routine is a
-## run of `PrintText` calls separated by palette fades and `ClearTilemap`, so this
-## screen is a run of beats separated by [Gen2IntroPresentation] queues. Nothing
-## here waits a number of frames it chose: every count is a `DelayFrames` operand.
-## Oak and the speech species use the ordinary imported pic tables; Gold and Silver
-## use CAL's trainer pic for the player and Crystal the imported raw ChrisPic.
+## run of `PrintText` calls between palette fades and `ClearTilemap`, so this
+## screen is a run of beats separated by [Gen2IntroPresentation] queues, every
+## count a `DelayFrames` operand. Oak and the speech species use the imported pic
+## tables; Gold and Silver use CAL's trainer pic and Crystal the raw ChrisPic.
 
 ## Carries the name the intro settled on, already through `InitName`'s default.
 signal finished(player_name: String)
@@ -17,6 +16,8 @@ const PIC_AT: Vector2i = Vector2i(6, 4)
 const PIC_TILES: int = 7
 const TILE: int = Gen2Font.TILE
 const GEN1_NAME_BOX_FRAMES: int = 10
+## A cry's length is the driver's: callers settle in steps this long.
+const CRY_WAIT_STEP_FRAMES: int = 8
 
 ## Where the screen is standing, which is the routine it is inside.
 enum Phase {
@@ -60,6 +61,9 @@ var _naming: Gen2NamingScreenScreen = null
 var _name_menu: Gen2PlayerNameMenuScreen = null
 var _audio: Gen2AudioPlayer = null
 var _audio_started: bool = false
+## `OakText2`'s `WaitSFX`: no press is read while the cry sounds.
+var _cry_waiting: bool = false
+var _cry_watch: Dictionary = {}
 var _cry_played: bool = false
 var _presentation := Gen2IntroPresentation.new()
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
@@ -130,6 +134,8 @@ func advance_frames(count: int) -> void:
 			_audio.advance_driver_frame()
 		if _text_box != null:
 			_text_box.advance_frame()
+		if _cry_waiting and not _audio.still_waiting(_cry_watch):
+			_cry_waiting = false
 		if _phase != Phase.ANIMATING:
 			# The cry sits inside `OakText2`'s own `text_asm`, so it fires when
 			# the words have finished appearing rather than when A is pressed.
@@ -170,6 +176,8 @@ func name_choice_image() -> Image:
 ## the queued animation, or the rest of a text that is still printing. A press
 ## cannot shorten either, so a caller settling the screen spends these.
 func animation_frames_left() -> int:
+	if _cry_waiting:
+		return CRY_WAIT_STEP_FRAMES
 	if _phase == Phase.ANIMATING:
 		return _presentation.remaining_frames()
 	return _text_box.frames_left() if _text_box != null else 0
@@ -188,7 +196,7 @@ func rival_name() -> String:
 ## pressed inside a `DelayFrames` run is swallowed, which is what the hardware
 ## does with a joypad nobody is reading.
 func handle_button(button: int) -> bool:
-	if _phase == Phase.ANIMATING:
+	if _phase == Phase.ANIMATING or _cry_waiting:
 		return true
 	if _name_menu != null:
 		return _name_menu.handle_button(button)
@@ -395,9 +403,7 @@ func _print_text() -> void:
 	_apply_frame()
 
 
-## `OakText2`'s `text_asm` plays the cry once the words are up. The source's
-## `WaitSFX` after it is not modelled: nothing here holds the script until the
-## four effect channels are free.
+## `OakText2`'s `text_asm` plays the cry once the words are up.
 func _play_cry_if_due() -> void:
 	if _cry_played or _index >= _beats.size() or _text_box == null:
 		return
@@ -405,6 +411,8 @@ func _play_cry_if_due() -> void:
 		return
 	_cry_played = true
 	_play_intro_cry()
+	_cry_waiting = _audio != null
+	_cry_watch = {}
 
 
 func _cry_beat_key() -> String:

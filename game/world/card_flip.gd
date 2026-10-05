@@ -170,6 +170,7 @@ var _step: int = 0
 ## Half-steps left in `.loop2`'s three flashes, on then off.
 var _flash_left: int = 0
 var _waiting_for_sfx: bool = false
+var _queued_sound: int = -1
 ## Coins still to be paid out one at a time, and the payout's own frame counter.
 var _payout_left: int = 0
 var _events: Array = []
@@ -262,6 +263,11 @@ func waiting_for_sfx() -> bool:
 
 func sfx_finished() -> void:
 	_waiting_for_sfx = false
+	if _queued_sound >= 0:
+		var index: int = _queued_sound
+		_queued_sound = -1
+		_sound(index)
+		_waiting_for_sfx = true
 
 
 func take_events() -> Array:
@@ -286,6 +292,12 @@ func blinking_cursor() -> bool:
 
 func _sound(index: int) -> void:
 	_emit({"kind": &"sound", "index": index})
+
+
+## `WaitSFX`, `PlaySFX`, `WaitSFX`.
+func _play_between_waits(index: int) -> void:
+	_queued_sound = index
+	_waiting_for_sfx = true
 
 
 ## One pass of `.MasterLoop`. Answers false once `JUMPTABLE_EXIT_F` is set,
@@ -365,6 +377,9 @@ func press_a() -> void:
 	match _prompt:
 		Prompt.CHOOSE:
 			_prompt = Prompt.NONE
+			## `.loop` tests A after its toggle and before the border moves: `.next`
+			## takes the card the border was not on (PyBoy, Crystal, every phase).
+			_which_card ^= 1
 			_sound(Gen2Sfx.SFX_SLOT_MACHINE_START)
 			_step = 4
 			_flash_left = FLASHES * 2 - 1
@@ -419,8 +434,6 @@ func _choose_a_card_pass() -> void:
 			_which_card = 0
 			_toggle_pass()
 		3:
-			## `.loop`'s own `xor $1` runs at the end of an iteration, so the
-			## card the border is standing on is the one A takes.
 			_which_card ^= 1
 			_toggle_pass()
 		_:
@@ -565,8 +578,7 @@ func _to_mon_group() -> bool:
 func _enter_check_the_card() -> void:
 	_state = State.CHECK_THE_CARD
 	_cursor_visible = true
-	_sound(Gen2Sfx.SFX_CHOOSE_A_CARD)
-	_waiting_for_sfx = true
+	_play_between_waits(Gen2Sfx.SFX_CHOOSE_A_CARD)
 
 
 ## The card turns over on the pass behind that effect, which is the `WaitSFX`
@@ -643,8 +655,7 @@ func _enter_quit() -> void:
 	_cursor_visible = false
 	_border_at = -1
 	_step = 0
-	_sound(Gen2Sfx.SFX_QUIT_SLOTS)
-	_waiting_for_sfx = true
+	_play_between_waits(Gen2Sfx.SFX_QUIT_SLOTS)
 
 
 func _quit_pass() -> void:

@@ -128,6 +128,18 @@ static func _filled(size: int, value: int) -> Array:
 	return out
 
 
+## `_SaveGameData` clears RECEIVED_REWARD, so the prize can be claimed again.
+func on_save() -> void:
+	if challenge_state == RECEIVED_REWARD:
+		challenge_state = NO_CHALLENGE
+
+
+## `LoadPlayerData`: RECEIVED_REWARD reads back as WON_CHALLENGE.
+func on_load() -> void:
+	if challenge_state == RECEIVED_REWARD:
+		challenge_state = WON_CHALLENGE
+
+
 func to_dict() -> Dictionary:
 	return {
 		"challenge_state": challenge_state,

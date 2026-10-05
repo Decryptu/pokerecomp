@@ -64,6 +64,7 @@ enum Phase {
 	CRY,
 	HATCHED,
 	ASK_NICKNAME,
+	CLEARING,
 	NAMING,
 	DONE,
 }
@@ -85,10 +86,9 @@ var _object_colors: PackedColorArray = PackedColorArray()
 var _pic_origin: Vector2i = EGG_AT
 var _pic_pad: Vector2i = Vector2i.ZERO
 var _nickname_forced: bool = false
+var menu_transition: Gen2MenuTransition = null
 var _animation: Gen2PicAnimation = null
 var _animation_pixels: PackedByteArray = PackedByteArray()
-## `sound_caught_mon`'s `WaitSFX` in front of `text_promptbutton`.
-var _caught_sound: int = 0
 var _sfx_watch: Dictionary = {}
 
 var _backdrop: Gen2Screen.Field = null
@@ -152,9 +152,7 @@ func awaiting_press() -> bool:
 		return true
 	if _text_box == null or not _text_box.visible or _text_box.is_revealing():
 		return false
-	if _phase == Phase.HATCHED:
-		return _caught_sound == 0
-	return _text_box.has_pages_left()
+	return _phase == Phase.HATCHED or _text_box.has_pages_left()
 
 
 func text_lines() -> PackedStringArray:
@@ -185,7 +183,7 @@ func handle_button(button: int) -> bool:
 	if _text_box.is_revealing() or _text_box.has_pages_left():
 		_text_box.advance()
 		return true
-	if _phase == Phase.HATCHED and _caught_sound == 0:
+	if _phase == Phase.HATCHED:
 		_text_box.advance()
 		_open_nickname_question()
 		return true
@@ -239,7 +237,7 @@ func _show_text(text: String, prompt: bool = false) -> void:
 
 
 func advance_frame() -> void:
-	if _phase == Phase.DONE or _data == null or _phase == Phase.NAMING:
+	if _phase in [Phase.DONE, Phase.CLEARING, Phase.NAMING] or _data == null:
 		return
 	if _yes_no.is_open():
 		_yes_no.advance_frame()
@@ -265,8 +263,6 @@ func advance_frame() -> void:
 		Phase.CRY:
 			if not _sfx_playing():
 				_open_hatched_text()
-		Phase.HATCHED:
-			_advance_caught_sound()
 		Phase.ASK_NICKNAME:
 			## `YesNoBox` opens once `PrintText` returns.
 			_yes_no.open()
@@ -448,22 +444,9 @@ func _advance_frontpic_animation() -> void:
 func _open_hatched_text() -> void:
 	_draw_species(int(current_hatch().get("species", 0)))
 	_phase = Phase.HATCHED
-	_caught_sound = 1
 	_show_text(
 		Gen2WorldPartyHost.hatch_text(String(current_hatch().get("nickname", ""))), true
 	)
-
-
-func _advance_caught_sound() -> void:
-	if _caught_sound == 1:
-		_text_box.set_blink_cursor(false)
-		sfx_requested.emit(Gen2Sfx.SFX_CAUGHT_MON)
-		_sfx_watch = {}
-		_caught_sound = 2
-		return
-	if _caught_sound == 2 and not _sfx_playing():
-		_caught_sound = 0
-		_text_box.set_blink_cursor(true)
 
 
 func _open_nickname_question() -> void:
@@ -481,6 +464,14 @@ func _answer_nickname(yes: bool) -> void:
 	if not yes:
 		_finish_hatch(String(current_hatch().get("nickname", "")))
 		return
+	_phase = Phase.CLEARING
+	if menu_transition == null:
+		_open_naming()
+		return
+	menu_transition.clear_screen(_open_naming, &"naming_screen")
+
+
+func _open_naming() -> void:
 	_naming = Gen2NamingScreenScreen.new()
 	if not _naming.open(
 		_data, Gen2WorldPartyHost.nickname_prompt(

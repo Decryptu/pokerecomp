@@ -133,8 +133,6 @@ func has_battle_extra() -> bool:
 
 
 ## Draws one character code at a tile position, in pixels from the top left.
-## A code with no tile draws nothing, which is what a space is.
-##
 ## [param font] says which strip is loaded. Under
 ## [constant Gen2Text.FONT_BATTLE_EXTRA] a code in $60 to $78 comes off the
 ## battle-extra sheet; everything else comes off the main font either way,
@@ -168,16 +166,15 @@ func draw_code(
 
 ## Draws a string left to right from [param at_x], advancing eight pixels per
 ## tile. Returns how many tiles were drawn, which is not the string's length when
-## it contains a ligature. [param max_tiles] stops the run short; `PlaceString`
-## has no such bound and needs none, every cartridge string being written to fit
-## its box, but a label a mod supplies is not. A bounded run that does not fit
-## ends in the charmap's own ellipsis rather than stopping mid-word, so a cut
-## value is never read as a whole one. The battle-extra strip has no ellipsis
-## tile under $75, so under that font the run is cut without one.
+## it contains a ligature. [param max_tiles] stops the run short (`PlaceString`
+## needs no bound, but a label a mod supplies does); a run that does not fit ends
+## in the charmap's own ellipsis so a cut value is never read as a whole one. The
+## battle-extra strip has no ellipsis tile under $75, so that font cuts without one.
 func draw_text(
 	text: String, into: PackedByteArray, into_width: int, at_x: int, at_y: int,
 	font: StringName = Gen2Text.FONT_MAIN, max_tiles: int = -1
 ) -> int:
+	Gen2TextLayout.refuse_unfilled(text)
 	var codes: PackedByteArray = fit(text, max_tiles, font, _generation)
 	for i: int in codes.size():
 		draw_code(codes[i], into, into_width, at_x + i * TILE, at_y, font)
@@ -299,7 +296,6 @@ func draw_border(
 ## Copies one tile out of a strip, clipped to the destination. Clipping rather
 ## than refusing, because a text box that runs off the edge of the screen should
 ## look wrong at the edge and be right everywhere else.
-##
 ## Public because every sheet in this project is a strip and they all draw from
 ## one the same way; [Gen2BattleTiles] is the other caller.
 static func blit_slot(

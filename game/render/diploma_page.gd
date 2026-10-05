@@ -72,6 +72,8 @@ static func from_data(data: GameData) -> Gen2DiplomaPage:
 const STATUS_BOX_AT: Vector2i = Vector2i(0, 5)
 const STATUS_BOX_SIZE: Vector2i = Vector2i(20, 12)
 const STATUS_TEXT_AT: Vector2i = Vector2i(1, 7)
+## `next` in a `GBPrinterString` is two rows.
+const STATUS_LINE_STEP: int = 2
 const CANCEL_AT: Vector2i = Vector2i(2, 15)
 const CANCEL_STRING: String = "Press B to Cancel"
 
@@ -99,16 +101,26 @@ func render(
 
 
 func _draw_status(indices: PackedByteArray, status: String) -> void:
-	font.draw_box(
-		Gen2OptionsStore.current().textbox_frame, indices, WIDTH,
+	draw_status_box(font, indices, WIDTH, status)
+
+
+## `PlacePrinterStatusString`'s box over any 160-pixel page of indices.
+static func draw_status_box(
+	into_font: Gen2Font, indices: PackedByteArray, width: int, status: String
+) -> void:
+	into_font.draw_box(
+		Gen2OptionsStore.current().textbox_frame, indices, width,
 		STATUS_BOX_AT.x * TILE, STATUS_BOX_AT.y * TILE,
 		STATUS_BOX_SIZE.x, STATUS_BOX_SIZE.y
 	)
 	var line: int = 0
 	for row: String in status.split("\n"):
-		_text(indices, row, STATUS_TEXT_AT + Vector2i(0, line))
+		into_font.draw_text(
+			row, indices, width, STATUS_TEXT_AT.x * TILE,
+			(STATUS_TEXT_AT.y + STATUS_LINE_STEP * line) * TILE
+		)
 		line += 1
-	_text(indices, CANCEL_STRING, CANCEL_AT)
+	into_font.draw_text(CANCEL_STRING, indices, width, CANCEL_AT.x * TILE, CANCEL_AT.y * TILE)
 
 
 func _draw_page_1(indices: PackedByteArray, player: String) -> void:
@@ -192,6 +204,46 @@ const PORTRAIT_MOVES_AT: Vector2i = Vector2i(1, 13)
 const PORTRAIT_PIC_AT: Vector2i = Vector2i(1, 1)
 const PORTRAIT_DEX_MARK: Array[int] = [0x74, 0xF2]
 const PORTRAIT_SPACE: int = Gen1Text.SPACE
+
+
+## `PrintPartyMonPage1`'s top five rows, the only ones the status box leaves showing
+## (its HP icon is a 1bpp tile outside the cache).
+const PARTY_NUMBER_AT: Vector2i = Vector2i(8, 0)
+const PARTY_LEVEL_AT: Vector2i = Vector2i(8, 2)
+const PARTY_HP_AT: Vector2i = Vector2i(12, 2)
+const PARTY_GENDER_AT: Vector2i = Vector2i(17, 2)
+const PARTY_NAME_AT: Vector2i = Vector2i(8, 4)
+const PARTY_NUMBER_CODE: int = 0x74
+const PARTY_GENDER_CODES: Dictionary = {&"male": 0xEF, &"female": 0xF5}
+
+
+## `PrintPartymon`'s first page under the status box; [param snapshot] is [method Gen2MonStatsScreen.snapshot]'s.
+func render_party_print(snapshot: Dictionary, data: GameData, status: String) -> Image:
+	var indices := PackedByteArray()
+	indices.resize(WIDTH * HEIGHT)
+	font.draw_code(PARTY_NUMBER_CODE, indices, WIDTH, PARTY_NUMBER_AT.x * TILE, PARTY_NUMBER_AT.y * TILE)
+	_text(indices, ".%03d" % int(snapshot.get("dex_number", 0)), PARTY_NUMBER_AT + Vector2i(1, 0))
+	font.draw_code(Gen2Text.LEVEL_CODE, indices, WIDTH, PARTY_LEVEL_AT.x * TILE, PARTY_LEVEL_AT.y * TILE)
+	_text(indices, str(int(snapshot.get("level", 0))).lpad(3), PARTY_LEVEL_AT + Vector2i(1, 0))
+	_text(indices, str(int(snapshot.get("max_hp", 0))).lpad(3), PARTY_HP_AT + Vector2i(1, 0))
+	var gender: StringName = StringName(snapshot.get("gender", &""))
+	if PARTY_GENDER_CODES.has(gender):
+		font.draw_code(int(PARTY_GENDER_CODES[gender]), indices, WIDTH,
+			PARTY_GENDER_AT.x * TILE, PARTY_GENDER_AT.y * TILE)
+	_text(indices, String(snapshot.get("nickname", "")), PARTY_NAME_AT)
+	var tint: PackedColorArray = PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
+	var image: Image = Gen2PicImage.from_indices(indices, WIDTH, HEIGHT, tint)
+	var art: Image = Gen2StatsScreenPage.pic_image(data, snapshot)
+	if art != null:
+		image.blit_rect(art, Rect2i(Vector2i.ZERO, art.get_size()),
+			Gen2StatsScreenPage.pic_origin(art.get_size(), snapshot, data.generation))
+	var box := PackedByteArray()
+	box.resize(WIDTH * HEIGHT)
+	_draw_status(box, status)
+	var over: Image = Gen2PicImage.from_indices(box, WIDTH, HEIGHT, tint)
+	var rect := Rect2i(STATUS_BOX_AT * TILE, STATUS_BOX_SIZE * TILE)
+	image.blit_rect(over, rect, rect.position)
+	return image
 
 
 ## Yellow's printer pages; [param values] carries `player`, `hi_score` and a portrait's `mon`.

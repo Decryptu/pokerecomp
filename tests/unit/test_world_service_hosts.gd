@@ -85,8 +85,8 @@ func test_mart_purchase_updates_money_items_and_save_atomically() -> void:
 ## `script_mart` has no mart id, so a Generation 1 counter is named by its map
 ## and the text row it was opened on, and a filter sees both.
 func test_a_generation_1_counter_names_its_map_and_text_row() -> void:
-	var steps: Array = _world._gen1_facility_steps(
-		{"command": Gen1Layout.TEXT_SCRIPT_MART, "items": [7]}, 3
+	var steps: Array = Gen1FacilityScripts._gen1_facility_steps(
+		_world, {"command": Gen1Layout.TEXT_SCRIPT_MART, "items": [7]}, 3
 	)
 	var values: Dictionary = steps[0]["values"]["values"]
 	assert_eq(int(values["text_id"]), 3)

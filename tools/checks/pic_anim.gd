@@ -57,6 +57,13 @@ func _check_game() -> void:
 		records == LAST_SPECIES + Gen2Layout.UNOWN_FORMS - 1,
 		"pic_anim has %d records, not the 251 species and 26 Unown letters." % records
 	)
+	var egg: Dictionary = _r.data.egg_pic_animation()
+	if _r.check(not egg.is_empty(), "pic_anim has no egg record."):
+		frames += _check_record(egg, Gen2Layout.EGG_SPECIES, 0)
+		_r.check(
+			not _r.data.egg_pic_animation_cell().is_empty(),
+			"The egg's animation frames are not in the cache."
+		)
 	_r.note("pic_anim %d records over %d frames, heights %s, %d frames reach the player's own run" % [
 		records, frames, sizes, _collisions
 	])

@@ -6,8 +6,7 @@ extends Control
 ## `wMenuCursorY - 1` into `wPlayerGender`, which is bit 0 of the byte
 ## [Gen2SaveData] already carries. The selection rules are [Gen2WorldMenu]'s and
 ## the layout [Gen2GenderScreenPage]'s. `.MenuData` sets STATICMENU_DISABLE_B, so
-## there is no way out but a choice, which is the source's own answer to a screen
-## a new game cannot skip.
+## there is no way out but a choice.
 
 ## Carries [constant Gen2SaveData.GENDER_MALE] or `GENDER_FEMALE`.
 signal closed(gender: int)

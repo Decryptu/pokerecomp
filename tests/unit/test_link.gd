@@ -336,6 +336,31 @@ func test_the_time_capsule_receives_the_partners_party_converted() -> void:
 	assert_eq(received[1], sent.to_dict())
 
 
+## A Generation 1 partner's `MON_CATCH_RATE` is the byte `TimeCapsule_CatchRateItems`
+## turns into a held item; Yellow's Kadabra carries `TWISTEDSPOON_GSC` in place of the header's.
+func test_a_generation_1_partner_sends_its_catch_rate_where_an_item_goes() -> void:
+	_data.generation = RomRegistry.GEN1
+	_data.id = RomRegistry.YELLOW
+	var plain: Gen2SaveMon = _mon(SPECIES_TWO)
+	var species: Dictionary = _data.species(SPECIES_TWO)
+	species["catch_rate"] = 0xFF
+	var created: Gen2SaveMon = Gen2SaveBattleAdapter.from_battle_mon(
+		Gen2BattleMon.create(_data, SPECIES_TWO, 5, [TACKLE])
+	)
+	assert_eq(created.catch_rate, 0xFF, "the species header's byte")
+	assert_eq(plain.catch_rate, 0, "a Generation 2 save keeps none")
+	var save: Gen2SaveData = _save()
+	save.game_id = RomRegistry.YELLOW
+	save.party = [created]
+	var partner: Dictionary = Gen2LinkTransport.peer_from_save(save)
+	var row: Dictionary = (partner["party"] as Array)[0]
+	assert_eq(int(row["item"]), 0xFF)
+	assert_eq(int(Gen2LinkSession.time_capsule_arrival(row)["item"]), 0xAD)
+	var kadabra: int = Gen1Layout.SPECIES_KADABRA
+	assert_eq(Gen1Layout.stored_catch_rate(RomRegistry.YELLOW, kadabra, 100), 0x60)
+	assert_eq(Gen1Layout.stored_catch_rate(RomRegistry.RED, kadabra, 100), 100)
+
+
 func test_a_link_battle_writes_the_record_it_produced() -> void:
 	var world: Gen2WorldAPI = _world()
 	var save: Gen2SaveData = _save()

@@ -1,18 +1,15 @@
 class_name Gen2RadioShow
 extends RefCounted
 
-## `engine/pokegear/radio.asm`: `RadioJumptable`, dispatched once a hardware
-## frame the way `PlayRadioShow` is; [Gen2WorldRadio] is the dial. Scene-free
-## with its own generator: a caller hands it the facts the source reads off
-## WRAM. Segments are named after the source's labels because the numbers are
-## profile split: Gold and Silver ship no Buena's Password, so every segment
-## past `$04` sits fifteen lower.
+## `engine/pokegear/radio.asm`: `RadioJumptable`, dispatched once a hardware frame
+## the way `PlayRadioShow` is; [Gen2WorldRadio] is the dial. Scene-free with its own
+## generator: a caller hands it the facts the source reads off WRAM. Segments are
+## named after the source's labels because the numbers are profile split: Gold and
+## Silver ship no Buena's Password, so every segment past `$04` sits fifteen lower.
 
-## `wCurRadioLine`'s own RADIO_SCROLL entry, which every printing segment leaves
-## behind it.
+## `wCurRadioLine`'s RADIO_SCROLL entry, which every printing segment leaves behind.
 const SCROLL: StringName = &"RadioScroll"
-## `PrintRadioLine` and `PlaceRadioString` both wait 100 frames; only
-## `OaksPKMNTalk14`'s restart uses a different one.
+## `PrintRadioLine` and `PlaceRadioString` wait 100 frames; `OaksPKMNTalk14`'s restart 10.
 const LINE_FRAMES: int = 100
 const RESTART_FRAMES: int = 10
 
@@ -65,9 +62,10 @@ const CHANNEL_ENTRY: Dictionary = {
 	Gen2WorldRadio.EVOLUTION_RADIO: &"EvolutionRadio",
 }
 
-## `data/text/common_1.asm`, which no importer reads: every radio text is one
-## `line` and nothing else, so a segment's output is exactly one box line.
-## Braced names are the `text_ram` buffers the segment fills first.
+## `data/text/common_1.asm`, which no importer reads: one box line per text, [constant
+## Gen2TextStream.PAUSE_MARK] for a `text_pause` inside it, and braced names for the `text_ram`
+## buffers. The pause runs inside the segment that printed, so the 100-frame wait follows it.
+const PAUSE: String = Gen2TextStream.PAUSE_MARK
 const TEXTS: Dictionary = {
 	&"OPT_IntroText1": "MARY: PROF.OAK'S",
 	&"OPT_IntroText2": "#MON TALK!",
@@ -95,7 +93,7 @@ const TEXTS: Dictionary = {
 	&"LC_Text5": "don't you miss the",
 	&"LC_Text6": "LUCKY NUMBER SHOW!",
 	&"LC_Text7": "This week's Lucky",
-	&"LC_Text8": "Number is {number}!",
+	&"LC_Text8": "Number is " + PAUSE + "{number}!",
 	&"LC_Text9": "I'll repeat that!",
 	&"LC_Text10": "Match it and go to",
 	&"LC_Text11": "the RADIO TOWER!",
@@ -112,10 +110,10 @@ const TEXTS: Dictionary = {
 	&"RocketRadioText4": "of preparation, we",
 	&"RocketRadioText5": "have risen again",
 	&"RocketRadioText6": "from the ashes!",
-	&"RocketRadioText7": "GIOVANNI! Can you",
-	&"RocketRadioText8": "hear? We did it!",
-	&"RocketRadioText9": "Where is our boss?",
-	&"RocketRadioText10": "Is he listening?",
+	&"RocketRadioText7": "GIOVANNI! " + PAUSE + "Can you",
+	&"RocketRadioText8": "hear?" + PAUSE + " We did it!",
+	&"RocketRadioText9": PAUSE + "Where is our boss?",
+	&"RocketRadioText10": PAUSE + "Is he listening?",
 	&"BuenaRadioText1": "BUENA: BUENA here!",
 	&"BuenaRadioText2": "Today's password!",
 	&"BuenaRadioText3": "Let me think… It's",
@@ -240,6 +238,10 @@ const BUENA_PASSWORDS: Array[Dictionary] = [
 	{"kind": BUENA_ITEM, "width": 12, "values": [0x31, 0x33, 0x34]},
 	{"kind": BUENA_STRING, "width": 13, "values": ["#MON Talk", "#MON Music", "Lucky Channel"]},
 ]
+## pokegold's `_RocketRadioText9` capitalises "Boss".
+const GOLD_SILVER_TEXTS: Dictionary = {
+	&"RocketRadioText9": PAUSE + "Where is our Boss?",
+}
 const BUENAS_PASSWORD_CHANNEL_NAME: String = "BUENA'S PASSWORD"
 
 ## `OaksPKMNTalk11` to `OaksPKMNTalk13` place strings at screen columns rather
@@ -259,16 +261,19 @@ var _random: RandomNumberGenerator = null
 var _context: Dictionary = {}
 var _crystal: bool = true
 
-## `wCurRadioLine`, `wNextRadioLine`, `wNumRadioLinesPrinted` and
-## `wRadioTextDelay`.
+## `wCurRadioLine`, `wNextRadioLine`, `wNumRadioLinesPrinted` and `wRadioTextDelay`.
 var _line: StringName = &""
 var _next_line: StringName = &""
 var _lines_printed: int = 0
 var _delay: int = 0
+## The rest of a line whose `text_pause` is running, and its row.
+var _pause: int = 0
+var _pause_rest: String = ""
+var _pause_top: bool = false
+var _station_name: String = ""
 
-## The two rows `PrintRadioLine` writes: the first line printed lands on the
-## top one and every line after it on the bottom, which `RadioScroll` then
-## copies up.
+## The two rows `PrintRadioLine` writes: the first line printed lands on the top one
+## and every line after it on the bottom, which `RadioScroll` then copies up.
 var _top: String = ""
 var _bottom: String = ""
 
@@ -279,8 +284,7 @@ var _landmark_name: String = ""
 var _class_name: String = ""
 var _trainer_name: String = ""
 var _password: String = ""
-## The remaining lines of the dex entry `PokedexShow1` chose, which
-## `CopyDexEntry` walks one per segment.
+## The dex entry `PokedexShow1` chose, one line per segment.
 var _dex_lines: PackedStringArray = PackedStringArray()
 
 ## `wBuenasPassword` and `DAILYFLAGS2_BUENAS_PASSWORD_F`, kept by the caller so
@@ -293,8 +297,7 @@ var buenas_password_today: bool = false
 ## and handing over.
 var ran_segment: StringName = &""
 
-## What `RadioMusicRestartDE` was last handed, drained by the host. -1 while no
-## segment has asked for a track.
+## What `RadioMusicRestartDE` was last handed, drained by the host; -1 for none.
 var pending_music: int = -1
 
 
@@ -330,6 +333,12 @@ func lines() -> PackedStringArray:
 	return PackedStringArray([_top, _bottom])
 
 
+## `BuenasPassword1`'s `PlaceString` at (2, 9), until `NoRadioName`; the dial's
+## own `LoadStation_BuenasPassword` names her only while Rockets hold the tower.
+func station_name() -> String:
+	return _station_name
+
+
 ## `wCurRadioLine`, which is `SCROLL` while a line is being read.
 func segment() -> StringName:
 	return _line
@@ -345,6 +354,12 @@ func finished() -> bool:
 func advance_frame() -> bool:
 	if _line.is_empty():
 		return false
+	if _pause > 0:
+		_pause -= 1
+		if _pause > 0:
+			return false
+		_store(_pause_rest, _pause_top)
+		return true
 	if _line == SCROLL:
 		return _scroll()
 	var before_top: String = _top
@@ -373,17 +388,29 @@ func _print(text: String, next: StringName) -> void:
 	_next_line = next
 	if _lines_printed < 2:
 		_lines_printed += 1
-	if _lines_printed == 1:
-		_top = text
-	else:
-		_bottom = text
+	var halves: PackedStringArray = text.split(PAUSE)
+	_store(halves[0], _lines_printed == 1)
+	if halves.size() > 1:
+		_pause = Gen2TextStream.PAUSE_FRAMES
+		_pause_top = _lines_printed == 1
+		_pause_rest = text.replace(PAUSE, "")
 	_line = SCROLL
 	_delay = LINE_FRAMES
 
 
+func _store(text: String, top: bool) -> void:
+	if top:
+		_top = text
+	else:
+		_bottom = text
+
+
 ## `NextRadioLine`, which is `CopyRadioTextToRAM` and then the above.
 func _say(text_id: StringName, next: StringName, fills: Dictionary = {}) -> void:
-	_print(_fill(String(TEXTS.get(text_id, "")), fills), next)
+	var text: String = String(TEXTS.get(text_id, ""))
+	if not _crystal:
+		text = String(GOLD_SILVER_TEXTS.get(text_id, text))
+	_print(_fill(text, fills), next)
 
 
 ## The `text_ram` buffers a line names, filled from what the segment resolved.
@@ -418,14 +445,12 @@ func _roll(bound: int) -> int:
 	return _random.randi_range(0, maxi(1, bound) - 1)
 
 
-## `Random` compared against a percentage, which the source writes as a byte:
-## `cp 49 percent - 1` is `cp 124`.
+## `Random` against a percentage byte: `cp 49 percent - 1` is `cp 124`.
 func _roll_percent(threshold: int) -> bool:
 	return _random.randi_range(0, 255) < threshold
 
 
-## The segments whose whole body is one line and the segment it hands over to,
-## which is what `RadioJumptable`'s rows mostly are.
+## The segments whose whole body is one line, and the segment each hands over to.
 const SEGMENT_LINES: Dictionary = {
 	&"OaksPKMNTalk2": [&"OPT_IntroText2", &"OaksPKMNTalk3"],
 	&"OaksPKMNTalk3": [&"OPT_IntroText3", &"OaksPKMNTalk4"],
@@ -719,6 +744,7 @@ func _segment_buenas_password1(_segment_id: StringName) -> void:
 		_run(&"BuenasPassword20" if _lines_printed == 0 else &"BuenasPassword8")
 		return
 	_start_station(Gen2WorldRadio.BUENAS_PASSWORD)
+	_station_name = BUENAS_PASSWORD_CHANNEL_NAME
 	_say(&"BuenaRadioText1", &"BuenasPassword2")
 
 
@@ -758,6 +784,7 @@ func _segment_buenas_password8(_segment_id: StringName) -> void:
 ## dial before the off-air line.
 func _segment_buenas_password20(_segment_id: StringName) -> void:
 	pending_music = Gen2WorldState.MUSIC_NONE
+	_station_name = ""
 	buenas_password_today = false
 	_lines_printed = 0
 	_say(&"BuenaOffTheAirText", &"BuenasPassword21")
@@ -803,9 +830,8 @@ func _music_only_channel(segment_id: StringName) -> int:
 	return Gen2WorldRadio.POKE_FLUTE_RADIO
 
 
-## `StartPokemonMusicChannel`: the box is cleared and the weekday picks between
-## the march and the lullaby. It is not `StartRadioStation`, so it runs whether
-## or not the station is already talking.
+## `StartPokemonMusicChannel`: the box is cleared and the weekday picks the march or
+## the lullaby, whether or not the station is already talking.
 func _start_pokemon_music() -> void:
 	_top = ""
 	_bottom = ""
@@ -843,8 +869,7 @@ func _oaks_pick_wild() -> void:
 	_mon_name = _species_name(species)
 
 
-## The Johto grass table row for a landmark, which is the one map carrying both
-## that landmark and grass encounters.
+## The Johto grass table row for a landmark: the one map carrying it and grass.
 func _grass_row(landmark: int) -> Dictionary:
 	if _data == null:
 		return {}
@@ -858,24 +883,23 @@ func _grass_row(landmark: int) -> Dictionary:
 	return {}
 
 
-## `PokedexShow1`: a caught species, and its entry split into the lines
-## `CopyDexEntry` walks one per segment.
+## `PokedexShow1`: a caught species and its seven lines, which `PokedexShow2`
+## (the category) to `PokedexShow8` print one per segment.
 func _pokedex_pick_mon() -> bool:
 	var caught: Array = _context.get("caught", []) as Array
 	if caught.is_empty() or _data == null:
 		return false
 	var species: int = int(caught[_roll(caught.size())])
 	_mon_name = _species_name(species)
-	_dex_lines = PackedStringArray()
-	for page: String in _data.dex_entry(species).get("pages", []) as Array:
+	var entry: Dictionary = _data.dex_entry(species)
+	_dex_lines = PackedStringArray([String(entry.get("category", ""))])
+	for page: String in entry.get("pages", []) as Array:
 		for line: String in page.split("\n"):
 			_dex_lines.append(line)
 	return true
 
 
-## `CopyDexEntry`. An entry runs out before `PokedexShow8` does, and the
-## cartridge reads on past its terminator into whatever follows; here the
-## remaining segments print nothing.
+## `CopyDexEntry`; only a mod's shorter entry runs out early.
 func _dex_line() -> String:
 	if _dex_lines.is_empty():
 		return ""
@@ -897,8 +921,7 @@ func _pnp_next() -> StringName:
 	return &"PeoplePlaces4" if _roll_percent(124) else &"PeoplePlaces6"
 
 
-## `PeoplePlaces4`: a trainer class the hidden-people list allows, and the first
-## trainer of it.
+## `PeoplePlaces4`: an allowed trainer class, and its first trainer.
 func _pnp_pick_person() -> void:
 	if _data == null:
 		return
@@ -921,8 +944,7 @@ func _pnp_pick_person() -> void:
 		return
 
 
-## The classes `PeoplePlaces4`'s own walk refuses, given the two progress facts
-## that shorten the list.
+## The classes `PeoplePlaces4` refuses, given the two progress facts.
 static func hidden_people(hall_of_fame: bool, kanto_badges: int) -> Array[int]:
 	var hidden: Array[int] = PNP_HIDDEN_ALWAYS.duplicate()
 	if not hall_of_fame:
@@ -940,8 +962,7 @@ func _pnp_pick_place() -> void:
 	_landmark_name = _data.landmark_name(landmark) if _data != null else ""
 
 
-## `BuenasPassword4` and `GetBuenasPassword`: one category and one of its three
-## words, rolled once a day and kept in the high and low nybbles of one byte.
+## `BuenasPassword4`, `GetBuenasPassword`: a category and a word, rolled once a day into one byte.
 func _roll_password() -> void:
 	if not buenas_password_today or buenas_password < 0:
 		var category: int = _roll(BUENA_PASSWORDS.size() + 5)
@@ -955,8 +976,7 @@ func _roll_password() -> void:
 	_password = password_words(_data, buenas_password)
 
 
-## `NUM_PASSWORDS_PER_CATEGORY`, the three words a category holds and the three
-## rows `BuenasPassword`'s menu lists.
+## `NUM_PASSWORDS_PER_CATEGORY`: the words a category holds and the rows Buena's menu lists.
 const PASSWORDS_PER_CATEGORY: int = 3
 
 
@@ -976,8 +996,7 @@ static func buenas_password_width(password: int) -> int:
 	return int(BUENA_PASSWORDS[clampi(password >> 4, 0, BUENA_PASSWORDS.size() - 1)]["width"])
 
 
-## The word a `wBuenasPassword` byte names, which Buena's own script reads as
-## well as the radio.
+## The word a `wBuenasPassword` byte names, read by Buena's own script too.
 static func password_words(data: GameData, password: int) -> String:
 	if password < 0:
 		return ""

@@ -254,11 +254,10 @@ static func x_flipped(image: Image) -> Image:
 ## `PadFrontpic` (engine/gfx/load_pics.asm) fills the 7x7 block a front pic is
 ## placed in, and does not centre a smaller pic: it lays one blank tile column
 ## before it and blank rows above it. This is that left pad, in tiles.
-## [param mirrored] is `wBoxAlignment`, which `LoadOrientedFrontpic` reads:
-## reversing the columns leaves the trailing blank on the left instead.
-## [param generation] is `LoadUncompressedSpriteData`'s `(8 - w) / 2`, which
-## does centre the pic, and `wSpriteFlipped` mirrors the whole seven-tile box,
-## so a six-wide pic's blank column crosses over.
+## [param mirrored] is `wBoxAlignment` (`LoadOrientedFrontpic`): reversing the
+## columns leaves the trailing blank on the left instead. [param generation] is
+## `LoadUncompressedSpriteData`'s `(8 - w) / 2`, which does centre the pic, and
+## `wSpriteFlipped` mirrors the whole seven-tile box, so a blank column crosses over.
 static func frontpic_pad_columns(
 	width: int, mirrored: bool = false, generation: int = RomRegistry.GEN2
 ) -> int:

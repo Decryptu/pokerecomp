@@ -36,6 +36,8 @@ var _save_root: String = ""
 
 
 func before_each() -> void:
+	Gen2OptionsStore.use_test_path()
+	DirAccess.remove_absolute(Gen2OptionsStore.path())
 	_save_root = Gen2SaveStore.root()
 	_forget_view()
 	_data = Fixture.build()
@@ -139,11 +141,24 @@ func test_a_held_direction_repeats_only_under_h_in_menu_and_stops_with_the_key()
 	_assert_repeat_stopped(runtime, row)
 
 
+## Only `OptionsControl` reads `hJoyLast`; every value handler tests
+## `hJoyPressed`, so a held RIGHT is one change however long it is held.
+func test_a_held_right_does_not_repeat_a_value_change_on_the_option_screen() -> void:
+	await _open_world_with_renderer()
+	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
+	_world_screen._unhandled_input(_pad(JOY_BUTTON_START))
+	await get_tree().process_frame
+	var host: Gen2StartMenuScreen = _world_screen._start_menu_host
+	host._open_options_mode()
+	var value: Callable = func() -> int: return Gen2OptionsStore.current().text_speed
+	assert_eq(await _held_moves(runtime, value, KEY_RIGHT), 0, "no repeat of a value change")
+
+
 ## Holds DOWN for two seconds of repeats and answers how often the cursor moved
 ## after the press itself, then lets go.
-func _held_moves(runtime: Gen2InputRuntime, read: Callable) -> int:
-	Input.parse_input_event(_key(true))
-	runtime._input(_key(true))
+func _held_moves(runtime: Gen2InputRuntime, read: Callable, code: Key = KEY_DOWN) -> int:
+	Input.parse_input_event(_key(true, code))
+	runtime._input(_key(true, code))
 	await get_tree().process_frame
 	var at: int = int(read.call())
 	var moved: int = 0
@@ -154,7 +169,7 @@ func _held_moves(runtime: Gen2InputRuntime, read: Callable) -> int:
 			at = int(read.call())
 	## Two frames: one for the release to reach the input state, one for the
 	## runtime's own poll of it, which is what the walk reads.
-	Input.parse_input_event(_key(false))
+	Input.parse_input_event(_key(false, code))
 	await get_tree().process_frame
 	await get_tree().process_frame
 	return moved
@@ -168,9 +183,9 @@ func _assert_repeat_stopped(runtime: Gen2InputRuntime, read: Callable) -> void:
 	assert_eq(int(read.call()), at, "and so does the menu")
 
 
-func _key(pressed: bool) -> InputEventKey:
+func _key(pressed: bool, code: Key = KEY_DOWN) -> InputEventKey:
 	var key := InputEventKey.new()
-	key.physical_keycode = KEY_DOWN
+	key.physical_keycode = code
 	key.pressed = pressed
 	return key
 

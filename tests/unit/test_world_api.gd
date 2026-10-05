@@ -429,6 +429,18 @@ func _write_cache(game_id: String = "testworld") -> void:
 				"here_you_go": "Here you go!", "not_enough_points": "Not enough.",
 				"no_room": "No room.", "come_again": "Come again!",
 			},
+			## `engine/events/bug_contest/judging.asm`'s six, `text_pause` and all.
+			"bug_contest": {
+				"first": "This Bug-Catching\nContest winner is" + Gen2TextStream.PAUSE_MARK
+					+ "…" + Gen2TextStream.PAGE_BREAK + "<RAM_CF01>,\nwho caught a\n<RAM_CF6B>!",
+				"first_score": Gen2TextStream.PAGE_BREAK + "The winning score\nwas <NUM_CEEF> points!",
+				"second": "Placing second was\n<RAM_CF01>," + Gen2TextStream.PAGE_BREAK
+					+ "who caught a\n<RAM_CF6B>!",
+				"second_score": Gen2TextStream.PAGE_BREAK + "The score was\n<NUM_CEF3> points!",
+				"third": "Placing third was\n<RAM_CF01>," + Gen2TextStream.PAGE_BREAK
+					+ "who caught a\n<RAM_CF6B>!",
+				"third_score": Gen2TextStream.PAGE_BREAK + "The score was\n<NUM_CEF7> points!",
+			},
 		},
 		## Gold and Silver's own addresses, matching the buffer table above.
 		"special_text_ram": {
@@ -438,6 +450,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 			"seer_time_of_day": 0xD01F,
 			"seer_ot": 0xD02A,
 			"seer_caught_level": 0xD036,
+			"bug_contest_winner_name": 0xCF01,
 		},
 	})
 
@@ -2528,12 +2541,17 @@ func test_boulder_script_asks_and_a_yes_sets_the_flag() -> void:
 
 	var used: Array = world.run_event_queue(true, 0)
 	assert_eq(String(used[0]["event"]["text"]), "CHIKORITA used\nSTRENGTH!")
-	## `_UseStrengthText` ends in `done` with no `waitbutton` behind it, and the
-	## `cry 0` after it names `wStrengthSpecies`.
+	## `_UseStrengthText` ends in `done` with no `waitbutton` behind it.
 	assert_false(bool(used[0]["event"]["prompt"]), "the first box owes no press")
-	assert_eq(int(used[0]["event"]["cry"]), 25, "the fixture party's own species")
 
-	var boulders: Array = world.run_event_queue(true)
+	## The `cry 0` after it names `wStrengthSpecies`, and `PlayMonCry` waits it out
+	## before the second box.
+	var cry: Array = world.run_event_queue(true)
+	var cry_request: Dictionary = cry[0]["event"]["request"]["values"]
+	assert_eq(cry_request["kind"], &"cry", JSON.stringify(cry))
+	assert_eq(int(cry_request["species"]), 25, "the fixture party's own species")
+
+	var boulders: Array = world.complete_runtime_request({"ok": true})
 	assert_eq(String(boulders[0]["event"]["text"]), "CHIKORITA can\nmove boulders.")
 
 	assert_eq(world.run_event_queue(true)[0]["status"], &"complete")
@@ -5929,8 +5947,9 @@ func test_crystal_engine_flags_and_hall_of_fame_commit_at_script_end() -> void:
 
 ## Script_credits farcalls RedCredits and falls into the same Script_endall tail
 ## as Script_halloffame (engine/overworld/scripting.asm's ReturnFromCredits), so
-## it commits nothing. maps/SilverCaveRoom3.asm's Red is its one call site.
-func test_credits_is_a_presentation_boundary_that_commits_no_flag() -> void:
+## the cartridge commits no flag. The port records the completion in `beat_red`,
+## which has no cartridge flag. maps/SilverCaveRoom3.asm's Red is its one call site.
+func test_credits_records_beat_red_and_no_cartridge_flag() -> void:
 	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
 	# credits is Crystal $a2: pokegold's $a0 plus farjumptext at $52 and
 	# verbosegiveitemvar at $9f.
@@ -5945,6 +5964,7 @@ func test_credits_is_a_presentation_boundary_that_commits_no_flag() -> void:
 	var result: Dictionary = runner.advance()
 
 	assert_eq(result["status"], &"complete", JSON.stringify(result))
+	assert_eq(state.beat_red, 1)
 	assert_false(state.hall_of_fame())
 	assert_eq(state.engine_flags().size(), 0)
 	assert_eq(result["events"].filter(func(event: Dictionary) -> bool:
@@ -8378,25 +8398,85 @@ func test_ending_the_contest_clears_the_flag_and_keeps_what_was_caught() -> void
 	assert_eq(int(world.state.contest_mon()["species"]), 10, "judging still needs it")
 
 
-func test_the_judging_reads_the_contestants_that_turned_up() -> void:
-	var world := _contest_world()
-	for index: int in Gen2WorldBugContest.NUM_CONTESTANTS:
-		world.state.set_event_flag(
-			Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index,
-			index >= Gen2WorldBugContest.CONTESTANTS_WITHDRAWN
+## `BugContestJudging` announces third, second and then first place, each with the
+## winner's name and Pokemon, its placing effect once they are up and its score on the
+## next paragraph, and leaves the player's own place for the results script. Every draw
+## comes off the generator the runner was handed.
+func test_the_judging_announces_third_second_then_first_from_the_injected_draws() -> void:
+	var judged: Dictionary = _judge_contest(7)
+	var texts: Array = judged["texts"]
+	assert_eq(texts.size(), 3, "three PrintTexts")
+	var placings: Array = judged["event"]["placings"]
+	var effects: Array[int] = [Gen2Sfx.SFX_3RD_PLACE, Gen2Sfx.SFX_2ND_PLACE, Gen2Sfx.SFX_1ST_PLACE]
+	for index: int in 3:
+		var place: Dictionary = placings[2 - index]
+		var split: Dictionary = Gen2TextStream.split_sounds(String(texts[index]))
+		assert_eq(
+			split["sounds"].map(func(sound: Dictionary) -> int: return int(sound["id"])),
+			[effects[index]], "the effect for place %d" % (3 - index)
 		)
-	assert_eq(
-		world.state.withdrawn_bug_contestants().size(),
-		Gen2WorldBugContest.NUM_CONTESTANTS - Gen2WorldBugContest.CONTESTANTS_WITHDRAWN
-	)
-	world.state.set_contest_mon({
-		"species": 10, "level": 12, "max_hp": 30, "hp": 30,
+		assert_string_contains(split["text"], "MON%d" % int(place["species"]))
+		assert_string_contains(split["text"], "%d points" % int(place["score"]))
+		assert_eq(Gen2TextLayout.unfilled_marker(split["text"]), "")
+	assert_eq(Gen2TextStream.split_sounds(texts[2])["beats"].size(), 2, "first place's pause and effect")
+	assert_eq(int(judged["event"]["score"]), 193)
+	assert_eq(int(judged["event"]["player_place"]), 1, "ahead of the best 157")
+	assert_string_contains(texts[2], "GOLD")
+	assert_eq(_judge_contest(7)["texts"], texts, "the same generator announces the same placings")
+	assert_ne(_judge_contest(8)["texts"], texts, "and another one does not")
+
+
+## Three contestants who turned up, each with the same three placings, against a
+## 193-point catch. Answers the texts the run showed in order and its judging event.
+func _judge_contest(seed_value: int) -> Dictionary:
+	var species: Array = []
+	for number: int in 20:
+		species.append({"number": number + 1, "name": "MON%d" % (number + 1)})
+	RomCache.write_json(RomCache.species_path(_directory), species)
+	var trainers: Array = [{
+		"number": 1, "name": "BUG CATCHER", "palette": [0, 0],
+		"trainers": [{"name": "DON", "party": []}, {"name": "ED", "party": []}, {"name": "BEN", "party": []}],
+	}]
+	RomCache.write_json(RomCache.trainers_path(_directory), trainers)
+	var encounters: Dictionary = RomCache.read_json(RomCache.world_encounters_path(_directory))
+	var placings: Array = [
+		{"species": 10, "score": 150}, {"species": 11, "score": 140}, {"species": 12, "score": 130},
+	]
+	encounters["bug_contest"]["contestants"] = [
+		{"trainer_class": 1, "trainer": 1, "placings": placings},
+		{"trainer_class": 1, "trainer": 2, "placings": placings},
+		{"trainer_class": 1, "trainer": 3, "placings": placings},
+	]
+	RomCache.write_json(RomCache.world_encounters_path(_directory), encounters)
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6280"] = [Gen2WorldScript.SPECIAL, 20, 0, Gen2WorldScript.END]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+
+	var state := Gen2WorldState.new()
+	state.set_contest_mon({
+		"species": 13, "level": 12, "max_hp": 30, "hp": 30,
 		"attack": 12, "defense": 13, "speed": 14,
 		"special_attack": 15, "special_defense": 16, "dvs": 0, "item": 0,
 	})
-	var judged: Dictionary = world.judge_bug_contest(_seeded())
-	assert_eq(int(judged["score"]), 193)
-	assert_true(judged["placings"].size() > 0)
+	var random := RandomNumberGenerator.new()
+	random.seed = seed_value
+	var runner := Gen2WorldScriptRunner.begin(
+		GameData.open_directory(_directory), state,
+		{"kind": &"test", "bank": 48, "script": 0x6280, "player_name": "GOLD"},
+		Callable(), random
+	)
+	var out: Dictionary = {"texts": [], "event": {}}
+	var result: Dictionary = runner.advance()
+	for _step: int in 8:
+		for event: Dictionary in result.get("events", []):
+			if StringName(event["type"]) == &"bug_contest_judged":
+				out["event"] = event
+		if StringName(result["status"]) != &"waiting":
+			break
+		out["texts"].append(String(result["event"]["text"]))
+		result = runner.advance(true)
+	assert_eq(result["status"], &"complete", JSON.stringify(result))
+	return out
 
 
 ## The park balls and what was caught survive a save and come back, since a
@@ -10461,6 +10541,30 @@ func test_a_cancelled_party_list_prints_the_two_boxes_that_have_one() -> void:
 			assert_eq(results[0]["event"]["text"], String(row[1 if chosen < 0 else 2]))
 
 
+## `PhotoStudio` calls `PrintPartymon` between "Hold still" and `.cancel`'s box:
+## the printer's own screen stands there until B, and the box follows it.
+func test_the_photo_studio_stands_on_the_printer_between_its_two_boxes() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_PHOTO_STUDIO, 0,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	_run_special(world)
+	while world.pending_runtime_request().is_empty():
+		_run_script(world, world.run_event_queue(true))
+	var results: Array = _run_script(world, world.complete_runtime_request({
+		"ok": true, "party_index": 0, "species": 1, "nickname": "KARP",
+		"original_trainer": "RED", "ot_id": 0, "level": 10,
+	}))
+	assert_eq(results[0]["event"]["text"], "Hold still.")
+	_run_script(world, world.run_event_queue(true))
+	var request: Dictionary = world.pending_runtime_request()
+	assert_eq(request.get("kind"), &"party_print_requested")
+	assert_eq(request["values"]["slot"], 0)
+	results = _run_script(world, world.complete_runtime_request({"ok": true}))
+	assert_eq(results[0]["event"]["text"], "No picture?")
+
+
 ## A Generation 1 cache: three maps whose collision grid holds the tile each cell
 ## draws, which is what `CheckTilePassable` reads. Map 0 is a town with a door
 ## tile and a ledge, map 1 the house behind it, whose mat warps back through
@@ -11012,7 +11116,7 @@ func test_gen1_a_text_box_draws_a_sprite_mid_step_standing() -> void:
 	assert_eq(walker.frame, 1, "the step did not walk on from its own counter")
 	## `UpdateSprites` runs from `OverworldLoop` alone, so `RedrawMapView`'s
 	## `DelayFrame`s hold every sprite still; a movement wait is the loop's own.
-	world.set("_gen1_steps", [world.call("_gen1_redraw_step")])
+	world.set("_gen1_steps", [Gen1MapScripts._gen1_redraw_step()])
 	assert_true(world.script_stops_the_map(), "a routine's own wait let the map run")
 	world.set("_gen1_steps", [{"type": &"wait", "values": {
 		"type": &"wait", "wait": Gen2WorldScriptRunner.WAIT_MOVEMENT,
@@ -11034,7 +11138,7 @@ func test_gen1_script_branches_read_pending_flags_and_scratch_in_each_choice() -
 		{"op": "branch", "snapshot": 0, "then": [{"op": "text", "text": "WAS OPEN"}], "else": []},
 		{"op": "branch", "flag": 683, "then": [], "else": [{"op": "text", "text": "CLOSED"}]},
 	]
-	var steps: Array = world._gen1_script_steps({"script": [
+	var steps: Array = Gen1ScriptNodes._gen1_script_steps(world, {"script": [
 		{"op": "text", "text": "QUESTION"},
 		{"op": "choice", "yes": chosen, "no": [
 			{"op": "branch", "flag": 683, "then": [], "else": [{"op": "text", "text": "NO"}]},
@@ -11111,18 +11215,18 @@ func test_gen1_a_catalogued_site_hands_over_what_a_mod_patched() -> void:
 		int(catalog.rows(Gen2WorldCatalog.KIND_STATIC)[0]["id"]), {"species": 25, "level": 3}
 	)
 	var world: Gen2WorldAPI = Gen2WorldAPI.open(data, 0, 0, Vector2i(1, 2), Gen2WorldState.new())
-	var steps: Array = world._gen1_script_steps(world.current_map.texts[0])
+	var steps: Array = Gen1ScriptNodes._gen1_script_steps(world, world.current_map.texts[0])
 	assert_eq(steps.size(), 3, JSON.stringify(steps))
 	assert_eq(int(steps[0]["value"]), 177, "the store follows the patched species' own index")
 	assert_eq(int(steps[1]["values"]["values"]["pokemon"]), 7, "the give hands over the patch")
 	assert_eq(int(steps[2]["values"]["values"]["pokemon"]), 25)
 	assert_eq(int(steps[2]["values"]["values"]["level"]), 3)
-	var shelf: Array = world._gen1_mart_steps(world.current_map.texts[1], 2)
+	var shelf: Array = Gen1FacilityScripts._gen1_mart_steps(world, world.current_map.texts[1], 2)
 	assert_eq(shelf[0]["values"]["values"]["items"], [{"item": 3, "price": 1}])
 	var picked: Array = []
-	var run: Dictionary = world._gen1_run(world.current_map.events["objects"][0])
+	var run: Dictionary = Gen1ScriptNodes._gen1_run(world, world.current_map.events["objects"][0])
 	run["object"]["object_index"] = 0
-	assert_true(world._gen1_pick_up_item({}, picked, run))
+	assert_true(Gen1ScriptNodes._gen1_pick_up_item(world, {}, picked, run))
 	assert_eq(picked[0]["items"], {1: 1}, "the ball holds the patched item")
 
 	## The Old and Good Rod are two fishing groups above the Super Rod's.
@@ -11145,12 +11249,12 @@ func test_gen1_a_catalogued_site_hands_over_what_a_mod_patched() -> void:
 ## `wBattleType` byte rides the request read across onto Crystal's numbering.
 func test_gen1_a_rows_battle_stands_behind_the_rest_of_the_row() -> void:
 	var world: Gen2WorldAPI = _gen1_world(0, Vector2i(1, 2))
-	world._gen1_steps = world._gen1_script_steps({"script": [
+	world._gen1_steps = Gen1ScriptNodes._gen1_script_steps(world, {"script": [
 		{"op": "wild_battle", "species": 19, "level": 5,
 			"battle_type": Gen1Layout.BATTLE_TYPE_OLD_MAN},
 		{"op": "flag", "flag": 47, "set": true},
 	]})
-	var results: Array = world._gen1_result()
+	var results: Array = Gen1MapScripts._gen1_result(world)
 	assert_true(world.state.is_event_flag_active(47), "the flag behind the store is set first")
 	var request: Dictionary = world.pending_runtime_request()
 	assert_eq(StringName(request.get("kind", &"")), &"battle_requested")
@@ -11266,7 +11370,7 @@ func test_gold_gs_ball_delivery_kurt_wait_and_shrine_are_saved_once() -> void:
 func test_gen1_an_escort_hides_its_original_object_after_a_map_change() -> void:
 	var world: Gen2WorldAPI = _gen1_world(3, Vector2i(1, 8))
 	(world.objects[0] as Gen2WorldObject).toggle_index = 7
-	world._gen1_start_movement_script(Gen1Layout.MOVEMENT_SCRIPT_PALLET, 0)
+	Gen1MapScripts._gen1_start_movement_script(world, Gen1Layout.MOVEMENT_SCRIPT_PALLET, 0)
 	(world.objects[0] as Gen2WorldObject).toggle_index = 9
 	world._gen1_movement_script["function"] = 4
 	world.advance_gen1_movement_script()

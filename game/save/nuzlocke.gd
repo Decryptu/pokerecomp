@@ -2,13 +2,10 @@ class_name Gen2Nuzlocke
 extends RefCounted
 
 ## The Nuzlocke challenge's own state and rules, for a run whose
-## [member Gen2Rules.challenge] is [constant Gen2Rules.CHALLENGE_NUZLOCKE]. Its
-## own file rather than [Gen2Rules] because a rule there names what the engine
-## DOES and never changes, while this is what the run has SPENT. Not
-## [Gen2WorldPartyHost] either: the launcher's save screen reads a slot's
-## graveyard without a world. The ruleset is the one Bulbapedia records, two
-## mandatory rules and the near-universal three; the optional clauses make the
-## challenge easier and a run that wants one can play it by hand.
+## [member Gen2Rules.challenge] is [constant Gen2Rules.CHALLENGE_NUZLOCKE]. Not in
+## [Gen2Rules], whose rules never change while this is what the run has SPENT, nor
+## in [Gen2WorldPartyHost], since the save screen reads a graveyard with no world.
+## The ruleset is Bulbapedia's two mandatory rules and the near-universal three.
 
 ## How many losses a run's memorial keeps. A full party six times over, which is
 ## more than a finished Nuzlocke has ever needed, and a bound so a save cannot

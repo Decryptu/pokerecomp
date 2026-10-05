@@ -2,12 +2,11 @@ class_name RomCache
 extends RefCounted
 
 ## Where decoded cartridge data lives between runs: under `user://`, never inside
-## the project, which is the runtime half of the rule .gitignore and the
-## pre-commit hook enforce at build time. One directory per dump, named by game
-## and hash, so two revisions never share a cache and a re-import cannot
-## half-overwrite the last one. Pixel data is raw colour indices rather than
-## images, which is what the renderer wants and avoids a decode round-trip whose
-## exactness would have to be trusted.
+## the project, the runtime half of the rule .gitignore and the pre-commit hook
+## enforce at build time. One directory per dump, named by game and hash, so two
+## revisions never share a cache and a re-import cannot half-overwrite the last.
+## Pixel data is raw colour indices rather than images, which is what the renderer
+## wants and avoids a decode round-trip whose exactness would have to be trusted.
 
 const ROOT: String = "user://rom_cache"
 const MANIFEST: String = "manifest.json"
@@ -77,7 +76,7 @@ const BYTES_KEY: String = "bytes"
 ## a dump the owner still has, so re-importing costs a few seconds and a
 ## migration would have to carry every past shape forever. Nothing but the cache
 ## is thrown away, since saves live under their own root.
-const FORMAT_VERSION: int = 160
+const FORMAT_VERSION: int = 163
 
 ## What [method state] answers. A stale cache is told from a missing one because
 ## they need different things said to whoever is looking at it: one is a
@@ -367,12 +366,11 @@ static func read_json(path: String) -> Variant:
 	return JSON.parse_string(text)
 
 
-## One cached grid of cartridge bytes, packed on the way out of JSON.
-## A JSON number returns as a float, and an Array of them costs about twenty-six
-## resident bytes per cartridge byte. Map block, map collision and tileset lookup
-## tables are byte grids read once per drawn tile and resident for every map at
-## once, so they are unboxed here rather than at each lookup. A non-array answers
-## empty, which the record's bounds checks report as absent.
+## One cached grid of cartridge bytes, packed on the way out of JSON: a JSON number
+## returns as a float, and an Array of them costs about twenty-six resident bytes per
+## cartridge byte. Map block, collision and tileset tables are read once per drawn
+## tile and resident for every map, so they are unboxed here rather than at each
+## lookup. A non-array answers empty, which the record's bounds checks report as absent.
 static func packed_bytes(value: Variant) -> PackedByteArray:
 	if value is PackedByteArray:
 		return value

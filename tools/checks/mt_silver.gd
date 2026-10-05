@@ -3,12 +3,11 @@ extends RefCounted
 var _r: RefCounted = null
 
 ## Verifies the walk from Viridian Gym to Red on Silver Cave Room 3, for both
-## command profiles. Three findings carry the leg. The Victory Road Gate is three
-## regions joined by two single cells with a black belt in each, so each belt's
-## hide flag is the gate on its own arm, which makes Oak a hard gate on Mt. Silver.
-## Each Silver Cave room is one region, so none needs a hand-named intermediate
-## cell the way Cinnabar did. And Red's hide flag EVENT_RED_IN_MT_SILVER is set at
-## a new game and cleared only by HallOfFameEnterScript.
+## command profiles. Three findings carry the leg: the Victory Road Gate's belts
+## make Oak a hard gate on Mt. Silver (see [constant GATE_LANDING]); each Silver Cave
+## room is one region, so none needs a hand-named intermediate cell the way Cinnabar
+## did; and Red's hide flag EVENT_RED_IN_MT_SILVER is set at a new game and cleared
+## only by HallOfFameEnterScript.
 
 
 ## constants/map_constants.asm. The DUNGEONS group is the one split on this leg:

@@ -7,8 +7,7 @@ extends RefCounted
 ## which end is the sender, and one twenty-byte block swapped both ways. Scene
 ## free and injected, the way [Gen2LinkTransport] is: a window with nobody in it
 ## is the honest default and a real game path, since the exchange times out and
-## `DoMysteryGift` prints its own communication-error box. The one partner today
-## is another of this player's own slots.
+## `DoMysteryGift` prints its own communication-error box.
 
 ## `hMGRole`. The side that holds the window open first is the receiver, which
 ## is what `InitializeIRCommunicationRoles` settles between two real Game Boys.

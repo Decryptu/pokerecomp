@@ -31,6 +31,8 @@ var _shown_page: int = 1
 var _open: bool = false
 var _gen1_kind: String = ""
 var _gen1_values: Dictionary = {}
+var _data: GameData = null
+var _party_snapshot: Dictionary = {}
 
 
 func _ready() -> void:
@@ -76,6 +78,24 @@ func open_gen1_printer(data: GameData, kind: String, values: Dictionary, preview
 	visible = true
 	if _printing:
 		music_requested.emit(MUSIC_PRINTER)
+	_refresh()
+	return true
+
+
+## `PrintPartymon`: the first page under the status box, held for B.
+func open_party_print(data: GameData, snapshot: Dictionary) -> bool:
+	_page = Gen2DiplomaPage.from_data(data)
+	var status: String = data.printer_status_string(STATUS_CONNECTION_ERROR)
+	if _page == null or status.is_empty() or snapshot.is_empty():
+		visible = false
+		return false
+	_data = data
+	_party_snapshot = snapshot
+	_printing = true
+	_status = status
+	_open = true
+	visible = true
+	music_requested.emit(MUSIC_PRINTER)
 	_refresh()
 	return true
 
@@ -131,6 +151,9 @@ func _refresh() -> void:
 		_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_view)
+	if not _party_snapshot.is_empty():
+		Gen2PicImage.show(_view, _page.render_party_print(_party_snapshot, _data, _status))
+		return
 	if not _gen1_kind.is_empty():
 		Gen2PicImage.show(_view, _page.render_gen1_printer(_gen1_kind, _gen1_values, _status, _cancel))
 		return

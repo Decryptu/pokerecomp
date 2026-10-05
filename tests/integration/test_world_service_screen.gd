@@ -60,6 +60,7 @@ func _queue_service() -> void:
 func _enter_mart_buy(host: Gen2WorldServiceScreen) -> void:
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_TOP)
 	assert_true(host.handle_button(PokeButton.A))
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
 
 
@@ -69,6 +70,7 @@ func _enter_mart_buy(host: Gen2WorldServiceScreen) -> void:
 func _quit_mart(host: Gen2WorldServiceScreen) -> void:
 	if host._mart_stage != Gen2WorldServiceScreen.MART_TOP:
 		assert_true(host.handle_button(PokeButton.B))
+		Fixture.settle_menu_fade(_world_screen)
 		assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_TOP)
 	assert_true(host.handle_button(PokeButton.B))
 
@@ -76,6 +78,17 @@ func _quit_mart(host: Gen2WorldServiceScreen) -> void:
 ## `InterpretTwoOptionMenu`'s `DelayFrames` behind an answered YES/NO. The host
 ## spends a menu's hold on its own frame and a save question's on the save
 ## prompt's, so both are turned and only the one that is holding moves.
+## `PokeGear.done`'s `WaitSFX` stands between a card's exit and the map, and the
+## world counts hardware frames off wall-clock time in `_process`: one awaited
+## frame spends however many that delta holds. Spend them by hand until the
+## host has gone, the terminal state.
+func _spend_until_the_service_closes(host: Gen2WorldServiceScreen) -> void:
+	for _frame: int in Gen2AudioPlayer.WAIT_CAP_FRAMES + 1:
+		if _world_screen._service_host == null:
+			return
+		host.advance_frame()
+
+
 func _spend_answer_hold(host: Gen2WorldServiceScreen) -> void:
 	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
 		host.advance_frame()
@@ -84,9 +97,15 @@ func _spend_answer_hold(host: Gen2WorldServiceScreen) -> void:
 
 ## A PC's `PC_DisplayText` box, printed and answered: the turn-on line, and each
 ## top-menu row's "accessed" line.
+## A PC box pressed through, and the `ClearPCItemScreen` behind it spent.
 func _answer_box(host: Gen2WorldServiceScreen) -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_TEXT, "a box stands first")
 	Fixture.press_through(host)
+	Fixture.settle_menu_fade(_world_screen)
+
+
+func _white_frames() -> int:
+	return Fixture.white_frames(_world_screen)
 
 
 func _write_pc_request() -> void:
@@ -152,6 +171,7 @@ func test_players_house_pc_opens_the_item_pc_and_resumes_the_waiting_script() ->
 	assert_null(host._pack)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 	assert_eq(host._cursor, 0, "the menu is back on WITHDRAW ITEM")
+	Fixture.settle_menu_fade(_world_screen)
 	host.handle_button(PokeButton.B)
 	host.advance_frame()
 	await get_tree().process_frame
@@ -192,7 +212,12 @@ func test_try_quick_save_asks_before_it_writes_and_answers_the_script() -> void:
 	host.advance_save_frames(Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES)
 	_read_save(host)
 	host.advance_save_frames(Gen2SavePrompt.DONE_FRAMES)
-	await get_tree().process_frame
+	## `ld c, 30 / call DelayFrames` stands between the answer and the script.
+	assert_not_null(_world_screen._service_host, "the thirty frames stand behind the write")
+	for _frame: int in Gen2WorldServiceScreen.QUICK_SAVE_FRAMES:
+		if _world_screen._service_host == null:
+			break
+		host.advance_frame()
 	assert_null(_world_screen._service_host)
 	assert_not_null(_world_screen._injected_save.world, "the write landed")
 
@@ -333,6 +358,7 @@ func test_the_hall_of_fame_row_walks_the_stored_records() -> void:
 
 	host._cursor = rows.find(Gen2WorldPC.PCPCITEM_HALL_OF_FAME)
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_not_null(host._hof)
 	assert_eq(host._hof.remaining(), host._save.hall_of_fame[0]["mons"].size())
 	assert_eq(
@@ -363,6 +389,30 @@ func test_pokemon_center_pc_opens_the_top_menu_and_bills_pc_behind_it() -> void:
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	await _finish_pokemon_center_pc(host)
+
+
+## `.LogIn`'s `ClearPCItemScreen` whites the map out before BILL'S PC's menu is
+## drawn, `ReturnToMapFromSubmenu` and a second one follow a list, and `.LogOut`'s
+## `CloseSubmenu` brings the machine's own menu back through the longer white.
+func test_bills_pc_is_white_while_it_logs_in_and_between_its_lists_and_out() -> void:
+	await _open_pokemon_center_pc()
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	host.handle_button(PokeButton.A)
+	Fixture.press_through(host)
+	assert_ne(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES, "drawn behind the white")
+	var cleared: int = Gen2MenuTransition.CLEAR_FRAMES[&"pc_item_screen"][&"crystal"]
+	assert_eq(_white_frames(), cleared)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
+
+	host.handle_button(PokeButton.A)
+	host._boxes.close_embedded()
+	assert_eq(_white_frames(), cleared, "`ReturnToMapFromSubmenu` and `ClearPCItemScreen`")
+	await get_tree().process_frame
+
+	host.handle_button(PokeButton.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC, "the top menu is under the white")
+	assert_eq(_white_frames(), Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"])
+	assert_false(_world_screen._screen._white.visible)
 
 
 ## `.Switch`: `ChangeBoxSaveGame` asks, saves behind its own box, and puts
@@ -462,6 +512,7 @@ func test_the_machine_boots_chooses_and_shuts_down_with_its_own_sounds() -> void
 	_answer_box(host)
 	host.handle_button(PokeButton.B)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+	Fixture.settle_menu_fade(_world_screen)
 
 	host._cursor = _pc_row_index(host, Gen2WorldPC.PCPCITEM_TURN_OFF)
 	host.handle_button(PokeButton.A)
@@ -607,10 +658,12 @@ func _finish_pokemon_center_pc(host: Gen2WorldServiceScreen) -> void:
 	boxes.close_embedded()
 	await get_tree().process_frame
 	assert_null(host._boxes)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_BOXES)
 
 	host.handle_button(PokeButton.B)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC)
+	Fixture.settle_menu_fade(_world_screen)
 	host.handle_button(PokeButton.B)
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
@@ -634,6 +687,7 @@ func test_the_shop_opens_over_the_map_and_the_buy_screen_only_after_buy() -> voi
 	)
 
 	assert_true(host.handle_button(PokeButton.A))
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mart_stage, Gen2WorldServiceScreen.MART_LIST)
 	assert_false(host._mart_over_map)
 	var listing: Image = (host._mart_view.texture as ImageTexture).get_image()
@@ -1068,7 +1122,7 @@ func test_phone_list_shows_registered_numbers_and_can_close() -> void:
 	assert_eq(host._pokegear.selected_contact(), 0)
 	## B on a card is that card's own `.quit`, which leaves the Pokegear.
 	assert_true(host.handle_button(PokeButton.B))
-	await get_tree().process_frame
+	_spend_until_the_service_closes(host)
 	assert_null(_world_screen._service_host)
 
 
@@ -1211,10 +1265,31 @@ func test_pokegear_clock_card_renders_source_time_and_returns_to_cards() -> void
 	var map: PackedInt32Array = host._pokegear._tilemap()
 	assert_eq(_row_text(map, Gen2TownMapPage.CLOCK_DAY_AT, 9), "WEDNESDAY")
 	assert_eq(_row_text(map, Gen2TownMapPage.CLOCK_TIME_AT, 8), "12:07 AM")
-	## Any button quits the clock card, and `.quit` leaves the Pokegear.
+	## Any button quits the clock card, and `.quit` leaves the Pokegear once
+	## `WaitSFX` ends. The wait is the sound's, so the frames are spent by hand:
+	## the screen's own `_process` counts wall-clock time, and one frame awaited
+	## spends however many hardware frames that delta holds.
 	assert_true(host.handle_button(PokeButton.A))
-	await get_tree().process_frame
+	_spend_until_the_service_closes(host)
 	assert_null(_world_screen._service_host)
+
+
+## `PokegearClock_Joypad`'s `.UpdateClock` redraws every frame, so a minute that
+## turns over under the open card shows; `PokeGear.done` is the exit sound.
+func test_the_clock_card_follows_the_clock_and_leaves_with_a_click() -> void:
+	await _open_world()
+	_world_screen._world.set_world_clock(3, 0, 7)
+	_world_screen._clock.minute = 7
+	_world_screen._open_pokegear()
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	_world_screen._world.set_world_clock(3, 0, 8)
+	_world_screen._clock.minute = 8
+	host.advance_frame()
+	assert_eq(_row_text(host._pokegear._tilemap(), Gen2TownMapPage.CLOCK_TIME_AT, 8), "12:08 AM")
+	watch_signals(host)
+	host.handle_button(PokeButton.A)
+	assert_signal_emitted_with_parameters(host, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, false])
 
 
 func test_only_one_service_layer_is_ever_on_screen() -> void:
@@ -1346,7 +1421,7 @@ func test_the_map_card_stays_when_nothing_is_owned_past_it() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.TOWN_MAP)
 	assert_not_null(host._town_map)
 	assert_true(host.handle_button(PokeButton.B))
-	await get_tree().process_frame
+	_spend_until_the_service_closes(host)
 	assert_null(_world_screen._service_host)
 
 
@@ -1386,6 +1461,7 @@ func test_town_map_decoration_opens_fullscreen_and_closes_the_script_request() -
 
 	_world_screen._text_box.finish()
 	_world_screen._advance_script_input()
+	Fixture.settle_menu_fade(_world_screen)
 	await get_tree().process_frame
 	var host: Gen2WorldServiceScreen = _world_screen._service_host
 	assert_not_null(host)
@@ -1401,6 +1477,7 @@ func test_town_map_decoration_opens_fullscreen_and_closes_the_script_request() -
 	assert_true(host.handle_button(PokeButton.B))
 	await get_tree().process_frame
 	assert_null(_world_screen._service_host)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_false(_world_screen._world.script_input_waiting())
 
 
@@ -1664,6 +1741,7 @@ func test_the_mailbox_lists_its_authors_and_reads_one() -> void:
 	assert_eq(host._pc_rows.size(), Gen2WorldPC.MAILBOX_ROWS.size())
 
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_not_null(host._mail_reader)
 	## `.loop` returns on A or B and on nothing else.
 	assert_false(host.handle_button(PokeButton.DOWN))
@@ -1703,6 +1781,48 @@ func test_putting_a_message_in_the_pack_empties_the_mailbox() -> void:
 	assert_eq(Fixture.box_words(host), Gen2WorldPC.MAILBOX_CLEARED)
 
 
+## `PlayerWithdrawItemMenu` and `PlayerTossItemMenu` open with `ClearPCItemScreen`
+## and leave with `CloseSubmenu`; the deposit's pack is its own screen but leaves
+## through the same `CloseSubmenu`. Each holds the screen white before the menu
+## the player came from is back.
+func test_the_item_pc_lists_clear_the_screen_in_and_close_the_submenu_out() -> void:
+	_write_pc_request()
+	await _open_world()
+	_world_screen._world.state.apply_changes({}, {}, {"items": {7: 1}, "pc_items": {7: 1}})
+	_world_screen._world.current_map.events["coord_events"][0]["script"] = 0x6190
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(Vector2i(7, 6))
+	)
+	await get_tree().process_frame
+	var host: Gen2WorldServiceScreen = _world_screen._service_host
+	Fixture.press_through(host)
+	var cleared: int = Gen2MenuTransition.CLEAR_FRAMES[&"pc_item_screen"][&"crystal"]
+	var closed: int = Gen2MenuTransition.CLOSE_WHITE_FRAMES[&"crystal"]
+
+	host.handle_button(PokeButton.A)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS, "the list is not drawn yet")
+	assert_eq(_white_frames(), cleared)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
+	host.handle_button(PokeButton.B)
+	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS, "back under the white")
+	assert_eq(_white_frames(), closed)
+
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_eq(_white_frames(), cleared, "the toss list clears the same way")
+	host.handle_button(PokeButton.B)
+	assert_eq(_white_frames(), closed)
+
+	## DEPOSIT ITEM has no `ClearPCItemScreen`: its pack builds under no white here.
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	assert_not_null(host._pack)
+	assert_eq(_white_frames(), 0)
+	host.handle_button(PokeButton.B)
+	assert_eq(_white_frames(), closed)
+
+
 ## `PCItemsJoypad`'s `.select_1` and `.moving_stuff_around` (`SwitchItemsInBag`).
 ## The withdraw and toss lists show `wPCItems` and reach it; a deposit is
 ## `DepositSellPack`, whose joypad handler has no SELECT in it.
@@ -1722,6 +1842,7 @@ func test_select_reorders_the_pc_item_list_but_not_the_deposit_list() -> void:
 
 	## WITHDRAW ITEM, which is the PC's own list.
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(_world_screen._world.state.pc_items().keys(), [7, 0x14])
 	host.handle_button(PokeButton.SELECT)
@@ -1735,6 +1856,7 @@ func test_select_reorders_the_pc_item_list_but_not_the_deposit_list() -> void:
 
 	## DEPOSIT ITEM's `DepositSellPack` answers SELECT with nothing.
 	host.handle_button(PokeButton.B)
+	Fixture.settle_menu_fade(_world_screen)
 	host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
 	assert_not_null(host._pack)

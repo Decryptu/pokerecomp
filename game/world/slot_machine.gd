@@ -612,7 +612,7 @@ func _payout_text() -> void:
 			_play(Gen2Sfx.SFX_PRESENT)
 	## Each of the three `.LinedUp*` routines ends in `WaitSFX`, and the box is
 	## printed behind it rather than over it.
-	_wait_then([{"kind": &"text", "name": &"lined_up"}])
+	_wait_then([{"kind": &"text", "name": &"lined_up", "payout": PAYOUTS[_matched / 4]}])
 
 
 ## `.LinedUpSevens`' own tail: the rarer `wKeepSevenBiasChance` is the one with
@@ -625,10 +625,11 @@ func _roll_seven_streak() -> void:
 
 
 ## `SlotsAction_PayoutAnim`: one coin every other frame, a sound every eighth,
-## and a coin case that has filled up takes no more.
+## and a coin case that has filled up takes no more. The coin test is before the `inc`, the sound test after.
 func _payout_anim() -> void:
+	var before: int = _delay
 	_delay = (_delay + 1) & 0xFF
-	if (_delay & 1) == 0:
+	if (before & 1) == 0:
 		return
 	if _payout == 0:
 		_index += 1
@@ -1019,7 +1020,6 @@ func _store_match(one: int, two: int, three: int) -> void:
 ## `SpriteAnimFunc_SlotsChanseyEgg`, the objects `DoNextFrameForFirst16Sprites`
 ## pumps. All three write `wSlotsDelay`, which is what the reel actions above
 ## are waiting on, so none of them is decoration.
-##
 ## Each is a Dictionary rather than a struct because a slot is either taken or
 ## empty: `DeinitializeSprite` clears the index and nothing else.
 func _animate_objects() -> void:

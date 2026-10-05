@@ -108,13 +108,9 @@ static func time_of_day_at(hour_value: int) -> int:
 
 
 ## `--clock=HH:MM` on the command line: the time every world opened this run
-## starts at and is held at, over the export defaults and over a save's own.
-##
-## An hour reaches the screen through the palettes and the light, and a renderer
-## reads world state and must not write it, so a shot tool or a mod's own
-## instrument cannot otherwise photograph what it draws at any hour but the one
-## the run happens to be in. Empty unless the switch was passed, and read once:
-## a run's clock cannot change under it.
+## starts at and is held at, over the export defaults and a save's own. A
+## renderer must not write world state, so a shot tool cannot otherwise draw any
+## hour but the current one. Empty unless passed, and read once.
 static func pin() -> Dictionary:
 	if not _pin_read:
 		_pin_read = true

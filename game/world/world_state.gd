@@ -3,9 +3,9 @@ extends RefCounted
 
 ## Mutable state shared by the scene-free overworld systems.
 ##
-## Cartridge-derived map records remain immutable in GameData. This record is
-## the runtime boundary for event flags and can later be serialized by the
-## save model without making Gen2WorldAPI own a save file.
+## Cartridge-derived map records remain immutable in GameData. This record is the
+## runtime boundary for event flags, serializable by the save model without making
+## Gen2WorldAPI own a save file.
 
 signal changed
 
@@ -47,17 +47,18 @@ const ROAM_SLOTS: int = 3
 ## Beside `InitRoamMons`, and Crystal's Tin Tower battle however it ends.
 const EVENT_RELEASED_THE_BEASTS: int = 123
 const EVENT_FOUGHT_SUICUNE_CRYSTAL: int = 821
+## Hides Red: the Hall of Fame clears it and his `disappear` sets it again.
+const EVENT_RED_IN_MT_SILVER: int = 1890
 ## Both source reroll loops are unbounded; the cap stops a mod's dead-end graph.
 const ROAM_ROLL_ATTEMPTS: int = 128
 ## `StoreSwarmMapIndices`' own two arguments, `constants/script_constants.asm`.
 const SWARM_DUNSPARCE: int = 0
 const SWARM_YANMA: int = 1
 const TEMPORARY_MAP_RELOAD_FLAGS: Array[int] = [0, 1, 2, 3, 4, 5, 6, 7]
-## Crystal maps STATUSFLAGS_HALL_OF_FAME_F through the source engine flag table
-## to ENGINE_CREDITS_SKIP, and the Goldenrod bargain merchant uses the daily
-## ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED flag. Both names are Crystal
-## indices, called out explicitly because pokegold's shorter engine flag table
-## (see the badge comment below) puts the same symbol one index lower there.
+## Crystal maps STATUSFLAGS_HALL_OF_FAME_F through the source engine flag table to
+## ENGINE_CREDITS_SKIP, and the Goldenrod bargain merchant uses the daily
+## ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED flag. Both are Crystal indices;
+## pokegold's shorter engine flag table (see the badge comment below) puts each one lower.
 const ENGINE_CREDITS_SKIP: int = 15
 const ENGINE_HALL_OF_FAME: int = ENGINE_CREDITS_SKIP
 ## `CheckReceivedDex`'s own flag, which is what the Pokemon Center PC's list
@@ -72,9 +73,8 @@ const BYTE_ENGINE_FLAGS: Dictionary = {
 	8: ["_mom_savings_flags", 0], 9: ["_mom_savings_flags", 7],
 }
 ## The next bit of the same `wStatusFlags` byte, `STATUSFLAGS_UNOWN_DEX_F`, which
-## `Pokedex_CheckUnlockedUnownMode` reads and only the Ruins of Alph research
-## centre's scientist sets. Ahead of ENGINE_MOBILE_SYSTEM, so it is one index on
-## every profile.
+## `Pokedex_CheckUnlockedUnownMode` reads and only the Ruins of Alph research centre's
+## scientist sets. Ahead of ENGINE_MOBILE_SYSTEM, so one index on every profile.
 const ENGINE_UNOWN_DEX: int = 12
 ## The one entry pokegold does not ship, and so the index every profile split in
 ## this table is measured from. See engine_flag().
@@ -182,10 +182,9 @@ var _event_flags: Dictionary = {}
 var _engine_flags: Dictionary = {}
 var _map_scenes: Dictionary = {}
 var _items: Dictionary = {}
-## `wPCItems`, which is its own array on the cartridge rather than a pocket of
-## the bag: `PlayersPC` moves stacks between the two and nothing else reads it.
-## Absent in a state written before the item PC existed, which restores as an
-## empty PC and needs no migration.
+## `wPCItems`, its own array on the cartridge rather than a pocket of the bag:
+## `PlayersPC` moves stacks between the two and nothing else reads it. Absent in a
+## state written before the item PC existed, which restores as an empty PC.
 var _pc_items: Dictionary = {}
 var _money: Dictionary = {}
 var _coins: int = 0
@@ -202,10 +201,9 @@ var _battle_box_full: bool = false
 ## it once the fight is over.
 var _battle_caught_celebi: bool = false
 ## `wWildEncounterCooldown`, which `EnterMap` sets to five and every step
-## decrements. Scratch on the cartridge rather than saved data, kept here
-## because this is where the world's own per-step counters live; a state written
-## before it existed restores as zero, which is the value a walk reaches after
-## its first four steps anyway.
+## decrements. Scratch on the cartridge rather than saved data, kept here because
+## this is where the world's own per-step counters live; a state written before it
+## existed restores as zero, the value a walk reaches after its first four steps anyway.
 var _wild_encounter_cooldown: int = 0
 ## `CountStep`'s own two bytes and `StepHappiness`'s, all three of them byte
 ## counters that wrap. `wStepCount` wrapping to zero is what `jr nz` reads to
@@ -223,10 +221,10 @@ var _pending_step_happiness: int = 0
 ## is `$80`, so an egg loses one hatch cycle every 256 steps offset 128 from the
 ## happiness pass.
 var _pending_egg_steps: int = 0
-## `wDayCareMan` and `wDayCareLady`, their two boxmon slots, `wStepsToEgg` and
-## the `wEggMon` the pair built. The slots are [Gen2SaveMon] rather than party
-## members: a deposited Pokemon leaves the party whole and comes back recomputed,
-## which is what `DepositBreedmon` and `RetrieveBreedmon` do.
+## `wDayCareMan` and `wDayCareLady`, their two boxmon slots, `wStepsToEgg` and the
+## `wEggMon` the pair built. The slots are [Gen2SaveMon] rather than party members:
+## a deposited Pokemon leaves the party whole and comes back recomputed
+## (`DepositBreedmon`, `RetrieveBreedmon`).
 var _day_care_man: int = 0
 var _day_care_lady: int = 0
 var _day_care_mons: Array = [null, null]
@@ -242,9 +240,8 @@ var _wild_encounters_off: bool = false
 ## trainer still stands, still draws and still talks; only the sighting is gone.
 var _trainer_sightings_off: bool = false
 ## The Bug Catching Contest's own counters. `wParkBallsRemaining` and the clock
-## reading `StartBugContestTimer` copies to `wBugContestStartTime`; whether a
-## contest is running at all is `ENGINE_BUG_CONTEST_TIMER`, which is an engine
-## flag and lives with the rest of them.
+## reading `StartBugContestTimer` copies to `wBugContestStartTime`; whether a contest
+## is running is the engine flag `ENGINE_BUG_CONTEST_TIMER`, which lives with the rest.
 var _park_balls: int = 0
 var _bug_contest_started: Dictionary = {}
 ## `wContestMon`, the party-struct-shaped Pokemon `BugContest_SetCaughtContestMon`
@@ -256,10 +253,9 @@ var _contest_mon: Dictionary = {}
 var _contest_second_party_species: int = 0
 ## `wDunsparceMapGroup`/`wDunsparceMapNumber` and `wYanmaMapGroup`/
 ## `wYanmaMapNumber`: Crystal's two swarms are independent, each with its own
-## `wSwarmFlags` bit, and `_SwarmWildmonCheck` tries Dunsparce before Yanma.
-## Gold and Silver hold one `wSwarmMapGroup` and their own
-## `StoreSwarmMapIndices` takes no kind, so only [constant SWARM_DUNSPARCE] is
-## ever written on those two.
+## `wSwarmFlags` bit, and `_SwarmWildmonCheck` tries Dunsparce before Yanma. Gold
+## and Silver hold one `wSwarmMapGroup` and their own `StoreSwarmMapIndices` takes
+## no kind, so only [constant SWARM_DUNSPARCE] is ever written on those two.
 var _swarm_maps: Array[Vector2i] = [Vector2i(-1, -1), Vector2i(-1, -1)]
 var _fishing_swarm_species: int = 0
 var _roaming_mons: Array = []
@@ -272,9 +268,8 @@ var _seen_species: Dictionary = {}
 ## flag survives releasing, trading away or boxing the Pokemon that set it.
 var _caught_species: Dictionary = {}
 ## `wUnownDex`: the Unown forms caught, in catching order rather than by letter.
-## Twenty-six slots on the cartridge,
-## where an empty one is a zero; here the list is as long as it is full, so its
-## size is `.count_unown`'s own answer.
+## Twenty-six slots on the cartridge, where an empty one is a zero; here the list is
+## as long as it is full, so its size is `.count_unown`'s own answer.
 var _unown_dex: Array[int] = []
 ## `wFirstUnownSeen`, the letter every Pokedex entry for UNOWN is drawn with:
 ## `Pokedex_LoadSelectedMonTiles` copies it into `wUnownLetter` before it asks
@@ -355,17 +350,15 @@ var _gen1_bytes: Dictionary = {}
 ## the entry again in its packed pocket array and clears both when the item is
 ## not there, which here is the quantity the item number already answers.
 var _registered_item: int = 0
-## `wLuckyIDNumber`, the five-digit number the Lucky Number Show draws every
-## day, and `sLuckyNumberDay`, which is `wCurDay + 1` on the day it was drawn so
-## that day zero is told from "never drawn"
-## (`LoadOrRegenerateLuckyIDNumber`). Kept together because the pair is what
-## says whether today's number has been rolled yet.
+## `wLuckyIDNumber`, the five-digit number the Lucky Number Show draws every day,
+## and `sLuckyNumberDay`, which is `wCurDay + 1` on the day it was drawn so that day
+## zero is told from "never drawn" (`LoadOrRegenerateLuckyIDNumber`). Kept together
+## because the pair is what says whether today's number has been rolled yet.
 var _lucky_id_number: int = 0
 var _lucky_number_day: int = 0
-## `wLuckyNumberDayTimer`'s own days-remaining byte.
-## `RestartLuckyNumberCountdown` sets it to the days until the next Friday and
-## the day rollover steps it, which is `CheckDayDependentEventHL`'s answer with
-## no absolute day to subtract.
+## `wLuckyNumberDayTimer`'s own days-remaining byte. `RestartLuckyNumberCountdown`
+## sets it to the days until the next Friday and the day rollover steps it, which is
+## `CheckDayDependentEventHL`'s answer with no absolute day to subtract.
 var _lucky_number_days_left: int = 0
 ## `wKenjiBreakTimer`, three to six days between the Route 27 sailor's breaks.
 ## `CheckDailyResetTimer` decrements it on every day that passes and resamples
@@ -742,9 +735,8 @@ static func _restore_deferred(restored: Gen2WorldState, source: Dictionary) -> v
 	restored._buenas_password = int(source.get("buenas_password", 0)) & 0xFF
 
 
-## Restores the mutable state after a host transaction could not be persisted.
-## The state object stays alive so existing world systems keep their signal
-## connection.
+## Restores the mutable state after a host transaction could not be persisted. The
+## state object stays alive so existing world systems keep their signal connection.
 func restore_from_dict(raw: Variant) -> void:
 	var restored: Gen2WorldState = Gen2WorldState.from_dict(raw)
 	if restored == null:
@@ -837,8 +829,7 @@ func battle_tower() -> Gen2BattleTower:
 	return _battle_tower
 
 
-## The live link session, which callers edit in place the way they do the tower's
-## record: every write is one the cartridge would have made to WRAM straight away.
+## The live link session, edited in place like the tower's record, with WRAM writes.
 func link_session() -> Gen2LinkSession:
 	return _link_session
 
@@ -978,6 +969,11 @@ func engine_flags() -> Dictionary:
 
 func hall_of_fame() -> bool:
 	return is_engine_flag_active(ENGINE_HALL_OF_FAME)
+
+
+## Generation 2 only; saves from before [member beat_red] was stored hold just the flag.
+func has_beaten_red() -> bool:
+	return beat_red != 0 or (hall_of_fame() and is_event_flag_active(EVENT_RED_IN_MT_SILVER))
 
 
 func set_hall_of_fame(active: bool = true) -> void:
@@ -1222,9 +1218,8 @@ func lucky_number_show_ready() -> bool:
 	return _lucky_number_days_left <= 0
 
 
-## `RestartLuckyNumberCountdown`: `InitNDaysCountdown` with the days until the
-## next Friday, seven on a Friday, so the show never comes round again the day
-## it ran.
+## `RestartLuckyNumberCountdown`: `InitNDaysCountdown` with the days until the next
+## Friday, seven on a Friday, so the show never comes round again the day it ran.
 func restart_lucky_number_countdown(day: int) -> void:
 	var until: int = Gen2WorldClock.FRIDAY - posmod(day, Gen2WorldClock.DAYS_PER_WEEK)
 	if until <= 0:

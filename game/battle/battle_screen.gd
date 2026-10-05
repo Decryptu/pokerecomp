@@ -904,6 +904,7 @@ func _ready() -> void:
 	_box.item_rect_changed.connect(_push_text_box_rect)
 	_box.visibility_changed.connect(_push_text_box_rect)
 	_box.prompt_answered.connect(_on_box_prompt_answered)
+	_box.play_sounds_from(_data)
 	_screen.display(_box)
 	_box.place_at_bottom()
 	## Over the text box: `LoadBattleMenu` draws its box after `EmptyBattleTextbox` draws that
@@ -3009,7 +3010,7 @@ func show_message(text: String, prompt: bool = true) -> void:
 	if _intro != null:
 		_intro_message = text
 		return
-	_last_message = text
+	_last_message = Gen2TextStream.strip_sounds(text)
 	## `StdBattleTextbox` blocks on a press for a line it printed; an empty box
 	## is the one a menu is drawn over and owes nothing.
 	_message_awaits_press = prompt and not text.is_empty()
@@ -3758,8 +3759,12 @@ func complete_capture(result: Dictionary) -> Dictionary:
 	## on a ball that broke out.
 	_capture_terminal = bool(result.get("ends_battle", false))
 	if caught:
-		_caught_line = GEN1_CAUGHT_TEXT % [_name_of(_caught_species()), Gen2TextStream.SCROLL_BREAK] \
+		_caught_line = (
+			GEN1_CAUGHT_TEXT % [_name_of(_caught_species()), Gen2TextStream.SCROLL_BREAK]
+			+ Gen2TextStream.sound_token(Gen1Sfx.SFX_CAUGHT_MON)
 			if _generation() == RomRegistry.GEN1 else CAUGHT_TEXT % _name_of(_caught_species())
+			+ Gen2TextStream.sound_token(Gen2Sfx.SFX_CAUGHT_MON)
+		)
 		_box_queue.append(_caught_line)
 		_capture_terminal = true
 		_capture_caught_event = _caught_event(result)
@@ -4075,14 +4080,12 @@ func _open_capture_nickname() -> bool:
 	return true
 
 
-## `Text_GotchaMonWasCaught`: the printed line's `sound_caught_mon`, then a frame of
+## `Text_GotchaMonWasCaught`: behind the line and its `sound_caught_mon`, a frame of
 ## `MUSIC_NONE` and `MUSIC_CAPTURE`. Generation 1's has the sound alone.
 func _queue_caught_sounds() -> void:
-	_sound_queue.append({"after_text": true})
-	_sound_queue.append({"sfx": Gen2Sfx.SFX_CAUGHT_MON})
-	_sound_queue.append({"wait": true})
 	if _generation() == RomRegistry.GEN1:
 		return
+	_sound_queue.append({"after_text": true})
 	_sound_queue.append({"music": Gen2Battle.MUSIC_NONE})
 	_sound_queue.append({"frames": 1})
 	_sound_queue.append({"music": Gen2Battle.MUSIC_CAPTURE})
@@ -4100,11 +4103,12 @@ func _open_new_dex_entry() -> bool:
 		&"":
 			_capture_dex_stage = &"text"
 			var gen1: bool = _generation() == RomRegistry.GEN1
-			show_message((GEN1_NEW_DEX_DATA_TEXT if gen1 else NEW_DEX_DATA_TEXT) % _name_of(_caught_species()))
-			_sound_queue.append({"after_text": true})
-			_sound_queue.append({"index": Gen1Sfx.SFX_DEX_PAGE_ADDED} if gen1
-				else {"sfx": Gen2Sfx.SFX_SLOT_MACHINE_START})
-			_sound_queue.append({"wait": true})
+			show_message(
+				(GEN1_NEW_DEX_DATA_TEXT if gen1 else NEW_DEX_DATA_TEXT) % _name_of(_caught_species())
+				+ Gen2TextStream.sound_token(
+					Gen1Sfx.SFX_DEX_PAGE_ADDED if gen1 else Gen2Sfx.SFX_SLOT_MACHINE_START
+				)
+			)
 			return true
 		&"text":
 			## `call ClearSprites` between the line and the page, which is the
@@ -4827,12 +4831,13 @@ func _finish_world_battle() -> void:
 		"save_written": _save_written,
 		"roamers_move": _battle.roamers_move_on(false),
 	}
+	## `.give_money` and `CheckPayDay`; a wild mon that left can owe Pay Day alone.
+	var earned: Dictionary = _earnings()["money"]
+	if not earned.is_empty():
+		result["money_awarded"] = earned.duplicate()
+	if _battle.is_gen1():
+		result["battle_result"] = _battle.gen1_battle_result()
 	if outcome == Gen2WorldBattleAdapter.OUTCOME_WON:
-		## `.give_money` and `CheckPayDay` as one credit per account, so the
-		## world applies exactly what the save already carries.
-		var earned: Dictionary = _earnings()["money"]
-		if not earned.is_empty():
-			result["money_awarded"] = earned.duplicate()
 		## `ExitBattle`'s `and $f / ret nz`: `wEvolvableFlags` is only ever read
 		## after a battle that was WON, so a fight that was lost or run from
 		## carries nothing for the overworld's own `EvolveAfterBattle` to walk.
@@ -4869,6 +4874,7 @@ func _finish_world_capture(capture: Dictionary) -> void:
 		"enemy": Gen2WorldBattleAdapter.enemy_record(_battle),
 		"roamers_move": _battle != null and _battle.roamers_move_on(true),
 		"money_awarded": (_earnings()["money"] as Dictionary).duplicate(),
+		"battle_result": 2,
 		"evolvable": _battle.evolvable_indices() if _battle != null else [],
 		"player_active": active.species if active != null else 0,
 	})
@@ -4884,7 +4890,8 @@ func _earnings() -> Dictionary:
 			if _source_save != null and _source_save.world != null else null,
 			_battle != null and not _battle.has_fled() \
 				and (_battle.winner() == Gen2Battle.PLAYER \
-					or bool(_capture_result.get("caught", false)))
+					or bool(_capture_result.get("caught", false))),
+			bool(_capture_result.get("caught", false))
 		)
 	return _earnings_computed
 
@@ -5153,8 +5160,8 @@ func _open_move_menu() -> void:
 
 
 ## `hInMenu` is clear through the battle's own menus; the pack sets it.
-func menu_repeats() -> bool:
-	return _pack_host != null and _pack_host.visible and _pack_host.menu_repeats()
+func menu_repeats(button: int) -> bool:
+	return _pack_host != null and _pack_host.visible and _pack_host.menu_repeats(button)
 
 
 func _answer_menu(button: int) -> void:
@@ -5632,6 +5639,7 @@ func _open_battle_stats() -> void:
 	_battle_stats.cry_requested.connect(
 		func(species: int) -> void: _play_entrance_cry(Gen2Battle.PLAYER, species)
 	)
+	_battle_stats.sfx_requested.connect(_play_sfx)
 	_switch_stage = &"stats"
 	_battle_stats.announce()
 	_reopen_menu_layer()
@@ -5700,6 +5708,9 @@ func _commit_switch(index: int) -> void:
 		&"item":
 			## `StatusHealer_Jumptable`'s way back: the pack is where a used item
 			## leaves the player, and where a cancelled one does too.
+			if index >= 0 and _battle.pp_item_refused(_pack_item, index):
+				_refuse_in_pack(_item_refusal_text(&"item_not_usable_here"), index)
+				return
 			if index >= 0 and Gen2Battle.asks_for_move_slot(_data, _pack_item):
 				_open_pack_move(_pack_item, index)
 				return
@@ -6407,7 +6418,6 @@ const EVENT_STATE_HANDLERS: Dictionary = {
 	## `FaintYourPokemon` and `FaintEnemyPokemon` sink the picture before
 	## either prints, so the line waits on the animation.
 	Gen2Battle.FAINTED: &"_begin_faint_event",
-	Gen2Battle.MOVE_FORGOTTEN: &"_play_move_forgotten",
 	Gen2Battle.SUBSTITUTE_PIC: &"_set_substitute_pic_event",
 	Gen2Battle.MINIMIZED: &"_set_minimize_pic_event",
 	Gen2Battle.SENT_OUT: &"_apply_sent_out",
@@ -6474,13 +6484,6 @@ func _apply_hud_drawn(event: Dictionary) -> void:
 
 func _begin_faint_event(event: Dictionary) -> void:
 	_begin_faint(int(event["side"]))
-
-
-func _play_move_forgotten(_event: Dictionary) -> void:
-	if _generation() == RomRegistry.GEN1:
-		_play_gen1_sound(Gen1Sfx.SFX_SWAP)
-	else:
-		_play_sfx(Gen2Sfx.SFX_SWITCH_POKEMON)
 
 
 func _set_substitute_pic_event(event: Dictionary) -> void:
@@ -6714,8 +6717,7 @@ const GEN1_LINES: Dictionary = {
 	Gen2Battle.STATUS_DIDNT_AFFECT: ["It didn't affect\n%s!", &"name:target"],
 	Gen2Battle.UNAFFECTED: ["%s\nis unaffected!", &"name:target"],
 	Gen2Battle.MIST_SET: ["%s's\nshrouded in mist!", &"name:side"],
-	Gen2Battle.FOCUS_ENERGY_SET: ["%s's\ngetting pumped!", &"name:side"],
-	Gen2Battle.MIST_PROTECTED: ["But, it failed!"],
+	Gen2Battle.FOCUS_ENERGY_SET: [Gen2TextStream.PAUSE_MARK + "%s's\ngetting pumped!", &"name:side"],
 	Gen2Battle.COINS_SCATTERED: ["Coins scattered\neverywhere!"],
 	Gen2Battle.TRANSFORMED: ["%s\ntransformed into" + SCROLL + "%s!", &"name:side", &"name:target"],
 	Gen2Battle.FLED_FROM_BATTLE: ["%s\nran from battle!", &"name:side"],
@@ -6777,7 +6779,9 @@ func _describe(event: Dictionary) -> String:
 	var kind: Variant = event["type"]
 	var gen1: bool = _generation() == RomRegistry.GEN1
 	if gen1 and GEN1_LINES.has(kind):
-		return _line(GEN1_LINES[kind], event)
+		return _line(GEN1_LINES[kind], event) + (
+			Gen2TextStream.sound_token(Gen1Sfx.SFX_LEVEL_UP) if kind == Gen2Battle.GREW_LEVEL else ""
+		)
 	if LINE_HANDLERS.has(kind):
 		return String(call(LINE_HANDLERS[kind], event))
 	if not gen1 and BATTLE_TEXT.has(kind):
@@ -6885,7 +6889,8 @@ func _move_declined_text(event: Dictionary) -> String:
 func _move_forgotten_text(event: Dictionary) -> String:
 	var learner: String = _event_name(event)
 	return Gen2MoveForget.forgot_text(
-		learner, String(_data.move(int(event["forgot"])).get("name", "")), _generation()
+		learner, String(_data.move(int(event["forgot"])).get("name", "")), _generation(),
+		_data.id == RomRegistry.YELLOW
 	) + PAGE + Gen2MoveForget.learned_text(
 		learner, String(_data.move(int(event["learned"])).get("name", "")), _generation()
 	)
@@ -7148,7 +7153,8 @@ func _stat_changed_text(event: Dictionary) -> String:
 	var who: String = _battler_name(int(event["target"]))
 	var stat_name: String = STAT_NAMES.get(event["stat"], String(event["stat"]).to_upper())
 	var by: int = int(event["by"])
-	var scroll: String = Gen2TextStream.SCROLL_NOWAIT_BREAK
+	## `GreatlyRoseText` and `_BattleStatWentWayUpText` open on a `text_pause` and a `<SCROLL>`.
+	var scroll: String = Gen2TextStream.PAUSE_MARK + Gen2TextStream.SCROLL_NOWAIT_BREAK
 	if _generation() == RomRegistry.GEN1:
 		stat_name = GEN1_STAT_NAMES.get(event["stat"], stat_name)
 		var verb: String = " rose!" if by > 0 else " fell!"
@@ -7323,12 +7329,25 @@ func _button_pack_action(button: int) -> bool:
 	return true
 
 
+func _step_pack_row(delta: int) -> void:
+	var before: Vector2i = _pack_list_position()
+	select_pack_row(_pack_index + delta)
+	Gen2ScrollingMenu.after_press(true, before, _pack_list_position())
+
+
+func _pack_list_position() -> Vector2i:
+	return Vector2i(_pack_index, Gen2BattleMenu.list_scrolled(
+		int(_list_scroll.get(&"pack", 0)), _pack_index, _pack_rows.size() + 1,
+		Gen2MartPage.GEN1_CURSOR_ROWS
+	))
+
+
 func _button_pack(button: int) -> bool:
 	match button:
 		PokeButton.RIGHT, PokeButton.DOWN:
-			select_pack_row(_pack_index + 1)
+			_step_pack_row(1)
 		PokeButton.LEFT, PokeButton.UP:
-			select_pack_row(_pack_index - 1)
+			_step_pack_row(-1)
 		PokeButton.A:
 			## `DisplayBagMenu` falls straight into `UseBagItem`.
 			if _world_battle_tutorial:

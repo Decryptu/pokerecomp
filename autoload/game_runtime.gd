@@ -14,10 +14,9 @@ var selected_save_slot: int = -1
 
 ## The new game the intro is running for, before it exists on disk.
 ## `NewGame` reaches `InitializeWorld` only after `PlayerProfileSetup` and
-## `OakSpeech` have both returned, so there is nothing to write until the intro
-## finishes. The launcher stages the slot and the slot's own label here, the
-## intro screen adds the trainer name and gender the cartridge asks for, and
-## only then is a save built and written. Abandoning the intro leaves no file.
+## `OakSpeech` have both returned, so nothing is written until the intro
+## finishes: the launcher stages the slot and its label here and the intro
+## screen adds the name and gender. Abandoning the intro leaves no file.
 var pending_new_game_slot: int = -1
 var pending_new_game_label: String = ""
 ## Which challenge the save screen chose for the run that is about to start. It
@@ -209,10 +208,9 @@ func _process(_delta: float) -> void:
 
 ## Puts the app block's window and frame-rate settings into the engine. The
 ## settings page calls it after every change and nothing else needs to. Refused on
-## anything but a player's own launch: a headless check would be capped at
-## whatever frame rate the developer last chose, and a screenshot driver would
-## take the window with it. GAME SPEED reaches the game through
-## [Gen2WorldAnimation.FrameClock] instead, which keeps it off the audio driver.
+## anything but a player's own launch, where a check would inherit the developer's
+## frame rate and a screenshot driver would lose the window. GAME SPEED reaches
+## the game through [Gen2WorldAnimation.FrameClock], off the audio driver.
 static func apply_display_options(options: Gen2Options) -> void:
 	if options == null or not is_player_launch():
 		return

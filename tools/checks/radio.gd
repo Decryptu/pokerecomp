@@ -87,6 +87,7 @@ func run(r: RefCounted) -> void:
 		_verify_music_records(_data, game_id, crystal)
 		_verify_map_music(_data, game_id, crystal)
 		_verify_shows(_data, game_id, crystal)
+		_verify_dex_show(_data, game_id, crystal)
 		_verify_big_object_census(_data, game_id)
 		_verify_snorlax(_data, game_id, crystal)
 		_verify_route_2(_data, game_id, crystal)
@@ -219,6 +220,29 @@ func _walk_show(
 			or (bottom.contains("  ") and not bottom.begins_with(" ")):
 			blank.append("%s ch%d: \"%s\"" % [game_id, channel, bottom])
 	return lines_seen
+
+
+## `PokedexShow2` to `8`: the name, then the category and the two pages.
+func _verify_dex_show(_data: GameData, game_id: StringName, crystal: bool) -> void:
+	var entry: Dictionary = _data.dex_entry(1)
+	var expected: Array[String] = [String(_data.species(1).get("name", "")), String(entry["category"])]
+	for page: String in entry["pages"]:
+		expected.append_array(page.split("\n"))
+	var show: Gen2RadioShow = Gen2RadioShow.start(
+		_data, Gen2WorldRadio.POKEDEX_SHOW, {"crystal": crystal, "caught": [1]}
+	)
+	var said: Array[String] = []
+	for _frame: int in Gen2RadioShow.LINE_FRAMES * 9:
+		show.advance_frame()
+		var bottom: String = show.lines()[1]
+		if said.is_empty() and not show.lines()[0].is_empty():
+			said.append(show.lines()[0])
+		elif not bottom.is_empty() and bottom != said[said.size() - 1]:
+			said.append(bottom)
+	_r.check(
+		said.slice(0, expected.size()) == expected,
+		"%s: the Pokedex show read %s, not the entry %s." % [game_id, said, expected]
+	)
 
 
 ## Every station's track has to be a real imported music record, or tuning to it

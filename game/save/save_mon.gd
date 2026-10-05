@@ -15,6 +15,8 @@ const UNNAMED: String = "UNKNOWN"
 
 var species: int = 0
 var item: int = 0
+## Generation 1's `MON_CATCH_RATE`; zero elsewhere.
+var catch_rate: int = 0
 var moves: Array = [0, 0, 0, 0]
 var pp: Array = [0, 0, 0, 0]
 ## `PP_UP_MASK`, the top two bits of each `MON_PP` byte.
@@ -68,6 +70,7 @@ func to_dict() -> Dictionary:
 	return {
 		"species": species,
 		"item": item,
+		"catch_rate": catch_rate,
 		"moves": moves.duplicate(),
 		"pp": pp.duplicate(),
 		"pp_ups": pp_ups.duplicate(),
@@ -101,6 +104,7 @@ static func from_dict(raw: Variant) -> Gen2SaveMon:
 	var out := Gen2SaveMon.new()
 	out.species = int(source.get("species", 0))
 	out.item = int(source.get("item", 0))
+	out.catch_rate = int(source.get("catch_rate", 0))
 	out.moves = _fixed_int_array(source.get("moves", []), MAX_MOVES)
 	out.pp = _fixed_int_array(source.get("pp", []), MAX_MOVES)
 	out.pp_ups = _fixed_int_array(source.get("pp_ups", []), MAX_MOVES)

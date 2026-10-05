@@ -261,9 +261,8 @@ func _advance_copyright() -> void:
 		_enter_after(PHASE_COPYRIGHT)
 
 
-## The presents phase spends whatever `GameFreakPresentsScene` spends: the
-## sequence is asked for a frame and the phase ends when it runs out, rather than
-## on a budget of this coordinator's own.
+## The presents phase spends whatever `GameFreakPresentsScene` spends: the sequence
+## is asked for a frame and the phase ends when it runs out, not on a budget of its own.
 func _advance_presents() -> void:
 	if _presents == null:
 		_enter_after(PHASE_PRESENTS)

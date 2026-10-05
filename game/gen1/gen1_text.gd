@@ -177,6 +177,7 @@ static func decode_stream(rom: RomFile, at: int) -> Dictionary:
 		return {"ok": false, "reason": "text_script", "command": command}
 	return Gen2TextStream.decode(rom.bytes(), at, {
 		"generation": RomRegistry.GEN1,
+		"yellow": rom.id == RomRegistry.YELLOW,
 		"far": func(bank: int, address: int) -> PackedByteArray:
 			var start: int = Gen1Layout.banked(bank, address)
 			return rom.slice(start, RomFile.bank_end(RomFile.bank_of(start)) - start),

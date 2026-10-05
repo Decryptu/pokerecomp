@@ -19,8 +19,7 @@ static func of(world: Gen2WorldAPI, save: Gen2SaveData) -> Dictionary:
 	if world != null and world.state != null:
 		_read_state(out, world.state, Gen2WorldState.is_crystal_profile(world.data))
 		_read_story(out, world.state, world.data.id)
-		out[&"beat_red"] = world.state.beat_red != 0 \
-			or world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
+		out[&"beat_red"] = _beat_red(world.state, world.spawn_after_champion, world.data.id)
 	_read_save(out, save)
 	return out
 
@@ -30,18 +29,13 @@ static func of(world: Gen2WorldAPI, save: Gen2SaveData) -> Dictionary:
 static func of_save(save: Gen2SaveData, data: GameData = null) -> Dictionary:
 	var out: Dictionary = {}
 	if save != null and save.world != null and save.world.world_state != null:
-		## The save's own cartridge decides which badge table is read, and the
-		## save carries it. Without this a Gold or Silver slot read with no
-		## `data` in hand is read through Crystal's flags, which sit one apart,
-		## so every badge in the mask is the wrong badge. A mod calling this from
-		## `save_activated` has no [GameData] and should not have to open one to
-		## be answered correctly.
+		## The save's own cartridge picks the badge table: a Gold or Silver slot
+		## read with no `data` (a `save_activated` mod has none) would go through
+		## Crystal's flags, one apart, and every badge would be the wrong one.
 		var game: StringName = data.id if data != null else save.game_id
 		_read_state(out, save.world.world_state, Gen2WorldState.is_crystal_game_id(game))
 		_read_story(out, save.world.world_state, game)
-		out[&"beat_red"] = \
-			save.world.world_state.beat_red != 0 \
-			or save.world.spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
+		out[&"beat_red"] = _beat_red(save.world.world_state, save.world.spawn_after_champion, game)
 	_read_save(out, save)
 	return out
 
@@ -72,6 +66,12 @@ static func differs(left: Dictionary, right: Dictionary) -> bool:
 		if not right.has(key) or right[key] != left[key]:
 			return true
 	return false
+
+
+static func _beat_red(state: Gen2WorldState, spawn_after_champion: int, game: StringName) -> bool:
+	if RomRegistry.generation_for(game) == RomRegistry.GEN1:
+		return false
+	return state.has_beaten_red() or spawn_after_champion == Gen2WorldSnapshot.SPAWN_AFTER_RED
 
 
 static func _read_state(out: Dictionary, state: Gen2WorldState, crystal: bool) -> void:
@@ -111,9 +111,8 @@ static func _read_story(out: Dictionary, state: Gen2WorldState, game: StringName
 			state.battle_tower().gs_ball_flag == Gen2BattleTower.GS_BALL_AVAILABLE
 
 
-## The party, the boxes and the play timer, which are the save's on both paths:
-## the world screen plays the slot's own party rather than a copy, so the live
-## run and a slot the launcher has only opened are read the same way.
+## The party, the boxes and the play timer, which are the save's on both paths: the
+## world screen plays the slot's own party, so a live run and an opened slot read alike.
 static func _read_save(out: Dictionary, save: Gen2SaveData) -> void:
 	if save == null:
 		return

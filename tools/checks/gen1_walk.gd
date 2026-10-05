@@ -1,11 +1,10 @@
 extends RefCounted
 
 ## Every Generation 1 warp and every ledge, swept on Red, Blue and Yellow. A
-## Generation 1 map's collision grid holds the tile a cell draws, so what is
-## proved here is the six tables [Gen2WorldCollision] carries for it: the
-## tileset's passable list decides a step, `WarpTileIDPointers` and
-## `DoorTileIDPointers` decide whether a warp fires, and `LedgeTiles` decides a
-## hop. Each is swept against the imported corpus rather than one sampled map.
+## Generation 1 map's collision grid holds the tile a cell draws, so what is proved
+## here is the six tables [Gen2WorldCollision] carries for it: the tileset's passable
+## list decides a step, `WarpTileIDPointers` and `DoorTileIDPointers` decide whether
+## a warp fires, and `LedgeTiles` decides a hop, each swept against the imported corpus.
 
 ## `data/maps/objects`' own totals, and the `LAST_MAP` warps inside them.
 const WARP_CENSUS: Dictionary = {
@@ -407,6 +406,9 @@ const SNES_CELL := Vector2i(3, 5)
 const VIRIDIAN_CITY: int = 0x01
 const HIDDEN_POTION_CELL := Vector2i(14, 4)
 const HIDDEN_POTION: int = 0x14
+const HIDDEN_ITEM_GUARD_FRAMES: int = 2000
+const HIDDEN_ITEM_IDLE_FRAMES: int = 30
+const HIDDEN_ITEM_PRESS_EVERY: int = 8
 
 ## `OpenPokemonCenterPC` at VIRIDIAN_POKECENTER's own cell and `OpenRedsPC` at
 ## the bedroom's: the two hidden events a `TX_SCRIPT_*` PC stands behind, faced
@@ -501,6 +503,7 @@ func _one_game() -> void:
 	_check_a_hidden_object()
 	_check_a_pc_opens()
 	_check_a_hidden_item()
+	_check_a_hidden_item_on_the_screen()
 	_check_the_trash_cans()
 	_check_a_gym_statue()
 	_check_a_bench_guy()
@@ -517,6 +520,7 @@ func _one_game() -> void:
 	_check_the_badge_house()
 	_check_the_day_care()
 	_check_the_name_rater()
+	_check_moms_rest()
 	_check_the_town_map_poster()
 	_check_flying()
 	_check_a_dungeon_fall()
@@ -595,7 +599,13 @@ func _check_the_nurse_heals() -> void:
 	)
 	world.choose_script_input(0)
 	world.run_event_queue(true)
+	if _r.game_id == &"yellow":
+		_check_the_yellow_nurse_waits(world)
+		return
+	var turned: Array[int] = _spend_script_waits(world, true)
 	var request: Dictionary = world.pending_runtime_request()
+	var turn: int = turned[0] if turned.size() == 1 else -1
+	_r.check(turn == Gen1Layout.NURSE_RED_TURN_FRAMES, "her turn to the machine waited %d." % turn)
 	if not _r.check(
 		StringName(request.get("kind", &"")) == &"party_heal_requested",
 		"the nurse asked for %s." % [request.get("kind", &"nothing")]
@@ -613,6 +623,8 @@ func _check_the_nurse_heals() -> void:
 		"the heal machine waited on %s." % [wait]
 	)
 	_r.check(world.party_holder() == &"heal_machine", "the machine held no party.")
+	var nurse: Gen2WorldObject = world.objects[0]
+	_r.check(nurse.facing == Gen2WorldSprite.FACING_LEFT, "the nurse faced %d, not the machine." % nurse.facing)
 	## `.partyLoop`'s `ld c, 30` per ball, and `MUSIC_PKMN_HEALED` behind them.
 	var sounds: Array = machine.get("sounds", [])
 	var wanted: Array = [[0, Gen1SoundEngine.SFX_STOP_ALL_MUSIC]]
@@ -634,11 +646,57 @@ func _check_the_nurse_heals() -> void:
 		world.advance_script_wait_frame()
 		spent += 1
 	_r.check(spent == frames, "the machine ran for %d frames, not %d." % [spent, frames])
-	## `PokemonFightingFitText` and `PokemonCenterFarewellText` behind it.
+	## `PokemonFightingFitText`, the bow on `ld c, $14` and `PokemonCenterFarewellText`.
 	_r.check(world.script_busy(), "nothing was said once the machine had stopped.")
-	world.run_event_queue(true)
-	world.run_event_queue(true)
+	var bows: Array[int] = _spend_script_waits(world, false)
+	_r.check(bows == [Gen1Layout.NURSE_RED_BOW_FRAMES], "the nurse bowed for %s." % [bows])
+	_r.check(nurse.facing == Gen2WorldSprite.FACING_DOWN, "the nurse stayed facing %d." % nurse.facing)
 	_r.check(not world.script_busy(), "the nurse never finished.")
+
+
+## Every counted wait spent from here, stopping at a heal request if asked.
+func _spend_script_waits(world: Gen2WorldAPI, stop_at_heal: bool) -> Array[int]:
+	var waits: Array[int] = []
+	for _step: int in 12:
+		var kind: StringName = StringName(world.pending_runtime_request().get("kind", &""))
+		var wait: Dictionary = world.pending_script_wait()
+		if stop_at_heal and kind == &"party_heal_requested":
+			break
+		if not wait.is_empty():
+			waits.append(int(wait.get("frames", 0)))
+			for _frame: int in int(wait.get("frames", 0)):
+				world.advance_script_wait_frame()
+		elif world.script_busy():
+			world.run_event_queue(true)
+		else:
+			break
+	return waits
+
+
+## Yellow's nurse with no starter out: `ld c, 64`, her turn (6), `ld c, 30`, the
+## machine, `HealParty`, her turn back (6), `Delay3` and `ld c, 40`.
+func _check_the_yellow_nurse_waits(world: Gen2WorldAPI) -> void:
+	var machine: int = NURSE_PARTY * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES \
+		+ Gen2WorldEffects.HEAL_MACHINE_FLASHES * Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
+	var waits: Array[int] = []
+	var heal_after: int = -1
+	for _step: int in 40:
+		var request: Dictionary = world.pending_runtime_request()
+		var wait: Dictionary = world.pending_script_wait()
+		if StringName(request.get("kind", &"")) == &"party_heal_requested":
+			heal_after = waits.size()
+			world.complete_runtime_request({"ok": true})
+		elif not wait.is_empty():
+			var frames: int = int(wait.get("frames", 0))
+			waits.append(frames)
+			for _frame: int in frames:
+				world.advance_script_wait_frame()
+		elif world.script_busy():
+			world.run_event_queue(true)
+		else:
+			break
+	_r.check(waits == [64, 6, 30, machine, 6, 3, 40], "the nurse waited %s." % [waits])
+	_r.check(heal_after == 4, "HealParty came after %d waits, not the animation." % heal_after)
 
 
 ## Every warp on every map: its destination resolves, it fires from some facing,
@@ -891,7 +949,7 @@ func _box_text(world: Gen2WorldAPI) -> String:
 	var results: Array = world.interact()
 	if results.is_empty():
 		return ""
-	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+	return _event_text(results)
 
 
 ## `EnterMap`'s first `RunMapScript` pass, whose callback blocks redraw in
@@ -1059,6 +1117,10 @@ const GIFT_ROWS: Array = [
 ]
 const GIFT_QUESTION: String = "Do you want to give a nickname to EEVEE?"
 const GIFT_GUARD_FRAMES: int = 2000
+const ROD_SHORE_CELL := Vector2i(6, 13)
+const FLUTE_GUARD_FRAMES: int = 1500
+const FLUTE_PRESS_EVERY: int = 20
+const FLUTE_MIN_FRAMES: int = 100
 
 
 func _check_a_gift_on_the_screen() -> void:
@@ -1086,12 +1148,7 @@ func _check_a_gift_on_the_screen() -> void:
 		var opened: String = " ".join(_r.settle_prompt(screen, prompt))
 		var want: String = String(row[2]).replace(Gen2WorldPC.PLAYER_MARKER, save.player_name)
 		_r.check(opened == want, "the EEVEE ball opened on %s rather than %s." % [opened, want])
-		if prompt.phase() == Gen2NicknamePromptScreen.Phase.BEFORE_TEXT and not bool(row[1]):
-			## `sound_get_item_1` holds the box until the jingle ends.
-			for _frame: int in GIFT_GUARD_FRAMES:
-				screen.advance_frame()
-				if prompt.phase() != Gen2NicknamePromptScreen.Phase.BEFORE_TEXT:
-					break
+		if not bool(row[1]):
 			var asked: String = " ".join(_r.settle_prompt(screen, prompt))
 			_r.check(asked == GIFT_QUESTION, "the EEVEE ball asked %s." % asked)
 			screen.press_button(PokeButton.B)
@@ -1267,8 +1324,9 @@ func _walk_the_link_menu() -> void:
 		"YES asked for %s rather than the save." % [save]):
 		return
 	world.complete_runtime_request({"ok": true})
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_SAVE_FRAMES)
+	## `PleaseWaitText`, whose `text_pause` is the box's own.
+	world.run_event_queue(true)
 	var menu: Dictionary = world.pending_runtime_request()
 	var rows: Array = (menu.get("values", {}) as Dictionary).get("rows", [])
 	var options: PackedStringArray = _r.data.special_text("cable_club_strings", "options").split("\n")
@@ -1398,8 +1456,9 @@ func _linked_menu() -> Gen2WorldAPI:
 	_spend_wait(world, Gen1Layout.CABLE_CLUB_CONNECTED_FRAMES)
 	world.choose_script_input(0)
 	world.complete_runtime_request({"ok": true})
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_SAVE_FRAMES)
+	## `PleaseWaitText`, whose `text_pause` is the box's own.
+	world.run_event_queue(true)
 	return world if _r.check(
 		StringName(world.pending_runtime_request().get("kind", &"")) == &"gen1_menu_requested",
 		"the menu never opened.") else null
@@ -1493,8 +1552,15 @@ func _walk_the_receptionist(dex: bool, frames: int, said: String) -> void:
 	_r.check(not world.script_busy(), "the receptionist never finished.")
 
 
+func _after_waits(world: Gen2WorldAPI, results: Array) -> Array:
+	var spent: Array = world.finish_script_waits()
+	return spent if not spent.is_empty() else results
+
+
 func _event_text(results: Array) -> String:
-	return String((results[0].get("event", {}) as Dictionary).get("text", ""))
+	return Gen2TextStream.strip_sounds(
+		String((results[0].get("event", {}) as Dictionary).get("text", ""))
+	)
 
 
 static func _ended(results: Array) -> bool:
@@ -2306,7 +2372,9 @@ func _walk_the_swap(wanted: int) -> void:
 		world.complete_runtime_request({"ok": true, "accepted": true})
 	)
 	_r.check(
-		receipt == _trade_filled(_r.data.special_text("npc_trade", "traded_for")),
+		receipt == Gen2TextStream.strip_sounds(
+			_trade_filled(_r.data.special_text("npc_trade", "traded_for"))
+		),
 		"the movie was followed by %s." % [receipt]
 	)
 	var thanks: String = _event_text(world.run_event_queue(true))
@@ -2420,9 +2488,6 @@ func _trade_filled(text: String) -> String:
 	return Gen2TextStream.fill_names(out, {"player": Gen2WorldScriptRunner.UNNAMED})
 
 
-## `DaycareGentlemanText` walked both ways: the offer, the party list and
-## `MoveMon PARTY_TO_DAYCARE`, then the growth, `HasEnoughMoney` and the way
-## back out. `IncrementDayCareMonExp` is what makes the second half possible.
 ## `NameRatersHouseNameRaterText` end to end, and the OT test both ways.
 func _check_the_name_rater() -> void:
 	var boxes: Dictionary = _name_rater_boxes()
@@ -2472,6 +2537,30 @@ func _check_the_name_rater() -> void:
 	_r.note("gen1 walk the NAME RATER: a rename, a traded member and three refusals")
 
 
+## `BIT_GOT_STARTER`, which Mom heals on, and her `object_event 5, 4`.
+const GOT_STARTER_ENGINE_FLAG: int = 259
+const MOM_CELL := Vector2i(5, 4)
+## `GBFadeOutToWhite` and `GBFadeInFromWhite`: three `ld c, 8` steps each.
+const MOM_FADE_FRAMES: int = 24
+
+
+## `RedsHouse1FMomHealScript`: the fade out, `HealParty`, the fade in.
+func _check_moms_rest() -> void:
+	var world: Gen2WorldAPI = _facing_up(REDS_HOUSE_1F, MOM_CELL + Vector2i.DOWN)
+	if world == null:
+		return
+	world.state.set_engine_flag(GOT_STARTER_ENGINE_FLAG, true)
+	world.interact()
+	var out: Array[int] = _spend_script_waits(world, true)
+	_r.check(out == [MOM_FADE_FRAMES], "Mom's fade out waited %s." % [out])
+	_r.check(StringName(world.pending_runtime_request().get("kind", &"")) == &"party_heal_requested",
+		"HealParty did not follow the fade out.")
+	world.complete_runtime_request({"ok": true})
+	var back: Array[int] = _spend_script_waits(world, false)
+	_r.check(back == [MOM_FADE_FRAMES], "Mom's fade in waited %s." % [back])
+	_r.note("gen1 walk Mom's rest fading out and back in")
+
+
 func _check_the_name_rater_refuses(boxes: Dictionary) -> void:
 	var come_again: String = _name_rater_text(boxes, "come_again")
 	var world: Gen2WorldAPI = _name_rater_world()
@@ -2489,7 +2578,7 @@ func _check_the_name_rater_refuses(boxes: Dictionary) -> void:
 		refused.interact()
 		refused.choose_script_input(0)
 		refused.run_event_queue(true)
-		var said: String = _event_text(refused.complete_runtime_request(row))
+		var said: String = _event_text(_after_waits(refused, refused.complete_runtime_request(row)))
 		var wanted: String = come_again if int(row.get("party_index", -1)) < 0 \
 			else _name_rater_text(boxes, "impeccable", NAME_RATER_SPECIES_NAME)
 		_r.check(said == wanted, "the list was answered with %s." % said)
@@ -2500,6 +2589,7 @@ func _check_the_name_rater_refuses(boxes: Dictionary) -> void:
 	blank.choose_script_input(0)
 	blank.run_event_queue(true)
 	blank.complete_runtime_request(_name_rater_row(true))
+	blank.finish_script_waits()
 	blank.choose_script_input(0)
 	blank.run_event_queue(true)
 	_r.check(
@@ -2518,6 +2608,7 @@ func _name_rater_row(mine: bool) -> Dictionary:
 
 ## What the box over a YES/NO says: the pending input's text, not the step's.
 func _name_rater_asked(world: Gen2WorldAPI) -> String:
+	world.finish_script_waits()
 	return String(world.pending_script_input().get("text", ""))
 
 
@@ -2568,6 +2659,8 @@ func _name_rater_text(boxes: Dictionary, name: String, ram: String = "") -> Stri
 	return text
 
 
+## `DaycareGentlemanText` both ways: the offer, the party list and the growth,
+## then `HasEnoughMoney` and the way back out.
 func _check_the_day_care() -> void:
 	_check_the_day_care_refuses()
 	var world: Gen2WorldAPI = _day_care_world(0)
@@ -2860,19 +2953,54 @@ func _check_the_pc_refuses_a_player_beside_it() -> void:
 	)
 
 
-## `HiddenItems`: the receipt names the item `GetItemName` fetched before the
-## bag was asked, and the second visit says nothing at all.
+## `HiddenItems`: the receipt names the item `GetItemName` fetched before the bag
+## was asked, then `SFX_GET_ITEM_2` and its wait draw no box, and the second visit says nothing.
 func _check_a_hidden_item() -> void:
 	var world: Gen2WorldAPI = _facing_up(VIRIDIAN_CITY, HIDDEN_POTION_CELL + Vector2i.DOWN)
 	if world == null:
 		return
 	var said: Array[String] = _spoken(world)
-	_r.check(said.size() == 1 and String(said[0]) == _hidden_item_box(),
+	_r.check(said.size() == 2 and said[0] == _hidden_item_box() and said[1].is_empty(),
 		"the hidden POTION said %s." % [said])
 	_r.check(int(world.state.items().get(HIDDEN_POTION, 0)) == 1,
 		"the bag holds %d POTION." % int(world.state.items().get(HIDDEN_POTION, 0)))
 	_r.check(world.interact().is_empty(), "the taken POTION answered twice.")
 	_check_hidden_items_are_listed()
+
+
+func _check_a_hidden_item_on_the_screen() -> void:
+	for full: bool in [false, true]:
+		var screen: Gen2WorldScreen = _r.open_screen(0, VIRIDIAN_CITY, HIDDEN_POTION_CELL + Vector2i.DOWN)
+		var label: String = "the hidden POTION with a %s bag" % ("full" if full else "free")
+		screen.world().player_facing = Gen2WorldSprite.FACING_UP
+		if full:
+			var stock: Dictionary = {}
+			for slot: int in Gen1Layout.BAG_ITEM_CAPACITY:
+				stock[HIDDEN_POTION + 1 + slot] = 1
+			screen.world().state.apply_changes({}, {}, {"items": stock})
+		screen.interact()
+		var box: Gen2TextBox = screen.get("_text_box")
+		var idle: int = 0
+		for _frame: int in HIDDEN_ITEM_GUARD_FRAMES:
+			screen.advance_frame()
+			idle = idle + 1 if box.visible and not box.is_revealing() \
+				and screen.world().pending_script_wait().is_empty() else 0
+			if idle > HIDDEN_ITEM_IDLE_FRAMES:
+				break
+		_r.check(box.visible, "%s closed its box without a press." % label)
+		var presses: int = 0
+		for frame: int in HIDDEN_ITEM_GUARD_FRAMES:
+			if frame % HIDDEN_ITEM_PRESS_EVERY == 0 and box.visible and not box.is_revealing():
+				screen.press_button(PokeButton.A)
+				presses += 1
+			screen.advance_frame()
+			if not box.visible and presses > 0:
+				break
+		_r.check(not box.visible and presses > 0, "%s left its box up after %d presses." % [label, presses])
+		var held: int = int(screen.world().state.items().get(HIDDEN_POTION, 0))
+		_r.check(held == (0 if full else 1), "%s left the bag holding %d." % [label, held])
+		_r.close_screen(screen)
+	_r.note("gen1 walk the hidden POTION's box closes on a press on the screen")
 
 
 ## The same POTION through the mod boundary.
@@ -3118,7 +3246,7 @@ func _check_the_beach_house() -> void:
 		and String(values.get("page", "")) == "high_score" and not bool(values.get("preview", true))
 		and int(values.get("hi_score", 0)) == BEACH_HI_SCORE, "PRINT asked for %s." % [request]):
 		return
-	var cancelled: Array = world.complete_runtime_request({"ok": true, "printed": false})
+	var cancelled: Array = _after_waits(world, world.complete_runtime_request({"ok": true, "printed": false}))
 	_r.check(_event_text(cancelled).begins_with(BEACH_PRINT_ERROR), "a cancelled print said %s." % [cancelled])
 	world = _facing_up(SUMMER_BEACH_HOUSE, BEACH_PRINTER + Vector2i.DOWN, world.state)
 	world.pikachu.set_party(true, true)
@@ -3141,18 +3269,20 @@ func _check_the_chairmans_print() -> void:
 	var asked: String = String(world.pending_script_input().get("text", ""))
 	_r.check(asked.begins_with(CHAIRMAN_PRINT_BOX), "the chairman asked %s." % asked)
 	world.choose_script_input(0)
+	world.finish_script_waits()
 	var request: Dictionary = world.pending_runtime_request()
 	if not _r.check(StringName(request.get("kind", &"")) == &"party_selection_requested",
 		"YES asked for %s." % [request]):
 		return
 	world.complete_runtime_request(_name_rater_row(true))
+	world.finish_script_waits()
 	request = world.pending_runtime_request()
 	var values: Dictionary = request.get("values", {})
 	if not _r.check(StringName(request.get("kind", &"")) == &"printer_requested"
 		and String(values.get("page", "")) == "portrait" and int(values.get("party_index", -1)) == 0,
 		"the member opened %s." % [request]):
 		return
-	var cancelled: Array = world.complete_runtime_request({"ok": true, "printed": false})
+	var cancelled: Array = _after_waits(world, world.complete_runtime_request({"ok": true, "printed": false}))
 	_r.check(_event_text(cancelled).begins_with(CHAIRMAN_CANCELLED_BOX), "a cancelled portrait said %s." % [cancelled])
 
 
@@ -3599,7 +3729,7 @@ func _check_a_scripted_player_walk() -> void:
 	while world.gen1_player_movement_running() and passes < SCRIPTED_WALK_PASSES:
 		world.advance_player_step_pass()
 		passes += 1
-	_r.check(_event_text(world.dispatch_sight_events()).begins_with(HALL_OF_FAME_BOX),
+	_r.check(_event_text(_after_waits(world, world.dispatch_sight_events())).begins_with(HALL_OF_FAME_BOX),
 		"Oak said nothing once the walk in had been drawn.")
 	var oak: Gen2WorldObject = world.objects[HALL_OF_FAME_OAK]
 	_r.check(oak.facing == Gen2WorldSprite.FACING_LEFT,
@@ -3917,6 +4047,54 @@ func _check_the_poke_flute() -> void:
 		"the flute woke a Snorlax that had already been beaten."
 	)
 	_r.note("gen1 poke flute set flag %d beside the Snorlax" % SNORLAX_FIGHT_FLAG)
+	_check_the_poke_flute_tune()
+	_check_the_rod_cast()
+
+
+## `FishingInit`: the rod's text and `SFX_HEAL_AILMENT`, then eighty frames, then the cast.
+func _check_the_rod_cast() -> void:
+	var screen: Gen2WorldScreen = _r.open_screen(0, PALLET_TOWN, ROD_SHORE_CELL)
+	screen.world().player_facing = Gen2WorldSprite.FACING_DOWN
+	screen.world().state.apply_changes({}, {}, {"items": {Gen1Layout.ITEM_OLD_ROD: 1}})
+	screen._on_field_item_used({
+		"ok": true, "effect": Gen2WorldPack.FIELD_EFFECT_ROD, "rod": Gen2WorldEncounter.METHOD_OLD_ROD,
+		"item": Gen1Layout.ITEM_OLD_ROD,
+	})
+	var audio: Gen2AudioPlayer = screen.get("_audio_player")
+	var said: bool = audio.effect_playing()
+	var cast_at: int = -1
+	for frame: int in FLUTE_GUARD_FRAMES:
+		screen.advance_frame()
+		if cast_at < 0 and screen.world().fishing_busy():
+			cast_at = frame
+	_r.check(said and cast_at >= Gen2WorldScreen.GEN1_ROD_CAST_FRAMES,
+		"the rod sounded %s and cast on frame %d." % [said, cast_at])
+	_r.close_screen(screen)
+
+
+## `PlayedFluteHadEffectText`'s `text_asm`: `SFX_POKEFLUTE` holds channel 3, then the map's piece returns.
+func _check_the_poke_flute_tune() -> void:
+	var screen: Gen2WorldScreen = _r.open_screen(0, ROUTE_12, SNORLAX_CELL)
+	screen.set_process(false)
+	var audio: Gen2AudioPlayer = screen.get("_audio_player")
+	screen._on_field_item_used({
+		"ok": true, "effect": Gen2WorldPack.FIELD_EFFECT_POKE_FLUTE, "woke": true,
+		"item": Gen1Layout.ITEM_POKE_FLUTE,
+	})
+	var held: int = 0
+	var after: int = 0
+	for frame: int in FLUTE_GUARD_FRAMES:
+		screen.advance_frame()
+		if frame % FLUTE_PRESS_EVERY == 0 and held == 0:
+			screen.press_button(PokeButton.A)
+		if audio._gen1.channel_sound_id(Gen1SoundEngine.CHAN3) == Gen1Sfx.SFX_POKEFLUTE:
+			held += 1
+		elif held > 0:
+			after += 1
+	_r.check(held > FLUTE_MIN_FRAMES, "the flute held channel 3 for %d frames." % held)
+	_r.check(audio.music_playing(), "the map's music did not come back behind the flute.")
+	_r.note("gen1 poke flute held channel 3 for %d frames, %d behind it" % [held, after])
+	_r.close_screen(screen)
 
 
 ## `ItemUseEscapeRope`: refused outdoors and in Agatha's room, taken in a cave,
@@ -4742,8 +4920,8 @@ func _check_aide_gift(caught: int, item: int) -> void:
 	world.player_facing = Gen2WorldSprite.FACING_UP
 	for species: int in range(1, caught + 1):
 		world.state.set_species_caught(species)
-	var event: Dictionary = world._gen1_event_at(world.object_facing_cell(), &"objects")
-	var steps: Array = world._gen1_script_steps(world.gen1_text_at(int(event.get("text", 0))), event)
+	var event: Dictionary = Gen1FacilityScripts._gen1_event_at(world, world.object_facing_cell(), &"objects")
+	var steps: Array = Gen1ScriptNodes._gen1_script_steps(world, world.gen1_text_at(int(event.get("text", 0))), event)
 	var said: String = JSON.stringify(steps)
 	_r.check(not steps.is_empty() and not said.contains("<NUM_") and not said.contains("<RAM_")
 		and said.contains(_r.data.item_name(item)), "the aide with %d caught said %s." % [caught, said])
@@ -5017,6 +5195,7 @@ func _check_leaving_early() -> void:
 		and passes < SCRIPTED_WALK_PASSES:
 		world.advance_player_step_pass()
 		world.dispatch_sight_events()
+		world.finish_script_waits()
 		passes += 1
 	world.dispatch_sight_events()
 	_r.check(world.player_cell == SAFARI_SCRIPT_LEAVE_EARLY_LANDING

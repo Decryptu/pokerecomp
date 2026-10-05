@@ -1270,10 +1270,9 @@ func _clear_player_step() -> void:
 	_gen1_pikachu_staged = []
 
 
-## Spends one hardware frame of the player's walk-step offset.
-## This only shrinks a presentation offset that starts and ends at player_cell;
-## it never changes player_cell, collision or event results, and a caller that
-## never starts a step sees no difference.
+## Spends one hardware frame of the player's walk-step offset. It only shrinks a
+## presentation offset that starts and ends at player_cell, never changing
+## player_cell, collision or event results.
 func advance_player_step_pass() -> bool:
 	## The pass after a hop lands, which clears the simulated presses and the
 	## ledge flag, runs a frame over as well.
@@ -1329,7 +1328,7 @@ func gen1_step_out_of_door() -> bool:
 		current_map.tileset, _gen1_tile_drawn_at(player_cell)
 	):
 		return false
-	_gen1_walk_player([{"direction": int(Gen1Layout.PAD_DIRECTIONS[Gen1Layout.PAD_DOWN_MASK]), "steps": 1}])
+	Gen1MapScripts._gen1_walk_player(self, [{"direction": int(Gen1Layout.PAD_DIRECTIONS[Gen1Layout.PAD_DOWN_MASK]), "steps": 1}])
 	return true
 
 
@@ -2520,24 +2519,6 @@ func end_bug_contest() -> Dictionary:
 	return {"ok": true, "kind": &"bug_contest_ended"}
 
 
-## `_BugContestJudging`: the player's own score against the five contestants who
-## turned up, and where that placed them.
-func judge_bug_contest(random: RandomNumberGenerator) -> Dictionary:
-	var caught: Dictionary = state.contest_mon()
-	var result: Dictionary = Gen2WorldBugContest.judge(
-		int(caught.get("species", 0)),
-		Gen2WorldBugContest.score(caught),
-		data.bug_contestants(),
-		state.withdrawn_bug_contestants(),
-		random if random != null else RandomNumberGenerator.new()
-	)
-	result["ok"] = true
-	result["kind"] = &"bug_contest_judged"
-	result["score"] = Gen2WorldBugContest.score(caught)
-	result["caught"] = caught
-	return result
-
-
 ## `CanEncounterWildMon`: the whole condition on the tile the player stands on,
 ## before the rate is read.
 func can_encounter_wild_mon() -> bool:
@@ -2784,8 +2765,6 @@ func encounter_request(
 		if method == &"auto" else method
 	if terrain_method not in [Gen2WorldEncounter.METHOD_GRASS, Gen2WorldEncounter.METHOD_SURF]:
 		return {}
-	## `RandomEncounter`'s Bug Contest branch, which replaces the map's own
-	## tables with `ContestMons` and the rate with the standing tile's own.
 	if bug_contest_active():
 		return _bug_contest_request(random, force_encounter, lead_level, cleanse_tag)
 	var source: StringName = Gen2WorldEncounter.SOURCE_NORMAL
@@ -2930,7 +2909,6 @@ func _bug_contest_request(
 	contest["cell"] = player_cell
 	contest["movement"] = movement_mode
 	return contest
-
 
 
 func set_repel_steps(steps: int) -> void:
@@ -3111,6 +3089,10 @@ func set_daylight_saving_time_enabled(enabled: bool) -> void:
 
 func phone_ring_active() -> bool:
 	return _phone_ring != null and not _phone_ring.is_finished()
+
+
+func phone_ring_opens() -> bool:
+	return _phone_ring != null and _phone_ring.opens_ring()
 
 
 func pending_phone_ring() -> Dictionary:
@@ -3565,10 +3547,9 @@ func take_grass_rustles() -> Array:
 	return out
 
 
-## Builds the source trainer approach path. The cartridge's
-## ComputePathToWalkToPlayer routine emits the longer axis first, with the
-## final movement removed by TrainerWalkToPlayer so the trainer stops before
-## the player. This helper keeps that path rule deterministic and scene-free.
+## Builds the source trainer approach path: ComputePathToWalkToPlayer emits the
+## longer axis first, with the final movement removed by TrainerWalkToPlayer so the
+## trainer stops before the player.
 static func trainer_approach_path(start_cell: Vector2i, target_cell: Vector2i) -> Array:
 	var path: Array = []
 	var x_delta: int = target_cell.x - start_cell.x
@@ -4308,51 +4289,18 @@ var _gen1_spin_facing: int = 0
 ## `BIT_BOULDER_DUST`: the facing a push was made in, until the slide it started
 ## has ended and `DoBoulderDustAnimation` has run.
 var _gen1_dust_facing: int = -1
-## The [method GameData.special_text] run `DisplayPokemonCenterDialogue_`'s own
-## boxes are imported under.
-const GEN1_POKECENTER_RUN: String = "pokecenter"
-const GEN1_CABLE_CLUB_RUN: String = "cable_club"
-const GEN1_CABLE_CLUB_STRINGS: String = "cable_club_strings"
-const GEN1_LINK_RUN: String = "link"
-const GEN1_COLOSSEUM2_RUN: String = "colosseum2"
-const GEN1_PICK_UP_RUN: String = "pick_up_item"
-## `InGameTradeTextPointers`' fifteen and the two boxes the swap prints, which
-## both generations' trades read under one run name.
-const GEN1_TRADE_RUN: String = "npc_trade"
-## `CardKeySuccessText` and `CardKeyFailText`, the two `TextPredefs` rows
-## `PrintCardKeyText` prints.
-const GEN1_CARD_KEY_RUN: String = "card_key"
-const GEN1_SAFARI_RUN: String = "safari"
-const GEN1_SAFARI_LABEL_RUN: String = "safari_labels"
-## `TextScript_PokemonCenterPC`, `TextScript_ItemStoragePC` and
-## `TextScript_BillsPC`, each a machine, the run its own boxes were imported
-## under and the boot line it opens with. `BIT_USING_GENERIC_PC` is clear on all
-## three, which is what makes every one of them print that line.
-const GEN1_PC_MACHINES: Dictionary = {
-	Gen1Layout.TEXT_SCRIPT_POKECENTER_PC: [&"gen1_pokemon_center", "pc", "turned_on"],
-	Gen1Layout.TEXT_SCRIPT_PLAYERS_PC: [&"gen1_players_pc", "players_pc", "turned_on"],
-	Gen1Layout.TEXT_SCRIPT_BILLS_PC: [&"gen1_bills_pc", "bills_pc", "switch_on"],
-}
-## `EndTrainerBattle`'s `cp LOST_BATTLE`, which a catch also passes.
-const GEN1_TRAINER_BEATEN: Array[StringName] = [
-	Gen2WorldBattleAdapter.OUTCOME_WON, Gen2WorldBattleAdapter.OUTCOME_CAUGHT,
-]
 
-## The outcomes `wIsInBattle` and `wBattleResult` name, one run of results each.
-const GEN1_BATTLE_OUTCOMES: Dictionary = {
-	Gen1Layout.BATTLE_OUTCOME_LOST: [Gen2WorldBattleAdapter.OUTCOME_LOST],
-	Gen1Layout.BATTLE_OUTCOME_ESCAPED: [
-		Gen2WorldBattleAdapter.OUTCOME_CAUGHT, Gen2WorldBattleAdapter.OUTCOME_RAN,
-	],
-	## `wBattleResult` at zero, which the tower's MAROWAK reads with `and a`.
-	Gen1Layout.BATTLE_OUTCOME_WON: [Gen2WorldBattleAdapter.OUTCOME_WON],
-}
-
+@warning_ignore("unused_private_class_variable")
 var _gen1_battle_outcome: StringName = &""  ## What the last battle a script asked for answered.
+@warning_ignore("unused_private_class_variable")
+var _gen1_battle_result: int = 0  ## Its `wBattleResult`; a wild mon that left writes nothing.
 ## `wSavedCoordIndex`, the row a state matched and the state behind it reads.
+@warning_ignore("unused_private_class_variable")
 var _gen1_saved_coord_index: int = 0
 ## `wSafariZoneGameOver`: scratch, the way the cartridge's own byte is.
+@warning_ignore("unused_private_class_variable")
 var _gen1_safari_game_over: bool = false
+@warning_ignore("unused_private_class_variable")
 var _gen1_safari_admitted: Dictionary = {}
 var _gen1_entry_steps: Array = []
 ## `wCurrentMapScriptFlags` bits a script set back for the next `RunMapScript`.
@@ -4360,11 +4308,15 @@ var _gen1_map_load_pending: int = 0
 var _gen1_volatile: Dictionary = {}
 ## Where `LoadSpecialWarpData` took the player from, which is the cell SRAM
 ## keeps: `SavePartyAndDexData` never rewrites it. Empty outside a link room.
+@warning_ignore("unused_private_class_variable")
 var _gen1_cable_club_origin: Dictionary = {}
 var _gen1_last_boulder: int = -1
+@warning_ignore("unused_private_class_variable")
 var _gen1_last_sprite_index: int = -1
 var _gen1_text_table: int = -1
+@warning_ignore("unused_private_class_variable")
 var _gen1_movement_script: Dictionary = {}
+@warning_ignore("unused_private_class_variable")
 var _gen1_scratch: Dictionary = {}
 ## `wFossilItem` and `wFossilMon`, saved player data: the lab keeps both from
 ## the visit that takes the fossil to the one that hands the Pokemon over.
@@ -4375,6 +4327,7 @@ var _gen1_warped_from: Dictionary = {}
 ## both reloaded with the map.
 var _gen1_destination_warp: int = -1
 var _gen1_warps_dropped: int = 0
+@warning_ignore("unused_private_class_variable")
 var _gen1_warp_entry: Dictionary = {}
 
 ## `wRivalName`.
@@ -4385,131 +4338,6 @@ var rival_name: String = Gen2WorldScriptRunner.UNNAMED
 ## box; `DisplayPokemonCenterDialogue_` is five of them around a choice.
 var _gen1_steps: Array = []
 var _gen1_money_window: bool = false
-const GEN1_WAITING_STEPS: Array[StringName] = [&"request", &"choice", &"wait"]
-## What each node [method Gen1WorldImporter.decode_script] wrote becomes. False
-## drops the whole interaction, the way an undecoded row does.
-const GEN1_SCRIPT_NODES: Dictionary = {
-	"text": &"_gen1_node_text",
-	"serial_status": &"_gen1_node_serial_status",
-	"link_state": &"_gen1_node_link_state",
-	"flag": &"_gen1_node_flag",
-	"branch": &"_gen1_node_branch",
-	"flag_test": &"_gen1_node_flag_test",
-	"has_item": &"_gen1_node_has_item",
-	"has_money": &"_gen1_node_has_money",
-	"has_coins": &"_gen1_node_has_coins",
-	"spend_money": &"_gen1_node_spend_money",
-	"add_coins": &"_gen1_node_add_coins",
-	"money_box": &"_gen1_node_money_box",
-	"coin_box": &"_gen1_node_coin_box",
-	"give_item": &"_gen1_resolve_gift",
-	"take_item": &"_gen1_take_item",
-	"toggle_object": &"_gen1_node_toggle",
-	"pick_up_item": &"_gen1_pick_up_item",
-	"give_pokemon": &"_gen1_resolve_gift_pokemon",
-	"pokedex": &"_gen1_node_pokedex",
-	"facing": &"_gen1_node_facing",
-	"badge": &"_gen1_node_badge",
-	"dex_count": &"_gen1_node_dex_count",
-	"tileset": &"_gen1_node_tileset",
-	"destination_warp": &"_gen1_node_destination_warp",
-	"diploma": &"_gen1_node_diploma",
-	"slot_machine": &"_gen1_node_slot_machine",
-	"surfing_minigame": &"_gen1_node_surfing_minigame",
-	"printer": &"_gen1_node_printer",
-	"picture": &"_gen1_node_picture",
-	"help_menu": &"_gen1_node_help_menu",
-	"ss_anne_leaves": &"_gen1_node_ss_anne_leaves",
-	"screen_tile": &"_gen1_node_screen_tile",
-	"name_item": &"_gen1_node_name_item",
-	"map_text": &"_gen1_node_map_text",
-	"facility": &"_gen1_node_facility",
-	"replace_block": &"_gen1_node_replace_block",
-	"player_coord": &"_gen1_node_player_coord",
-	"walk": &"_gen1_node_walk",
-	"day_care": &"_gen1_node_day_care",
-	"town_map": &"_gen1_node_town_map",
-	"elevator": &"_gen1_node_elevator",
-	"set_map_script": &"_gen1_node_set_map_script",
-	"player_in_array": &"_gen1_node_player_in_array",
-	"object_facing": &"_gen1_node_object_facing",
-	"object_move": &"_gen1_node_object_move",
-	"object_stay": &"_gen1_node_object_stay",
-	"movement_running": &"_gen1_node_movement_running",
-	"coord_index": &"_gen1_node_coord_index",
-	"guard_drink": &"_gen1_node_guard_drink",
-	"arrow_movement": &"_gen1_node_arrow_movement",
-	"wild_battle": &"_gen1_node_wild_battle",
-	"battle_outcome": &"_gen1_node_battle_outcome",
-	"save_coord_index": &"_gen1_node_save_coord_index",
-	"saved_coord_index": &"_gen1_node_saved_coord_index",
-	"player_facing": &"_gen1_node_player_facing",
-	"map_script_table": &"_gen1_node_map_script_table",
-	"set_last_map": &"_gen1_node_set_last_map",
-	"safari_balls": &"_gen1_node_safari_balls",
-	"safari_admission": &"_gen1_node_safari_admission",
-	"safari_steps": &"_gen1_node_safari_steps",
-	"set_blackout_map": &"_gen1_node_set_blackout_map",
-	"set_player_coord": &"_gen1_node_set_player_coord",
-	"set_starter": &"_gen1_node_set_starter",
-	"set_riding": &"_gen1_node_set_riding",
-	"starter": &"_gen1_node_starter",
-	"riding": &"_gen1_node_riding",
-	"movement_script_running": &"_gen1_node_movement_script_running",
-	"npc_movement_script": &"_gen1_node_npc_movement_script",
-	"volatile": &"_gen1_node_volatile",
-	"map_load_bit": &"_gen1_node_map_load_bit",
-	"store_byte": &"_gen1_node_store_byte",
-	"gym_trash": &"_gen1_node_gym_trash",
-	"object_coord_move": &"_gen1_node_object_coord_move",
-	"volatile_test": &"_gen1_node_volatile_test",
-	"boulder_on": &"_gen1_node_boulder_on",
-	"coord_lookup": &"_gen1_node_coord_lookup",
-	"emote": &"_gen1_node_emote",
-	"object_path": &"_gen1_node_object_path",
-	"trainer_battle": &"_gen1_node_trainer_battle",
-	"trainer_battle_object": &"_gen1_node_trainer_battle_object",
-	"warp_to": &"_gen1_node_warp_to",
-	"text_table": &"_gen1_node_text_table",
-	"object_position": &"_gen1_node_object_position",
-	"object_position_save": &"_gen1_node_object_position_kept",
-	"object_position_restore": &"_gen1_node_object_position_kept",
-	"heal_party": &"_gen1_node_heal_party",
-	"hall_of_fame": &"_gen1_node_hall_of_fame",
-	"save_game": &"_gen1_node_save_game",
-	"reset_game": &"_gen1_node_reset_game",
-	"flag_range": &"_gen1_node_flag_range",
-	"badge_guards": &"_gen1_node_badge_guards",
-	"badges_byte": &"_gen1_node_badges_byte",
-	"name_species": &"_gen1_node_name_species",
-	"name_badge": &"_gen1_node_name_badge",
-	"scratch": &"_gen1_node_scratch",
-	"scratch_test": &"_gen1_node_scratch_test",
-	"random": &"_gen1_node_random",
-	"random_bit": &"_gen1_node_random_bit",
-	"talking_to": &"_gen1_node_talking_to",
-	"pikachu_test": &"_gen1_node_pikachu_test",
-	"sound": &"_gen1_node_sound",
-	"pikachu": &"_gen1_node_pikachu",
-	"pikachu_text": &"_gen1_node_pikachu_text",
-	"pikachu_movement": &"_gen1_node_pikachu_movement",
-	"pikachu_talk": &"_gen1_node_pikachu_talk",
-	"jigglypuff": &"_gen1_node_jigglypuff",
-	"oaks_aide": &"_gen1_node_oaks_aide",
-	"filtered_bag": &"_gen1_node_filtered_bag",
-	"menu_cancel": &"_gen1_node_menu_cancel",
-	"menu_row": &"_gen1_node_menu_row",
-	"menu_item": &"_gen1_node_menu_item",
-	"dex_rating": &"_gen1_node_dex_rating",
-	"set_fossil": &"_gen1_node_set_fossil",
-	"redraw_map_view": &"_gen1_node_redraw",
-	"copy_name": &"_gen1_node_copy_name",
-	"party_menu": &"_gen1_node_party_menu",
-	"name_mon": &"_gen1_node_name_mon",
-	"name_party_mon": &"_gen1_node_name_party_mon",
-	"mon_ot": &"_gen1_node_mon_ot",
-	"list_menu": &"_gen1_node_list_menu",
-}
 
 
 ## The raw permission byte at a walk cell: the imported grid, unless a
@@ -4613,6 +4441,11 @@ func gen1_pikachu_happiness(kind: int, slot: int = -1) -> void:
 	pikachu.modify_happiness(kind, slot < 0 or int(starter.get("slot", -1)) == slot)
 
 
+## The starter's party slot while it is not following, or -1.
+func gen1_sleeping_starter_slot() -> int:
+	return -1 if pikachu == null or pikachu.following() else gen1_starter_slot()
+
+
 ## `IsThisPartyMonStarterPikachu` by party slot, or -1 with no starter.
 func gen1_starter_slot() -> int:
 	return int((_party_summary.get("starter_pikachu", {}) as Dictionary).get("slot", -1))
@@ -4658,11 +4491,24 @@ func gen1_pikachu_battle_opened(trainer: bool) -> void:
 		gen1_pikachu_happiness(Gen1Pikachu.HAPPY_GYMLEADER)
 
 
+## `UpdatePikachuMoodAfterBattle`, behind `EvolutionAfterBattle`.
+func gen1_pikachu_battle_ended(starter_alive: bool) -> void:
+	if pikachu != null and starter_alive:
+		pikachu.raise_mood_after_battle()
+
+
 ## `ApplyOutOfBattlePoisonDamage`'s two Pikachu lines behind a counted step.
 func gen1_pikachu_step(random: RandomNumberGenerator) -> void:
-	if pikachu == null or random == null or _gen1_pikachu_script_active():
+	if pikachu == null or random == null or gen1_step_effects_skipped():
 		return
 	pikachu.count_step((random.randi() & 1) != 0)
+
+
+## Yellow's `ApplyOutOfBattlePoisonDamage` returns before the day care, Pikachu and
+## poison while a map script holds Pikachu or the link is connected.
+func gen1_step_effects_skipped() -> bool:
+	return _gen1 and data != null and data.id == RomRegistry.YELLOW \
+		and (_gen1_pikachu_script_active() or gen1_link_connected())
 
 
 ## `wPikachuMapScriptFlags`' active bit, a map's own hold on the follower.
@@ -4676,10 +4522,9 @@ func gen1_pikachu_landed() -> void:
 		pikachu.set_hidden(false)
 
 
-## The follower as the renderer draws an actor, or empty while slot fifteen's
-## image index is `$ff`.
-## `EmotionBubble` reads the slot's pixels whether or not its image is drawn, so
-## a hidden follower still carries its bubble.
+## The follower as the renderer draws an actor, or empty while slot fifteen's image
+## index is `$ff`. `EmotionBubble` reads the slot's pixels whether or not its image
+## is drawn, so a hidden follower still carries its bubble.
 func gen1_pikachu_sprite() -> Dictionary:
 	if pikachu == null or data == null or (not pikachu.visible() and pikachu.emote_frames <= 0):
 		return {}
@@ -4714,1393 +4559,28 @@ func _gen1_apply_map_pal_offset(target_map: Gen2WorldMap) -> void:
 		gen1_map_pal_offset = 0
 
 
-## `CheckForHiddenEventOrBookshelfOrCardKeyDoor` runs first on A and a row
-## found spends the press; a card key door alone leaves `hItemAlreadyFound` at
-## $ff, so the sign and sprite check still runs.
-func _gen1_interact() -> Array:
-	if current_map == null:
-		return []
-	var hidden: Variant = _gen1_hidden_nodes()
-	if hidden != null:
-		_gen1_steps = _gen1_script_steps({"script": hidden})
-		return _gen1_result()
-	_gen1_steps = _gen1_card_key_steps() + _gen1_sign_or_sprite()
-	return _gen1_result() if not _gen1_steps.is_empty() else []
-
-
-## `CheckForHiddenEvent`, then `PrintBookshelfText`, or null when neither found
-## anything. An empty list is a row that answered and printed nothing.
-func _gen1_hidden_nodes() -> Variant:
-	for row: Dictionary in current_map.events.get("hidden_events", []) as Array:
-		if Vector2i(int(row["x"]), int(row["y"])) == facing_cell():
-			return row.get("script", [])
-	var shelf: Array = _gen1_bookshelf_nodes()
-	if shelf.is_empty():
-		return null
-	return shelf
-
-
-## `PrintBookshelfText` reads `lda_coord 8, 7`, the faced cell's bottom left
-## tile, and answers a player facing up alone.
-func _gen1_bookshelf_nodes() -> Array:
-	if current_tileset == null or player_facing != Gen2WorldSprite.FACING_UP:
-		return []
-	return (current_tileset.bookshelves as Dictionary).get(
-		_gen1_tile_drawn_at(facing_cell()), []
-	) as Array
-
-
-## `IsSpriteOrSignInFrontOfPlayer`: a sign on the faced cell answers first and
-## returns, and only then is a sprite looked for.
-func _gen1_sign_or_sprite() -> Array:
-	var event: Dictionary = _gen1_event_at(facing_cell(), &"bg_events")
-	if event.is_empty():
-		event = _gen1_event_at(object_facing_cell(), &"objects")
-		_gen1_last_sprite_index = int(event.get("object_index", -1))
-		_gen1_face_talked_object(_gen1_last_sprite_index)
-	if event.is_empty() and pikachu != null \
-		and pikachu.stands_in_front(player_cell, facing_direction()):
-		pikachu.status |= Gen1Pikachu.STATUS_FACE_PLAYER
-		return _gen1_pikachu_talk_steps()
-	var text_id: int = int(event.get("text", 0))
-	var row: Dictionary = gen1_text_at(text_id)
-	var steps: Array = _gen1_trainer_steps(row, event)
-	if steps.is_empty():
-		steps = _gen1_facility_steps(row, text_id)
-	if steps.is_empty():
-		steps = _gen1_script_steps(row, event)
-	if not steps.is_empty():
-		return steps
-	var text: String = gen1_filled_text(String(row.get("text", "")))
-	return [] if text.is_empty() else [{"type": &"text", "text": text}]
-
-
-## `IsSpriteInFrontOfPlayer`'s BIT_FACE_PLAYER; the talk's $7f lands on slot fifteen.
-func _gen1_face_talked_object(index: int) -> void:
-	if index < 0 or index >= objects.size() \
-		or bool(_gen1_volatile.get("no_npc_face_player", false)):
-		return
-	(objects[index] as Gen2WorldObject).facing = _facing_toward(
-		(objects[index] as Gen2WorldObject).cell, player_cell
-	)
-
-
-## `PrintCardKeyText`: the CARD KEY opens the door in front of the player and
-## the world remembers where it stood; without the key there is only a refusal.
-func _gen1_card_key_steps() -> Array:
-	var door: Dictionary = _gen1_card_key_door()
-	if door.is_empty():
-		return []
-	if state == null or int((state.items() as Dictionary).get(
-		Gen1Layout.ITEM_CARD_KEY, 0
-	)) < 1:
-		return [_gen1_card_key_box("card_key_fail")]
-	door["type"] = &"block"
-	door["card_key"] = true
-	## `set BIT_CUR_MAP_LOADED_1` behind the block: the floor's callback flags
-	## the door on the next frame, so leaving and returning keeps it open.
-	return [_gen1_card_key_box("card_key_success"), door,
-		{"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_1_BIT},
-		_gen1_sound_step("sound", {"index": Gen1Sfx.SFX_GO_INSIDE})]
-
-
-func _gen1_card_key_box(name: String) -> Dictionary:
-	return {
-		"type": &"text",
-		"text": data.special_text(GEN1_CARD_KEY_RUN, name) if data != null else "",
-	}
-
-
-## `GetTileAndCoordsInFrontOfPlayer` against the door tiles, and the block
-## coordinates `srl d` and `srl e` leave.
-func _gen1_card_key_door() -> Dictionary:
-	if (current_map.events["card_key"] as Array).is_empty():
-		return {}
-	var top_floor: bool = current_map.number == Gen1Layout.SILPH_CO_TOP_FLOOR
-	var cell: Vector2i = facing_cell()
-	var tile: int = _gen1_tile_drawn_at(cell)
-	if not Gen1Layout.CARD_KEY_DOOR_TILES.has(tile) \
-		and not (top_floor and tile == Gen1Layout.CARD_KEY_TOP_FLOOR_TILE):
-		return {}
-	return {
-		"x": cell.x >> 1, "y": cell.y >> 1,
-		"block": Gen1Layout.CARD_KEY_TOP_FLOOR_BLOCK if top_floor \
-			else Gen1Layout.CARD_KEY_OPEN_BLOCK,
-	}
-
-
 func gen1_text_at(text_id: int) -> Dictionary:
-	if current_map == null:
-		return {}
-	if _gen1_text_table >= 0 and current_map.alternate_texts.has(_gen1_text_table):
-		var rows: Array = current_map.alternate_texts[_gen1_text_table]
-		return rows[text_id - 1] if text_id >= 1 and text_id <= rows.size() else {}
-	return current_map.text_at(text_id)
+	return Gen1ScriptNodes.gen1_text_at(self, text_id)
 
 
-## The print-time names still standing in an imported Generation 1 box, which
-## is every box the world or a screen hosting one of its facilities prints.
 func gen1_filled_text(text: String) -> String:
-	return Gen2TextStream.fill_names(text, {
-		"player": _player_name if not _player_name.is_empty() \
-			else Gen2WorldScriptRunner.UNNAMED,
-		"rival": rival_name,
-	})
-
-
-## The boxes a `text_asm` row prints, with its branches resolved against the
-## save. A taken side the importer did not read answers nothing at all, the way
-## an undecoded row does.
-func _gen1_script_steps(row: Dictionary, event: Dictionary = {}) -> Array:
-	var nodes: Variant = row.get("script", [])
-	if not nodes is Array or (nodes as Array).is_empty():
-		return []
-	var steps: Array = []
-	return steps if _gen1_resolve_script(nodes as Array, steps, _gen1_run(event)) else []
-
-
-## The bag, purse and object a row is walked against.
-func _gen1_run(event: Dictionary) -> Dictionary:
-	return {
-		"bag": state.items() if state != null else {}, "named": "", "object": event,
-		"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
-		"coins": state.coins() if state != null else 0,
-		"flags": {}, "engine_flags": {}, "flag_tests": {}, "scratch": _gen1_run_scratch(),
-	}
-
-
-## `wSpriteIndex` counts objects from one.
-func _gen1_run_scratch() -> Dictionary:
-	var scratch: Dictionary = _gen1_scratch.duplicate()
-	if data != null and _gen1_last_sprite_index >= 0:
-		scratch[int(Gen1Layout.for_id(data.id)["sprite_index_wram"])] = _gen1_last_sprite_index + 1
-	return scratch
-
-
-## [param run] is the bag the row is walked against, carrying what its own gifts
-## have already put in it, and the name `CopyToStringBuffer` last wrote.
-func _gen1_resolve_script(nodes: Array, steps: Array, run: Dictionary) -> bool:
-	for index: int in nodes.size():
-		var node: Dictionary = nodes[index]
-		var op: String = String(node.get("op", ""))
-		## Each of the three owns every step behind it, so the row ends there.
-		if op == "trade":
-			return _gen1_trade(node, steps)
-		if op == "choice":
-			return _gen1_script_choice(node, steps, run)
-		if op == "menu":
-			return _gen1_script_menu(node, nodes.slice(index + 1), steps, run)
-		if not GEN1_SCRIPT_NODES.has(op):
-			return false
-		if not call(GEN1_SCRIPT_NODES[op], node, steps, run):
-			return false
-	return true
-
-
-func _gen1_node_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var box: Dictionary = _gen1_script_box(node, String(run["named"]), run.get("buffers", {}))
-	steps.append(box)
-	if run.has("cable_club_run"):
-		box["press"] = false
-		steps.append_array(_gen1_cable_club_run_steps(int(run["cable_club_run"])))
-		run.erase("cable_club_run")
-	return true
-
-
-func _gen1_node_flag_index(node: Dictionary, run: Dictionary) -> int:
-	var index: int = int(node["flag"])
-	if node.has("index_source"):
-		index += (int((run["scratch"] as Dictionary).get(int(node["index_source"]), 0))
-			+ int(node.get("index_offset", 0))) & 0xFF
-	return index
-
-
-func _gen1_node_flag(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var shadow: Dictionary = run["engine_flags" if bool(node.get("engine", false)) else "flags"]
-	var flag: int = _gen1_badge_flag_granted(node, _gen1_node_flag_index(node, run))
-	shadow[flag] = bool(node["set"])
-	steps.append({
-		"type": &"flag",
-		"flag": flag,
-		"set": bool(node["set"]),
-		"engine": bool(node.get("engine", false)),
-	})
-	return true
-
-
-## The badge a site grants IS its engine flag, so a patched row moves the bit.
-func _gen1_badge_flag_granted(node: Dictionary, flag: int) -> int:
-	if data == null or not data.has_content_overlay() or not node.has("at") \
-		or not bool(node.get("engine", false)):
-		return flag
-	var badge: int = data.catalog().badge_for_engine_flag(flag)
-	if badge < 0:
-		return flag
-	var site: Dictionary = data.catalog().gen1_site(
-		Gen2WorldCatalog.KIND_BADGE, int(node["at"]), {"badge": badge}
-	)
-	var moved: int = int(site.get("badge", badge)) - Gen2WorldState.KANTO_BADGE_FIRST
-	return Gen2WorldState.gen1_badge_flag(moved) if moved >= 0 and moved < Gen1Layout.BADGE_COUNT else flag
-
-
-func _gen1_node_replace_block(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({
-		"type": &"block", "x": int(node["x"]), "y": int(node["y"]),
-		"block": int(node["block"]), "redraw": bool(node.get("redraw", true)),
-	})
-	return true
-
-
-func _gen1_node_redraw(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append(_gen1_redraw_step())
-	return true
-
-
-func _gen1_node_branch(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(node, _gen1_branch_set(node, run), steps, run)
-
-
-func _gen1_node_has_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var bag: Dictionary = run["bag"]
-	return _gen1_resolve_side(
-		node, int(bag.get(int(node["item"]), 0)) > 0, steps, run
-	)
-
-
-func _gen1_node_has_money(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var price: int = int(_gen1_linked_site(
-		Gen2WorldCatalog.KIND_PRIZE, "ask_address", node, {"price": int(node["price"])}
-	)["price"])
-	return _gen1_resolve_side(node, int(run["money"]) >= price, steps, run)
-
-
-func _gen1_node_has_coins(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var coins: int = int(run["coins"])
-	var wanted: int = int(node["coins"])
-	var holds: bool = coins == wanted if String(node["test"]) == "exactly" \
-		else coins >= wanted
-	return _gen1_resolve_side(node, holds, steps, run)
-
-
-## `SubBCD` over `wPlayerMoney`, whose `.fill` writes zeroes across a balance it
-## borrowed past.
-func _gen1_node_spend_money(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var amount: int = int(_gen1_linked_site(
-		Gen2WorldCatalog.KIND_PRIZE, "spend_address", node, {"price": int(node["amount"])}
-	)["price"])
-	var left: int = maxi(int(run["money"]) - amount, 0)
-	run["money"] = left
-	steps.append({"type": &"money", "amount": left})
-	return true
-
-
-func _gen1_node_add_coins(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var held: int = mini(
-		int(run["coins"]) + int(node["amount"]), Gen1Layout.COIN_CEILING
-	)
-	run["coins"] = held
-	steps.append({"type": &"coins", "amount": held})
-	return true
-
-
-## A routine's own `cp SPRITE_FACING_*`: which side of its cell it answers.
-func _gen1_node_facing(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, Gen1Layout.FACING_STEPS.get(int(node["facing"]), Vector2i.ZERO)
-			== facing_direction(),
-		steps, run
-	)
-
-
-## `wBeatGymFlags`, whose eight bits are Kanto's badges in the engine flags'
-## own order.
-func _gen1_node_badge(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var flag: int = Gen2WorldState.gen1_badge_flag(int(node["badge"]))
-	return _gen1_resolve_side(
-		node, state != null and state.is_engine_flag_active(flag), steps, run
-	)
-
-
-## `CountSetBits` over `wPokedexOwned`, which only Oak's right poster reads.
-func _gen1_node_dex_count(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, state != null and state.caught_count() >= int(node["count"]),
-		steps, run
-	)
-
-
-## `DisplayDiploma`, a page of its own behind the game designer's last line.
-func _gen1_node_diploma(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "values": {
-		"kind": &"diploma_requested", "values": {"printing": false},
-	}})
-	return true
-
-
-## `LinkCableHelp`'s `.linkHelpLoop`: the menu again after a row's own text or page.
-func _gen1_node_help_menu(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var step: Dictionary = {
-		"type": &"request", "quit": node["quit"],
-		"values": {"kind": &"gen1_menu_requested", "values": {
-			"box": node["box"], "rows": node["rows"], "grid": node["grid"],
-			"text": String(node["prompt"]),
-		}},
-	}
-	for key: String in ["replies", "pokedex"]:
-		if node.has(key):
-			step[key] = node[key]
-	steps.append(step)
-	return true
-
-
-## `DisplayMonFrontSpriteInBox`: the box up under `WaitForTextScrollButtonPress`.
-func _gen1_node_picture(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var shown: Dictionary = {"type": &"pokemon_picture_requested"}
-	if node.has("special"):
-		shown["special"] = String(node["special"])
-	else:
-		shown["pokemon"] = int(node["species"])
-	steps.append({"type": &"button", "events": [shown]})
-	steps.append({"type": &"event", "event": {"type": &"pokemon_picture_closed"}})
-	return true
-
-
-## `PromptUserToPlaySlots`' YES; the coins the loop leaves come back as the answer.
-func _gen1_node_slot_machine(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "slot_machine": true, "values": {
-		"kind": &"slot_machine_requested",
-		"values": {
-			"generation": RomRegistry.GEN1,
-			"coins": state.coins() if state != null else 0,
-			"lucky": state != null
-				and state.gen1_byte(GEN1_LUCKY_SLOT) == int(node["lucky_index"]),
-		},
-	}})
-	return true
-
-
-## `wSurfingMinigameHiScore`.
-const GEN1_SURF_HI_SCORE: Array[String] = ["surf_hi_score_low", "surf_hi_score_high"]
+	return Gen1ScriptNodes.gen1_filled_text(self, text)
 
 
 func gen1_surf_hi_score() -> int:
-	if state == null:
-		return 0
-	return state.gen1_byte(GEN1_SURF_HI_SCORE[1]) << 8 | state.gen1_byte(GEN1_SURF_HI_SCORE[0])
+	return Gen1ScriptNodes.gen1_surf_hi_score(self)
 
 
-func set_gen1_surf_hi_score(score: int) -> void:
-	if state == null:
-		return
-	state.set_gen1_byte(GEN1_SURF_HI_SCORE[0], score & 0xFF)
-	state.set_gen1_byte(GEN1_SURF_HI_SCORE[1], (score >> 8) & 0xFF)
-
-
-## `farcall SurfingPikachuMinigame`; BIT_PIKACHU_MAP_SURF_SELECT lets SELECT quit it.
-func _gen1_node_surfing_minigame(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "surfing": true, "values": {
-		"kind": &"surfing_minigame_requested",
-		"values": {
-			"hi_score": gen1_surf_hi_score(),
-			"surfing_pikachu": pikachu != null and pikachu.surfing(),
-			"select_quits": event_flag_active(
-				Gen1Layout.engine_flag_base("pikachu_map_script_flags")
-				+ Gen1Layout.PIKACHU_MAP_SURF_SELECT_BIT
-			),
-		},
-	}})
-	return true
-
-
-## A printer page, its arms `hCanceledPrinting`'s; a preview is held for a press.
-func _gen1_node_printer(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var values: Dictionary = {
-		"kind": &"printer_requested",
-		"values": {
-			"page": String(node["page"]), "preview": bool(node.get("preview", false)),
-			"hi_score": gen1_surf_hi_score(),
-			"party_index": int((run.get("party", {}) as Dictionary).get("index", -1)),
-		},
-	}
-	if bool(node.get("preview", false)):
-		steps.append({"type": &"request", "values": values})
-		return true
-	return _gen1_stage_later(node, steps, run, values, &"printed")
-
-
-## `wDestinationWarpID`: the warp the last `LoadDestinationWarpPosition` landed
-## on, counted from zero.
-func _gen1_node_destination_warp(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(node, _gen1_destination_warp == int(node["warp"]), steps, run)
-
-
-## `VermilionDockSSAnneLeavesScript` on demand, through the ordinary step runner.
 func gen1_ss_anne_leaves() -> Array:
-	_gen1_steps = []
-	_gen1_node_ss_anne_leaves({}, _gen1_steps, {})
-	return _gen1_result()
-
-
-## `VermilionDockSSAnneLeavesScript`: MUSIC_SURFING, the horn behind the lead,
-## the drift, `EraseSSAnne`'s five water blocks under the second horn, and
-## `dec [wNumberOfWarps]`.
-func _gen1_node_ss_anne_leaves(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var horn_at: int = Gen1Layout.SS_ANNE_LEAD_FRAMES
-	var drifted: int = horn_at + Gen1Layout.SS_ANNE_COLUMNS * Gen1Layout.SS_ANNE_DRIFTS \
-		* Gen1Layout.SS_ANNE_DRIFT_FRAMES + Gen1Layout.SS_ANNE_ERASE_FRAMES
-	## `ld [wSpritePlayerStateData1ImageIndex]` of zero turns the player down.
-	steps.append({"type": &"player_facing", "facing": Gen2WorldSprite.FACING_DOWN})
-	steps.append(_gen1_wait_step(
-		&"ss_anne_leaves", drifted + Gen1Layout.SS_ANNE_TAIL_FRAMES, {"sounds": [
-			{"frame": 0, "kind": &"music", "index": Gen2WorldFieldMove.MUSIC_SURF},
-			{"frame": horn_at, "gen1": true, "index": Gen1Sfx.SFX_SS_ANNE_HORN},
-			{"frame": drifted, "gen1": true, "index": Gen1Sfx.SFX_SS_ANNE_HORN},
-		]}
-	))
-	steps.append({
-		"type": &"erase_rows", "first_row": Gen1Layout.SS_ANNE_BAND_TOP / PokeTiles.TILE_HEIGHT,
-		"rows": (Gen1Layout.SS_ANNE_BAND_BOTTOM - Gen1Layout.SS_ANNE_BAND_TOP) / PokeTiles.TILE_HEIGHT,
-		"tile": Gen1Layout.SS_ANNE_WATER_TILE,
-	})
-	for column: int in Gen1Layout.SS_ANNE_ERASE_BLOCKS:
-		steps.append({
-			"type": &"block", "x": Gen1Layout.SS_ANNE_ERASE_AT.x + column,
-			"y": Gen1Layout.SS_ANNE_ERASE_AT.y, "block": Gen1Layout.SS_ANNE_WATER_BLOCK,
-		})
-	steps.append({"type": &"drop_last_warp"})
-	return true
-
-
-func _gen1_node_tileset(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, current_map != null and current_map.tileset == int(node["tileset"]),
-		steps, run
-	)
-
-
-## `lda_coord`: one position of the 20x18 screen, which `BookOrSculptureText`
-## reads a row above the shelf's own tile.
-func _gen1_node_screen_tile(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var screen: int = int(node["screen"])
-	@warning_ignore("integer_division")
-	var row: int = screen / Gen1Layout.SCREEN_WIDTH_TILES
-	return _gen1_resolve_side(
-		node,
-		_gen1_screen_tile(screen % Gen1Layout.SCREEN_WIDTH_TILES, row)
-			== int(node["tile"]),
-		steps, run
-	)
-
-
-func _gen1_node_player_coord(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var axis: int = int(node["axis"])
-	var standing: int = player_cell.y if axis == 0 else player_cell.x
-	var value: int = int(node["value"])
-	var holds: bool = standing == value
-	match String(node.get("test", "exactly")):
-		"below":
-			holds = standing < value
-		"bit":
-			holds = standing & (1 << value) != 0
-	return _gen1_resolve_side(node, holds, steps, run)
-
-
-## `ArePlayerCoordsInArray`, whose carry is the player standing on one row of
-## the `db y, x` list the caller named.
-func _gen1_node_player_in_array(
-	node: Dictionary, steps: Array, run: Dictionary
-) -> bool:
-	var standing: bool = false
-	var cells: Array = node["cells"]
-	for index: int in cells.size():
-		var cell: Dictionary = cells[index]
-		if player_cell == Vector2i(int(cell["x"]), int(cell["y"])):
-			## `CheckCoords` counts the row up before it compares, so the index
-			## a body reads back starts at one.
-			run["coord_index"] = index + 1
-			standing = true
-			break
-	return _gen1_resolve_side(node, standing, steps, run)
-
-
-## One object's own byte of `wSpriteStateData1`, which a script writes by hand
-## to turn an NPC where `applymovement` would turn one on Generation 2.
-func _gen1_node_object_facing(
-	node: Dictionary, steps: Array, run: Dictionary
-) -> bool:
-	steps.append({
-		"type": &"object_facing", "index": _gen1_object_index(node, run),
-		"facing": facing_for_direction(Gen1Layout.FACING_STEPS[int(node["facing"])]),
-	})
-	return true
-
-
-## The store `CallFunctionInTable` dispatches on next frame; a map with no
-## dispatch has no byte for `wCurMapScript` to be copied into.
-func _gen1_node_set_map_script(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var byte: int = int(node["byte"])
-	if byte < 0:
-		return true
-	## `wNextSafariZoneGateScript`: the state the walk before it is to land on.
-	var value: int = _gen1_run_saved_index(run) if node.has("from") else int(node["value"])
-	steps.append({"type": &"map_script", "byte": byte, "value": value})
-	return true
-
-
-## `CallFunctionInTable` itself: the body the map's own byte selects, resolved
-## where the entry script reaches the dispatch. An index the importer read no
-## body for runs nothing, the way an undecoded row says nothing.
-func _gen1_node_map_script_table(
-	node: Dictionary, steps: Array, run: Dictionary
-) -> bool:
-	if state == null or current_map == null:
-		return false
-	return _gen1_resolve_script(
-		_gen1_map_state_nodes(state.gen1_map_script(int(node["byte"]))), steps, run
-	)
-
-
-## The two Snorlax and the Pokemon Tower's Marowak, fought once a state returns.
-## `wIsInBattle` and `wBattleResult`, read by a post-battle state.
-func _gen1_node_battle_outcome(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var wanted: Array = GEN1_BATTLE_OUTCOMES.get(String(node["outcome"]), [])
-	return _gen1_resolve_side(node, wanted.has(_gen1_battle_outcome), steps, run)
-
-
-func _gen1_node_wild_battle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var site: Dictionary = _gen1_site(
-		[Gen2WorldCatalog.KIND_STATIC], node,
-		{"species": int(node["species"]), "level": int(node["level"])}
-	)
-	var values: Dictionary = {
-		"kind": &"wild", "pokemon": int(site["species"]), "level": int(site["level"]),
-	}
-	values.merge(Gen1Layout.battle_type_values(int(node.get("battle_type", 0))))
-	steps.append({"type": &"request", "values": {"kind": &"battle_requested", "values": values}})
-	return true
+	return Gen1ScriptNodes.gen1_ss_anne_leaves(self)
 
 
 func gen1_tutorial_ball_lands() -> bool:
-	if data == null or state == null:
-		return true
-	var values: Dictionary = pending_runtime_request().get("values", {})
-	return Gen1Layout.tutorial_ball_lands(
-		data.id, int(values.get("gen1_battle_type", 0)), state.is_event_flag_active
-	)
+	return Gen1ScriptNodes.gen1_tutorial_ball_lands(self)
 
 
-## `DecodeArrowMovementRLE`: the arrow tile the player stands on queues its own
-## legs, and a cell with no row of its own leaves the map's trainers alone.
-func _gen1_node_arrow_movement(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	for cell: Dictionary in node["cells"] as Array:
-		if player_cell != Vector2i(int(cell["x"]), int(cell["y"])):
-			continue
-		steps.append({
-			"type": &"walk", "moves": (cell["moves"] as Array).duplicate(true), "spinner": true,
-		})
-		return _gen1_resolve_side(node, true, steps, run)
-	return _gen1_resolve_side(node, false, steps, run)
-
-
-func _gen1_node_object_coord_move(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var object: int = _gen1_object_index(node, run)
-	var rows: Array = node["rows"]
-	for index: int in range(object * Gen1Layout.OBJECT_COORD_ROWS,
-		mini(rows.size(), (object + 1) * Gen1Layout.OBJECT_COORD_ROWS)):
-		var row: Dictionary = rows[index]
-		if player_cell != Vector2i(int(row["x"]), int(row["y"])):
-			continue
-		steps.append({"type": &"object_move", "index": object, "moves": (row["moves"] as Array).duplicate()})
-		return true
-	return true
-
-
-func _gen1_node_walk(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var moves: Array = (node["moves"] as Array).duplicate(true)
-	if node.has("steps_offset"):
-		var count: int = int(run.get("coord_index", 0)) + int(node["steps_offset"])
-		if count < 1:
-			return true
-		(moves[0] as Dictionary)["steps"] = count
-	steps.append({"type": &"walk", "moves": moves})
-	return true
-
-
-## `MoveSprite` returns as soon as it has copied the list, so its steps are
-## drawn behind the script rather than in front of it.
-func _gen1_node_object_move(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	steps.append({
-		"type": &"object_move", "index": _gen1_object_index(node, run),
-		"moves": _gen1_filled_moves(node["fill"], run) if node.has("fill") \
-			else (node["moves"] as Array).duplicate(),
-	})
-	return true
-
-
-## `FillMemory` over `wNPCMovementDirections2`: one direction, `c` times.
-func _gen1_filled_moves(fill: Dictionary, run: Dictionary) -> Array:
-	var count: int = _gen1_scratch_read(run, int(fill["from"]), int(fill["offset"])) \
-		if fill.has("from") else int(fill["count"])
-	var moves: Array = []
-	moves.resize(mini(count, Gen1Layout.NPC_MOVEMENT_MAX))
-	moves.fill(int(fill["direction"]))
-	return moves
-
-
-func _gen1_node_object_stay(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	steps.append({"type": &"object_stay", "index": _gen1_object_index(node, run)})
-	return true
-
-
-## The bits a state reads to hold still while the walk before it is drawn.
-func _gen1_node_movement_running(
-	node: Dictionary, steps: Array, run: Dictionary
-) -> bool:
-	if node.has("remaining"):
-		var remaining: int = gen1_object_steps_remaining() \
-			if String(node["who"]) == Gen1Layout.MOVEMENT_TEST_OBJECT \
-			else gen1_player_steps_remaining()
-		return _gen1_resolve_side(node, remaining == int(node["remaining"]), steps, run)
-	var running: bool = gen1_object_movement_running() \
-		if String(node["who"]) == Gen1Layout.MOVEMENT_TEST_OBJECT \
-		else gen1_player_movement_running()
-	return _gen1_resolve_side(node, running, steps, run)
-
-
-## `wCoordIndex`, the row `ArePlayerCoordsInArray` matched on, counted from 1.
-func _gen1_node_coord_index(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, _gen1_index_matches(node, int(run.get("coord_index", 0))), steps, run
-	)
-
-
-## `wSavedCoordIndex`, which outlives the state that wrote it.
-func _gen1_node_saved_coord_index(
-	node: Dictionary, steps: Array, run: Dictionary
-) -> bool:
-	return _gen1_resolve_side(
-		node, _gen1_index_matches(node, _gen1_run_saved_index(run)), steps, run
-	)
-
-
-func _gen1_index_matches(node: Dictionary, index: int) -> bool:
-	var value: int = int(node["index"])
-	return index < value if String(node["test"]) == "below" else index == value
-
-
-## The store, whose -1 is `wCoordIndex` itself. The run keeps the copy the rest
-## of the row reads and the world takes it when spent: both sides of the gate's
-## "Leaving early?" resolve before the answer, and NO's 5 had overwritten YES's 0.
-func _gen1_node_save_coord_index(
-	node: Dictionary, steps: Array, run: Dictionary
-) -> bool:
-	var value: int = int(node["value"])
-	run["saved_coord_index"] = int(run.get("coord_index", 0)) if value < 0 else value
-	steps.append({"type": &"saved_coord_index", "value": int(run["saved_coord_index"])})
-	return true
-
-
-func _gen1_run_saved_index(run: Dictionary) -> int:
-	return int(run.get("saved_coord_index", _gen1_saved_coord_index))
-
-
-func _gen1_node_player_facing(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({
-		"type": &"player_facing",
-		"facing": facing_for_direction(Gen1Layout.FACING_STEPS[int(node["facing"])]),
-	})
-	return true
-
-
-## `farcall DisplayTownMap`, which the bookshelf poster and the TOWN MAP item
-## both reach. The screen is the whole of the step: it takes B and leaves.
-func _gen1_node_town_map(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "values": {
-		"kind": &"town_map_requested", "values": {"landmark": landmark_backup()},
-	}})
-	return true
-
-
-## `<Map>ElevatorStoreWarpEntriesScript`, run by the map an `elevator` row is on.
-func _gen1_seed_warp_entry(target_map: Gen2WorldMap) -> void:
-	_gen1_warp_entry = _gen1_warped_from.duplicate() \
-		if _gen1_map_elevator(target_map) else {}
-
-
-static func _gen1_map_elevator(target_map: Gen2WorldMap) -> bool:
-	for row: Dictionary in target_map.texts:
-		for node: Dictionary in (row.get("script", []) as Array):
-			if String(node.get("op", "")) == "elevator":
-				return true
-	return false
-
-
-func _gen1_warp_entry_over(cell: Vector2i, source_warp: Dictionary) -> Dictionary:
-	if not _gen1 or _gen1_warp_entry.is_empty() or warp_index_at(cell) != 1:
-		return source_warp
-	var written: Dictionary = source_warp.duplicate(true)
-	written["destination"] = int(_gen1_warp_entry["warp"])
-	written["map_group"] = 0
-	written["map_number"] = int(_gen1_warp_entry["map"])
-	return written
-
-
-## `DisplayElevatorFloorMenu`, whose `WhichFloorText` ends on `text_end`.
-func _gen1_node_elevator(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var floors: Array = node.get("floors", [])
-	if floors.is_empty():
-		return false
-	steps.append({"type": &"request", "elevator": true, "values": {
-		"kind": &"elevator_requested",
-		"values": {
-			"generation": RomRegistry.GEN1, "floors": floors.duplicate(true),
-		},
-	}})
-	return true
-
-
-## `GetItemName` into `wStringBuffer`, which names a hidden item's receipt
-## before the bag has been asked whether it can take one.
-func _gen1_node_name_item(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	var item: int = _gen1_fossil_byte(run, "item") \
-		if String(node.get("from", "")) == "fossil_item" \
-		else _gen1_item_of(int(node["item"]), run)
-	_gen1_named(node, run, data.item_name(item) if data != null else "")
-	return true
-
-
-func _gen1_item_of(item: int, run: Dictionary) -> int:
-	if item == Gen1Layout.SCRIPT_FOSSIL_ITEM_SOURCE:
-		return _gen1_fossil_byte(run, "item")
-	if item != Gen1Layout.SCRIPT_MENU_ITEM_SOURCE:
-		return item
-	return int((run.get("menu", {}) as Dictionary).get("item", -1))
-
-
-func _gen1_node_safari_balls(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"safari_balls", "count": int(node.get(
-		"count", _gen1_safari_admitted.get("balls", 0)
-	))})
-	return true
-
-
-func _gen1_node_safari_steps(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"safari_steps", "steps": int(node["steps"])})
-	return true
-
-
-## Yellow's two admission routines for a purse that cannot pay ¥500, both of
-## which answer carry when nothing was won, which is the branch's `else`.
-func _gen1_node_safari_admission(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	_gen1_safari_admitted = {}
-	if String(node["kind"]) == "low_cost":
-		_gen1_safari_low_cost(steps, run)
-	else:
-		_gen1_safari_nag(steps)
-	return _gen1_resolve_side(node, not _gen1_safari_admitted.is_empty(), steps, run)
-
-
-func _gen1_safari_low_cost(steps: Array, run: Dictionary) -> void:
-	## `DivideBCDPredef3` divides the balance by the byte `ld a, 23` wrote, which
-	## packed decimal reads as seventeen; `SafariZoneEntranceConvertBCDtoNumber`
-	## then takes the quotient's last byte, so only its last two digits count.
-	@warning_ignore("integer_division")
-	var quotient: int = int(run["money"]) / Gen1Layout.SAFARI_LOW_COST_DIVISOR
-	var balls: int = quotient % Gen1Layout.SAFARI_LOW_COST_DIGITS + 1
-	## `FillMemory` empties the purse before either line is printed.
-	run["money"] = 0
-	steps.append({"type": &"money", "amount": 0})
-	steps.append(_gen1_safari_box("low_cost_1"))
-	steps.append({"type": &"money_box", "kind": &"money_top_right"})
-	steps.append(_gen1_safari_box("low_cost_2"))
-	_gen1_safari_admitted = {
-		"balls": mini(balls, Gen1Layout.SAFARI_LOW_COST_MAX_BALLS),
-		"steps": Gen1Layout.SAFARI_STEPS,
-	}
-
-
-func _gen1_safari_nag(steps: Array) -> void:
-	var visit: int = state.safari_steps() >> 8
-	steps.append(_gen1_safari_box("nag_%d" % mini(
-		visit, Gen1Layout.SAFARI_NAG_LINES - 1
-	)))
-	state.set_safari_steps(state.safari_steps() + (1 << 8))
-	if visit != Gen1Layout.SAFARI_NAG_GIFT_VISIT:
-		return
-	steps.append(_gen1_safari_box("one_ball"))
-	_gen1_safari_admitted = {
-		"balls": Gen1Layout.SAFARI_NAG_BALLS, "steps": Gen1Layout.SAFARI_STEPS,
-	}
-
-
-func _gen1_node_set_last_map(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"last_map", "map": int(node["map"])})
-	return true
-
-
-func _gen1_node_set_blackout_map(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"blackout_map", "map": int(node["map"])})
-	return true
-
-
-func _gen1_node_set_player_coord(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"player_coord", "axis": int(node["axis"]), "value": int(node["value"])})
-	return true
-
-
-func _gen1_node_set_starter(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var value: int = _gen1_scratch_read(run, int(node["scratch"]), 0) if node.has("scratch") \
-		else int(node["value"])
-	if String(node["who"]) == "player" and data != null:
-		var linked: Dictionary = _gen1_linked_site(
-			Gen2WorldCatalog.KIND_STARTER, "starter_address", node,
-			{"species": data.gen1_dex_of_index(value)}
-		)
-		if linked.has("species"):
-			value = int(data.species(int(linked["species"])).get("index", value))
-	steps.append({"type": &"starter", "who": String(node["who"]), "value": value})
-	return true
-
-
-func _gen1_node_name_species(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	var species: int = int(node.get("species", 0))
-	if String(node.get("from", "")) == "player_starter" and state != null and data != null:
-		species = data.gen1_dex_of_index(state.gen1_starter("player"))
-	elif String(node.get("from", "")) == "fossil_mon":
-		species = _gen1_fossil_species(run)
-	elif node.has("scratch") and data != null:
-		species = data.gen1_dex_of_index(_gen1_scratch_read(run, int(node["scratch"]), 0))
-	_gen1_named(node, run, String(data.species(species).get("name", "")) \
-		if data != null and species > 0 else "")
-	return true
-
-
-## Both name routines answer in `wNameBuffer`, and `CopyToStringBuffer` moves the
-## first out. A node naming its buffer fills that marker alone.
-func _gen1_named(node: Dictionary, run: Dictionary, name: String) -> void:
-	run["named"] = name
-	if not node.has("buffer"):
-		return
-	var buffers: Dictionary = run.get("buffers", {})
-	buffers[int(node["buffer"])] = name
-	run["buffers"] = buffers
-
-
-## `DisplayPartyMenu` and `DisplayNameRaterScreen`: what either answers decides
-## the boxes behind it, so both sides ride the request unresolved.
-func _gen1_node_party_menu(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_stage_later(node, steps, run, {
-		"kind": &"party_selection_requested", "values": {"routine": &"name_rater"},
-	}, &"party_index")
-
-
-func _gen1_node_name_mon(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var chosen: Dictionary = run.get("party", {})
-	if chosen.is_empty():
-		return false
-	return _gen1_stage_later(node, steps, run, {
-		"kind": &"gen1_nickname_requested", "values": {
-			"party_index": int(chosen.get("index", -1)),
-			"buffer": int(node.get("buffer", -1)),
-		},
-	}, &"name")
-
-
-func _gen1_stage_later(
-	node: Dictionary, steps: Array, run: Dictionary, values: Dictionary, answer: StringName
-) -> bool:
-	steps.append({
-		"type": &"request", "values": values, "answer": answer,
-		"later": {"then": node["then"], "else": node["else"]},
-		"run": _gen1_run_copy(run),
-	})
-	return true
-
-
-## `GetPartyMonName2` into `wNameBuffer`: the nickname the list came back with.
-func _gen1_node_name_party_mon(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	_gen1_named(node, run, String((run.get("party", {}) as Dictionary).get("nickname", "")))
-	return true
-
-
-## `NameRatersHouseCheckMonOTScript`: carry when either half of the OT differs.
-func _gen1_node_mon_ot(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var chosen: Dictionary = run.get("party", {})
-	return _gen1_resolve_side(node, not Gen2NameRater.matches_ot(
-		String(chosen.get("original_trainer", "")), int(chosen.get("ot_id", -1)),
-		_player_name, _player_id
-	), steps, run)
-
-
-func _gen1_node_copy_name(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	var buffers: Dictionary = run.get("buffers", {})
-	buffers[int(node["to"])] = String(buffers.get(int(node["from"]), ""))
-	run["buffers"] = buffers
-	return true
-
-
-func _gen1_node_set_fossil(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var which: String = String(node["which"])
-	var value: int = _gen1_item_of(
-		Gen1Layout.SCRIPT_MENU_ITEM_SOURCE if node.has("from") else int(node["value"]), run
-	)
-	## Read again inside the same row, so the walk carries them like the bag.
-	var fossil: Dictionary = run.get("fossil", {})
-	fossil[which] = value
-	run["fossil"] = fossil
-	steps.append({"type": &"fossil", "which": which, "value": value})
-	return true
-
-
-func _gen1_fossil_byte(run: Dictionary, which: String) -> int:
-	var walked: Dictionary = run.get("fossil", {})
-	return int(walked[which]) if walked.has(which) else int(gen1_fossil.get(which, 0))
-
-
-func _gen1_fossil_species(run: Dictionary) -> int:
-	var stored: int = _gen1_fossil_byte(run, "mon")
-	return data.gen1_dex_of_index(stored) if data != null and stored > 0 else 0
-
-
-func _gen1_node_name_badge(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	run["named"] = String(node["name"])
-	return true
-
-
-func _gen1_node_scratch(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var value: int = int(node["value"]) if node.has("value") \
-		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"]))
-	(run["scratch"] as Dictionary)[int(node["address"])] = value
-	steps.append({"type": &"scratch", "address": int(node["address"]), "value": value})
-	return true
-
-
-func _gen1_scratch_read(run: Dictionary, address: int, offset: int) -> int:
-	return (int((run["scratch"] as Dictionary).get(address, 0)) + offset) & 0xFF
-
-
-func _gen1_object_index(node: Dictionary, run: Dictionary) -> int:
-	if node.has("object"):
-		return int(node["object"])
-	return _gen1_scratch_read(run, int(node["object_from"]), int(node["object_offset"]))
-
-
-func _gen1_node_scratch_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, int((run["scratch"] as Dictionary).get(int(node["address"]), 0)) == int(node["value"]), steps, run
-	)
-
-
-## `Random`'s byte stays in `a` on both sides, so a store behind the branch
-## reads the same roll rather than a second one.
-func _gen1_node_random(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var roll: int = _gen1_roll()
-	run["roll"] = roll
-	return _gen1_resolve_side(node, roll < int(node["below"]), steps, run)
-
-
-func _gen1_node_random_bit(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(node, _gen1_roll() & (1 << int(node["bit"])) != 0, steps, run)
-
-
-func _gen1_node_talking_to(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(node, _gen1_last_sprite_index == int(node["object"]), steps, run)
-
-
-## Red and Blue have no follower, so every fact about it reads false there.
-func _gen1_node_pikachu_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var taken: bool = false
-	if pikachu != null:
-		match String(node["what"]):
-			"starter":
-				taken = pikachu.starter_alive()
-			"surfing":
-				taken = pikachu.surfing()
-			"following":
-				taken = pikachu.following()
-			"ailing":
-				taken = pikachu.ailing
-			"happiness":
-				taken = pikachu.happiness < int(node["below"])
-	return _gen1_resolve_side(node, taken, steps, run)
-
-
-func _gen1_node_pikachu(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"pikachu", "what": String(node["what"]),
-		"value": node.get("value", 0)})
-	return true
-
-
-## `ApplyPikachuMovementData` holds the script until its last command, and
-## `TryApplyPikachuMovementData` runs it only for a walking follower already
-## facing the way the row names.
-func _gen1_node_pikachu_movement(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	if node.has("facing") and (pikachu == null or not pikachu.starter_alive()
-		or movement_mode != MOVEMENT_WALK
-		or pikachu.facing_toward_player(player_cell) != int(node["facing"])):
-		return true
-	steps.append({"type": &"pikachu_movement", "bytes": PackedByteArray(node["bytes"]),
-		"refresh": bool(node.get("refresh", false))})
-	steps.append({"type": &"wait", "values": {
-		"type": &"wait", "wait": Gen2WorldScriptRunner.WAIT_MOVEMENT,
-	}})
-	return true
-
-
-## `PewterPokecenterJigglypuffText`'s song, which the host plays and spins
-## `wSprite03` through until the driver's channels fall silent.
-func _gen1_node_jigglypuff(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append(_gen1_wait_step(&"jigglypuff", WAIT_UNTIL_FINISHED,
-		{"object": int(node["object"])}))
-	return true
-
-
-## `wSprite03StateData1ImageIndex` written by hand: the standing frame of the
-## next facing of `.FacingDirections`' ring.
 func gen1_turn_object(index: int, facing: int) -> void:
-	_turn_gen1_object(index, facing, [])
-
-
-func _gen1_node_pikachu_talk(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append_array(_gen1_pikachu_talk_steps())
-	return true
-
-
-## `TalkToPikachu`: `MapSpecificPikachuExpression`'s named cases first, the
-## mood and happiness tables last.
-func _gen1_pikachu_emotion() -> int:
-	var map: int = current_map.number if current_map != null else -1
-	if map == Gen1Layout.POKEMON_FAN_CLUB:
-		if not _gen1_pikachu_script_active():
-			return Gen1Layout.PIKACHU_EMOTION_FAN_CLUB_SEEL
-		if not pikachu.following():
-			return Gen1Layout.PIKACHU_EMOTION_FAN_CLUB_LEFT
-	elif map == Gen1Layout.PEWTER_POKECENTER and not pikachu.following():
-		return Gen1Layout.PIKACHU_EMOTION_PEWTER_ASLEEP
-	elif map == Gen1Layout.BILLS_HOUSE and not pikachu.following():
-		return _gen1_bills_house_emotion()
-	if pikachu.asleep:
-		return Gen1Layout.PIKACHU_EMOTION_ASLEEP
-	if pikachu.ailing:
-		return Gen1Layout.PIKACHU_EMOTION_AILING
-	if map >= Gen1Layout.POKEMON_TOWER_1F and map <= Gen1Layout.POKEMON_TOWER_7F:
-		return Gen1Layout.PIKACHU_EMOTION_TOWER
-	if pikachu.emotion_modifier > 0:
-		return Gen1Layout.PIKACHU_MODIFIER_EMOTIONS[pikachu.emotion_modifier - 1]
-	return pikachu.mood_emotion(data.gen1_pikachu())
-
-
-## `BillsHouse_CheckPikachuEmotion`, off `wBillsHouseCurScript`.
-func _gen1_bills_house_emotion() -> int:
-	var layout: Dictionary = Gen1Layout.for_id(data.id)
-	var script: int = state.gen1_map_script(
-		int(layout["bills_house_script"]) - int(layout["map_scripts"])
-	) if state != null else 0
-	if script == Gen1Layout.BILLS_HOUSE_SCRIPT_HEALED:
-		return Gen1Layout.PIKACHU_EMOTION_BILL_HEALED
-	if script == Gen1Layout.BILLS_HOUSE_SCRIPT_ARRIVED:
-		return Gen1Layout.PIKACHU_EMOTION_BILL_ARRIVED
-	if not event_flag_active(Gen1Layout.MET_BILL_2_EVENT):
-		return Gen1Layout.PIKACHU_EMOTION_BILL_UNMET
-	return Gen1Layout.PIKACHU_EMOTION_BILL_MET
-
-
-## `DoStarterPikachuEmotions`: one emotion's commands as steps. A bubble and a
-## redraw are counted waits, a movement waits on the follower, and the clip and
-## the portrait go out as events for whoever draws them.
-func _gen1_pikachu_talk_steps() -> Array:
-	var steps: Array = []
-	if pikachu == null or data == null:
-		return steps
-	var emotions: Array = data.gen1_pikachu().get("emotions", [])
-	var index: int = _gen1_pikachu_emotion()
-	if index < 0 or index >= emotions.size():
-		return steps
-	steps.append(_gen1_wait_step(&"text_init", Gen1Layout.TEXT_INIT_FRAMES))
-	for row: Dictionary in emotions[index]:
-		match String(row["cmd"]):
-			"text":
-				steps.append({"type": &"text", "text": String(row["text"])})
-			"emote":
-				steps.append({"type": &"pikachu", "what": "emote", "value": int(row["value"])})
-				steps.append(_gen1_wait_step(&"emote", Gen1Layout.EMOTE_FRAMES))
-			"movement":
-				_gen1_node_pikachu_movement({"bytes": row["bytes"]}, steps, {})
-			"delay":
-				steps.append(_gen1_wait_step(&"pikachu_delay", int(row["value"])))
-			"subcmd":
-				steps.append_array(_gen1_pikachu_subcommand_steps(int(row["value"])))
-			"pikapic":
-				steps.append(_gen1_wait_step(&"pikapic", WAIT_UNTIL_FINISHED,
-					{"index": int(row["value"])}))
-			"pcm":
-				steps.append(_gen1_sound_step("pikachu_clip", {"index": int(row["value"])}))
-			_:
-				steps.append({"type": &"pikachu", "what": String(row["cmd"]),
-					"value": int(row.get("value", 0))})
-	return steps
-
-
-## `PlayPikachuSoundClip`: three `DelayFrame`s, then the clip's one-bit samples
-## with interrupts off, at the rate measured on the cartridge.
-func _gen1_pikachu_cry_frames(index: int) -> int:
-	var cries: Array = data.gen1_pikachu().get("cries", []) if data != null else []
-	if index < 0 or index >= cries.size():
-		return 0
-	return Gen1Layout.pikachu_cry_frames(int(cries[index]))
-
-
-## A row's `PlaySound`, `PlayCry`, `WaitForSoundToFinish` or Yellow's
-## `PlayPikachuSoundClip`: a schedule the screen sounds, and the hold behind it.
-func _gen1_node_sound(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append(_gen1_sound_step(String(node["what"]), node))
-	return true
-
-
-func _gen1_sound_step(what: String, node: Dictionary = {}) -> Dictionary:
-	var index: int = int(node.get("index", 0))
-	match what:
-		"cry":
-			return _gen1_sound_wait([{"frame": 0, "cry": index}])
-		"wait":
-			return _gen1_sound_wait([], bool(node.get("music", false)))
-		"map_music":
-			## `PlayDefaultMusic` waits for the effect channels first.
-			if bool(node.get("wait", false)):
-				return _gen1_sound_wait([{"wait": true, "map_music": true}])
-			return _gen1_sound_event([{"frame": 0, "map_music": true}])
-		"pikachu_clip":
-			return _gen1_wait_step(&"gen1_sound", _gen1_pikachu_cry_frames(index), {
-				"sounds": [{"frame": 0, "pikachu_clip": index}],
-			})
-		"alternate_music":
-			return _gen1_alternate_music_step(String(node.get("name", "")))
-		"music":
-			return _gen1_sound_event([{
-				"frame": 0, "gen1": true, "kind": &"music", "index": index,
-				"bank": int(node.get("bank", -1)),
-			}])
-	return _gen1_sound_event([
-		{"frame": 0, "gen1": true, "index": index, "wait": bool(node.get("wait", false))},
-	])
-
-
-## `Music_Cities1AlternateTempo` fades the room's piece out and spends
-## `DelayFrames` in front of its `PlayMusic`; the rival's three start at once.
-func _gen1_alternate_music_step(name: String) -> Dictionary:
-	var record: Dictionary = data.gen1_alternate_music(name) if data != null else {}
-	var delay: int = int(record.get("delay_frames", 0))
-	var sounds: Array = [{"frame": delay, "alternate_music": name}]
-	if int(record.get("fade_frames", 0)) > 0:
-		sounds.push_front({"frame": 0, "fade": int(record["fade_frames"])})
-	if delay > 0:
-		return _gen1_wait_step(&"gen1_sound", delay, {"sounds": sounds})
-	return _gen1_sound_event(sounds)
-
-
-## A `WaitForSoundToFinish` behind whatever [param sounds] start.
-func _gen1_sound_wait(sounds: Array, music: bool = false) -> Dictionary:
-	var step: Dictionary = _gen1_wait_step(&"gen1_sound", 0, {"sounds": sounds})
-	(step["values"] as Dictionary)["until_sound"] = true
-	(step["values"] as Dictionary)["music"] = music
-	return step
-
-
-func _gen1_sound_event(sounds: Array) -> Dictionary:
-	return {"type": &"event", "event": {
-		"type": &"presentation_special_applied", "kind": &"gen1_sound", "sounds": sounds,
-	}}
-
-
-## `.Subcommands`: the redraw spends `Delay3`, and the three map checks put the
-## follower back behind the player.
-func _gen1_pikachu_subcommand_steps(which: int) -> Array:
-	if which == Gen1Layout.PIKACHU_SUBCMD_REDRAW:
-		return [_gen1_wait_step(&"pikachu_delay", Gen1Layout.PIKACHU_REDRAW_FRAMES)]
-	var maps: Dictionary = {
-		Gen1Layout.PIKACHU_SUBCMD_PEWTER: Gen1Layout.PEWTER_POKECENTER,
-		Gen1Layout.PIKACHU_SUBCMD_FAN_CLUB: Gen1Layout.POKEMON_FAN_CLUB,
-		Gen1Layout.PIKACHU_SUBCMD_BILLS: Gen1Layout.BILLS_HOUSE,
-	}
-	if not maps.has(which) or current_map == null or current_map.number != int(maps[which]):
-		return []
-	var steps: Array = [{"type": &"pikachu", "what": "following", "value": true}]
-	if which != Gen1Layout.PIKACHU_SUBCMD_BILLS:
-		steps.append({"type": &"pikachu", "what": "turn_away", "value": 0})
-	return steps
-
-
-## `Func_f1ea2`: the first row the happiness is below, the last row otherwise.
-func _gen1_node_pikachu_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var happiness: int = pikachu.happiness if pikachu != null else 0
-	var texts: Array = node["texts"]
-	var chosen: Dictionary = texts[-1]
-	for row: Dictionary in texts:
-		if int(row["below"]) > 0 and happiness < int(row["below"]):
-			chosen = row
-			break
-	return _gen1_node_text({"op": "text", "text": String(chosen["text"])}, steps, run)
-
-
-func _gen1_node_oaks_aide(raw: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var node: Dictionary = raw.duplicate()
-	node["item"] = int(_gen1_site(
-		[Gen2WorldCatalog.KIND_ITEM], raw, {"item": int(raw["item"]), "quantity": 1}
-	)["item"])
-	var other: Array = [_gen1_aide_box("come_back", node)]
-	if not _gen1_resolve_script(node["other"] as Array, other, _gen1_run_copy(run)):
-		return false
-	var yes: Array = []
-	if state != null and state.caught_count() >= int(node["requirement"]):
-		## `OaksAideScript`: HereYouGo, `GiveItem`, then GotItem or NoRoom.
-		yes.append(_gen1_aide_box("here_you_go", node))
-		var gift_run: Dictionary = _gen1_run_copy(run)
-		var before: int = yes.size()
-		if not _gen1_resolve_gift(
-			{"op": "give_item", "item": int(node["item"]), "count": 1}, yes, gift_run
-		):
-			return false
-		var taken: bool = yes.size() > before
-		yes.append(_gen1_aide_box("got_item" if taken else "no_room", node))
-		if not _gen1_resolve_script(node["got" if taken else "other"] as Array, yes, gift_run):
-			return false
-	else:
-		yes.append(_gen1_aide_box("uh_oh", node))
-		if not _gen1_resolve_script(node["other"] as Array, yes, _gen1_run_copy(run)):
-			return false
-	steps.append({
-		"type": &"choice", "text": String(_gen1_aide_box("hi", node)["text"]), "yes": yes, "no": other,
-	})
-	return true
-
-
-## `hOaksAideRequirement` and `hOaksAideNumMonsOwned`, three-digit fields.
-const GEN1_AIDE_REQUIREMENT: int = 0xFFDB
-const GEN1_AIDE_OWNED: int = 0xFFDD
-
-
-func _gen1_aide_box(name: String, node: Dictionary) -> Dictionary:
-	var text: String = gen1_filled_text(
-		data.special_text(GEN1_OAKS_AIDE_RUN, name) if data != null else ""
-	)
-	var numbers: Dictionary = {
-		GEN1_AIDE_REQUIREMENT: int(node["requirement"]),
-		GEN1_AIDE_OWNED: state.caught_count() if state != null else 0,
-	}
-	for address: int in numbers:
-		text = Gen2TextStream.fill_all_markers(
-			text, "%s%04X>" % [Gen2TextStream.NUMBER_MARKER, address],
-			str(numbers[address]).lpad(3)
-		)
-	return {"type": &"text", "text": Gen2TextStream.fill_all_markers(
-		text, Gen2TextStream.RAM_MARKER, data.item_name(int(node["item"])) if data != null else ""
-	)}
-
-
-const GEN1_OAKS_AIDE_RUN: StringName = &"oaks_aide"
-
-## A `give_pokemon` is one of three kinds; the site is tried under each.
-const GEN1_GIVING_KINDS: Array[StringName] = [
-	Gen2WorldCatalog.KIND_STARTER, Gen2WorldCatalog.KIND_PRIZE, Gen2WorldCatalog.KIND_GIFT,
-]
-
-
-## A site node's numbers with any mod patch folded in, the way
-## [method Gen2WorldScriptRunner._catalogued] substitutes a command's operands.
-func _gen1_site(kinds: Array, node: Dictionary, fields: Dictionary) -> Dictionary:
-	if data == null or not data.has_content_overlay() or not node.has("at"):
-		return fields
-	for kind: StringName in kinds:
-		var row: Dictionary = data.catalog().gen1_site(kind, int(node["at"]), fields)
-		if not row.is_empty():
-			return row
-	return fields
-
-
-## The same for a table row of this map: an object, a hidden item, a clerk, a prize.
-func _gen1_event_site(kind: StringName, source: int, index: int, fields: Dictionary) -> Dictionary:
-	if data == null or current_map == null or index < 0 or not data.has_content_overlay():
-		return fields
-	var row: Dictionary = data.catalog().check(Gen2WorldCatalog.pack_event_id(
-		kind, source, current_map.number, index
-	))
-	return row if not row.is_empty() else fields
-
-
-## A node carrying one of a site's numbers: the `wPlayerStarter` store beside
-## Oak's give, the money test and spend around the salesman's. See `LINK_ROLES`.
-func _gen1_linked_site(kind: StringName, key: String, node: Dictionary, fields: Dictionary) -> Dictionary:
-	if data == null or not data.has_content_overlay() or not node.has("at"):
-		return fields
-	var row: Dictionary = data.catalog().gen1_linked(kind, key, int(node["at"]), fields)
-	return row if not row.is_empty() else fields
-
-
-func _gen1_node_starter(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var held: int = state.gen1_starter(String(node["who"])) if state != null else 0
-	return _gen1_resolve_side(node, held == int(node["value"]), steps, run)
-
-
-func _gen1_node_riding(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(node, movement_mode != MOVEMENT_WALK, steps, run)
-
-
-## `wWalkBikeSurfState`'s three values, in `LoadPlayerSpriteGraphics`' order.
-const GEN1_RIDING_MODES: Array[StringName] = [MOVEMENT_WALK, MOVEMENT_BIKE, MOVEMENT_SURF]
-
-
-func _gen1_node_set_riding(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var mode: int = int(node["mode"])
-	if mode < 0 or mode >= GEN1_RIDING_MODES.size():
-		return false
-	steps.append({"type": &"riding", "mode": GEN1_RIDING_MODES[mode]})
-	return true
-
-
-func _gen1_node_movement_script_running(
-	node: Dictionary, steps: Array, run: Dictionary
-) -> bool:
-	return _gen1_resolve_side(node, not _gen1_movement_script.is_empty(), steps, run)
-
-
-func _gen1_node_npc_movement_script(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({
-		"type": &"npc_movement_script", "table": int(node["table"]),
-		"object": int(node["object"]),
-	})
-	return true
-
-
-func _gen1_node_store_byte(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var value: int = int(node.get("value", 0))
-	if bool(node.get("random", false)):
-		var roll: int = int(run["roll"]) if bool(node.get("rolled", false)) and run.has("roll") \
-			else _gen1_roll()
-		value = (roll & int(node["mask"])) >> int(node["shift"])
-	steps.append({"type": &"byte", "name": String(node["name"]), "value": value})
-	return true
-
-
-## `GymTrashScript`, whose second lock sets `VermilionGymSetDoorTile`'s bit.
-func _gen1_node_gym_trash(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var can: int = int(node["can"])
-	var side: String = "trash"
-	if state != null and not _gen1_run_flag(Gen1Layout.LOCK_2ND_EVENT, run):
-		if not _gen1_run_flag(Gen1Layout.LOCK_1ST_EVENT, run):
-			if can == state.gen1_byte(GEN1_FIRST_LOCK):
-				_gen1_node_flag({"flag": Gen1Layout.LOCK_1ST_EVENT, "set": true}, steps, run)
-				_gen1_draw_second_can(node, steps)
-				side = "first_lock"
-		elif can in [state.gen1_byte(GEN1_SECOND_LOCK), state.gen1_byte(GEN1_SECOND_LOCK_ALT)]:
-			_gen1_node_flag({"flag": Gen1Layout.LOCK_2ND_EVENT, "set": true}, steps, run)
-			steps.append({"type": &"map_load", "bit": Gen1Layout.MAP_LOADED_2_BIT})
-			side = "second_lock"
-		else:
-			_gen1_node_flag({"flag": Gen1Layout.LOCK_1ST_EVENT, "set": false}, steps, run)
-			steps.append({"type": &"byte", "name": GEN1_FIRST_LOCK,
-				"value": _gen1_roll() & Gen1Layout.TRASH_FIRST_MASK})
-			side = "reset"
-	return _gen1_resolve_script(node[side] as Array, steps, run)
+	Gen1ScriptNodes.gen1_turn_object(self, index, facing)
 
 
 ## Where `CheckFightingMapTrainers`' two increments leave a map's script.
@@ -6111,1196 +4591,12 @@ const GEN1_SECOND_LOCK: String = "second_lock_trash_can"
 const GEN1_SECOND_LOCK_ALT: String = "second_lock_trash_can_alt"
 
 
-func _gen1_draw_second_can(node: Dictionary, steps: Array) -> void:
-	var table: Array = node["table"]
-	var row: int = int(node["can"]) * int(node["row_size"])
-	var roll: int = _gen1_roll()
-	var swapped: int = ((roll & 0xF) << 4) | (roll >> 4)
-	if int(node["row_size"]) == Gen1Layout.TRASH_ROW_SIZE:
-		var masked: int = ((int(table[row]) & swapped) - 1) & 0xFF
-		steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK,
-			"value": int(table[row + 1 + masked]) & Gen1Layout.TRASH_CAN_MASK})
-		steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK_ALT, "value": 0})
-		return
-	var pair: int = {2: roll & 1, 3: swapped, 4: roll & 3}.get(int(table[row]), 0)
-	steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK,
-		"value": int(table[row + 1 + 2 * pair])})
-	steps.append({"type": &"byte", "name": GEN1_SECOND_LOCK_ALT,
-		"value": int(table[row + 2 + 2 * pair])})
-
-
-func _gen1_roll() -> int:
-	return script_random.randi_range(0, 255) if script_random != null else 0
-
-
-func _gen1_node_map_load_bit(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"map_load", "bit": int(node["bit"])})
-	return true
-
-
-func _gen1_node_volatile(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({
-		"type": &"volatile", "name": String(node["name"]), "set": bool(node["set"]),
-		"value": int(node.get("value", 1 if bool(node["set"]) else 0)),
-	})
-	return true
-
-
-func _gen1_node_volatile_test(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, bool(_gen1_volatile.get(String(node["name"]), false)), steps, run
-	)
-
-
-func _gen1_node_boulder_on(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var standing: bool = false
-	if _gen1_last_boulder >= 0 and _gen1_last_boulder < objects.size():
-		var cell: Vector2i = (objects[_gen1_last_boulder] as Gen2WorldObject).cell
-		standing = _gen1_cell_index(node["cells"] as Array, cell, run)
-	return _gen1_resolve_side(node, standing, steps, run)
-
-
-func _gen1_node_coord_lookup(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	_gen1_cell_index(node["cells"] as Array, player_cell, run)
-	return true
-
-
-func _gen1_cell_index(cells: Array, cell: Vector2i, run: Dictionary) -> bool:
-	for index: int in cells.size():
-		var row: Dictionary = cells[index]
-		if cell == Vector2i(int(row["x"]), int(row["y"])):
-			run["coord_index"] = index + 1
-			return true
-	return false
-
-
-func _gen1_node_emote(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"emote", "object": int(node["object"]), "kind": int(node["kind"])})
-	steps.append(_gen1_wait_step(&"emote", Gen1Layout.EMOTE_FRAMES))
-	return true
-
-
-func _gen1_node_object_path(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	steps.append({
-		"type": &"object_path", "index": _gen1_object_index(node, run), "target": int(node["target"]),
-		"perspective": int(node["perspective"]), "y_adjust": int(node["y_adjust"]),
-	})
-	return true
-
-
-func _gen1_node_trainer_battle(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var number: int = int(node.get("number", 1))
-	if String(node.get("number_from", "")) == "rival_starter" and state != null:
-		number += state.gen1_starter("rival")
-	steps.append(_gen1_trainer_request(int(node["class"]), number, node.get("end_texts", {}), -1))
-	return true
-
-
-func _gen1_node_trainer_battle_object(
-	node: Dictionary, steps: Array, _run: Dictionary
-) -> bool:
-	var index: int = _gen1_last_sprite_index
-	if index < 0 or index >= objects.size():
-		return false
-	var rows: Array = current_map.events.get("objects", [])
-	if index >= rows.size():
-		return false
-	var trainer: Dictionary = rows[index]
-	if not trainer.has("species") and not trainer.has("trainer_class"):
-		return false
-	_gen1_engage_music(trainer, steps)
-	if trainer.has("species"):
-		steps.append({"type": &"request", "values": {"kind": &"battle_requested",
-			"values": _gen1_battle_values({}, trainer)}})
-		return true
-	steps.append(_gen1_trainer_request(
-		int(trainer.get("trainer_class", 0)), int(trainer.get("trainer_number", 1)),
-		node.get("end_texts", {}), index
-	))
-	return true
-
-
-func _gen1_trainer_request(
-	trainer_class: int, number: int, end_texts: Dictionary, object_index: int
-) -> Dictionary:
-	var won: Dictionary = {"text": "%s: %s" % [
-		_gen1_trainer_name(trainer_class), String(end_texts.get("won", "")),
-	]}
-	return {
-		"type": &"request",
-		"values": {"kind": &"battle_requested", "values": {
-			"kind": &"trainer", "trainer_group": trainer_class, "trainer_class": trainer_class,
-			"trainer_id": maxi(number - 1, 0), "object_index": object_index,
-			"trainer_name": _gen1_trainer_name(trainer_class),
-			"win_text": won, "loss_text": _gen1_loss_text(trainer_class),
-			"defeated_text": _gen1_defeated_text(trainer_class),
-		}},
-		"object_index": object_index,
-	}
-
-
-func _gen1_node_warp_to(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"warp_to", "map": int(node["map"]), "warp": int(node["warp"])})
-	return true
-
-
-func _gen1_node_text_table(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"text_table", "table": int(node["table"])})
-	return true
-
-
-func _gen1_node_object_position(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({
-		"type": &"object_position", "index": int(node["object"]),
-		"axis": String(node["axis"]), "value": int(node["value"]),
-	})
-	return true
-
-
-## `GetSpritePosition2` and `SetSpritePosition2`, WRAM the same visit reads back.
-func _gen1_node_object_position_kept(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": StringName(node["op"]), "index": int(node["object"])})
-	return true
-
-
-func _gen1_node_heal_party(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "values": {
-		"kind": &"party_heal_requested", "values": {},
-	}})
-	return true
-
-
-## `HallOfFamePC` writes the team into `sHallOfFame` and counts it in
-## `wNumHoFTeams` in front of the animation, which is the induction the shelf
-## and the Pokemon Center's machine read as `ENGINE_HALL_OF_FAME`.
-func _gen1_node_hall_of_fame(_node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	_gen1_node_flag({"flag": Gen2WorldState.ENGINE_HALL_OF_FAME, "engine": true, "set": true}, steps, run)
-	steps.append({"type": &"request", "values": {
-		"kind": &"hall_of_fame_requested", "values": {},
-	}})
-	return true
-
-
-func _gen1_node_save_game(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "values": {
-		"kind": &"quick_save_requested", "values": {},
-	}})
-	return true
-
-
-func _gen1_node_reset_game(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "values": {
-		"kind": &"soft_reset_requested", "values": {},
-	}})
-	return true
-
-
-func _gen1_node_flag_range(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var first: int = int(node["first"])
-	for offset: int in int(node["count"]):
-		_gen1_node_flag({"flag": first + offset, "set": bool(node["set"])}, steps, run)
-	return true
-
-
-## The top row is skipped past Victory Road; the badge name fills `wNameBuffer`.
-func _gen1_node_badge_guards(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	for row: Dictionary in node["rows"] as Array:
-		if player_cell.y != int(row["y"]):
-			continue
-		if player_cell.y == int(node["past_y"]) and player_cell.x >= int(node["past_x"]):
-			return true
-		if event_flag_active(int(row["flag"])):
-			return true
-		run["named"] = String(row["badge"])
-		return _gen1_node_map_text({"text": int(row["text"])}, steps, run)
-	return true
-
-
-func _gen1_node_badges_byte(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var byte: int = 0
-	for bit: int in Gen1Layout.BADGE_COUNT:
-		if state != null and state.is_engine_flag_active(Gen2WorldState.gen1_badge_flag(bit)):
-			byte |= 1 << bit
-	return _gen1_resolve_side(node, byte == int(node["value"]), steps, run)
-
-
-## `jp DisplayTextID`: the map's own row, which the Mansion switches print.
-func _gen1_node_map_text(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	if current_map == null:
-		return false
-	var text_id: int = int(node["text"]) if node.has("text") \
-		else _gen1_scratch_read(run, int(node["from"]), int(node["offset"]))
-	## `hTextID` and `hSpriteIndex` are one HRAM byte, so a row a map script
-	## opens by id leaves that id where `EngageMapTrainer` reads a sprite: the
-	## object of that index is the trainer, which is how Lance's room fights him.
-	_gen1_last_sprite_index = text_id - 1
-	var row: Dictionary = gen1_text_at(text_id)
-	## `DisplayTextID` over a trainer's row is `TalkToTrainer` after the fight.
-	var trainer: Array = _gen1_trainer_steps(row, _gen1_object_event(text_id - 1))
-	if not trainer.is_empty():
-		steps.append_array(trainer)
-		return true
-	var nodes: Variant = row.get("script", [])
-	if nodes is Array and not (nodes as Array).is_empty():
-		return _gen1_resolve_script(nodes as Array, steps, run)
-	if String(row.get("text", "")).is_empty():
-		return false
-	## `wStringBuffer` outlives the row that filled it: Lt. Surge's receipt is
-	## the `DisplayTextID` after his `GiveItem`.
-	steps.append(_gen1_script_box(row, String(run.get("named", "")), run.get("buffers", {})))
-	return true
-
-
-## A `TX_SCRIPT_*` a hidden event reached, which `DisplayTextID` dispatches the
-## same way it does one standing on a sign.
-func _gen1_node_facility(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var facility: Array = _gen1_facility_steps({"command": int(node["command"])})
-	if facility.is_empty():
-		return false
-	steps.append_array(facility)
-	return true
-
-
-func _gen1_node_money_box(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"money_box", "kind": &"money_top_right"})
-	return true
-
-
-func _gen1_node_coin_box(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"money_box", "kind": &"game_corner"})
-	return true
-
-
-func _gen1_node_toggle(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	steps.append({
-		"type": &"toggle",
-		"index": int(node["index"]) if node.has("index") \
-			else _gen1_toggle_index(_gen1_object_index(node, run)),
-		"hidden": bool(node["hidden"]),
-	})
-	return true
-
-
-## `_DisplayPokedex` opens on one entry and the page the world already has for
-## `pokedex_entry_requested` is that same one.
-func _gen1_node_pokedex(node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	steps.append({"type": &"request", "values": {
-		"kind": &"pokedex_entry_requested",
-		"values": {"species": int(node["species"])},
-	}})
-	return true
-
-
-func _gen1_run_flag(flag: int, run: Dictionary) -> bool:
-	return bool((run["flags"] as Dictionary).get(flag, event_flag_active(flag)))
-
-
-func _gen1_node_flag_test(node: Dictionary, _steps: Array, run: Dictionary) -> bool:
-	var condition: Dictionary = node.duplicate()
-	condition.erase("snapshot")
-	run["flag_tests"][int(node["snapshot"])] = _gen1_branch_set(condition, run)
-	return true
-
-
-func _gen1_branch_set(node: Dictionary, run: Dictionary) -> bool:
-	if node.has("snapshot"):
-		return bool(run["flag_tests"][int(node["snapshot"])])
-	if bool(node.get("engine", false)):
-		return bool((run["engine_flags"] as Dictionary).get(int(node["flag"]),
-			state != null and state.is_engine_flag_active(int(node["flag"]))))
-	var first: bool = _gen1_run_flag(_gen1_node_flag_index(node, run), run)
-	for flag: int in node.get("clear", []):
-		if _gen1_run_flag(flag, run):
-			return false
-	if node.has("all"):
-		for flag: int in node["all"] as Array:
-			first = first and _gen1_run_flag(flag, run)
-		return first
-	if first:
-		return true
-	for flag: int in node.get("either", []):
-		if _gen1_run_flag(flag, run):
-			return true
-	return false
-
-
-func _gen1_resolve_side(
-	node: Dictionary, taken: bool, steps: Array, run: Dictionary
-) -> bool:
-	return _gen1_resolve_script(node["then" if taken else "else"] as Array, steps, run)
-
-
-## `_GivePokemon`, whose carry the caller's own `jr nc` reads: the party first,
-## the box behind it, and no room at all is the one answer that clears it. Only
-## the screen holding the save knows which, so both sides are resolved here and
-## the request carries them until it comes back.
-func _gen1_resolve_gift_pokemon(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var species: int = _gen1_fossil_species(run) \
-		if String(node.get("from", "")) == "fossil_mon" else int(node["species"])
-	if species < 1:
-		return false
-	var site: Dictionary = _gen1_site(
-		GEN1_GIVING_KINDS, node, {"species": species, "level": int(node["level"])}
-	)
-	var step: Dictionary = {"type": &"request", "values": {
-		"kind": &"pokemon_requested",
-		"values": {"pokemon": int(site["species"]), "level": int(site["level"])},
-	}}
-	if node.has("routine"):
-		(step["values"]["values"] as Dictionary)["routine"] = StringName(node["routine"])
-	if node.has("ok"):
-		var taken: Array = []
-		var full: Array = []
-		if not _gen1_resolve_script(node["ok"] as Array, taken, _gen1_run_copy(run)) \
-			or not _gen1_resolve_script(node["full"] as Array, full, _gen1_run_copy(run)):
-			return false
-		step["ok"] = taken
-		step["full"] = full
-	steps.append(step)
-	return true
-
-
-## `AddItemToInventory` and its carry; only a gift that landed is named.
-func _gen1_resolve_gift(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var site: Dictionary = {"item": int(node["item"]), "quantity": int(node["count"])}
-	if node.has("hidden"):
-		site = _gen1_event_site(
-			Gen2WorldCatalog.KIND_ITEM, Gen2WorldCatalog.GEN1_SOURCE_HIDDEN, int(node["hidden"]), site
-		)
-	else:
-		site = _gen1_site([Gen2WorldCatalog.KIND_ITEM], node, site)
-	var item: int = int(site["item"])
-	var bag: Dictionary = run["bag"]
-	var room: Dictionary = Gen2WorldPack.receive_check(
-		data, bag, item, maxi(1, int(site["quantity"]))
-	)
-	var taken: bool = bool(room.get("ok", false))
-	if taken:
-		bag[item] = int(room["quantity"])
-		run["named"] = data.item_name(item) if data != null else ""
-		steps.append({"type": &"items", "items": {item: int(room["quantity"])}})
-	if not node.has("ok"):
-		return true
-	return _gen1_resolve_script(node["ok" if taken else "full"] as Array, steps, run)
-
-
-## `PickUpItem`: the object's own item, `HideObject` on it, and the receipt
-## behind `wDoNotWaitForButtonPress`. Its own `ret z` says nothing at all for an
-## item object outside `ToggleableObjectStates`.
-func _gen1_pick_up_item(_node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var object: Dictionary = run.get("object", {})
-	var item: int = int(_gen1_event_site(
-		Gen2WorldCatalog.KIND_ITEM, Gen2WorldCatalog.GEN1_SOURCE_OBJECT,
-		int(object.get("object_index", -1)), {"item": int(object.get("item", 0))}
-	)["item"])
-	var toggle: int = int(object.get("toggle_index", -1))
-	if item < 1 or toggle < 0:
-		return false
-	var bag: Dictionary = run["bag"]
-	var room: Dictionary = Gen2WorldPack.receive_check(data, bag, item, 1)
-	if not bool(room.get("ok", false)):
-		steps.append(_gen1_facility_box(GEN1_PICK_UP_RUN, "no_room"))
-		return true
-	bag[item] = int(room["quantity"])
-	steps.append({"type": &"items", "items": {item: int(room["quantity"])}})
-	steps.append({"type": &"toggle", "index": toggle, "hidden": true})
-	var box: Dictionary = _gen1_facility_box(GEN1_PICK_UP_RUN, "found")
-	box["text"] = Gen2TextStream.fill_all_markers(
-		String(box["text"]), Gen2TextStream.RAM_MARKER,
-		data.item_name(item) if data != null else ""
-	)
-	box["press"] = false
-	steps.append(box)
-	return true
-
-
-## `RemoveGuardDrink`: the first row of `GuardDrinksList` the bag holds is spent
-## and named in `hItemToRemoveID`. The Saffron gate guards are its only callers.
-func _gen1_node_guard_drink(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var bag: Dictionary = run["bag"]
-	for item: int in node["items"] as Array:
-		if int(bag.get(item, 0)) < 1:
-			continue
-		_gen1_take_item({"item": item}, steps, run)
-		return _gen1_resolve_side(node, true, steps, run)
-	return _gen1_resolve_side(node, false, steps, run)
-
-
-func _gen1_take_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var bag: Dictionary = run["bag"]
-	var item: int = _gen1_item_of(int(node["item"]), run)
-	var left: int = int(bag.get(item, 0)) - 1
-	if left < 0:
-		return true
-	if left == 0:
-		bag.erase(item)
-	else:
-		bag[item] = left
-	steps.append({"type": &"items", "items": {item: left}})
-	return true
-
-
-## `DaycareGentlemanText`, which owns the whole row: the offer and a party list
-## on one side of `wDayCareInUse`, the growth and the price on the other.
-func _gen1_node_day_care(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	if data == null or state == null:
-		return false
-	if not state.day_care_has_mon(Gen2WorldDayCare.SLOT_MAN):
-		steps.append(_gen1_day_care_offer())
-		return true
-	return _gen1_day_care_visit(steps)
-
-
-## `.IntroText` under a `YesNoChoice`, with `wPartyCount` tested before the list.
-func _gen1_day_care_offer() -> Dictionary:
-	var taken: Array = [_gen1_day_care_box("only_one_mon")]
-	if int(_party_summary.get("count", 0)) > 1:
-		taken = [
-			_gen1_day_care_box("which_mon"),
-			{
-				"type": &"request",
-				"values": {"kind": &"party_selection_requested", "values": {
-					"routine": &"day_care",
-				}},
-				"day_care": &"deposit",
-			},
-		]
-	return {
-		"type": &"choice",
-		"text": String(_gen1_day_care_box("intro")["text"]),
-		"yes": taken,
-		"no": [_gen1_day_care_box("come_again")],
-	}
-
-
-## `DisplayPartyMenu`'s carry is CANCEL, and `callfar KnowsHMMove` is the whole
-## of what is asked about the row it came back with.
-func _gen1_day_care_after_selection(result: Dictionary) -> Array:
-	var party_index: int = int(result.get("party_index", -1))
-	if party_index < 0:
-		return [_gen1_day_care_box("all_right_then")]
-	if Gen2WorldTMHM.knows_hm_move(data, _gen1_party_moves(party_index)):
-		return [_gen1_day_care_box("knows_hm_move")]
-	return [
-		_gen1_day_care_box("will_look_after", String(result.get("nickname", ""))),
-		_gen1_day_care_request(&"deposit", party_index, PIKACHU_CLIP_DAY_CARE_IN),
-		_gen1_day_care_box("come_see_me"),
-	]
-
-
-## `PlayCry` on `wCurPartySpecies`, or Yellow's `PikachuCry28` going in and
-## `PikachuCry35` coming out; both ride the request's completion.
-const PIKACHU_CLIP_DAY_CARE_IN: int = 27
-const PIKACHU_CLIP_DAY_CARE_OUT: int = 34
-
-
-func _gen1_cry_after(step: Dictionary, result: Dictionary) -> Array:
-	if bool(result.get("starter_pikachu", false)):
-		return [_gen1_sound_step("pikachu_clip", {"index": int(step["cry_after"])})]
-	var species: int = int(result.get("species", 0))
-	return [_gen1_sound_step("cry", {"index": species})] if species > 0 else []
-
-
-## `.daycareInUse`: the level the slot reached and the price behind it.
-func _gen1_day_care_visit(steps: Array) -> bool:
-	var visit: Dictionary = Gen2WorldDayCare.gen1_visit(state, data)
-	if visit.is_empty():
-		return false
-	var nickname: String = String(visit["nickname"])
-	var growth: int = int(visit["growth"])
-	steps.append(_gen1_day_care_box(
-		"has_grown" if growth > 0 else "needs_more_time", nickname, "%3d" % growth
-	))
-	if int(_party_summary.get("count", 0)) >= Gen2SaveData.MAX_PARTY:
-		steps.append(_gen1_day_care_box("no_room"))
-		return true
-	var price: int = int(visit["price"])
-	steps.append({"type": &"money_box", "kind": &"money_top_right"})
-	steps.append({
-		"type": &"choice",
-		"text": String(_gen1_day_care_box("owe_money", "", str(price))["text"]),
-		"yes": _gen1_day_care_payment(price, nickname),
-		"no": [_gen1_day_care_box("all_right_then")],
-	})
-	return true
-
-
-## `.enoughMoney` pays before it draws the box again, so the receipt stands over
-## the new balance.
-func _gen1_day_care_payment(price: int, nickname: String) -> Array:
-	var purse: int = state.money(Gen2WorldMartHost.MONEY_ACCOUNT)
-	if purse < price:
-		return [_gen1_day_care_box("not_enough_money")]
-	return [
-		{"type": &"money", "amount": purse - price},
-		{"type": &"money_box", "kind": &"money_top_right"},
-		_gen1_day_care_box("heres_your_mon"),
-		_gen1_day_care_request(&"withdraw", -1, PIKACHU_CLIP_DAY_CARE_OUT),
-		_gen1_day_care_box("got_mon_back", nickname),
-	]
-
-
-func _gen1_day_care_request(action: StringName, party_index: int, clip: int) -> Dictionary:
-	return {"type": &"request", "cry_after": clip, "values": {
-		"kind": &"day_care_mon_requested",
-		"values": {"action": action, "party_index": party_index},
-	}}
-
-
-## One stub with its `text_ram` and its `text_decimal` or `text_bcd` filled,
-## [param number] already spelled the way that command prints it.
-func _gen1_day_care_box(name: String, ram: String = "", number: String = "") -> Dictionary:
-	var text: String = gen1_filled_text(data.day_care_text(name))
-	if not ram.is_empty():
-		text = Gen2TextStream.fill_all_markers(text, Gen2TextStream.RAM_MARKER, ram)
-	if not number.is_empty():
-		text = Gen2TextStream.fill_all_markers(
-			text, Gen2TextStream.NUMBER_MARKER, number
-		)
-	return {"type": &"text", "text": text}
-
-
-func _gen1_party_moves(party_index: int) -> Array:
-	var moves: Array = _party_summary.get("moves", [])
-	return moves[party_index] as Array if party_index < moves.size() else []
-
-
-## `DoInGameTradeDialogue` over the row's own `wWhichTrade`:
-## `wCompletedInGameTradeFlags` answers TRADETEXT_AFTER_TRADE alone once the swap
-## has happened, and the offer is a `YesNoChoice` under TRADETEXT_WANNA_TRADE.
-func _gen1_trade(node: Dictionary, steps: Array) -> bool:
-	var trade_id: int = int(node["trade_id"])
-	var values: Dictionary = {"trade_id": trade_id}
-	var site: Dictionary = _gen1_site([Gen2WorldCatalog.KIND_TRADE], node, {"trade": trade_id})
-	if site.has("species"):
-		values["offered_species"] = int(site["species"])
-		values["requested_species"] = int(site["requested_species"])
-	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, values)
-	if record.is_empty():
-		return false
-	if state != null and state.npc_trade_done(trade_id):
-		steps.append(_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_AFTER))
-		return true
-	steps.append({
-		"type": &"choice",
-		"text": _gen1_trade_text(record, Gen2Layout.trade_text_name(
-			false, Gen2WorldScriptRunner.TRADE_DIALOG_INTRO, int(record["dialog"])
-		)),
-		"yes": [{
-			"type": &"request",
-			"values": {"kind": &"party_selection_requested", "values": {
-				"routine": &"npc_trade", "trade": values,
-			}},
-			"trade": trade_id,
-		}],
-		"no": [_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_CANCEL)],
-	})
-	return true
-
-
-## `InGameTrade_DoTrade` behind `DisplayPartyMenu`: a cancelled list is
-## TRADETEXT_NO_TRADE and a wrong species TRADETEXT_WRONG_MON. The swap sets the
-## flag before `ConnectCableText`, and `TradedForText` follows the movie.
-func _gen1_trade_after_selection(step: Dictionary, result: Dictionary) -> Array:
-	var trade_id: int = int(step["trade"])
-	var record: Dictionary = Gen2WorldPartyHost.trade_record(data, {"trade_id": trade_id})
-	var party_index: int = int(result.get("party_index", -1))
-	if record.is_empty():
-		return []
-	if party_index < 0:
-		return [_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_CANCEL)]
-	if int(result.get("species", 0)) != int(record["requested_species"]):
-		return [_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_WRONG)]
-	return [
-		{"type": &"npc_trade", "trade_id": trade_id},
-		_gen1_trade_run_box(record, "cable"),
-		{"type": &"request", "values": {"kind": &"trade_requested", "values": {
-			"trade_id": trade_id, "party_index": party_index,
-		}}},
-		_gen1_trade_run_box(record, "traded_for"),
-		_gen1_trade_box(record, Gen2WorldScriptRunner.TRADE_DIALOG_COMPLETE),
-	]
-
-
-func _gen1_trade_box(record: Dictionary, dialog: int) -> Dictionary:
-	return _gen1_trade_run_box(record, Gen2Layout.trade_text_name(
-		false, dialog, int(record.get("dialog", 0))
-	))
-
-
-func _gen1_trade_run_box(record: Dictionary, name: String) -> Dictionary:
-	return {"type": &"text", "text": _gen1_trade_text(record, name)}
-
-
-## `InGameTrade_GetMonName` twice: the species the row asks for into
-## `wInGameTradeGiveMonName` and the one it offers into its neighbour.
-func _gen1_trade_text(record: Dictionary, name: String) -> String:
-	if data == null or name.is_empty():
-		return ""
-	var text: String = gen1_filled_text(data.special_text(GEN1_TRADE_RUN, name))
-	for row: Array in [
-		[Gen1Layout.TRADE_GIVE_NAME, int(record.get("requested_species", 0))],
-		[Gen1Layout.TRADE_RECEIVE_NAME, int(record.get("offered_species", 0))],
-	]:
-		text = Gen2TextStream.fill_all_markers(
-			text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, int(row[0])],
-			String(data.species(int(row[1])).get("name", ""))
-		)
-	return text
-
-
-## `YesNoChoice` stands behind the box that asked, so the question is the last
-## box printed.
-func _gen1_script_choice(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var asked: int = _gen1_last_box(steps)
-	if asked < 0:
-		return false
-	var question: Dictionary = steps[asked]
-	steps.remove_at(asked)
-	var yes: Array = []
-	var no: Array = []
-	if not _gen1_resolve_script(node["yes"] as Array, yes, _gen1_run_copy(run)) \
-		or not _gen1_resolve_script(node["no"] as Array, no, _gen1_run_copy(run)):
-		return false
-	steps.append({
-		"type": &"choice", "text": String(question["text"]), "yes": yes, "no": no,
-	})
-	return true
-
-
-## `HandleMenuInput` over a box a script drew itself: the node owns the tail,
-## walked once per row and once for the B press.
-func _gen1_script_menu(
-	node: Dictionary, tail: Array, steps: Array, run: Dictionary
-) -> bool:
-	var rows: Array = _gen1_menu_rows(node, run)
-	if rows.is_empty():
-		return false
-	var answers: Array = []
-	for index: int in rows.size():
-		var row: Dictionary = rows[index]
-		if not _gen1_menu_walk(tail, answers, run, {
-			"row": index, "item": int(row.get("item", -1)),
-		}):
-			return false
-	if not _gen1_menu_walk(tail, answers, run, {"row": -1, "item": -1, "cancelled": true}):
-		return false
-	## The question stays up under the menu, so its box owes no press.
-	var asked: int = _gen1_last_box(steps)
-	var text: String = String((steps[asked] as Dictionary)["text"]) if asked >= 0 else ""
-	if asked >= 0:
-		steps.remove_at(asked)
-	steps.append({
-		"type": &"request", "menu": true, "answers": answers,
-		"values": {"kind": &"gen1_menu_requested", "values": {
-			"box": node["box"], "entries_at": node.get("entries_at", {}),
-			"labels": node.get("labels", []), "rows": rows, "text": text,
-		}},
-	})
-	return true
-
-
-func _gen1_menu_walk(
-	tail: Array, answers: Array, run: Dictionary, menu: Dictionary
-) -> bool:
-	var arm: Array = []
-	var copy: Dictionary = _gen1_run_copy(run)
-	copy["menu"] = menu
-	if not _gen1_resolve_script(tail, arm, copy):
-		return false
-	answers.append(arm)
-	return true
-
-
-func _gen1_menu_rows(node: Dictionary, run: Dictionary) -> Array:
-	var rows: Array = []
-	if not node.has("filter"):
-		for text: String in node.get("entries", []) as Array:
-			rows.append({"text": text})
-		return rows
-	var bag: Dictionary = run["bag"]
-	for value: Variant in node["filter"] as Array:
-		var item: int = int(value)
-		if int(bag.get(item, 0)) > 0:
-			rows.append({"item": item, "text": data.item_name(item) if data != null else ""})
-	return rows
-
-
-func _gen1_node_filtered_bag(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, not _gen1_menu_rows({"filter": node.get("items", [])}, run).is_empty(),
-		steps, run
-	)
-
-
-## `DisplayListMenuID` over `SPECIALLISTMENU`, reopened behind every line it
-## prints: the loop is the node and the `jr c` B answers the way out.
-func _gen1_node_list_menu(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var done: Array = []
-	if not _gen1_resolve_script(node["done"] as Array, done, _gen1_run_copy(run)):
-		return false
-	var rows: Array = []
-	for row: Dictionary in node["rows"] as Array:
-		rows.append({
-			"item": int(row["item"]),
-			"name": data.item_name(int(row["item"])) if data != null else "",
-			"text": gen1_filled_text(String(row["text"])),
-		})
-	steps.append({
-		"type": &"request", "list_menu": true, "rows": rows, "done": done,
-		"values": {"kind": &"gen1_list_menu_requested", "values": {"rows": rows}},
-	})
-	return true
-
-
-func _gen1_node_menu_cancel(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, bool((run.get("menu", {}) as Dictionary).get("cancelled", false)), steps, run
-	)
-
-
-func _gen1_node_menu_row(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, int((run.get("menu", {}) as Dictionary).get("row", -1)) == int(node["row"]),
-		steps, run
-	)
-
-
-func _gen1_node_menu_item(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	return _gen1_resolve_side(
-		node, int((run.get("menu", {}) as Dictionary).get("item", -1)) == int(node["item"]),
-		steps, run
-	)
-
-
-func _gen1_node_dex_rating(_node: Dictionary, steps: Array, _run: Dictionary) -> bool:
-	var rated: Dictionary = Gen2ProfOaksPC.rate(data, state)
-	if rated.is_empty():
-		return false
-	for page: String in rated["pages"] as Array:
-		steps.append({"type": &"text", "text": gen1_filled_text(page)})
-	return true
-
-
-## The box a YES/NO opens under, which nothing written between the two takes
-## the place of.
-func _gen1_last_box(steps: Array) -> int:
-	for index: int in range(steps.size() - 1, -1, -1):
-		var type: StringName = StringName((steps[index] as Dictionary)["type"])
-		if type == &"text":
-			return index
-		if GEN1_WAITING_STEPS.has(type):
-			return -1
-	return -1
-
-
-func _gen1_run_copy(run: Dictionary) -> Dictionary:
-	return run.duplicate(true)
-
-
-func _gen1_script_box(
-	node: Dictionary, named: String, buffers: Dictionary = {}
-) -> Dictionary:
-	var text: String = gen1_filled_text(String(node.get("text", "")))
-	for address: Variant in buffers:
-		text = Gen2TextStream.fill_all_markers(
-			text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, int(address)],
-			String(buffers[address])
-		)
-	if not named.is_empty():
-		text = Gen2TextStream.fill_all_markers(
-			text, Gen2TextStream.RAM_MARKER, named
-		)
-	var step: Dictionary = {"type": &"text", "text": text}
-	if not bool(node.get("press", true)):
-		step["press"] = false
-	return step
-
-
-## `DisplayTextID`'s own dispatch, which reads the first byte of the text a
-## pointer stands at: a `TX_SCRIPT_*` id runs a routine and prints nothing.
-func _gen1_facility_steps(row: Dictionary, text_id: int = 0) -> Array:
-	var command: int = int(row.get("command", 0))
-	if GEN1_PC_MACHINES.has(command):
-		return _gen1_pc_steps(GEN1_PC_MACHINES[command] as Array)
-	match command:
-		Gen1Layout.TEXT_SCRIPT_MART:
-			return _gen1_mart_steps(row, text_id)
-		Gen1Layout.TEXT_SCRIPT_POKECENTER_NURSE:
-			return _gen1_nurse_steps()
-		Gen1Layout.TEXT_SCRIPT_CABLE_CLUB:
-			return _gen1_cable_club_steps()
-		Gen1Layout.TEXT_SCRIPT_VENDING_MACHINE:
-			return _gen1_vending_steps()
-		Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
-			return _gen1_prize_steps(text_id)
-	return []
-
-
-func _gen1_pc_steps(machine: Array) -> Array:
-	return [
-		_gen1_facility_box(String(machine[1]), String(machine[2])),
-		{"type": &"request", "values": {
-			"kind": &"pc_requested", "values": {"mode": StringName(machine[0])},
-		}},
-	]
-
-
-## `GetPrizeMenuId` subtracts `TEXT_GAMECORNERPRIZEROOM_PRIZE_VENDOR_1` from the
-## id that opened it, so a vendor's list is their place among the map's own
-## prize rows.
-func _gen1_prize_steps(text_id: int) -> Array:
-	var menus: Array = data.prize_menus() if data != null else []
-	var first: int = _gen1_first_prize_text()
-	var menu: int = text_id - first
-	if first <= 0 or menu < 0 or menu >= menus.size():
-		return []
-	var chosen: Dictionary = menus[menu]
-	var tms: bool = bool(chosen.get("tms", false))
-	var rows: Array = []
-	for index: int in (chosen.get("rows", []) as Array).size():
-		var row: Dictionary = chosen["rows"][index]
-		var site: Dictionary = _gen1_event_site(
-			Gen2WorldCatalog.KIND_PRIZE, Gen2WorldCatalog.GEN1_SOURCE_PRIZE,
-			menu << Gen2WorldCatalog.GEN1_PRIZE_MENU_SHIFT | index,
-			{"item" if tms else "species": int(row.get("item", 0)), "price": int(row.get("cost", 0)),
-				"level": int(row.get("level", 0))}
-		)
-		rows.append({
-			"item": int(site["item" if tms else "species"]), "cost": int(site["price"]),
-			"level": int(site.get("level", 0)),
-		})
-	return [{"type": &"request", "values": {
-		"kind": &"prize_requested",
-		"values": {"menu": menu, "tms": tms, "rows": rows},
-	}}]
-
-
-func _gen1_first_prize_text() -> int:
-	if current_map == null:
-		return 0
-	for index: int in current_map.texts.size():
-		if int((current_map.texts[index] as Dictionary).get("command", 0)) \
-			== Gen1Layout.TEXT_SCRIPT_PRIZE_VENDOR:
-			return index + 1
-	return 0
-
-
-## `VendingMachineMenu`, whose list is `VendingPrices` rather than a shelf and
-## whose greeting is the box the menu stands over.
-func _gen1_vending_steps() -> Array:
-	var rows: Array = data.vending_rows() if data != null else []
-	if rows.is_empty():
-		return []
-	return [{"type": &"request", "values": {
-		"kind": &"vending_requested", "values": {"rows": rows},
-	}}]
-
-
-## `CableClubNPC`: no Pokedex, or Yellow's follower not walking, is
-## `MakingPreparationsText`; nobody on the cable is `wLinkTimeoutCounter` and
-## `.failedToEstablishConnection`; a partner is `.establishedConnection`.
-func _gen1_cable_club_steps() -> Array:
-	var ready: bool = state != null \
-		and state.is_engine_flag_active(Gen2WorldState.ENGINE_POKEDEX) \
-		and (pikachu == null or pikachu.following())
-	var welcome: Dictionary = _gen1_facility_box(GEN1_CABLE_CLUB_RUN, "welcome")
-	if not ready:
-		return [
-			welcome,
-			_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PREPARING_FRAMES),
-			_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "making_preparations"),
-		]
-	if state.link_transport().status() == Gen2LinkTransport.CONNECTION_NOT_ESTABLISHED:
-		return [
-			welcome,
-			_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_TIMEOUT_FRAMES),
-			_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "area_reserved"),
-		]
-	welcome["press"] = false
-	return [
-		welcome,
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_CONNECTED_FRAMES),
-		{
-			"type": &"choice",
-			"text": gen1_filled_text(data.special_text(GEN1_CABLE_CLUB_RUN, "please_apply")),
-			"yes": _gen1_cable_club_save_steps(),
-			"no": [
-				_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_CLOSE_FRAMES),
-				_gen1_facility_box(GEN1_CABLE_CLUB_RUN, "come_again"),
-			],
-		},
-	]
-
-
-## YES: `SaveGameData` writes silently, `SFX_SAVE`, `PleaseWaitText`'s
-## `text_pause`, and `Serial_SyncAndExchangeNybble`, which a save-file peer answers.
-func _gen1_cable_club_save_steps() -> Array:
-	var please_wait: Dictionary = _gen1_facility_box(GEN1_CABLE_CLUB_RUN, "please_wait")
-	please_wait["press"] = false
-	return [
-		{"type": &"request", "values": {"kind": &"quick_save_requested", "values": {}}},
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES, {
-			"sounds": [{"frame": 0, "gen1": true, "index": Gen1Sfx.SFX_SAVE}],
-		}),
-		please_wait,
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES),
-	] + _gen1_link_menu_steps()
-
-
-## `LinkMenu`: BIT_LINK_CONNECTED, `WhereWouldYouLikeText` under
-## `CableClubOptionsText`'s rows; B and CANCEL are `.choseCancel`.
-func _gen1_link_menu_steps() -> Array:
-	var rows: Array = []
-	for label: String in data.special_text(GEN1_CABLE_CLUB_STRINGS, "options").split("\n"):
-		rows.append({"text": label})
-	var box: Rect2i = Gen1Layout.LINK_MENU_BOX_YELLOW if rows.size() > 3 \
-		else Gen1Layout.LINK_MENU_BOX
-	var answers: Array = []
-	for row: int in rows.size():
-		answers.append(_gen1_link_menu_answer(row, rows.size()))
-	answers.append(_gen1_link_menu_cancel_steps())
-	var question: Dictionary = _gen1_facility_box(GEN1_LINK_RUN, "where_to")
-	return [
-		{"type": &"link_connected", "set": true},
-		{"type": &"request", "menu": true, "answers": answers, "values": {
-			"kind": &"gen1_menu_requested", "values": {
-				"box": {"x": box.position.x, "y": box.position.y,
-					"width": box.size.x, "height": box.size.y},
-				"entries_at": {"x": box.position.x + 2, "y": box.position.y + 2},
-				"labels": [], "rows": rows, "text": String(question["text"]),
-				"hold_frames": Gen1Layout.LINK_MENU_HOLD_FRAMES, "fast_text": true,
-			},
-		}},
-	]
-
-
-## One row's own walk; Yellow's COLOSSEUM2 is `.asm_f5963`'s handshake first.
-func _gen1_link_menu_answer(row: int, rows: int) -> Array:
-	if row == rows - 1:
-		return _gen1_link_menu_cancel_steps()
-	if row == Gen1Layout.LINK_MENU_COLOSSEUM2:
-		return [
-			_gen1_wait_step(&"cable_club_wait",
-				Gen1Layout.CUP_HANDSHAKE_FRAMES + Gen1Layout.CUP_MENU_OPEN_FRAMES),
-			{"type": &"cup_menu"},
-		]
-	return _gen1_link_room_steps(row)
-
-
-## `.next`: `PleaseWaitText`, `PrepareForSpecialWarp` and the room's own row.
-func _gen1_link_room_steps(row: int) -> Array:
-	var please_wait: Dictionary = _gen1_facility_box(GEN1_LINK_RUN, "please_wait")
-	please_wait["press"] = false
-	return [
-		please_wait,
-		_gen1_wait_step(&"cable_club_wait",
-			Gen1Layout.LINK_MENU_WAIT_FRAMES + Gen1Layout.LINK_MENU_WARP_FRAMES),
-		{"type": &"link_state", "value": Gen1Layout.LINK_STATE_IN_CABLE_CLUB},
-		{"type": &"special_warp", "name": Gen1Layout.CABLE_CLUB_WARP_ROWS[
-			row * 2 if row == Gen1Layout.LINK_MENU_TRADE else 2
-		]},
-	]
-
-
-## `Func_f531b`: a row walked to its cup's verdict on both parties, a refusal
-## reopening the menu; CANCEL and B are `asm_f547f`'s carry.
-func _gen1_cup_menu_steps() -> Array:
-	state.link_session().gen1_stadium_cup = 0
-	var rows: Array = []
-	for label: String in data.special_text(GEN1_CABLE_CLUB_STRINGS, "rows").split("\n"):
-		rows.append({"text": label})
-	var cup_rules: Dictionary = {}
-	for cup: int in Gen1Layout.CUP_COUNT:
-		cup_rules[cup] = Array(data.special_text(GEN1_CABLE_CLUB_STRINGS, "rules_%d" % cup).split("\n"))
-	var answers: Array = []
-	for cup: int in Gen1Layout.CUP_COUNT:
-		answers.append(_gen1_cup_answer(cup))
-	answers.append(_gen1_link_menu_cancel_steps())
-	answers.append(_gen1_link_menu_cancel_steps())
-	return [{"type": &"request", "menu": true, "answers": answers, "values": {
-		"kind": &"gen1_menu_requested", "values": {
-			"box": _gen1_box(Gen1Layout.CUP_MENU_BOX),
-			"entries_at": {"x": Gen1Layout.CUP_MENU_ROWS_AT.x, "y": Gen1Layout.CUP_MENU_ROWS_AT.y},
-			"labels": [{
-				"x": Gen1Layout.CUP_VIEW_AT.x, "y": Gen1Layout.CUP_VIEW_AT.y, "step": 1,
-				"rows": Array(data.special_text(GEN1_CABLE_CLUB_STRINGS, "view_rules").split("\n")),
-			}],
-			"boxes": [_gen1_box(Gen1Layout.CUP_VIEW_BOX), _gen1_box(Gen1Layout.CUP_RULES_BOX)],
-			"cursor_labels": {
-				"x": Gen1Layout.CUP_RULES_AT.x, "y": Gen1Layout.CUP_RULES_AT.y, "step": 1,
-				"rows": cup_rules,
-			},
-			"rows": rows, "text": "", "hold_frames": Gen1Layout.CUP_MENU_HOLD_FRAMES,
-		},
-	}}]
-
-
-static func _gen1_box(box: Rect2i) -> Dictionary:
-	return {"x": box.position.x, "y": box.position.y, "width": box.size.x, "height": box.size.y}
-
-
-func _gen1_cup_answer(cup: int) -> Array:
-	var refusal: String = _gen1_cup_refusal(
-		cup, _party_summary.get("species", []), _party_summary.get("levels", [])
-	)
-	if not refusal.is_empty():
-		return [{"type": &"text", "text": refusal}, {"type": &"cup_menu"}]
-	var species: Array = []
-	var levels: Array = []
-	for row: Dictionary in state.link_transport().peer.get("party", []) as Array:
-		species.append(int(row.get("species", 0)))
-		levels.append(int(row.get("level", 0)))
-	if not _gen1_cup_refusal(cup, species, levels).is_empty():
-		return [_gen1_facility_box(GEN1_COLOSSEUM2_RUN, "ineligible"), {"type": &"cup_menu"}]
-	return [{"type": &"stadium_cup", "cup": cup + 1}] \
-		+ _gen1_link_room_steps(Gen1Layout.LINK_MENU_COLOSSEUM)
-
-
-## `PokeCup`, `PikaCup` and `PetitCup` in their own order; empty lets the party in.
-func _gen1_cup_refusal(cup: int, species: Array, levels: Array) -> String:
-	if species.size() != Gen1Layout.CUP_PARTY_SIZE:
-		return _gen1_cup_text("three_mons")
-	if species.has(Gen1Layout.CUP_MEW):
-		return _gen1_cup_text("mew")
-	if species[0] == species[1] or species[0] == species[2] or species[1] == species[2]:
-		return _gen1_cup_text("different_mons")
-	if cup == Gen1Layout.CUP_PETIT:
-		var sized: String = _gen1_petit_refusal(species)
-		if not sized.is_empty():
-			return sized
-	var bounds: Array = Gen1Layout.CUP_LEVELS[cup]
-	var names: Array = Gen1Layout.CUP_REFUSALS[cup]
-	var total: int = 0
-	for level: Variant in levels:
-		if int(level) > int(bounds[1]):
-			return _gen1_cup_text(String(names[1]))
-		if int(level) < int(bounds[0]):
-			return _gen1_cup_text(String(names[0]))
-		total += int(level)
-	if total > int(bounds[2]):
-		return _gen1_cup_text(String(names[2]))
-	return ""
-
-
-## `Func_3b10f` over every member, then the Pokedex's inches and pounds.
-func _gen1_petit_refusal(species: Array) -> String:
-	for member: Variant in species:
-		if _gen1_is_evolved(int(member)):
-			return _gen1_cup_text("evolved", int(member))
-	for member: Variant in species:
-		var dex: Dictionary = data.dex_entry(int(member))
-		var height: int = int(dex.get("height", 0))
-		@warning_ignore("integer_division")
-		if (height / 100) * 12 + height % 100 > Gen1Layout.CUP_PETIT_MAX_INCHES:
-			return _gen1_cup_text("height", int(member))
-		if int(dex.get("weight", 0)) > Gen1Layout.CUP_PETIT_MAX_WEIGHT:
-			return _gen1_cup_text("weight", int(member))
-	return ""
-
-
-func _gen1_is_evolved(species: int) -> bool:
-	for number: int in range(1, data.species_count() + 1):
-		for row: Dictionary in data.evolutions(number):
-			if int(row.get("target", 0)) == species:
-				return true
-	return false
-
-
-func _gen1_cup_text(name: String, species: int = 0) -> String:
-	var text: String = data.special_text(GEN1_COLOSSEUM2_RUN, name)
-	if species > 0:
-		text = text.replace(
-			"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(Gen1Layout.for_id(data.id)["name_buffer"])],
-			String(data.species(species).get("name", ""))
-		)
-	return text
-
-
-func _gen1_link_menu_cancel_steps() -> Array:
-	return [
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.LINK_MENU_CANCEL_FRAMES),
-		_gen1_facility_box(GEN1_LINK_RUN, "canceled"),
-		{"type": &"link_connected", "set": false},
-	]
-
-
-## `CableClub_Run`: `ld c, 80` behind "Just a moment.",
-## `CableClub_DoBattleOrTrade`, `HealParty` after a fight, `ReturnToCableClubRoom`.
-func _gen1_cable_club_run_steps(link_state: int) -> Array:
-	var battle: bool = link_state == Gen1Layout.LINK_STATE_START_BATTLE
-	var out: Array = [
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_RUN_FRAMES),
-		{"type": &"request", "values": {"kind": &"link_room_requested", "values": {
-			"link_mode": Gen2LinkTransport.LINK_COLOSSEUM if battle \
-				else Gen2LinkTransport.LINK_TRADECENTER,
-			"gen1": true,
-		}}},
-	]
-	if battle:
-		out.append({"type": &"request", "values": {
-			"kind": &"party_heal_requested", "values": {},
-		}})
-	out.append({"type": &"cable_club_return"})
-	return out
-
-
-func _gen1_node_serial_status(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var status: int = state.link_transport().status() if state != null \
-		else Gen2LinkTransport.CONNECTION_NOT_ESTABLISHED
-	return _gen1_resolve_side(node, status == int(node["status"]), steps, run)
-
-
-## `CableClub_Run` reads a `LINK_STATE_START_*` store on the next box's first
-## joypad poll, so that box owes no press.
-func _gen1_node_link_state(node: Dictionary, steps: Array, run: Dictionary) -> bool:
-	var value: int = int(node["value"])
-	steps.append({"type": &"link_state", "value": value})
-	if value in [Gen1Layout.LINK_STATE_START_TRADE, Gen1Layout.LINK_STATE_START_BATTLE]:
-		run["cable_club_run"] = value
-	return true
-
-
-## `LoadSpecialWarpData` and `SpecialEnterMap`: on foot, facing down, `wLastMap`
-## left at PALLET_TOWN, and the cell left from kept for the snapshot.
-func _gen1_special_warp(name: String) -> Dictionary:
-	var warp: Dictionary = data.gen1_cable_club_warp(name) if data != null else {}
-	var target: Gen2WorldMap = data.world_map(0, int(warp.get("map", -1))) if not warp.is_empty() else null
-	if target == null:
-		return {}
-	if _gen1_cable_club_origin.is_empty():
-		_gen1_cable_club_origin = {
-			"map": map_id(), "cell": player_cell, "facing": player_facing,
-			"movement_mode": movement_mode, "sprite": player_sprite_number,
-			"last_map": _gen1_last_map,
-		}
-	var from_map: Vector2i = map_id()
-	movement_mode = MOVEMENT_WALK
-	player_sprite_number = _walking_sprite()
-	player_facing = Gen2WorldSprite.FACING_DOWN
-	_apply_map(
-		target, data.world_tileset(target.tileset),
-		Vector2i(int(warp["x"]), int(warp["y"])), true, 0, MAP_ENTRY_WARP
-	)
-	_gen1_last_map = Gen1Layout.PALLET_TOWN
-	return {"type": &"warp", "from_map": from_map, "to_map": map_id(), "to_cell": player_cell}
-
-
-## `ReturnToCableClubRoom` and `CableClub_Run`'s tail: `wStatusFlags3` zeroed,
-## the room loaded again, LINK_STATE_IN_CABLE_CLUB.
 func gen1_return_to_cable_club_room() -> Array:
-	if current_map == null:
-		return []
-	var rest: Array = _gen1_steps
-	_apply_map(current_map, current_tileset, player_cell, true, 0, MAP_ENTRY_WARP)
-	_gen1_steps = rest
-	state.link_session().gen1_link_state = Gen1Layout.LINK_STATE_IN_CABLE_CLUB
-	return [{"type": &"map_reloaded", "map": map_id(), "cell": player_cell}]
+	return Gen1FacilityScripts.gen1_return_to_cable_club_room(self)
 
 
-## `wLinkState`.
 func gen1_link_state() -> int:
-	return state.link_session().gen1_link_state if state != null else Gen1Layout.LINK_STATE_NONE
+	return Gen1FacilityScripts.gen1_link_state(self)
 
 
 ## BIT_LINK_CONNECTED, under which `DrawStartMenu` spells SAVE as RESET.
@@ -7309,271 +4605,27 @@ func in_link_room() -> bool:
 
 
 func gen1_link_connected() -> bool:
-	return state != null and state.link_session().gen1_link_connected
+	return Gen1FacilityScripts.gen1_link_connected(self)
 
 
-## The cell SRAM holds: the receptionist's while the player is in a link room.
 func gen1_saved_position() -> Dictionary:
-	return _gen1_cable_club_origin
+	return Gen1FacilityScripts.gen1_saved_position(self)
 
 
-## `MartDialog`'s counter is the whole of a Generation 1 shop, so the request
-## carries the inventory `script_mart` wrote behind the id.
-## `script_mart` writes the shelf into the text pointer, so a counter is named by its map and text row.
-func _gen1_mart_steps(row: Dictionary, text_id: int) -> Array:
-	var items: Variant = _gen1_event_site(
-		Gen2WorldCatalog.KIND_SHOP, Gen2WorldCatalog.GEN1_SOURCE_TEXT, text_id - 1,
-		{"items": row.get("items", [])}
-	)["items"]
-	if not items is Array or (items as Array).is_empty():
-		return []
-	var place: Vector2i = map_id()
-	return [{"type": &"request", "values": {
-		"kind": &"mart_requested",
-		"values": {
-			"dialog": Gen2WorldMartHost.MARTTYPE_STANDARD,
-			"address": 0,
-			"items": (items as Array).duplicate(),
-			"map_group": place.x,
-			"map_number": place.y,
-			"text_id": text_id,
-		},
-	}}]
-
-
-## `DisplayPokemonCenterDialogue_`: `ShallWeHealYourPokemonText` is the first
-## visit's alone, `BIT_USED_POKECENTER` set behind it, and `YesNoChoicePokeCenter`
-## opens over whichever box was last. `SetLastBlackoutMap` is YES's, ahead of the heal.
-func _gen1_nurse_steps() -> Array:
-	var used: int = Gen1Layout.status_flag_4(Gen1Layout.USED_POKECENTER_BIT)
-	var asked: bool = state.is_engine_flag_active(used)
-	state.set_engine_flag(used, true)
-	var farewell: Array = [_gen1_pokecenter_box("farewell")]
-	var steps: Array = [] if asked else [_gen1_pokecenter_box("welcome")]
-	return steps + [
-		{
-			"type": &"choice",
-			"text": String(_gen1_pokecenter_box("welcome")["text"]) if asked \
-				else _gen1_pokecenter_text("shall_we_heal"),
-			"yes": [
-				{"type": &"blackout_map"},
-				_gen1_pokecenter_box("need_your_pokemon"),
-				{"type": &"request", "values": {
-					"kind": &"party_heal_requested", "values": {},
-				}},
-				_gen1_heal_machine_step(),
-				_gen1_pokecenter_box("fighting_fit"),
-			] + farewell,
-			"no": farewell,
-		},
-	]
-
-
-## `farcall AnimateHealingMachine`, the step behind `predef HealParty`, which the
-## dialogue waits out before its last two lines. `.partyLoop` sounds one ball
-## every `ld c, 30`, and the flashes open on `MUSIC_PKMN_HEALED`.
-func _gen1_heal_machine_step() -> Dictionary:
-	var balls: int = int(_party_summary.get("count", 0))
-	var flashes_at: int = balls * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES
-	var frames: int = flashes_at + Gen2WorldEffects.HEAL_MACHINE_FLASHES \
-		* Gen2WorldEffects.HEAL_MACHINE_FLASH_INTERVAL
-	var sounds: Array = [{
-		"frame": 0, "gen1": true, "index": Gen1SoundEngine.SFX_STOP_ALL_MUSIC,
-	}]
-	for ball: int in balls:
-		sounds.append({
-			"frame": ball * Gen2WorldEffects.HEAL_MACHINE_BALL_FRAMES,
-			"gen1": true, "index": Gen1Sfx.SFX_HEALING_MACHINE,
-		})
-	sounds.append({
-		"frame": flashes_at, "gen1": true, "index": Gen1Layout.MUSIC_PKMN_HEALED,
-	})
-	return _gen1_wait_step(&"heal_machine_anim", frames, {
-		"machine_type": 0, "balls": balls, "sounds": sounds,
-	})
-
-
-## A counted wait, with the `presentation_special_applied` event a screen would
-## start it from when [param presentation] names one.
-func _gen1_wait_step(
-	kind: StringName, frames: int, presentation: Dictionary = {}
-) -> Dictionary:
-	var step: Dictionary = {"type": &"wait", "values": {
-		"type": &"wait",
-		"wait": Gen2WorldScriptRunner.WAIT_FRAMES,
-		"kind": kind,
-		"frames": frames,
-	}}
-	if not presentation.is_empty():
-		var event: Dictionary = presentation.duplicate(true)
-		event["type"] = &"presentation_special_applied"
-		event["kind"] = kind
-		step["events"] = [event]
-	return step
-
-
-func _gen1_pokecenter_box(name: String) -> Dictionary:
-	return _gen1_facility_box(GEN1_POKECENTER_RUN, name)
-
-
-func _gen1_pokecenter_text(name: String) -> String:
-	return data.special_text(GEN1_POKECENTER_RUN, name) if data != null else ""
-
-
-func _gen1_facility_box(run: String, name: String) -> Dictionary:
-	return {
-		"type": &"text",
-		"text": gen1_filled_text(
-			data.special_text(run, name)
-		) if data != null else "",
-	}
-
-
-func _gen1_event_at(cell: Vector2i, kind: StringName) -> Dictionary:
-	for event: Dictionary in _active_events_at(cell):
-		if event.get("kind", &"") == kind and int(event.get("text", 0)) > 0:
-			return event
-	return {}
-
-
-## `TalkToTrainer`: the flag, the after or before line, `EngageMapTrainer` unless
-## [param seen], and `StartTrainerBattle`. Standing wild Pokemon share the header.
-func _gen1_trainer_steps(row: Dictionary, event: Dictionary, seen: bool = false) -> Array:
-	var raw: Variant = row.get("trainer", {})
-	if not raw is Dictionary or (raw as Dictionary).is_empty():
-		return []
-	var header: Dictionary = raw as Dictionary
-	var flag: int = int(header["event_flag"])
-	_gen1_scratch[int(Gen1Layout.for_id(data.id)["trainer_header_flag_bit"])] = flag % 8
-	if event_flag_active(flag):
-		if header.has("after_script"):
-			var steps: Array = []
-			return steps if _gen1_resolve_script(header["after_script"], steps, _gen1_run(event)) else []
-		return [{"type": &"text", "text": gen1_filled_text(String(header["after"]))}]
-	var fight: Array = [{"type": &"text", "text": gen1_filled_text(String(header["before"]))}]
-	if not seen:
-		_gen1_engage_music(event, fight)
-	fight.append({
-		"type": &"request",
-		"values": {
-			"kind": &"battle_requested",
-			"values": _gen1_battle_values(header, event),
-		},
-		"trainer_flag": flag,
-		"object_index": int(event.get("object_index", -1)),
-		"standing_wild": not event.has("trainer_class"),
-		"end_script": header.get("end_script", []),
-	})
-	return fight
-
-
-## `EngageMapTrainer`'s `PlayTrainerMusic`, under a printed box's wait for the press.
-func _gen1_engage_music(event: Dictionary, steps: Array) -> void:
-	if int(_gen1_volatile.get("gym_leader", 0)) != 0:
-		return
-	## A standing Pokemon's species byte is in no list, so it plays Youngster's.
-	var record: Dictionary = data.trainer_encounter_music(
-		int(event.get("trainer_class", Gen1Layout.YOUNGSTER_CLASS))
-	)
-	if record.is_empty():
-		return
-	var music: Dictionary = _gen1_sound_step("music", {
-		"index": int(record["sound_id"]), "bank": int(record["bank"]),
-	})
-	var last: Dictionary = steps.back() if not steps.is_empty() else {}
-	if StringName(last.get("type", &"")) == &"text" and bool(last.get("press", true)):
-		last["press"] = false
-		steps.append({"type": &"button", "arrow": true, "events": [music["event"]]})
-		return
-	steps.append(music)
-
-
-## `InitBattleEnemyParameters` splits the object's two bytes on `OPP_ID_OFFSET`:
-## above it a trainer class and party, below a species and a level.
-func _gen1_battle_values(header: Dictionary, event: Dictionary) -> Dictionary:
-	if not event.has("trainer_class"):
-		var site: Dictionary = _gen1_event_site(
-			Gen2WorldCatalog.KIND_STATIC, Gen2WorldCatalog.GEN1_SOURCE_OBJECT,
-			int(event.get("object_index", -1)),
-			{"species": int(event.get("species", 0)), "level": int(event.get("level", 0))}
-		)
-		return {"kind": &"wild", "pokemon": int(site["species"]), "level": int(site["level"])}
-	var trainer_class: int = int(event["trainer_class"])
-	var spoken: Dictionary = {"text": "%s: %s" % [
-		_gen1_trainer_name(trainer_class), String(header["end"]),
-	]}
-	return {
-		"kind": &"trainer",
-		"trainer_group": trainer_class,
-		"trainer_class": trainer_class,
-		"trainer_id": maxi(int(event.get("trainer_number", 1)) - 1, 0),
-		"object_index": int(event.get("object_index", -1)),
-		"trainer_name": _gen1_trainer_name(trainer_class),
-		"win_text": spoken,
-		"loss_text": _gen1_loss_text(trainer_class),
-		"defeated_text": _gen1_defeated_text(trainer_class),
-	}
-
-
-## `GetTrainerName_`: the rival's own name for his three classes.
-func _gen1_trainer_name(trainer_class: int) -> String:
-	if trainer_class in Gen1Layout.RIVAL_CLASSES:
-		return rival_name
-	return data.trainer_name(trainer_class) if data != null else ""
-
-
-## `TrainerDefeatedText`, the first line `TrainerBattleVictory` prints.
-func _gen1_defeated_text(trainer_class: int) -> String:
-	return gen1_trainer_text("defeated", _gen1_trainer_name(trainer_class))
-
-
-## A `link_battle` row with `wTrainerName`'s marker filled with [param name].
 func gen1_trainer_text(text: String, name: String) -> String:
-	if data == null:
-		return ""
-	var layout: Dictionary = Gen1Layout.for_id(data.id)
-	return gen1_filled_text(data.special_text("link_battle", text).replace(
-		"%s%04X>" % [Gen2TextStream.RAM_MARKER, int(layout["trainer_name_wram"])], name
-	))
+	return Gen1FacilityScripts.gen1_trainer_text(self, text, name)
 
 
-## `HandlePlayerBlackOut`: OPP_RIVAL1 alone says a line on a loss. The lose row
-## `SaveEndBattleTextPointers` keeps is printed by nothing.
-func _gen1_loss_text(trainer_class: int) -> Dictionary:
-	if trainer_class != Gen1Layout.RIVAL1_CLASS or data == null:
-		return {}
-	return {"text": gen1_filled_text(data.special_text("link_battle", "rival1_win"))}
-
-
-## `IsGhostBattle` and `PrintBeginningBattleText`'s `.pokemonTower`: a wild on
-## the tower's floors is a GHOST without a SILPH SCOPE in the bag, and
-## RESTLESS_SOUL, the MAROWAK, appears as one and is unveiled with it.
 func gen1_ghost_kind(species: int) -> StringName:
-	if not _gen1 or current_map == null or state == null \
-		or current_map.number < Gen1Layout.POKEMON_TOWER_1F \
-		or current_map.number > Gen1Layout.POKEMON_TOWER_7F:
-		return &""
-	if state.item_quantity(Gen1Layout.ITEM_SILPH_SCOPE) <= 0:
-		return Gen1Layout.GHOST_UNIDENTIFIED
-	return Gen1Layout.GHOST_UNVEILED if species == Gen1Layout.RESTLESS_SOUL else &""
+	return Gen1FacilityScripts.gen1_ghost_kind(self, species)
 
 
-## `PlayerBlackedOutText2`, printed over the fight the party was lost in.
 func gen1_blackout_text() -> String:
-	return gen1_filled_text(data.special_text("link_battle", "blacked_out")) \
-		if _gen1 and data != null else ""
+	return Gen1FacilityScripts.gen1_blackout_text(self)
 
 
-## `.battleOccurred`'s `AnyPartyAlive` behind every Generation 1 fight but one on
-## OAKS_LAB, whatever the fight came to. With no save to read, the outcome stands
-## in. A `wPartyCount` of zero, which is Yellow's Pikachu demo, runs its loop 256
-## times over the WRAM past the party and ORs a nonzero byte: alive.
 func gen1_blackout_due(save: Gen2SaveData, outcome: StringName) -> bool:
-	if not _gen1 or current_map == null or current_map.number == Gen1Layout.OAKS_LAB:
-		return false
-	if save == null:
-		return outcome == Gen2WorldBattleAdapter.OUTCOME_LOST
-	return not save.party.is_empty() and not Gen2WorldPartyHost.party_has_fit_mon(save)
+	return Gen1FacilityScripts.gen1_blackout_due(self, save, outcome)
 
 
 ## A Generation 2 collision code at [param cell], or -1 on a Generation 1 map,
@@ -7594,7 +4646,8 @@ func permission_for_code(code: int, tileset: Gen2WorldTileset = null) -> int:
 	if not _gen1:
 		return Gen2WorldCollision.permission_for(code)
 	return Gen2WorldCollision.gen1_permission(
-		tileset if tileset != null else current_tileset, code
+		tileset if tileset != null else current_tileset, code,
+		data != null and data.id == RomRegistry.YELLOW
 	)
 
 
@@ -7670,8 +4723,7 @@ func events_at(cell: Vector2i = player_cell) -> Array:
 
 ## Public event boundary for the screen and future systems. By default it
 ## reports active decoded records without interpreting cartridge scripts. The
-## optional execution flag keeps the old raw-data call stable while exposing
-## the queued interpreter to callers that are ready for it.
+## optional execution flag exposes the queued interpreter to callers that want it.
 func dispatch_events(cell: Vector2i = player_cell, execute_scripts: bool = false) -> Array:
 	var events: Array = _active_events_at(cell)
 	if execute_scripts:
@@ -7702,7 +4754,7 @@ func dispatch_script_events(cell: Vector2i = player_cell, coord_events: bool = t
 ## and a nonzero event flag prevents the encounter from being queued.
 func dispatch_sight_events() -> Array:
 	if _gen1:
-		return _gen1_sight()
+		return Gen1MapScripts._gen1_sight(self)
 	if _active_script != null or not _script_queue.is_empty():
 		return run_event_queue(false)
 	var request: Dictionary = _find_sight_request()
@@ -7712,1021 +4764,61 @@ func dispatch_sight_events() -> Array:
 	return run_event_queue(false)
 
 
-## `DoBoulderDustAnimation`, which `RunMapScript` reaches on every pass
-## `BIT_BOULDER_DUST` stands and `BIT_SCRIPTED_NPC_MOVEMENT` does not: the
-## smoke's twenty-four frames hold the map, and `SFX_CUT` follows them.
-func _gen1_boulder_dust() -> Array:
-	if _gen1_dust_facing < 0 or gen1_object_movement_running():
-		return []
-	if _gen1_last_boulder >= 0 and _gen1_last_boulder < objects.size() \
-		and (objects[_gen1_last_boulder] as Gen2WorldObject).is_stepping():
-		return []
-	var facing: int = _gen1_dust_facing
-	_gen1_dust_facing = -1
-	var frames: int = Gen1Layout.BOULDER_DUST_STEPS * Gen1Layout.BOULDER_DUST_STEP_FRAMES
-	_gen1_steps = [_gen1_wait_step(&"gen1_boulder_dust", frames, {
-		"facing": facing,
-		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Sfx.SFX_CUT}],
-	})]
-	return _gen1_result()
-
-
-## `UsedCut`'s tail: `RedrawMapView`, `AnimCut`, `SFX_CUT` and a second redraw.
 func gen1_cut_animation(applied: Dictionary) -> Array:
-	if not _gen1 or _gen1_holding():
-		return []
-	var grass: bool = int(applied.get("animation", 0)) == Gen2WorldFieldMove.ANIMATION_GRASS
-	var frames: int = Gen1Layout.cut_animation_frames(grass)
-	_gen1_steps = [_gen1_redraw_step(), _gen1_wait_step(&"gen1_cut", frames, {
-		"facing": player_facing,
-		"grass": grass,
-		"sounds": [{"frame": frames, "gen1": true, "index": Gen1Sfx.SFX_CUT}],
-	}), _gen1_redraw_step()]
-	return _gen1_result()
+	return Gen1MapScripts.gen1_cut_animation(self, applied)
 
 
-## `CheckFightingMapTrainers`: the shock bubble and `TrainerWalkUpToPlayer` in
-## front of `DisplayEnemyTrainerTextAndStartBattle`, which is `TalkToTrainer`
-## with BIT_SEEN_BY_TRAINER already set and so opens on the before-battle line.
-func _gen1_sight() -> Array:
-	if _gen1_holding():
-		return []
-	advance_gen1_movement_script()
-	var dust: Array = _gen1_boulder_dust()
-	if not dust.is_empty():
-		return dust
-	var ended: Array = _gen1_safari_check()
-	if not ended.is_empty():
-		return ended
-	## A script that only wrote blocks holds nothing, and the trainer check follows.
-	var running: Array = _gen1_map_script()
-	if _gen1_holding():
-		return running
-	var request: Dictionary = _find_sight_request()
-	if request.is_empty():
-		return running
-	var event: Dictionary = request["event"]
-	_gen1_last_sprite_index = int(request["object_index"])
-	var steps: Array = _gen1_trainer_steps(
-		current_map.text_at(int(event.get("text", 0))), event, true
-	)
-	if steps.is_empty():
-		return running
-	## `TrainerEngage` starts the piece before the bubble goes up.
-	var engaged: Array = []
-	_gen1_engage_music(event, engaged)
-	_gen1_steps = engaged + [{"type": &"request", "values": {
-		"kind": &"trainer_approach_requested",
-		"values": {
-			"object_index": int(request["object_index"]),
-			"direction": request["direction"],
-			"distance": int(request["distance"]),
-		},
-	}}] + steps
-	return _gen1_joined(running, _gen1_result())
-
-
-func _gen1_joined(first: Array, second: Array) -> Array:
-	if first.is_empty() or second.is_empty():
-		return first + second
-	(second[0] as Dictionary)["events"] = (first[0] as Dictionary).get("events", []) \
-		+ (second[0] as Dictionary).get("events", [])
-	return second
-
-
-## `CheckEvent EVENT_IN_SAFARI_ZONE`, which gates the counter and the window.
 func gen1_safari_active() -> bool:
-	return _gen1 and state != null \
-		and state.is_event_flag_active(Gen1Layout.IN_SAFARI_ZONE_EVENT)
+	return Gen1MapScripts.gen1_safari_active(self)
 
 
-## `SafariZoneCheckSteps`: the counter is read before it is decremented.
 func gen1_count_safari_step() -> bool:
-	if not gen1_safari_active():
-		return false
-	if state.safari_steps() <= 0:
-		_gen1_safari_game_over = true
-		return true
-	state.set_safari_steps(state.safari_steps() - 1)
-	return false
+	return Gen1MapScripts.gen1_count_safari_step(self)
 
 
-## `SafariZoneGameOver`, reached from `SafariZoneCheck`'s ball count as well as
-## from the step counter: the box, the warp to the gate and the state it leaves.
-func _gen1_safari_check() -> Array:
-	if not gen1_safari_active():
-		_gen1_safari_game_over = false
-		return []
-	if not _gen1_safari_game_over and state.safari_balls() > 0:
-		return []
-	_gen1_safari_game_over = false
-	var steps: Array = []
-	## `SafariGameOverText`'s first line is the timer rather than the bag.
-	if state.safari_balls() > 0:
-		steps.append(_gen1_safari_box("times_up"))
-	steps.append(_gen1_safari_box("game_over"))
-	steps.append({
-		"type": &"flag", "flag": Gen1Layout.SAFARI_GAME_OVER_EVENT, "set": true,
-	})
-	var byte: int = gen1_safari_gate_byte()
-	if byte >= 0:
-		steps.append({
-			"type": &"map_script", "byte": byte,
-			"value": Gen1Layout.SAFARI_SCRIPT_LEAVING,
-		})
-	steps.append({
-		"type": &"warp_to", "map": Gen1Layout.SAFARI_ZONE_GATE_MAP,
-		"warp": Gen1Layout.SAFARI_GAME_OVER_WARP,
-	})
-	_gen1_steps = steps
-	return _gen1_result()
-
-
-func _gen1_leave_safari_zone() -> void:
-	if not gen1_safari_active():
-		return
-	state.set_event_flag(Gen1Layout.IN_SAFARI_ZONE_EVENT, false)
-	state.set_safari_balls(0)
-	var byte: int = gen1_safari_gate_byte()
-	if byte >= 0:
-		state.set_gen1_map_script(byte, 0)
-
-
-## `TEXT_BLACKED_OUT`'s tail: the balls, the steps, the flag and both gate bytes.
 func gen1_map_blackout() -> void:
-	if not _gen1 or data == null or not Gen1Layout.poison_blackout_ends_safari(data.id):
-		return
-	_gen1_leave_safari_zone()
-	state.set_safari_steps(0)
-	_gen1_saved_coord_index = 0
+	Gen1MapScripts.gen1_map_blackout(self)
 
 
-func _gen1_safari_box(name: String) -> Dictionary:
-	if data == null:
-		return {"type": &"text", "text": ""}
-	var text: String = data.special_text(GEN1_SAFARI_RUN, name)
-	if text.is_empty():
-		text = data.special_text(GEN1_SAFARI_LABEL_RUN, name)
-	return {"type": &"text", "text": gen1_filled_text(text)}
-
-
-## `wSafariZoneGateCurScript`'s offset, read off the gate's own dispatch: it is
-## the one map whose state a routine outside that map writes.
 func gen1_safari_gate_byte() -> int:
-	return _gen1_map_script_byte_of(Gen1Layout.SAFARI_ZONE_GATE_MAP)
+	return Gen1MapScripts.gen1_safari_gate_byte(self)
 
 
-func _gen1_map_script_byte_of(number: int) -> int:
-	var map: Gen2WorldMap = data.world_map(0, number) if data != null else null
-	return _gen1_dispatch_byte(map) if map != null else -1
-
-
-## `w<Map>CurScript`'s value for the map stood on, or -1 where the map
-## dispatches on none.
 func gen1_map_script_state() -> int:
-	var byte: int = _gen1_map_script_byte()
-	return state.gen1_map_script(byte) if byte >= 0 and state != null else -1
-
-
-func _gen1_map_script_byte() -> int:
-	return _gen1_dispatch_byte(current_map) if current_map != null else -1
-
-
-## The table sits behind whatever the entry script tests first, which is a
-## branch on Pallet Town, Oak's Lab and Viridian Mart, so every arm is walked.
-func _gen1_dispatch_byte(map: Gen2WorldMap) -> int:
-	return _gen1_dispatch_byte_in(map.scripts.get("entry", []) as Array)
-
-
-func _gen1_dispatch_byte_in(nodes: Array) -> int:
-	for node: Dictionary in nodes:
-		if String(node.get("op", "")) == "map_script_table":
-			return int(node["byte"])
-		for key: String in Gen1Layout.SCRIPT_BRANCH_KEYS:
-			if node.has(key):
-				var byte: int = _gen1_dispatch_byte_in(node[key] as Array)
-				if byte >= 0:
-					return byte
-	return -1
-
-
-func _gen1_map_state_nodes(index: int) -> Array:
-	for row: Dictionary in current_map.scripts.get("states", []) as Array:
-		if int(row.get("id", -1)) == index:
-			return row.get("nodes", []) as Array
-	return []
-
-
-## `RunMapScript`, which `JoypadOverworld` runs every frame: what stands in
-## front of `CallFunctionInTable` and then the state the map's byte selects.
-func _gen1_map_script() -> Array:
-	if current_map == null or state == null:
-		return []
-	if not _gen1_entry_steps.is_empty():
-		_gen1_steps = _gen1_entry_steps
-		_gen1_entry_steps = []
-		return _gen1_result()
-	var entry: Array = _gen1_map_script_nodes(_gen1_map_load_pending)
-	_gen1_map_load_pending = 0
-	if entry.is_empty():
-		return []
-	var steps: Array = []
-	if not _gen1_resolve_script(entry, steps, _gen1_run({})) or steps.is_empty():
-		return []
-	_gen1_steps = steps
-	return _gen1_result()
+	return Gen1MapScripts.gen1_map_script_state(self)
 
 
 func script_input_waiting() -> bool:
-	return _gen1_holding() or (_active_script != null and _active_script.is_waiting())
+	return Gen1MapScripts._gen1_holding(self) or (_active_script != null and _active_script.is_waiting())
 
 
 ## True while a script holds the world, either running or still queued. A host
 ## that drives ambient motion checks this so a script keeps sole ownership of
 ## the objects it may be moving.
 func script_busy() -> bool:
-	return _gen1_holding() or _active_script != null or not _script_queue.is_empty()
+	return Gen1MapScripts._gen1_holding(self) or _active_script != null or not _script_queue.is_empty()
 
 
-## Whether a Generation 1 interaction is still standing in front of the map.
-func _gen1_holding() -> bool:
-	return not _gen1_steps.is_empty()
-
-
-func _gen1_step(type: StringName) -> Dictionary:
-	if _gen1_steps.is_empty():
-		return {}
-	var step: Dictionary = _gen1_steps[0]
-	return step if StringName(step.get("type", &"")) == type else {}
-
-
-## The result the head step is waiting on, empty once the list is spent. What a
-## row writes takes no turn of its own and is spent on the way past, and the
-## balance window one of those draws rides on the result behind it.
-func _gen1_result() -> Array:
-	_gen1_battle_last()
-	var events: Array = []
-	while not _gen1_steps.is_empty() and _gen1_written(_gen1_steps[0], events, _gen1_steps):
-		_gen1_steps.pop_front()
-	if _gen1_steps.is_empty():
-		_gen1_close_money_window(events)
-		return [] if events.is_empty() \
-			else [{"ok": true, "status": &"done", "events": events}]
-	_gen1_stand_sprites_still()
-	var result: Dictionary = _gen1_waiting_result(_gen1_steps[0])
-	result["events"] = events + (result.get("events", []) as Array)
-	return [result]
-
-
-## `DisplayTextIDInit`'s `.spriteStandStillLoop`: `and $fc` on every image
-## index, the counter behind it untouched.
-func _gen1_stand_sprites_still() -> void:
-	for object: Gen2WorldObject in objects:
-		if object.active and not object.deleted and object.is_stepping():
-			object.frame = 0
-
-
-## `OverworldLoop` reads `wCurOpponent` once the script has returned, so the
-## rest of a row stands in front of its battle: Yellow's initial catch training
-## sets its event behind the store and the throw reads it.
-func _gen1_battle_last() -> void:
-	var battles: Array = []
-	var rest: Array = []
-	for step: Dictionary in _gen1_steps:
-		var request: Dictionary = step.get("values", {}) if step.get("type", &"") == &"request" else {}
-		(battles if StringName(request.get("kind", &"")) == &"battle_requested" else rest).append(step)
-	if not battles.is_empty() and not rest.is_empty():
-		_gen1_steps = rest + battles
-
-
-## `ReadTrainer` reads `wLoneAttackNo` and `wRivalStarter` as they stand when
-## the fight opens: a gym's row writes the byte behind `InitBattleEnemyParameters`.
-func _gen1_stamped_request(request: Dictionary) -> Dictionary:
-	if StringName(request.get("kind", &"")) != &"battle_requested":
-		return request.duplicate(true)
-	var values: Variant = request.get("values", {})
-	if not values is Dictionary or StringName((values as Dictionary).get("kind", &"")) != &"trainer":
-		return request.duplicate(true)
-	var stamped: Dictionary = request.duplicate(true)
-	var stamped_values: Dictionary = stamped["values"]
-	stamped_values["lone_attack"] = int(_gen1_volatile.get("gym_leader", 0))
-	stamped_values["rival_starter"] = state.gen1_starter("rival") if state != null else 0
-	return stamped
-
-
-
-## `SetLastBlackoutMap`, whose whole body is the rest-house list: healing in one
-## of the Safari Zone's three leaves the map a blackout lands on where it was.
-func _gen1_record_blackout_map() -> void:
-	if current_map == null or data == null \
-		or data.gen1_special_warp_list("rest_houses").has(current_map.number):
-		return
-	_gen1_last_blackout_map = _gen1_last_map
-
-
-## `AfterDisplayingTextID` redraws the map behind the row, which takes a balance
-## window down the way `closetext`'s redraw takes Generation 2's.
-func _gen1_close_money_window(events: Array) -> void:
-	if not _gen1_money_window:
-		return
-	_gen1_money_window = false
-	events.append({"type": &"text_closed"})
-
-
-func _gen1_waiting_result(step: Dictionary) -> Dictionary:
-	var type: StringName = StringName(step["type"])
-	if type == &"request":
-		return {
-			"ok": true, "status": &"waiting",
-			"event": {"type": &"runtime_request", "request": _gen1_stamped_request(step["values"])},
-		}
-	if type == &"choice":
-		return {"ok": true, "status": &"waiting", "event": {"type": &"choice"}}
-	## `WaitForTextScrollButtonPress`; `arrow` is a printed box's blinking one.
-	if type == &"button":
-		return {
-			"ok": true, "status": &"waiting", "event": {
-				"type": &"button", "box": false, "arrow": bool(step.get("arrow", false)),
-			},
-			"events": (step.get("events", []) as Array).duplicate(true),
-		}
-	## A counted wait and whatever it starts on the frame it opens on.
-	if type == &"wait":
-		return {
-			"ok": true, "status": &"waiting",
-			"event": (step["values"] as Dictionary).duplicate(true),
-			"events": (step.get("events", []) as Array).duplicate(true),
-		}
-	## `AfterDisplayingTextID` ends every box on `WaitForTextScrollButtonPress`
-	## unless the row set `wDoNotWaitForButtonPress...` before its last one.
-	return {
-		"ok": true, "status": &"waiting",
-		"event": {
-			"type": &"text",
-			"text": String(step["text"]),
-			"prompt": bool(step.get("press", true)),
-		},
-	}
-
-
-## [param steps] is the list [param step] heads, which an in-view block queues onto.
-func _gen1_written(step: Dictionary, events: Array, steps: Array) -> bool:
-	match StringName(step["type"]):
-		&"money":
-			state.apply_changes({}, {}, {
-				"money": {Gen2WorldMartHost.MONEY_ACCOUNT: int(step["amount"])},
-			})
-			return true
-		&"coins":
-			state.apply_changes({}, {}, {"coins": int(step["amount"])})
-			return true
-		&"money_box":
-			_gen1_money_window = true
-			events.append({
-				"type": &"money_window_opened",
-				"kind": StringName(step.get("kind", &"money_top_right")),
-				"money": state.money(Gen2WorldMartHost.MONEY_ACCOUNT) if state != null else 0,
-				"coins": state.coins() if state != null else 0,
-			})
-			return true
-		&"flag":
-			if bool(step.get("engine", false)):
-				state.set_engine_flag(int(step["flag"]), bool(step["set"]))
-			else:
-				state.set_event_flag(int(step["flag"]), bool(step["set"]))
-			return true
-		&"items":
-			state.apply_changes({}, {}, {"items": step["items"]})
-			return true
-		&"fossil":
-			gen1_fossil[String(step["which"])] = int(step["value"])
-			return true
-		&"toggle":
-			gen1_toggle_object(int(step["index"]), bool(step["hidden"]))
-			return true
-		&"drop_last_warp":
-			_gen1_warps_dropped += 1
-			return true
-		## `SetLastBlackoutMap` names the map a script wrote; the nurse's own
-		## step carries none and takes `wLastMap` instead.
-		&"blackout_map":
-			if step.has("map"):
-				_gen1_last_blackout_map = int(step["map"])
-			else:
-				_gen1_record_blackout_map()
-			return true
-		&"map_script":
-			state.set_gen1_map_script(int(step["byte"]), int(step["value"]))
-			return true
-		&"saved_coord_index":
-			_gen1_saved_coord_index = int(step["value"])
-			return true
-		&"last_map":
-			_gen1_last_map = int(step["map"])
-			return true
-		&"safari_balls":
-			state.set_safari_balls(int(step["count"]))
-			return true
-		&"safari_steps":
-			state.set_safari_steps(int(step["steps"]))
-			return true
-		&"starter":
-			_gen1_record_starter(step)
-			return true
-	return _gen1_linked(step, events, steps)
-
-
-func _gen1_record_starter(step: Dictionary) -> void:
-	state.set_gen1_starter(String(step["who"]), int(step["value"]))
-	if String(step["who"]) == "player":
-		state.apply_changes({}, {}, {"starter_species": data.gen1_dex_of_index(int(step["value"]))})
-
-
-## The rest of [method _gen1_written]: what the cable club writes.
-func _gen1_linked(step: Dictionary, events: Array, steps: Array) -> bool:
-	match StringName(step["type"]):
-		&"link_state":
-			state.link_session().gen1_link_state = int(step["value"])
-			return true
-		&"link_connected":
-			state.link_session().gen1_link_connected = bool(step["set"])
-			return true
-		&"special_warp":
-			var warped: Dictionary = _gen1_special_warp(String(step["name"]))
-			if not warped.is_empty():
-				events.append(warped)
-			return true
-		&"cable_club_return":
-			events.append_array(gen1_return_to_cable_club_room())
-			return true
-		&"cup_menu":
-			var cup: Array = _gen1_cup_menu_steps()
-			for index: int in cup.size():
-				steps.insert(1 + index, cup[index])
-			return true
-		&"stadium_cup":
-			state.link_session().gen1_stadium_cup = int(step["cup"])
-			return true
-	return _gen1_kept(step, events, steps)
-
-
-## The rest of [method _gen1_written]: what a row leaves behind it.
-func _gen1_kept(step: Dictionary, events: Array, steps: Array) -> bool:
-	match StringName(step["type"]):
-		&"scratch":
-			_gen1_scratch[int(step["address"])] = int(step["value"])
-			return true
-		&"volatile":
-			## The byte itself, `wGymLeaderNo` being `wLoneAttackNo` too.
-			_gen1_volatile[String(step["name"])] = int(step.get("value", 1 if bool(step["set"]) else 0))
-			return true
-		&"map_load":
-			_gen1_map_load_pending |= 1 << int(step["bit"])
-			return true
-		&"byte":
-			state.set_gen1_byte(String(step["name"]), int(step["value"]))
-			return true
-		&"pikachu":
-			_gen1_pikachu_written(String(step["what"]), step["value"])
-			return true
-		&"pikachu_movement":
-			if pikachu != null:
-				pikachu.start_movement(step["bytes"], bool(step["refresh"]))
-			return true
-		&"text_table":
-			_gen1_text_table = int(step["table"])
-			return true
-		&"npc_movement_script":
-			_gen1_start_movement_script(int(step["table"]), int(step["object"]))
-			return true
-		&"npc_trade":
-			state.apply_changes({}, {}, {"npc_trades": {int(step["trade_id"]): true}})
-			return true
-		&"event":
-			events.append((step["event"] as Dictionary).duplicate(true))
-			return true
-		&"wait":
-			## A `WaitForSoundToFinish` with no driver to ask ends where it starts.
-			if not bool((step["values"] as Dictionary).get("until_sound", false)) \
-					or sound_playing.is_valid():
-				return false
-			events.append_array((step.get("events", []) as Array).duplicate(true))
-			return true
-	return _gen1_drawn(step, events, steps)
-
-
-## The rest of [method _gen1_written]: what a row moves or redraws.
-func _gen1_drawn(step: Dictionary, events: Array, steps: Array) -> bool:
-	match StringName(step["type"]):
-		&"object_facing":
-			_gen1_last_sprite_index = int(step["index"])
-			_turn_gen1_object(int(step["index"]), int(step["facing"]), events)
-			return true
-		&"player_coord":
-			if int(step["axis"]) == 0:
-				player_cell.y = int(step["value"])
-			else:
-				player_cell.x = int(step["value"])
-			return true
-		&"emote":
-			_gen1_show_emote(int(step["object"]), int(step["kind"]))
-			return true
-		&"object_path":
-			_gen1_last_sprite_index = int(step["index"])
-			events.append_array(_gen1_walk_object(
-				int(step["index"]), _gen1_path_to_player(step)
-			))
-			return true
-		&"warp_to":
-			events.append(_gen1_warp_to(int(step["map"]), int(step["warp"])))
-			return true
-		&"object_position", &"object_position_save", &"object_position_restore":
-			_gen1_object_position_step(step)
-			return true
-		&"walk":
-			events.append_array(_gen1_walk_player(step["moves"] as Array))
-			if bool(step.get("spinner", false)) and gen1_player_movement_running():
-				_gen1_spinning = true
-				_gen1_spin_facing = player_facing
-			return true
-		&"object_move":
-			_gen1_last_sprite_index = int(step["index"])
-			events.append_array(_gen1_walk_object(
-				int(step["index"]), step["moves"] as Array
-			))
-			return true
-		&"object_stay":
-			_gen1_last_sprite_index = int(step["index"])
-			_gen1_stand_object(int(step["index"]))
-			return true
-		&"player_facing":
-			player_facing = int(step["facing"])
-			return true
-		&"riding":
-			set_movement_mode(StringName(step["mode"]))
-			return true
-		&"erase_rows":
-			erase_screen_rows(int(step["first_row"]), int(step["rows"]), int(step["tile"]))
-			return true
-		&"block":
-			_gen1_block_written(step, events, steps)
-			return true
-	return false
-
-
-## `PrintCardKeyText` writes `wCardKeyDoorY` and its neighbour behind the box,
-## so the floor's own callback can flag the door next load.
-func _gen1_block_written(step: Dictionary, events: Array, steps: Array) -> void:
-	if bool(step.get("card_key", false)) and state != null:
-		state.set_card_key_door(Vector2i(int(step["x"]), int(step["y"])))
-	var changed: Dictionary = change_block(int(step["x"]), int(step["y"]), int(step["block"]))
-	if not bool(changed.get("ok", false)):
-		return
-	events.append(changed)
-	if bool(step.get("redraw", true)) and _gen1_block_in_view(int(step["x"]), int(step["y"])):
-		steps.insert(1, _gen1_redraw_step())
-
-
-func _gen1_redraw_step() -> Dictionary:
-	return _gen1_wait_step(&"gen1_redraw", Gen1Layout.REDRAW_MAP_VIEW_FRAMES)
-
-
-## `ReplaceTileBlock` redraws when the block's padded address lies within four
-## rows plus six blocks of `wCurrentTileBlockMapViewPointer`, compared linearly.
-func _gen1_block_in_view(block_x: int, block_y: int) -> bool:
-	if current_map == null:
-		return false
-	var stride: int = current_map.width_blocks + Gen1Layout.MAP_BORDER_BLOCKS * 2
-	var offset: int = (block_y - (player_cell.y >> 1) + 2) * stride \
-		+ block_x - (player_cell.x >> 1) + 2
-	return offset >= 0 and offset < 4 * stride + 6
-
-
-## The follower's routines a row calls and an emotion's own commands; Red and
-## Blue have nothing to write.
-func _gen1_pikachu_written(what: String, value: Variant) -> void:
-	if pikachu == null:
-		return
-	match what:
-		"following":
-			pikachu.set_following(bool(value))
-		"drawing":
-			pikachu.set_drawing(bool(value))
-		"spawn_state":
-			pikachu.spawn_state = int(value)
-		"schedule_spawn":
-			pikachu.schedule_after_map_load(gen1_pikachu_view(false))
-		"emote":
-			pikachu.show_emote(int(value))
-		"turn_away":
-			pikachu.face_away_from(gen1_player_facing())
-
-
-## `PIKACHU_SPRITE_INDEX` is slot fifteen, past any map's own objects.
-func _gen1_show_emote(index: int, kind: int) -> void:
-	if index < 0:
-		set_player_emote(kind, true, Gen1Layout.EMOTE_FRAMES)
-	elif index == Gen1Pikachu.SPRITE_INDEX - 1 and pikachu != null:
-		pikachu.show_emote(kind)
-	elif index < objects.size():
-		(objects[index] as Gen2WorldObject).set_emote(kind, true, Gen1Layout.EMOTE_FRAMES)
-
-
-## `FindPathToPlayer`: greater axis first, `hNPCPlayerYDistance` moved by the caller.
-func _gen1_path_to_player(step: Dictionary) -> Array:
-	var target: int = int(step["target"])
-	if target < 0 or target >= objects.size():
-		return []
-	var from: Vector2i = (objects[target] as Gen2WorldObject).cell
-	## BIT_PLAYER_LOWER_Y is set when the object is north of the player, and
-	## the perspective byte complements both bits before the path is read.
-	var lower_y: bool = from.y < player_cell.y
-	var lower_x: bool = from.x < player_cell.x
-	if int(step["perspective"]) != 0:
-		lower_y = not lower_y
-		lower_x = not lower_x
-	var dy: int = absi(player_cell.y - from.y) + int(step["y_adjust"])
-	var dx: int = absi(player_cell.x - from.x)
-	var moves: Array = []
-	var walked_y: int = 0
-	var walked_x: int = 0
-	while moves.size() < Gen1Layout.NPC_MOVEMENT_MAX:
-		var left_y: int = absi(dy - walked_y)
-		var left_x: int = absi(dx - walked_x)
-		if left_y == 0 and left_x == 0:
-			break
-		if left_x > left_y:
-			moves.append(Gen1Layout.MOVE_LEFT if lower_x else Gen1Layout.MOVE_RIGHT)
-			walked_x += 1
-		else:
-			moves.append(Gen1Layout.MOVE_UP if lower_y else Gen1Layout.MOVE_DOWN)
-			walked_y += 1
-	return moves
-
-
-func _gen1_warp_to(map_number: int, warp: int) -> Dictionary:
-	var target_map: Gen2WorldMap = data.world_map(0, map_number) if data != null else null
-	if target_map == null:
-		return {}
-	## `LoadDestinationWarpPosition` reaches the row with `add a / add a`, so
-	## `wDestinationWarpID` counts from zero as a `warp_event`'s `\4 - 1` does.
-	var warps: Array = target_map.events.get("warps", [])
-	if warp < 0 or warp >= warps.size():
-		return {}
-	var row: Dictionary = warps[warp]
-	var from_map: Vector2i = map_id()
-	var rest: Array = _gen1_steps  ## The state's own steps behind the warp still stand.
-	_apply_map(
-		target_map, data.world_tileset(target_map.tileset),
-		Vector2i(int(row["x"]), int(row["y"])), true, 0, MAP_ENTRY_DOOR
-	)
-	_gen1_steps = rest
-	return {"type": &"warp", "from_map": from_map, "to_map": map_id(), "to_cell": player_cell}
-
-
-func _gen1_object_position_step(step: Dictionary) -> void:
-	var index: int = int(step["index"])
-	var type: StringName = StringName(step["type"])
-	if type == &"object_position":
-		_gen1_place_object(index, String(step["axis"]), int(step["value"]))
-	elif index < 0 or index >= objects.size():
-		return
-	elif type == &"object_position_save":
-		_gen1_saved_object_position = {"index": index, "cell": objects[index].cell}
-	elif int(_gen1_saved_object_position.get("index", -1)) == index:
-		var cell: Vector2i = _gen1_saved_object_position["cell"]
-		_gen1_place_object(index, "y", cell.y)
-		_gen1_place_object(index, "x", cell.x)
-
-
-func _gen1_place_object(index: int, axis: String, value: int) -> void:
-	if index < 0 or index >= objects.size():
-		return
-	var object: Gen2WorldObject = objects[index]
-	if axis == "y":
-		object.cell.y = value
-	else:
-		object.cell.x = value
-	_remember_object_position(object)
-
-
+@warning_ignore("unused_private_class_variable")
 var _gen1_saved_object_position: Dictionary = {}
 
 
-func _gen1_start_movement_script(table: int, object: int) -> void:
-	_gen1_movement_script = {
-		"table": table, "object": object, "function": 0, "steps": 0,
-		"toggle_index": _gen1_toggle_index(object),
-	}
-
-
 func gen1_movement_script_running() -> bool:
-	return not _gen1_movement_script.is_empty()
+	return Gen1MapScripts.gen1_movement_script_running(self)
 
 
 func advance_gen1_movement_script() -> Array:
-	if _gen1_movement_script.is_empty() or current_map == null:
-		return []
-	var events: Array = []
-	var table: int = int(_gen1_movement_script["table"])
-	var function: int = int(_gen1_movement_script["function"])
-	if table == Gen1Layout.MOVEMENT_SCRIPT_PALLET:
-		_gen1_pallet_movement(function, events)
-	else:
-		_gen1_pewter_movement(table, function, events)
-	return events
+	return Gen1MapScripts.advance_gen1_movement_script(self)
 
 
-func _gen1_movement_lists(table: int) -> Dictionary:
-	return current_map.movement_scripts.get(table, {}) if current_map != null else {}
-
-
-func _gen1_pallet_movement(function: int, events: Array) -> void:
-	var object: int = int(_gen1_movement_script["object"])
-	match function:
-		0:
-			var steps: int = player_cell.x - Gen1Layout.PALLET_PATH_LEFT_COLUMN
-			_gen1_movement_script["steps"] = steps
-			if steps == 0:
-				_gen1_movement_script["function"] = 3
-				return
-			var moves: Array = []
-			moves.resize(steps)
-			moves.fill(Gen1Layout.MOVE_LEFT)
-			events.append_array(_gen1_walk_object(object, moves))
-			_gen1_movement_script["function"] = 1
-		1:
-			if gen1_object_movement_running():
-				return
-			events.append_array(_gen1_walk_player([
-				{"direction": Gen1Layout.MOVE_LEFT, "steps": int(_gen1_movement_script["steps"])},
-			]))
-			_gen1_movement_script["function"] = 2
-		2, 3:
-			if function == 2 and gen1_player_movement_running():
-				return
-			var lists: Dictionary = _gen1_movement_lists(Gen1Layout.MOVEMENT_SCRIPT_PALLET)
-			events.append_array(_gen1_walk_player(lists.get("player", [])))
-			events.append_array(_gen1_walk_object(object, lists.get("object", [])))
-			_gen1_movement_script["function"] = 4
-		4:
-			if gen1_player_movement_running():
-				return
-			gen1_toggle_object(int(_gen1_movement_script["toggle_index"]), true)
-			_gen1_movement_script = {}
-
-
-## `PewterGuys` writes the player's row over the last press `DecodeRLEList` wrote.
-func _gen1_pewter_movement(table: int, function: int, events: Array) -> void:
-	if function == 0:
-		var lists: Dictionary = _gen1_movement_lists(table)
-		var walk: Array = (lists.get("player", []) as Array).duplicate(true)
-		for row: Dictionary in lists.get("approaches", []):
-			if int(row["y"]) != player_cell.y or int(row["x"]) != player_cell.x:
-				continue
-			if not walk.is_empty():
-				(walk[0] as Dictionary)["steps"] = int((walk[0] as Dictionary)["steps"]) - 1
-			walk = (row["presses"] as Array) + walk
-			break
-		events.append_array(_gen1_walk_player(walk))
-		events.append_array(_gen1_walk_object(
-			int(_gen1_movement_script["object"]), lists.get("object", [])
-		))
-		_gen1_movement_script["function"] = 1
-	elif not gen1_player_movement_running():
-		_gen1_movement_script = {}
-
-
-## The override the next object load reads, and the object standing now.
-func _turn_gen1_object(index: int, facing: int, events: Array) -> void:
-	if current_map == null or index < 0 or index >= objects.size():
-		return
-	_apply_object_override(&"object_facing", {
-		"map_group": current_map.group, "map_number": current_map.number,
-		"object_index": index, "facing": facing,
-	})
-	(objects[index] as Gen2WorldObject).facing = facing
-	events.append({"type": &"object_turned", "object_index": index, "facing": facing})
-
-
-## Spends the head step and answers with whatever the next one waits on.
-## [param choice] is the row a YES/NO was answered with.
-func _gen1_advance(choice: int, result: Dictionary = {}) -> Array:
-	var step: Dictionary = _gen1_steps.pop_front()
-	if StringName(step.get("type", &"")) == &"choice":
-		var branch: Array = step.get("yes" if choice == 0 else "no", [])
-		_gen1_steps = branch.duplicate(true) + _gen1_steps
-	elif step.has("trade"):
-		_gen1_steps = _gen1_trade_after_selection(step, result) + _gen1_steps
-	elif step.has("day_care"):
-		_gen1_steps = _gen1_day_care_after_selection(result) + _gen1_steps
-	elif step.has("cry_after"):
-		_gen1_steps = _gen1_cry_after(step, result) + _gen1_steps
-	elif step.has("elevator"):
-		_gen1_ride_elevator(result)
-	elif step.has("slot_machine") and result.has("coins"):
-		_gen1_steps.push_front({"type": &"coins", "amount": int(result["coins"])})
-	elif step.has("surfing") and result.has("hi_score"):
-		set_gen1_surf_hi_score(int(result["hi_score"]))
-	elif step.has("replies") or step.has("pokedex") or step.has("list_menu"):
-		_gen1_steps = _gen1_menu_answered(step, int(result.get("row", -1))) + _gen1_steps
-	elif step.has("answers"):
-		var answers: Array = step["answers"]
-		var row: int = int(result.get("row", -1))
-		if row < 0 or row >= answers.size() - 1:
-			row = answers.size() - 1
-		_gen1_steps = (answers[row] as Array).duplicate(true) + _gen1_steps
-	elif step.has("later"):
-		_gen1_steps = _gen1_resolve_later(step, result) + _gen1_steps
-	elif step.has("ok"):
-		## `accepted` is the carry `_GivePokemon` answers in.
-		_gen1_steps = (step[
-			"ok" if bool(result.get("accepted", false)) else "full"
-		] as Array).duplicate(true) + _gen1_steps
-	_gen1_battle_won(step, result)
-	return _gen1_result()
-
-
-func _gen1_menu_answered(step: Dictionary, chosen: int) -> Array:
-	if step.has("replies") or step.has("pokedex"):
-		var replies: Array = step.get("replies", step.get("pokedex", []))
-		## The cache's numbers are floats, which `Array.has` tells from an int.
-		if chosen < 0 or chosen >= replies.size() or _gen1_row_named(step["quit"], chosen):
-			return []
-		if step.has("pokedex"):
-			return [{"type": &"request", "values": {
-				"kind": &"pokedex_entry_requested",
-				"values": {"species": int(replies[chosen])},
-			}}, step]
-		return [{"type": &"text", "text": String(replies[chosen])}, step]
-	var listed: Array = step["rows"]
-	if chosen < 0 or chosen >= listed.size():
-		return (step["done"] as Array).duplicate(true)
-	return [{"type": &"text", "text": String((listed[chosen] as Dictionary)["text"])}, step]
-
-
-static func _gen1_row_named(rows: Array, row: int) -> bool:
-	for named: Variant in rows:
-		if int(named) == row:
-			return true
-	return false
-
-
-## The side a staged request came back on, with its answer on the run.
-func _gen1_resolve_later(step: Dictionary, result: Dictionary) -> Array:
-	var run: Dictionary = (step.get("run", {}) as Dictionary).duplicate(true)
-	var cancelled: bool = true
-	if StringName(step.get("answer", &"")) == &"printed":
-		cancelled = not bool(result.get("printed", false))
-	elif StringName(step.get("answer", &"")) == &"party_index":
-		cancelled = int(result.get("party_index", -1)) < 0
-		if not cancelled:
-			run["party"] = {
-				"index": int(result["party_index"]),
-				"nickname": String(result.get("nickname", "")),
-				"ot_id": int(result.get("ot_id", -1)),
-				"original_trainer": String(result.get("original_trainer", "")),
-			}
-	else:
-		var entered: String = String(result.get("name", ""))
-		cancelled = entered.is_empty()
-		if not cancelled:
-			var buffers: Dictionary = run.get("buffers", {})
-			buffers[int((step["values"]["values"] as Dictionary)["buffer"])] = entered
-			run["buffers"] = buffers
-	var steps: Array = []
-	var nodes: Array = (step["later"] as Dictionary)["then" if cancelled else "else"]
-	return steps if _gen1_resolve_script(nodes, steps, run) else []
-
-
-func _gen1_ride_elevator(result: Dictionary) -> void:
-	var floor_row: Variant = result.get("floor", null)
-	if not floor_row is Dictionary:
-		return
-	_gen1_warp_entry = {
-		"warp": int((floor_row as Dictionary)["warp"]),
-		"map": int((floor_row as Dictionary)["map"]),
-	}
-	_gen1_steps.push_front(_gen1_wait_step(
-		&"gen1_elevator_shake", Gen1Layout.ELEVATOR_SHAKE_FRAMES, {"shake": true}
-	))
-
-
-## `EndTrainerBattle` flags a beaten opponent, and its `cp OPP_ID_OFFSET` skips
-## `HideObject` for a trainer, so only a standing wild goes off the map. It sets
-## both map-load bits, and `StartTrainerBattle` left the map's script on row 2.
-func _gen1_battle_won(step: Dictionary, result: Dictionary) -> void:
-	if result.has("outcome"):
-		_gen1_battle_outcome = StringName(result["outcome"])
-	var flag: int = int(step.get("trainer_flag", -1))
-	if flag < 0 or state == null or not result.has("outcome"):
-		return
-	_gen1_map_load_pending = Gen1Layout.MAP_LOAD_BOTH
-	var byte: int = _gen1_map_script_byte()
-	if byte >= 0 and not _gen1_map_state_nodes(GEN1_END_BATTLE_STATE).is_empty():
-		state.set_gen1_map_script(byte, GEN1_END_BATTLE_STATE)
-	if StringName(result.get("outcome", &"")) not in GEN1_TRAINER_BEATEN:
-		return
-	state.set_event_flag(flag)
-	if bool(step.get("standing_wild", false)):
-		gen1_toggle_object(_gen1_toggle_index(int(step.get("object_index", -1))), true)
-	load_object_masks()
-	var ending: Array = []  ## `TextCommand_ASM` behind the end-battle line the fight printed.
-	for node: Dictionary in step.get("end_script", []) as Array:
-		if String(node.get("op", "")) != "text":
-			ending.append(node)
-	var steps: Array = []
-	if not ending.is_empty() and _gen1_resolve_script(ending, steps, _gen1_run({})):
-		_gen1_steps = steps + _gen1_steps
-
-
-## `CollisionCheckOnLand` skips every test while `wSimulatedJoypadStatesIndex`
-## stands, so only the map bounds refuse.
-func _gen1_walk_player(moves: Array) -> Array:
-	var generated: Array = []
-	for leg: Dictionary in moves:
-		if int(leg["direction"]) == Gen1Layout.MOVE_NONE:
-			for _pass: int in int(leg["steps"]):
-				_queue_player_step(Vector2i.ZERO, 1, false, Vector2i.ZERO, STEP_KIND_WALK)
-			continue
-		var direction: Vector2i = movement_direction(int(leg["direction"]))
-		for _step: int in int(leg["steps"]):
-			var destination: Vector2i = player_cell + direction
-			if not _cell_in_bounds(destination):
-				_queue_player_step(Vector2i.ZERO, 0, false, direction, STEP_KIND_WALK)
-				generated.append({
-					"type": &"movement_blocked", "player": true, "cell": destination,
-				})
-				return generated
-			player_cell = destination
-			_queue_player_step(
-				direction, STEP_PASSES_WALK, false, direction, STEP_KIND_WALK
-			)
-	return generated
-
-
-## `MoveSprite`, whose whole list is queued here and drawn a step at a time by
-## [method advance_scripted_steps_pass]. `CanWalkOntoTile` allows a scripted step
-## outright, so only the map bounds refuse one.
-func _gen1_walk_object(index: int, moves: Array) -> Array:
-	var generated: Array = []
-	if current_map == null or index < 0 or index >= objects.size():
-		return generated
-	var object: Gen2WorldObject = objects[index]
-	_gen1_stand_object(index)
-	var facing: int = object.facing
-	for row: int in moves:
-		var direction: Vector2i = movement_direction(row)
-		facing = facing_for_direction(direction)
-		var destination: Vector2i = object.cell + direction
-		if not _cell_in_bounds(destination):
-			## `NormalStep` writes the facing before `GetNextTile` refuses, so a
-			## step off the map turns the object where it stands.
-			object.queue_step(Vector2i.ZERO, 0, false, direction)
-			generated.append({
-				"type": &"movement_blocked", "object_index": index, "cell": destination,
-			})
-			continue
-		var vacated: Vector2i = object.cell
-		object.cell = destination
-		var passes: int = STEP_PASSES_FAST if row >= Gen1Layout.NPC_RUN_FIRST else STEP_PASSES_WALK
-		object.queue_step(direction, passes, false, direction, STEP_KIND_WALK)
-		_advance_followers(index, vacated)
-	var key: String = _object_key(current_map.group, current_map.number, index)
-	_object_position_overrides[key] = object.cell
-	_object_facing_overrides[key] = facing
-	return generated
-
-
-## `SetSpriteMovementBytesToFF`: STAY over movement byte 1 and NONE over byte 2,
-## WRAM the next map load fills from `wMapSpriteData`, so nothing is recorded.
-func _gen1_stand_object(index: int) -> void:
-	if index < 0 or index >= objects.size():
-		return
-	(objects[index] as Gen2WorldObject).movement = Gen1Layout.object_movement(
-		Gen1Layout.OBJECT_MOVEMENT_STAY, Gen1Layout.OBJECT_MOVEMENT_NONE
-	)
-
-
-## `ShowObject` and `HideObject`: one `wToggleableObjectFlags` bit by global
-## index, and `UpdateSprites` behind it.
 func gen1_toggle_object(index: int, hidden: bool) -> void:
-	if index < 0 or state == null or data == null:
-		return
-	state.set_object_toggled(index, hidden == data.gen1_toggle_on(index))
-	load_object_masks()
-
-
-func _gen1_toggle_index(object_index: int) -> int:
-	if object_index < 0 or object_index >= objects.size():
-		return -1
-	return (objects[object_index] as Gen2WorldObject).toggle_index
+	Gen1MapScripts.gen1_toggle_object(self, index, hidden)
 
 
 ## See [constant Gen2WorldScriptRunner.WAIT_RUNS_THE_MAP]. Generation 1's
 ## `UpdateSprites` runs from `OverworldLoop` alone, so any `DelayFrames` stops it.
 func script_stops_the_map() -> bool:
-	if _gen1_holding():
+	if Gen1MapScripts._gen1_holding(self):
 		return StringName(pending_script_wait().get("wait", &"")) \
 			!= Gen2WorldScriptRunner.WAIT_MOVEMENT
 	return script_busy() and not bool(
@@ -8735,9 +4827,9 @@ func script_stops_the_map() -> bool:
 
 
 func pending_runtime_request() -> Dictionary:
-	var step: Dictionary = _gen1_step(&"request")
+	var step: Dictionary = Gen1MapScripts._gen1_step(self, &"request")
 	if not step.is_empty():
-		return _gen1_stamped_request(step["values"])
+		return Gen1MapScripts._gen1_stamped_request(self, step["values"])
 	return _active_script.pending_runtime_request() if _active_script != null else {}
 
 
@@ -8795,7 +4887,7 @@ func gen1_pikachu_cells() -> Array[Vector2i]:
 
 
 func pending_script_input() -> Dictionary:
-	var step: Dictionary = _gen1_step(&"choice")
+	var step: Dictionary = Gen1MapScripts._gen1_step(self, &"choice")
 	if not step.is_empty():
 		return {
 			"type": &"choice",
@@ -8804,23 +4896,22 @@ func pending_script_input() -> Dictionary:
 		}
 	## A box owing no press is spent by [method Gen2WorldScreen.advance_frame]
 	## rather than by one, and this is what it reads to find it.
-	var box: Dictionary = _gen1_step(&"text")
+	var box: Dictionary = Gen1MapScripts._gen1_step(self, &"text")
 	if not box.is_empty():
 		return {"type": &"text", "text": String(box["text"])}
-	if not _gen1_step(&"button").is_empty():
+	if not Gen1MapScripts._gen1_step(self, &"button").is_empty():
 		return {"type": &"button"}
-	var wait: Dictionary = _gen1_step(&"wait")
+	var wait: Dictionary = Gen1MapScripts._gen1_step(self, &"wait")
 	if not wait.is_empty():
 		return (wait["values"] as Dictionary).duplicate(true)
 	return _active_script.pending_input() if _active_script != null else {}
 
 
-## The frame wait a running script is standing in, empty when it is not standing
-## in one. Distinct from [method pending_script_input] and
-## [method pending_runtime_request] because no host answers it: only frames do,
-## through [method advance_script_wait].
+## The frame wait a running script is standing in, empty when it is not. Distinct
+## from [method pending_script_input] and [method pending_runtime_request] because
+## no host answers it: only frames do, through [method advance_script_wait].
 func pending_script_wait() -> Dictionary:
-	var step: Dictionary = _gen1_step(&"wait")
+	var step: Dictionary = Gen1MapScripts._gen1_step(self, &"wait")
 	if not step.is_empty():
 		return (step["values"] as Dictionary).duplicate(true)
 	return _active_script.pending_wait() if _active_script != null else {}
@@ -8869,10 +4960,10 @@ func load_object_masks() -> void:
 ## This is the explicit interaction boundary for NPCs, signs and item-like
 ## objects. It never executes a hidden object or invents a fallback action.
 func interact() -> Array:
-	if _active_script != null or not _script_queue.is_empty() or _gen1_holding():
+	if _active_script != null or not _script_queue.is_empty() or Gen1MapScripts._gen1_holding(self):
 		return run_event_queue(false)
 	if _gen1:
-		return _gen1_interact()
+		return Gen1ScriptNodes._gen1_interact(self)
 	var target: Vector2i = facing_cell()
 	var gs_request: Dictionary = _gs_ball_request(target)
 	if not gs_request.is_empty():
@@ -9025,8 +5116,8 @@ func _tile_collision_script_request(cell: Vector2i) -> Dictionary:
 func run_event_queue(acknowledge: bool = false, choice: int = -1) -> Array:
 	## `AfterDisplayingTextID` waits for the press and `CloseTextDisplay` returns
 	## to `HandleMap`, with no script behind it to resume.
-	if _gen1_holding():
-		return _gen1_advance(choice) if acknowledge else []
+	if Gen1MapScripts._gen1_holding(self):
+		return Gen1MapScripts._gen1_advance(self, choice) if acknowledge else []
 	var results: Array = []
 	var accept: bool = acknowledge
 	var selected_choice: int = choice
@@ -9079,8 +5170,8 @@ func cancel_script_input() -> Array:
 func complete_runtime_request(result: Dictionary) -> Array:
 	## `AfterDisplayingTextID` returns to `HandleMap` with nothing behind it, so
 	## a Generation 1 facility walks its own list instead of resuming a script.
-	if not _gen1_step(&"request").is_empty():
-		var spent: Array = _gen1_advance(-1, result)
+	if not Gen1MapScripts._gen1_step(self, &"request").is_empty():
+		var spent: Array = Gen1MapScripts._gen1_advance(self, -1, result)
 		## A list ending on its request still answers the host that the request
 		## was taken, the way a Generation 2 script's own terminal result does.
 		return spent if not spent.is_empty() else [{"ok": true, "status": &"done", "events": []}]
@@ -9206,10 +5297,9 @@ func _enqueue_script_events(events: Array) -> void:
 			"script": script_address,
 			"event": event.duplicate(true),
 		}
-		# hLastTalked, which GetFacingObject writes before an object's script
-		# runs. Without it every `disappear LAST_TALKED` in an ordinary object
-		# script resolves to object -1: the trainer and item-ball requests below
-		# carry their own, so only the plain object case was missing one.
+		# hLastTalked, which GetFacingObject writes before an object's script runs.
+		# Without it every `disappear LAST_TALKED` in an ordinary object script resolves
+		# to object -1; the trainer and item-ball requests below carry their own.
 		if event.get("kind", &"") == &"objects" and event.has("object_index"):
 			request["object_index"] = int(event["object_index"])
 		var trainer_request: Dictionary = _trainer_request_for_event(event)
@@ -9483,7 +5573,6 @@ func _object_event_flags() -> Array[int]:
 	return flags
 
 
-
 func _queue_map_callbacks(callback_type: int) -> void:
 	if current_map == null:
 		return
@@ -9551,10 +5640,10 @@ func gen1_map_load_pending() -> bool:
 ## at the first that would show something.
 func _spend_gen1_nodes(nodes: Array) -> Array:
 	var steps: Array = []
-	if nodes.is_empty() or not _gen1_resolve_script(nodes, steps, _gen1_run({})):
+	if nodes.is_empty() or not Gen1ScriptNodes._gen1_resolve_script(self, nodes, steps, Gen1ScriptNodes._gen1_run(self, {})):
 		return []
 	var events: Array = []
-	while not steps.is_empty() and _gen1_written(steps[0], events, steps):
+	while not steps.is_empty() and Gen1MapScripts._gen1_written(self, steps[0], events, steps):
 		steps.pop_front()
 	return steps
 
@@ -9781,16 +5870,13 @@ func _script_start_bug_contest(_event: Dictionary) -> Array:
 	return [start_bug_contest()]
 
 
-func _script_select_contestants(_event: Dictionary) -> Array:
-	var withdrawn: Dictionary = Gen2WorldBugContest.select_withdrawn(
-		schedule_random if schedule_random != null else RandomNumberGenerator.new()
-	)
+func _script_select_contestants(event: Dictionary) -> Array:
+	var withdrawn: Array = event.get("withdrawn", [])
 	for index: int in Gen2WorldBugContest.NUM_CONTESTANTS:
 		state.set_event_flag(
-			Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index,
-			bool(withdrawn.get(index, false))
+			Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index, withdrawn.has(index)
 		)
-	return [{"type": &"bug_contestants_selected", "withdrawn": withdrawn.keys()}]
+	return [{"type": &"bug_contestants_selected", "withdrawn": withdrawn}]
 
 
 func _script_contest_drop_off(event: Dictionary) -> Array:
@@ -10050,10 +6136,9 @@ func _apply_object_movement(event: Dictionary) -> Array:
 			if _cell_in_bounds(destination):
 				var vacated: Vector2i = object.cell
 				object.cell = destination
-				# The cell commits here, as it does for every other step in this
-				# runtime; only the drawing trails. A stream applies in one call,
-				# so the whole path is queued and drawn a step at a time by
-				# advance_scripted_steps_pass().
+				# The cell commits here, as for every other step in this runtime; only the
+				# drawing trails. A stream applies in one call, so the whole path is queued and
+				# drawn a step at a time by advance_scripted_steps_pass().
 				object.queue_step(
 					direction * cells, int(SCRIPTED_STEP_PASSES[kind]) * cells, jumping,
 					shown, kind,
@@ -10133,7 +6218,6 @@ func _movement_effect(
 				"command": command.duplicate(true),
 			})
 	return true
-
 
 
 func _clear_transient_object_visibility_overrides() -> void:
@@ -10289,10 +6373,9 @@ func _apply_result_events(result: Dictionary) -> Dictionary:
 	for generated: Dictionary in _apply_script_object_events(result.get("events", [])):
 		result["events"].append(generated)
 	for event: Dictionary in result.get("events", []):
-		## `Script_blackoutmod`'s own two writes. `wLastSpawnMapGroup` and
-		## `wLastSpawnMapNumber` are the pair a Pokemon Center entrance sets and
-		## the pair `GetWhiteoutSpawn` reads, so the command lands on the same
-		## field rather than on a destination of its own.
+		## `Script_blackoutmod`'s own two writes: `wLastSpawnMapGroup` and
+		## `wLastSpawnMapNumber`, the pair a Pokemon Center entrance sets and
+		## `GetWhiteoutSpawn` reads, so the command lands on the same field as they do.
 		if StringName(event.get("type", &"")) == &"blackout_destination_changed":
 			last_spawn_map = Vector2i(
 				int(event.get("map_group", 0)), int(event.get("map_number", 0))
@@ -10554,7 +6637,7 @@ func try_warp(cell: Vector2i = player_cell, entry: int = MAP_ENTRY_DOOR) -> Dict
 	## (10,8) is one, and the walk to the beasts crosses it.
 	if not _warp_tile_allows(cell):
 		return {}
-	source_warp = _gen1_warp_entry_over(cell, source_warp)
+	source_warp = Gen1ScriptNodes._gen1_warp_entry_over(self, cell, source_warp)
 	var target_group: int = int(source_warp.get("map_group", -1))
 	var target_number: int = int(source_warp.get("map_number", -1))
 	## `.goBackOutside`: a Generation 1 indoor warp names `LAST_MAP` rather than a
@@ -10734,10 +6817,9 @@ func try_connection(direction: Vector2i) -> Dictionary:
 
 	var from_map: Vector2i = map_id()
 	var from_cell: Vector2i = player_cell
-	## `.loadNewMap` runs on the pass the step lands, with the follower's
-	## coordinates rewritten around the player then; the step is begun here, so
-	## slot fifteen is carried into the new map's coordinates now and placed
-	## when the step lands.
+	## `.loadNewMap` runs on the pass the step lands, with the follower's coordinates
+	## rewritten around the player then; the step is begun here, so slot fifteen is
+	## carried into the new map's coordinates now and placed when the step lands.
 	if pikachu != null:
 		pikachu.on_connection()
 		var shift: Vector2i = target_cell - (from_cell + direction)
@@ -11105,9 +7187,9 @@ func advance_scripted_steps_pass() -> bool:
 	return changed
 
 
-## Spends the frames a script is waiting on and resumes it the frame its wait
-## ends: `ScriptEvents`'s SCRIPT_WAIT_MOVEMENT and the counted delay `pause`,
-## `wait`, `deactivatefacing` and `showemote` spend. Once per frame beside
+## Spends the frames a script is waiting on and resumes it the frame its wait ends:
+## `ScriptEvents`'s SCRIPT_WAIT_MOVEMENT and the counted delay `pause`, `wait`,
+## `deactivatefacing` and `showemote` spend. Once per frame beside
 ## [method advance_scripted_steps_pass].
 func advance_script_wait_frame() -> Array:
 	var wait: Dictionary = pending_script_wait()
@@ -11119,8 +7201,7 @@ func advance_script_wait_frame() -> Array:
 			return []
 		return _complete_script_wait()
 	if bool(wait.get("until_sound", false)):
-		if sound_playing.is_valid() \
-				and bool(sound_playing.call(_sound_watch, bool(wait.get("music", false)))):
+		if _sound_held(wait):
 			return []
 		_sound_watch = {}
 		return _complete_script_wait()
@@ -11144,7 +7225,17 @@ var _presentation_finished: bool = false
 ## `WaitForSoundToFinish`, answered each frame by the host's driver in
 ## [method Gen2AudioPlayer.still_waiting]'s shape. Unset, nothing is playing.
 var sound_playing: Callable = Callable()
+var channel_playing: Callable = Callable()
 var _sound_watch: Dictionary = {}
+
+
+func _sound_held(wait: Dictionary) -> bool:
+	if wait.has("channel"):
+		return channel_playing.is_valid() and bool(channel_playing.call(
+			_sound_watch, int(wait["channel"]), int(wait["sound"])
+		))
+	return sound_playing.is_valid() \
+		and bool(sound_playing.call(_sound_watch, bool(wait.get("music", false))))
 
 
 func finish_presentation() -> void:
@@ -11205,8 +7296,8 @@ func _complete_script_wait() -> Array:
 	## `WaitScript` and `WaitScriptMovement` both run `UnfreezeAllObjects` the
 	## frame their wait ends, before they hand the script back to `SCRIPT_READ`.
 	unfreeze_all_objects()
-	if not _gen1_step(&"wait").is_empty():
-		return _gen1_advance(-1)
+	if not Gen1MapScripts._gen1_step(self, &"wait").is_empty():
+		return Gen1MapScripts._gen1_advance(self, -1)
 	if _active_script == null:
 		return []
 	var advanced: Dictionary = _active_script.complete_wait()
@@ -11393,9 +7484,8 @@ func player_input_move(direction: Vector2i) -> Dictionary:
 	## turn however the facing sits; move_result owns that branch.
 	var forced: StringName = StringName(forced_movement().get("kind", &"none"))
 	## `.CheckTurning`'s own first test is `wPlayerTurningDirection`, so a turn is
-	## only ever taken from a standstill. On ice that byte stays set between
-	## steps, which is what makes a slide change direction without spending a
-	## turn on it.
+	## only ever taken from a standstill. On ice that byte stays set between steps,
+	## which is what makes a slide change direction without spending a turn on it.
 	if _gen1:
 		if _gen1_turns_on(direction):
 			var shown: int = player_facing
@@ -11984,7 +8074,7 @@ func _apply_map(
 		_gen1_volatile.clear()
 		_gen1_text_table = -1
 		_gen1_last_boulder = -1
-		_gen1_seed_warp_entry(target_map)
+		Gen1ScriptNodes._gen1_seed_warp_entry(self, target_map)
 	## `RefreshPlayerSprite` clears `wPlayerTurningDirection`, and every warp and
 	## connection reaches it, so a slide never survives a map change.
 	_stand_in_place()
@@ -12010,10 +8100,9 @@ func _apply_map(
 	# temporary map-flag reset. Flagless visibility and movement-level show/hide
 	# are live-map changes, so only those overrides expire on a map load.
 	_clear_transient_object_visibility_overrides()
-	## `EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1` to `_8` are Crystal's first eight
-	## flags; Generation 1's first eight are Pallet Town's own, the lab visit
-	## and the dex rating among them, and nothing on that cartridge clears a
-	## flag on a map load.
+	## `EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1` to `_8` are Crystal's first eight flags;
+	## Generation 1's first eight are Pallet Town's own, the lab visit and the dex
+	## rating among them, and nothing on that cartridge clears a flag on a map load.
 	if not _gen1:
 		state.reset_map_reload_flags()
 	_arm_wild_encounter_cooldown(false)
@@ -12035,9 +8124,8 @@ func _apply_map(
 	current_tileset = target_tileset
 	player_cell = _clamp_cell(target_cell)
 	# RefreshPlayerSprite calls CheckWarpFacingDown, then applies a scripted
-	# PLAYERSPRITESETUP_CUSTOM_FACING override last. This makes a staircase entry
-	# face its automatic downward exit instead of retaining the direction used on
-	# the previous map.
+	# PLAYERSPRITESETUP_CUSTOM_FACING override last, so a staircase entry faces its
+	# automatic downward exit instead of the direction used on the previous map.
 	if not custom_facing and Gen2WorldCollision.faces_down_on_spawn(
 		gen2_code_at(player_cell)
 	):
@@ -12332,7 +8420,7 @@ func gen1_warp_pad_pending() -> bool:
 	if not _gen1 or current_map == null \
 		or current_map.tileset == Gen1Layout.TILESET_OVERWORLD:
 		return false
-	var warp: Dictionary = _gen1_warp_entry_over(player_cell, warp_at(player_cell))
+	var warp: Dictionary = Gen1ScriptNodes._gen1_warp_entry_over(self, player_cell, warp_at(player_cell))
 	if warp.is_empty() or int(warp.get("map_number", -1)) == Gen1Layout.WARP_TO_LAST_MAP:
 		return false
 	return gen1_warp_pad_or_hole() == Gen1Layout.STANDING_ON_WARP_PAD
@@ -12552,11 +8640,11 @@ func _gen1_check_force_bike_or_surf() -> void:
 	## Both `w<Map>CurScript` stores sit in front of their own `cp`, so a match
 	## on any map writes B3F's and only B3F's own cell skips B4F's.
 	state.set_gen1_map_script(
-		_gen1_map_script_byte_of(Gen1Layout.SEAFOAM_ISLANDS_B3F), Gen1Layout.SEAFOAM_MOVE_OBJECT
+		Gen1MapScripts._gen1_map_script_byte_of(self, Gen1Layout.SEAFOAM_ISLANDS_B3F), Gen1Layout.SEAFOAM_MOVE_OBJECT
 	)
 	if current_map.number != Gen1Layout.SEAFOAM_ISLANDS_B3F:
 		state.set_gen1_map_script(
-			_gen1_map_script_byte_of(Gen1Layout.SEAFOAM_ISLANDS_B4F), Gen1Layout.SEAFOAM_MOVE_OBJECT
+			Gen1MapScripts._gen1_map_script_byte_of(self, Gen1Layout.SEAFOAM_ISLANDS_B4F), Gen1Layout.SEAFOAM_MOVE_OBJECT
 		)
 	if current_map.number in [
 		Gen1Layout.SEAFOAM_ISLANDS_B3F, Gen1Layout.SEAFOAM_ISLANDS_B4F,
@@ -12617,11 +8705,10 @@ func warp_to_escape_point(spawn: int, entry: int = MAP_ENTRY_WARP) -> Dictionary
 	return gen1_fly_to(_gen1_last_blackout_map, entry)
 
 
-## `ItemUseEscapeRope`: no map environment is read at all. Agatha's room is
-## refused by name and `EscapeRopeTilesets` is the rest. `DigFunction` is the
-## same routine under the other type byte and asks exactly this.
+## `ItemUseEscapeRope`: Agatha's room (and Bill's house and the Fan Club on
+## Yellow) by name, `EscapeRopeTilesets` the rest. `DigFunction` asks the same.
 func _gen1_check_escape() -> StringName:
-	if current_map.number == Gen1Layout.AGATHAS_ROOM \
+	if current_map.number in Gen1Layout.escape_refused_maps(data.id) \
 		or not data.gen1_special_warp_list(
 			"escape_rope_tilesets"
 		).has(current_map.tileset):
@@ -12636,12 +8723,40 @@ func poke_flute_request() -> Dictionary:
 	var request: Dictionary = {"ok": true, "woke": false}
 	if current_map == null:
 		return request
+	if pikachu != null and current_map.number == Gen1Layout.PEWTER_POKECENTER:
+		request["pikachu"] = not pikachu.following() and pikachu.is_next_to(player_cell)
+		request["woke"] = request["pikachu"]
+		return request
 	var flute: Dictionary = data.gen1_snorlax_flute(current_map.number, player_cell)
 	if flute.is_empty() or state.is_event_flag_active(int(flute["beat"])):
 		return request
 	state.set_event_flag(int(flute["fight"]), true)
 	request["woke"] = true
 	return request
+
+
+## `PlayedFluteHadEffectText` and its tune, then `PikachuEmotion26` at Pewter.
+func gen1_flute_woke_steps(wakes_pikachu: bool) -> Array:
+	_gen1_steps = [Gen1FacilityScripts._gen1_facility_box(self, "poke_flute", "had_effect")] + _gen1_flute_tune_steps()
+	if wakes_pikachu:
+		_gen1_steps.append_array(
+			Gen1ScriptNodes._gen1_pikachu_talk_steps(self, Gen1Layout.PIKACHU_EMOTION_PEWTER_ASLEEP)
+		)
+	return Gen1MapScripts._gen1_result(self)
+
+
+## The `text_asm`: `SFX_POKEFLUTE` takes channel 3 from its own bank, then the map's piece restarts.
+func _gen1_flute_tune_steps() -> Array:
+	return [
+		Gen1ScriptNodes._gen1_sound_step(self, "sound", {"index": Gen1SoundEngine.SFX_STOP_ALL_MUSIC}),
+		Gen1ScriptNodes._gen1_sound_step(self, "music", {
+			"index": Gen1Sfx.SFX_POKEFLUTE, "bank": Gen1Layout.AUDIO_BANK_ROM[0],
+		}),
+		Gen1ScriptNodes._gen1_sound_step(self, "channel", {
+			"channel": Gen1SoundEngine.CHAN3, "index": Gen1Sfx.SFX_POKEFLUTE,
+		}),
+		Gen1ScriptNodes._gen1_sound_step(self, "map_music", {"wait": true}),
+	]
 
 
 ## `EscapeRopeFunction`, which is `EscapeRopeOrDig` with the other type byte: the
@@ -12659,7 +8774,7 @@ func escape_rope_request() -> Dictionary:
 	var wall_event: int = unown_wall_event(EVENT_WALL_OPENED_IN_KABUTO_CHAMBER)
 	if wall_event >= 0:
 		state.set_event_flag(wall_event, true)
-	_gen1_leave_safari_zone()
+	Gen1MapScripts._gen1_leave_safari_zone(self)
 	var staged: Dictionary = _stage_escape(&"escape_rope_requested", 0, -1)
 	staged["wall_event"] = wall_event
 	_pending_escape["wall_event"] = wall_event
@@ -12736,10 +8851,9 @@ func hidden_items() -> Array:
 		var bg_event: Dictionary = (rows[index] as Dictionary).duplicate(true)
 		if int(bg_event.get("type", -1)) != BGEVENT_ITEM:
 			continue
-		## `event_index` the way [method events_at] stamps it: it is the only
-		## stable name a background event has, and [Gen2WorldCatalog] addresses a
-		## patched item under a tile by it. Without it every record on a map
-		## reads index 0 and a mod is told the wrong item.
+		## `event_index` as [method events_at] stamps it: the only stable name a
+		## background event has, which [Gen2WorldCatalog] addresses a patched item under a
+		## tile by. Without it every record reads index 0 and a mod is told the wrong item.
 		bg_event["event_index"] = index
 		var record: Dictionary = _hidden_item_record(bg_event)
 		if not bool(record.get("ok", false)):
@@ -12758,13 +8872,13 @@ func hidden_items() -> Array:
 ## cell holds none, it was taken, or a script is running.
 func take_hidden_item(cell: Vector2i) -> Array:
 	if current_map == null or _active_script != null or not _script_queue.is_empty() \
-			or _gen1_holding():
+			or Gen1MapScripts._gen1_holding(self):
 		return []
 	for row: Dictionary in current_map.events.get("hidden_events", []) as Array:
 		if row.has("hidden_item") and Vector2i(int(row["x"]), int(row["y"])) == cell \
 				and not (state != null and state.is_engine_flag_active(int(row["hidden_item_flag"]))):
-			_gen1_steps = _gen1_script_steps({"script": row.get("script", [])})
-			return _gen1_result()
+			_gen1_steps = Gen1ScriptNodes._gen1_script_steps(self, {"script": row.get("script", [])})
+			return Gen1MapScripts._gen1_result(self)
 	## [method events_at] rather than the raw list: it is what stamps `kind` and
 	## `event_index`, both of which the request below is built from.
 	for event: Dictionary in events_at(cell):
@@ -12821,7 +8935,6 @@ func hidden_item_nearby() -> bool:
 			continue
 		return true
 	return false
-
 
 
 ## The two tiles `GetFacingTileCoord`'s results are compared against. The source
@@ -12902,9 +9015,8 @@ func _watered_weird_tree_script(object_index: int) -> Dictionary:
 
 
 ## Walks a script from [param address] to the first [param opcode]. Answers that
-## command's branch target when [param branch] is set, and otherwise how many
-## bytes in the command after it starts. 0 for a stream that ends or fails to
-## decode first, which is what leaves a caller with no label to jump to.
+## command's branch target when [param branch] is set, and otherwise how many bytes
+## in the command after it starts; 0 for a stream that ends or fails to decode first.
 func _script_command_end(bank: int, address: int, opcode: int, branch: bool) -> int:
 	var crystal: bool = data.id != &"gold" and data.id != &"silver"
 	var raw: PackedByteArray = data.world_script(bank, address)
@@ -13171,10 +9283,10 @@ func _load_objects(carry_presentation: bool = false) -> void:
 	set_object_time(object_hour, object_time_of_day)
 
 
-## The source changeblock macro receives walk-cell coordinates. The cartridge
-## adds four tile coordinates before resolving the padded block buffer. Since
-## one block contains two walk cells and the live map exposes only its interior,
-## the resulting local block is floor((source + 4) / 2) - 2.
+## The source changeblock macro receives walk-cell coordinates. The cartridge adds
+## four tile coordinates before resolving the padded block buffer; a block holds two
+## walk cells and the live map exposes only its interior, so the local block is
+## floor((source + 4) / 2) - 2.
 func _script_block_cell(source_cell: Vector2i) -> Vector2i:
 	return Vector2i(
 		floori(float(source_cell.x + 4) / 2.0) - 2,

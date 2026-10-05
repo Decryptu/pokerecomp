@@ -171,6 +171,89 @@ func test_only_a_prompt_buttons_press_is_answered_with_the_click() -> void:
 	assert_eq(clicks.size(), 3, "a caller's wait is not a prompt")
 
 
+## `TextCommand_SOUND` is `PlaySFX` and `WaitSFX`: the tiles before it are drawn,
+## the effect starts, and nothing after it prints until the effect has ended.
+func test_a_sound_plays_after_the_tiles_before_it_and_holds_the_text() -> void:
+	var box: Gen2TextBox = _box()
+	box.reveal_speed = 30.0
+	var sounding: Array = [true]
+	var heard: Array = []
+	box.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	box.sound_requested.connect(func(sound: Dictionary) -> void:
+		heard.append([int(sound["id"]), box.glyphs().size()])
+	)
+	box.show_text("AB" + Gen2TextStream.sound_token(Gen2Sfx.SFX_ITEM) + "CD")
+	for _frame: int in 30:
+		box.advance_frame()
+	assert_eq(heard, [[Gen2Sfx.SFX_ITEM, 2]], "asked once, with two tiles on the page")
+	assert_true(box.is_revealing(), "and the printer waits on it")
+	assert_eq(box.glyphs().size(), 2, "CD is not typed over the effect")
+
+	sounding[0] = false
+	for _frame: int in 30:
+		box.advance_frame()
+	assert_false(box.is_revealing())
+	assert_eq(box.glyphs().size(), 4)
+	assert_eq(heard.size(), 1)
+
+
+## Red and Blue's `OneTwoAndText` runs `PlaySoundWaitForCurrent` and prints
+## " Poof!" over the effect; only Yellow waits it out.
+func test_a_sound_marked_to_play_over_does_not_hold_the_text() -> void:
+	var box: Gen2TextBox = _box()
+	box.reveal_speed = 30.0
+	box.sound_busy = func(_watch: Dictionary) -> bool: return true
+	box.show_text("A" + Gen2TextStream.sound_token(
+		Gen1Sfx.SFX_SWAP, Gen2TextStream.PLAY_MARK
+	) + "B")
+	for _frame: int in 30:
+		box.advance_frame()
+	assert_false(box.is_revealing())
+	assert_eq(box.glyphs().size(), 2)
+
+
+## A sound belongs to the page it was reached on, at the tile it follows, and a
+## line the layout wraps does not move it.
+func test_a_sound_lands_on_its_page_at_the_tile_it_follows() -> void:
+	var fanfare: String = Gen2TextStream.sound_token(Gen2Sfx.SFX_ITEM)
+	var pages: Array = Gen2TextLayout.lay_out_pages(
+		"Hello\nWorld" + fanfare + Gen2TextStream.PAGE_BREAK + "Next" + fanfare, COLUMNS, ROWS
+	)
+	assert_eq(pages[0]["lines"], PackedStringArray(["Hello", "World"]), "the token draws nothing")
+	assert_eq(int(pages[0]["beats"][0]["at"]), 10)
+	assert_eq(int(pages[1]["beats"][0]["at"]), 4)
+	var wrapped: Array = Gen2TextLayout.lay_out_pages(
+		"BULBASAUR used TACKLE" + fanfare, COLUMNS, ROWS
+	)
+	assert_eq(wrapped[0]["lines"], PackedStringArray(["BULBASAUR used", "TACKLE"]))
+	assert_eq(int(wrapped[0]["beats"][0]["at"]), "BULBASAUR used".length() + "TACKLE".length())
+
+
+## `TextCommand_PAUSE` is 30 `DelayFrames` unless A or B is down when it is reached;
+## the tiles before it are on screen and the ones after it wait.
+func test_a_pause_holds_the_text_for_thirty_frames_unless_a_button_is_held() -> void:
+	var text: String = "AB" + Gen2TextStream.PAUSE_MARK + "CD"
+	var box: Gen2TextBox = _box()
+	box.reveal_speed = 60.0
+	box.show_text(text)
+	for _frame: int in 2:
+		box.advance_frame()
+	assert_eq(box.glyphs().size(), 2)
+	var held_for: int = 0
+	while box.glyphs().size() == 2 and held_for < 100:
+		box.advance_frame()
+		held_for += 1
+	assert_eq(held_for, Gen2TextStream.PAUSE_FRAMES + 1, "30 frames of delay, then CD starts")
+
+	var pressed: Gen2TextBox = _box()
+	pressed.reveal_speed = 60.0
+	pressed.accelerated = true
+	pressed.show_text(text)
+	for _frame: int in 3:
+		pressed.advance_frame()
+	assert_eq(pressed.glyphs().size(), 3, "a held A or B reads the pad once and skips the wait")
+
+
 ## `Paragraph` clears the box and spends `DelayFrames 20` before the next page
 ## prints, and a press in those frames is spent the way one on a printing page is.
 func test_a_paragraph_holds_the_box_cleared_before_the_next_page() -> void:

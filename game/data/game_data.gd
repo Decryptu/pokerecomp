@@ -570,6 +570,8 @@ func _gen1_role(kind: StringName, index: int) -> Dictionary:
 func gen1_sound(bank: int, sound_id: int) -> Dictionary:
 	if sound_id <= 0:
 		return {}
+	if sound_id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
+		return {"index": 0, "bank": bank, "sound_id": sound_id}
 	var row: Dictionary = _gen1_audio_row(bank, sound_id)
 	if row.is_empty():
 		return {}
@@ -1826,14 +1828,28 @@ func mod_type_numbers() -> Array[int]:
 	return _overlay.defined_numbers(Gen2ContentOverlay.KIND_TYPE)
 
 
-## BattleCommand_Stab walks TypeMatchups in table order, not the species' slots.
-func ordered_defending_types(attacking: int, defending: Array) -> Array:
+## The defending types [param attacking] has a chart row against, in table order.
+func matched_defending_types(attacking: int, defending: Array) -> Array:
 	var out: Array = []
-	var keys: Array = _matchups.keys()
-	for key: int in keys:
+	for key: int in _matchups.keys():
 		for kind: int in defending:
 			if key == Gen2ContentOverlay.matchup_number(attacking, kind) and not out.has(kind):
 				out.append(kind)
+	return out
+
+
+## `wDamageMultipliers` after `AdjustDamageForMoveType`: each matched row
+## overwrites it, so the last in table order, not [method type_effectiveness]'s product.
+func last_matched_multiplier(attacking: int, defending: Array) -> int:
+	var matched: Array = matched_defending_types(attacking, defending)
+	if matched.is_empty():
+		return Gen2Layout.MATCHUP_EFFECTIVE
+	return type_matchup(attacking, int(matched[-1]))
+
+
+## BattleCommand_Stab walks TypeMatchups in table order, not the species' slots.
+func ordered_defending_types(attacking: int, defending: Array) -> Array:
+	var out: Array = matched_defending_types(attacking, defending)
 	for kind: int in defending:
 		if not out.has(kind):
 			out.append(kind)
@@ -3558,8 +3574,7 @@ func species_pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 ## [param unown_form] is a letter rather than zero: { height, script, idle,
 ## frames }, the scripts and each frame as a [PackedByteArray].
 ## Empty for Gold and Silver, which have no pic animation at all, and for an egg:
-## `AnimateMon_CheckIfPokemon` refuses `EGG` before anything is read, so the
-## cartridge's own egg tables are never reached through here.
+## `AnimateMon_CheckIfPokemon` refuses `EGG`; see [method egg_pic_animation].
 func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	var section: Dictionary = _pic_anims()
 	if section.is_empty():
@@ -3575,7 +3590,25 @@ func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	if not value is Dictionary:
 		return {}
 
-	var record: Dictionary = value as Dictionary
+	return _pic_anim_record(value as Dictionary)
+
+
+## `EggAnimation`, `EggAnimationIdle`, `EggFrames` and `EggBitmasks` in
+## [method pic_animation]'s shape: `StatsScreen_AnimateEgg`'s, Crystal only.
+func egg_pic_animation() -> Dictionary:
+	var value: Variant = _pic_anims().get("egg", null)
+	return _pic_anim_record(value as Dictionary) if value is Dictionary else {}
+
+
+func egg_pic_animation_cell() -> Dictionary:
+	var pic: Dictionary = egg_pic()
+	if pic.is_empty() or egg_pic_animation().is_empty() or atlas("egg_front_anim").is_empty():
+		return {}
+	pic["atlas"] = "egg_front_anim"
+	return pic
+
+
+func _pic_anim_record(record: Dictionary) -> Dictionary:
 	var blob: PackedByteArray = _blob("pic_anims")
 	var frames: Array = []
 	for frame: Variant in (record.get("frames", []) as Array):

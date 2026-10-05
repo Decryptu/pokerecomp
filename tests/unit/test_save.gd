@@ -426,6 +426,21 @@ func test_a_current_save_with_the_wrong_box_shape_is_rejected() -> void:
 	assert_string_contains(result["message"], "PC boxes")
 
 
+## `wPlayerStarter` is all a Generation 1 save from before `starter_species` was
+## stored has, and it holds the internal index rather than the dex number.
+func test_a_generation_1_save_without_the_stored_starter_gets_its_dex_number() -> void:
+	Fixture.build(_directory, "testgame", RomRegistry.GEN1)
+	var rows: Array = RomCache.read_json(RomCache.species_path(_directory))
+	rows[Fixture.CHARMANDER - 1]["index"] = 0xB0
+	RomCache.write_json(RomCache.species_path(_directory), rows)
+	_data = GameData.open_directory(_directory)
+	var save: Gen2SaveData = _save()
+	save.world = Gen2WorldSnapshot.new()
+	save.world.world_state.set_gen1_starter("player", 0xB0)
+	Gen2SaveStore.repair_gen1_starter(save, _data)
+	assert_eq(save.world.world_state.starter_species, Fixture.CHARMANDER)
+
+
 func test_a_legacy_save_migrates_to_empty_pc_boxes_without_inventing_world_state() -> void:
 	var save: Gen2SaveData = _save()
 	var raw: Dictionary = save.to_dict()

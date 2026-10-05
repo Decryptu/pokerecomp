@@ -87,6 +87,10 @@ var stat_moved: bool = false
 ## `wSomeoneIsRampaging`, read by `BattleCommand_LowerSub` alone.
 var someone_is_rampaging: bool = false
 
+## Generation 1's `StatModifierDownEffect` opening tests, asked once per move.
+var drop_gate_asked: bool = false
+var drop_gate_blocked: bool = false
+
 ## `wFailedMessage`: which of `BattleCommand_StatDown`'s three refusals the
 ## fail-text step says, or empty for a stat that moved.
 var stat_failure: StringName = &""

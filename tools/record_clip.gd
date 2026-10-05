@@ -451,11 +451,6 @@ func _build_saves(data: GameData) -> void:
 ## The world screen, the recording save behind it and the mods told which save
 ## is being played.
 func _build_world(data: GameData) -> void:
-	## The mods, before the screen and against this cartridge. `GameRuntime`
-	## loads them from its own `_ready`, but a `-s` driver cannot depend on
-	## having run after that: a screen built first has no follower walking
-	## behind the player and no wild Pokemon on the map, and which of those a
-	## clip caught was a race.
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_screen = packed.instantiate() as Gen2WorldScreen
 	_screen.map_group = _map.x
@@ -852,9 +847,8 @@ func _start() -> void:
 	## applied and `do=0:<button>` was dropped in silence.
 	_base = _clip_frame() + 1
 	_drawn_at_start = Engine.get_frames_drawn()
-	## The recorded frame the clip proper starts on, which is what the video is
-	## trimmed to. Printed rather than assumed: the mod load in front of it is
-	## as long as it is, and a caller cannot know that in advance.
+	## The recorded frame the clip proper starts on, which the video is trimmed to.
+	## Printed, not assumed: the length of the mod load in front of it is not known in advance.
 	print("TRIM=%d" % _frames)
 	for frame: int in _actions:
 		_pending.append(frame)

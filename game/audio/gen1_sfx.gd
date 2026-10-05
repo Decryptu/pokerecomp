@@ -6,6 +6,9 @@ extends RefCounted
 
 const SFX_GET_ITEM_1: int = 134
 const SFX_GET_ITEM_2: int = 137
+const SFX_POKEDEX_RATING: int = 145
+## Audio 2's `SFX_Level_Up`, which Audio 1's `SFX_Get_Item1_1` shares an id with.
+const SFX_LEVEL_UP: int = 134
 const SFX_TINK: int = 140
 const SFX_HEAL_HP: int = 141
 const SFX_HEAL_AILMENT: int = 142
@@ -52,6 +55,8 @@ const SFX_PURCHASE: int = 178
 const SFX_COLLISION: int = 180
 const SFX_GO_OUTSIDE: int = 181
 const SFX_SAVE: int = 182
+## Audio 1's `SFX_Pokeflute`; Audio 3's intro table reuses 184 for `SFX_Intro_Lunge`.
+const SFX_POKEFLUTE: int = 184
 const SFX_INTRO_LUNGE: int = 184
 const SFX_INTRO_HIP: int = 185
 const SFX_INTRO_HOP: int = 186
@@ -63,3 +68,20 @@ const SFX_SLOTS_REWARD: int = 191
 const SFX_SLOTS_NEW_SPIN: int = 192
 const SFX_SHOOTING_STAR: int = 194
 const SFX_TRAINER_APPEARED: int = 233
+
+## `PlayPokedexRatingSfx`'s `OwnedMonValues`, and the row of `PokedexRatingSfxPointers`
+## the first an owned count is below picks.
+const RATING_BELOW: Array[int] = [10, 40, 60, 90, 120, 150, 0xFF]
+## Effect and bank place in `Gen1Layout.AUDIO_BANK_ROM`.
+const RATING_EFFECTS: Array[Array] = [
+	[SFX_DENIED, 2], [SFX_POKEDEX_RATING, 0], [SFX_GET_ITEM_1, 0], [SFX_CAUGHT_MON, 1],
+	[SFX_LEVEL_UP, 1], [SFX_GET_KEY_ITEM, 0], [SFX_GET_ITEM_2, 0],
+]
+
+
+static func rating_effect(owned: int) -> Array[int]:
+	var row: int = 0
+	while row < RATING_BELOW.size() - 1 and owned >= RATING_BELOW[row]:
+		row += 1
+	var effect: Array = RATING_EFFECTS[row]
+	return [Gen1Layout.AUDIO_BANK_ROM[int(effect[1])], int(effect[0])]

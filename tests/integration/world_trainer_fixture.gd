@@ -7,6 +7,7 @@ extends RefCounted
 const BattleFixture := preload("res://tests/unit/battle_fixture.gd")
 ## Longer than any box the fixture prints takes to reach its end.
 const PRINT_FRAME_CAP: int = 2000
+const MENU_FADE_FRAME_CAP: int = 200
 
 const GAME_ID: StringName = &"worldtrainer"
 const SHA1: String = "0123456789abcdef"
@@ -723,7 +724,7 @@ static func _write_slots(cache_directory: String, manifest: Dictionary) -> void:
 		"bet_how_many": "Bet how many\ncoins?", "start": "Start!",
 		"not_enough_coins": "Not enough\ncoins.",
 		"ran_out_of_coins": "Darn… Ran out of\ncoins…",
-		"play_again": "Play again?", "lined_up": "lined up!\nWon @ coins!",
+		"play_again": "Play again?", "lined_up": "lined up!\nWon <RAM_D086> coins!",
 		"darn": "Darn!",
 	}
 
@@ -1255,6 +1256,26 @@ static func _text(text: String) -> Array:
 	return out
 
 
+## The frames of a `FadeToMenu` or a `CloseSubmenu` the world is inside, spent: the
+## white a menu opens and closes behind, which no screen under it can skip.
+static func settle_menu_fade(screen: Gen2WorldScreen) -> void:
+	for _frame: int in MENU_FADE_FRAME_CAP:
+		if not screen._menu_transition.active():
+			return
+		screen.advance_frame()
+
+
+## The frames the screen is all white until the transition in flight is over.
+static func white_frames(screen: Gen2WorldScreen) -> int:
+	var white: int = 0
+	for _frame: int in MENU_FADE_FRAME_CAP:
+		if not screen._menu_transition.active():
+			break
+		white += 1 if screen._screen._white.visible else 0
+		screen.advance_frame()
+	return white
+
+
 ## A service host's `PrintText` spent to where it waits: the frames its letters,
 ## `Paragraph` and scrolls cost, and no press.
 static func print_out(host: Gen2WorldServiceScreen) -> void:
@@ -1276,3 +1297,32 @@ static func box_words(host: Gen2WorldServiceScreen) -> String:
 static func press_through(host: Gen2WorldServiceScreen) -> void:
 	print_out(host)
 	host.handle_button(PokeButton.A)
+
+
+## Holds DOWN for [param frames] of [member Gen2InputRuntime] repeat, pressing
+## once through [param first], and answers the frames on which [param read]
+## changed. A held-down list is the real thing: the runtime's clock, its gate and
+## the screen's own repeat handling, with no frame spent but the ones counted.
+static func hold_down(first: Callable, read: Callable, frames: int) -> Array[int]:
+	var runtime: Gen2InputRuntime = Gen2InputRuntime.instance()
+	## A stall left by an earlier press is spent before this one starts.
+	for _frame: int in 30:
+		runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
+	var action: StringName = PokeButton.action(PokeButton.DOWN)
+	Input.action_press(action)
+	var down := InputEventAction.new()
+	down.action = action
+	down.pressed = true
+	runtime._input(down)
+	first.call()
+	var changed: Array[int] = []
+	var at: Variant = read.call()
+	for frame: int in frames:
+		runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
+		var now: Variant = read.call()
+		if now != at:
+			changed.append(frame + 1)
+			at = now
+	Input.action_release(action)
+	runtime._advance_direction_repeat(Gen2InputRuntime.FRAME_SECONDS)
+	return changed

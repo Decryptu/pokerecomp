@@ -4,11 +4,10 @@ var _r: RefCounted = null
 
 ## Verifies side-wall and side-buoy directional masks against freshly imported real
 ## caches, for both command profiles. The expected codes come from the pinned
-## sources: `GetMovementPermissions` and
-## `CanObjectLeaveTile`/`WillObjectBumpIntoTile`. The real-cartridge counterpart to
-## the side-wall cases in tests/unit/test_world_collision.gd and
-## tests/unit/test_world_api.gd, which use synthetic caches. It also pins the map
-## census, so a future cache change is loud.
+## sources: `GetMovementPermissions` and `CanObjectLeaveTile`/`WillObjectBumpIntoTile`.
+## The real-cartridge counterpart to the synthetic cases in
+## tests/unit/test_world_collision.gd and tests/unit/test_world_api.gd. It also
+## pins the map census.
 
 ## constants/map_constants.asm's CELADON_MANSION_ROOF, Crystal map group 21
 ## number 15. The only map in either pinned cartridge with $b0 or $b1 cells: a

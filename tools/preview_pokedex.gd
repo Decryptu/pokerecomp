@@ -2,12 +2,11 @@ extends SceneTree
 
 ## Captures the Pokedex against a real imported cache.
 ##   Godot --headless --path . -s res://tools/preview_pokedex.gd -- \
-##       crystal /tmp/dex.png [list|entry|option|search|results|unown] [presses]
-## A Generation 1 cartridge answers `list`, `side` and `entry` and none of the
-## other four: `ShowPokedexMenu` has no mode, search or Unown screen.
-## The world behind it is a new game with every species seen and every second one
-## caught, which puts a full listing, both row states and a real entry on screen at
-## once. `f<n>` in [presses] spends n hardware frames, which catches the arrow blink.
+##       crystal /tmp/dex.png [list|entry|print|option|search|results|unown] [presses]
+## A Generation 1 cartridge answers `list`, `side` and `entry` only. The world
+## behind it is a new game with every species seen and every second one caught,
+## which puts a full listing, both row states and a real entry on screen at once.
+## `f<n>` in [presses] spends n hardware frames, which catches the arrow blink.
 
 const NEW_BARK_GROUP: int = 24
 const NEW_BARK_MAP: int = 7
@@ -36,6 +35,7 @@ const ROUTES: Dictionary = {
 	# holds it at position 226, which is thirty-two pages down and one row on.
 	"unseen": "r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,r,d",
 	"entry": "a",
+	"print": "a,r,r,r,a",
 	"option": "sel",
 	"search": "start",
 	# BEGIN SEARCH spends `AnimateDexSearchSlowpoke` before the results open, so
@@ -53,6 +53,7 @@ const GEN1_ROUTES: Dictionary = {
 	"entry": "a,a",
 	# `.choseArea`, which is the side menu's third row.
 	"area": "a,d,d,a",
+	"print": "a,d,d,d,a",
 }
 
 
@@ -61,7 +62,7 @@ func _initialize() -> void:
 	if args.size() < 2:
 		push_error(
 			"Usage: preview_pokedex.gd -- <game> <output.png> "
-			+ "[list|entry|option|search|results|unown] [presses]"
+			+ "[list|entry|print|option|search|results|unown] [presses]"
 		)
 		quit(1)
 		return

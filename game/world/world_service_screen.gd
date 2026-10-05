@@ -10,6 +10,7 @@ signal completed(results: Array)
 signal music_requested(track: int)
 ## `ExitPokegearRadio_HandleMusic` as another card opens: the map's own piece.
 signal map_music_requested()
+signal gen1_music_requested(song: Array[int])
 ## A Pokegear call placed; the world answers with [method finish_call].
 signal call_placed(results: Array)
 ## The sound this screen asks for, played by the world screen's own driver.
@@ -162,6 +163,7 @@ var _hold_frames: int = 0
 var _hold_then: Callable = Callable()
 var _hold_sound: Dictionary = {}
 var _hold_waits_sound: bool = false
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
 var _mart_after: StringName = MART_LIST
 var _mart_waits: bool = true
 ## `SaveScreenTilesToBuffer1`: a Generation 1 shop photographs the screen behind
@@ -425,7 +427,12 @@ func open_pending(
 			_open_elevator(resolved.get("data", {}).get("elevator", {}))
 			return true
 		&"pc_requested":
-			_boot_pc(StringName(resolved.get("data", {}).get("pc", {}).get("mode", &"")))
+			var machine: StringName = StringName(resolved.get("data", {}).get("pc", {}).get("mode", &""))
+			## Generation 1's boot line is the script's own box, printed before this.
+			if String(machine).begins_with("gen1_"):
+				_open_gen1_pc(machine)
+			else:
+				_boot_pc(machine)
 			return true
 	_show_error("No scene host for %s." % String(request.get("kind", "request")))
 	return false
@@ -505,6 +512,15 @@ func handle_button(button: int) -> bool:
 		return false
 	if _pack != null:
 		return _pack.handle_button(button)
+	var before: Vector2i = _list_position(button)
+	var handled: bool = _press_button(button)
+	Gen2ScrollingMenu.after_press(
+		_data != null and _data.generation == RomRegistry.GEN1, before, _list_position(button)
+	)
+	return handled
+
+
+func _press_button(button: int) -> bool:
 	if _press_prompt(button):
 		return true
 	if _pc_box_print:
@@ -579,7 +595,7 @@ func _apply_pc_switch_press() -> void:
 		## `PC_PlaySwapItemsSound`, which is the pack's own pair of effects.
 		if not _gen1_pc:
 			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
-			sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+			_hold_for_sound(sfx_requested.emit.bind(Gen2Sfx.SFX_SWITCH_POKEMON, true))
 	_pc_switch = int(answer["held"])
 	_render_rows()
 
@@ -716,7 +732,8 @@ func _open_elevator(elevator: Dictionary) -> void:
 		_elevator_scroll = 0
 		_set_overlay_open(true)
 		_open_map_overlay_view()
-		_print(_elevator_prompt())
+		## Yellow's `DisplayElevatorFloorMenu` prints with `BIT_NO_TEXT_DELAY` set.
+		_print(_elevator_prompt(), _data.id == RomRegistry.YELLOW)
 		_render_elevator()
 		return
 	if int(_elevator.get("current", -1)) < 0:
@@ -857,6 +874,60 @@ func _press_elevator(button: int) -> void:
 var question_page: String = ""
 var box_palette: PackedColorArray = PackedColorArray()
 var _no_request: bool = false
+var menu_transition: Gen2MenuTransition = null
+var _fade_order: int = Gen2WorldPalette.FADE_IDENTITY
+## Whether `BuyMenu` is up behind a `FadeToMenu`, or waiting on one.
+var _buy_faded: bool = false
+var _buy_fading: bool = false
+var _hof_faded: bool = false
+
+## The modes whose boxes stand over the map, which a fade has to redraw.
+const FADE_REDRAWN_MODES: Array = [
+	MODE.MENU, MODE.PC, MODE.PC_ITEMS, MODE.PC_MAILBOX, MODE.PC_MAIL_SUBMENU,
+	MODE.PC_MAIL_CONFIRM, MODE.PC_ASK, MODE.PC_TEXT,
+]
+
+
+func set_fade_order(order: int) -> void:
+	if order == _fade_order:
+		return
+	_fade_order = order
+	if _box != null:
+		_box.palette = _faded_box_palette()
+	if _service_view == null:
+		return
+	if _mode == MODE.MART:
+		_render_mart()
+	elif FADE_REDRAWN_MODES.has(_mode):
+		_render_rows()
+
+
+func _faded_box_palette() -> PackedColorArray:
+	if _fade_order == Gen2WorldPalette.FADE_IDENTITY:
+		return box_palette
+	return Gen2WorldPalette.fade_palette(
+		box_palette if box_palette.size() >= 4 else Gen2WorldPalette.text_palette(),
+		_fade_order
+	)
+
+
+func _fade_to_menu(open: Callable) -> void:
+	if menu_transition == null:
+		open.call()
+		return
+	menu_transition.fade_to_menu(open)
+
+
+func _clear_screen(open: Callable, screen: StringName = &"pc_item_screen") -> void:
+	if menu_transition == null:
+		open.call()
+		return
+	menu_transition.clear_screen(open, screen)
+
+
+func _close_submenu() -> void:
+	if menu_transition != null:
+		menu_transition.close_submenu()
 
 
 func _open_menu(input: Dictionary) -> void:
@@ -1569,6 +1640,14 @@ func _gen1_mart() -> bool:
 
 ## `BuyMenuLoop` restores its cursor; pokered's loops zero `wCurrentMenuItem`.
 func _return_to_mart_list(stage: StringName) -> void:
+	## `BuyMenu`'s `FadeToMenu`, once a visit: its loop stays on the screen.
+	if stage == MART_LIST and _mart_over_map and not _gen1_mart() and not _buy_fading:
+		_buy_fading = true
+		_fade_to_menu(_return_to_mart_list.bind(stage))
+		return
+	if _buy_fading:
+		_buy_fading = false
+		_buy_faded = menu_transition != null
 	_mart_stage = stage
 	_mart_over_map = false
 	if _gen1_mart():
@@ -1772,10 +1851,15 @@ func _buy_mart_selection() -> void:
 ## B off the buy or sell list: `.Buy` and `.Sell` both fall into `.AnythingElse`;
 ## only `.Quit` and the four single-list shop types print the come-again box.
 func _leave_mart() -> void:
+	## `BuyMenu`'s `CloseSubmenu`; the sell list shares this way out and has none.
+	var faded: bool = _buy_faded
+	_buy_faded = false
 	if _mart_standard():
 		_show_mart_top(_mart_text("ask_more"))
-		return
-	_quit_mart()
+	else:
+		_quit_mart()
+	if faded:
+		_close_submenu()
 
 
 func _quit_mart() -> void:
@@ -2369,12 +2453,14 @@ func _refuse_pc() -> void:
 
 
 ## `BillsPC_SeeYa`, and the `.LogOut` behind it: back to the machine's own top
-## menu, or out of the host when nothing opened this but a start-menu action.
+## menu, or out of the host when nothing opened this but a start-menu action, whose
+## `CloseSubmenu` is the world's.
 func _leave_bills_pc() -> void:
 	if _bills_pc_only:
 		_finish([])
 		return
 	_open_pc(&"pokemon_center")
+	_close_submenu()
 
 
 ## `PokemonCenterPC`'s top menu, or `_PlayersHousePC`'s item PC when the script
@@ -2467,11 +2553,16 @@ func _open_pc_item_list(action: int) -> void:
 		_open_pc_text([_said(_pc_text("no_items"))], &"pc_items", _title)
 		return
 	if depositing:
-		_open_deposit_sell_pack(Gen2DepositSellPack.DEPOSIT, _open_pc_items)
+		_open_deposit_sell_pack(Gen2DepositSellPack.DEPOSIT, _leave_pc_deposit)
 		return
 	_mode = MODE.PC_ITEM_LIST
 	_summary = ""
 	_render_rows()
+
+
+func _leave_pc_deposit() -> void:
+	_open_pc_items()
+	_close_submenu()
 
 
 func _pc_list_is_bag() -> bool:
@@ -2606,7 +2697,7 @@ func _confirm_pc_menu_row(row: int) -> void:
 		Gen2WorldPC.PCPCITEM_OAKS_PC:
 			_open_pc_text([_said(_pc_text("oaks_pc"))], &"pc_oak", "")
 		Gen2WorldPC.PCPCITEM_HALL_OF_FAME:
-			_open_hall_of_fame(0)
+			_fade_to_menu(_open_hall_of_fame_machine)
 		Gen2WorldPC.PCPCITEM_TURN_OFF:
 			## `TurnOffPC` prints and `.shutdown` runs behind it with no press.
 			_open_pc_text([_said(_pc_text("closed"), &"none")], &"pc_shut_down", "")
@@ -2616,8 +2707,9 @@ func _confirm_player_pc_row(row: int) -> void:
 	_players_pc_row = row
 	match row:
 		Gen2WorldPC.PLAYERSPCITEM_WITHDRAW_ITEM, \
-		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM, \
 		Gen2WorldPC.PLAYERSPCITEM_TOSS_ITEM:
+			_clear_screen(_open_pc_item_list.bind(row))
+		Gen2WorldPC.PLAYERSPCITEM_DEPOSIT_ITEM:
 			_open_pc_item_list(row)
 		Gen2WorldPC.PLAYERSPCITEM_MAIL_BOX:
 			_enter_mailbox()
@@ -2866,6 +2958,7 @@ func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
 		kind, _save.player_name if _save != null else "", _write_service_save,
 		_save == null or _save.save_file_exists
 	)
+	_save_prompt.sound_busy = Gen2AudioPlayer.sound_wait
 	_save_printed = ""
 	_frame_clock.reset()
 	set_process(true)
@@ -2876,6 +2969,9 @@ func _open_save_prompt(kind: Gen2SavePrompt.Kind, after: StringName) -> void:
 ## behind it answers the same success without touching a file, the way a
 ## transaction with `persist` off does.
 func _write_service_save() -> Dictionary:
+	## Crystal's `ChangeBoxSaveGame` switches after the SAVING text, before the write.
+	if _save_after == &"change_box" and not _gold_silver():
+		_switch_save_box()
 	if not save_action.is_valid():
 		return {"ok": true, "kind": &"not_persisted"}
 	return save_action.call()
@@ -2937,15 +3033,25 @@ const SAVE_MEDIUM_SPEED: float = 1.0 / (Gen2TextBox.FRAME_SECONDS * 3.0)
 
 
 ## A, B and a frame all sync the same way: the prompt decides what its step reads.
+func _gold_silver() -> bool:
+	return _data != null and (_data.id == RomRegistry.GOLD or _data.id == RomRegistry.SILVER)
+
+
+func _switch_save_box() -> void:
+	_box_index = _box_submenu_index
+	if _save != null:
+		_save.current_box = _box_index
+
+
+const QUICK_SAVE_FRAMES: int = 30
+
+
 func _advance_save_prompt() -> void:
 	if _save_prompt == null:
 		return
-	if _save_prompt.writing_now() and _save_after == &"change_box":
-		## `ChangeBoxSaveGame` puts `wCurBox` between the two halves, so the
-		## write switches the box rather than the answer.
-		_box_index = _box_submenu_index
-		if _save != null:
-			_save.current_box = _box_index
+	## pokegold's switches before the text.
+	if _save_prompt.saving_begins() and _save_after == &"change_box" and _gold_silver():
+		_switch_save_box()
 	if _save_prompt.take_sfx():
 		sfx_requested.emit(Gen2Sfx.SFX_SAVE, true)
 	if not _save_prompt.finished():
@@ -2957,8 +3063,9 @@ func _advance_save_prompt() -> void:
 	_save_after = &""
 	set_process(false)
 	if after == &"quick_save":
-		## TRUE for a save that was written, FALSE for one that was not.
-		_finish_runtime({"ok": true, "script_value": 0 if refused else 1})
+		## TRUE for a save that was written, FALSE for one that was not; then `ld c, 30`.
+		var answer: Dictionary = {"ok": true, "script_value": 0 if refused else 1}
+		_hold(_finish_runtime.bind(answer), QUICK_SAVE_FRAMES)
 		return
 	if after == &"change_box":
 		_open_box_list()
@@ -3007,11 +3114,18 @@ func _pc_text_printed() -> void:
 	var said: Dictionary = _pc_texts[0]
 	if int(said["sfx"]) >= 0:
 		sfx_requested.emit(int(said["sfx"]), false)
+	if int(said.get("rating", -1)) >= 0:
+		_play_gen1_rating(int(said["rating"]))
 	if said["end"] == &"none":
 		_advance_pc_text()
 
 
 func _advance_pc_text() -> void:
+	## `ProfOaksPCBoot`'s `WaitSFX` behind the press that ends the rating's `JoyWaitAorB`.
+	if not _pc_texts.is_empty() and int(_pc_texts[0]["sfx"]) >= 0:
+		_pc_texts[0]["sfx"] = -1
+		_hold_for_sound(_advance_pc_text)
+		return
 	if _box != null:
 		_box.advance()
 	_pc_texts.pop_front()
@@ -3038,7 +3152,7 @@ const PC_TEXT_LANDINGS: Dictionary = {
 	&"pc_oak": &"_open_pc_oak",
 	&"mailbox": &"_open_mailbox",
 	&"decoration": &"_open_decorations",
-	&"bills_pc": &"_open_bills_pc_menu",
+	&"bills_pc": &"_log_in_bills_pc",
 	&"bills_pc_mail": &"_open_bills_pc_menu",
 	&"oak_closed": &"_open_oak_closed",
 	&"gen1_items": &"_open_gen1_items",
@@ -3083,7 +3197,20 @@ func _open_gen1_top() -> void:
 	_render_rows()
 
 
+## `ActivatePC`'s `SFX_ENTER_PC` and the wait behind it, in front of each machine
+## it opens; LOG OFF has its own sound.
 func _confirm_gen1_top_row(row: int) -> void:
+	if row in [
+		Gen2WorldPC.GEN1_PC_BILLS, Gen2WorldPC.GEN1_PC_PLAYERS,
+		Gen2WorldPC.GEN1_PC_OAKS, Gen2WorldPC.GEN1_PC_LEAGUE,
+	]:
+		gen1_sfx_requested.emit(Gen1Sfx.SFX_ENTER_PC)
+		_hold_for_sound(_enter_gen1_machine.bind(row))
+		return
+	_leave_gen1_machine()
+
+
+func _enter_gen1_machine(row: int) -> void:
 	match row:
 		Gen2WorldPC.GEN1_PC_BILLS:
 			var met: bool = _world.state.is_event_flag_active(
@@ -3098,12 +3225,15 @@ func _confirm_gen1_top_row(row: int) -> void:
 			_open_gen1_box_text("oaks_pc", "accessed", &"gen1_oak_ask")
 		Gen2WorldPC.GEN1_PC_LEAGUE:
 			_open_gen1_box_text("hof_pc", "accessed", &"gen1_league")
-		_:
-			_leave_gen1_machine()
 
 
 ## `LogOff`, and `ExitPlayerPC` and `ExitBillsPC` with no top menu behind them.
 func _leave_gen1_machine() -> void:
+	gen1_sfx_requested.emit(Gen1Sfx.SFX_TURN_OFF_PC)
+	_hold_for_sound(_finish_gen1_machine)
+
+
+func _finish_gen1_machine() -> void:
 	if _bills_pc_only:
 		_finish([])
 		return
@@ -3297,10 +3427,15 @@ func _gen1_item_transaction(item: int) -> Dictionary:
 func _open_gen1_bills() -> void:
 	_mode = MODE.PC_BOXES
 	_cursor = _bills_pc_cursor
-	_pc_rows = Gen2WorldPC.gen1_bills_pc_menu()
+	_pc_rows = Gen2WorldPC.gen1_bills_pc_menu(_data.id)
 	_gen1_quiet()
-	_print(_gen1_box("bills_pc", "what"), _gen1_instant)
+	_print(_gen1_bills_what(), _gen1_instant)
 	_render_rows()
+
+
+## Yellow's `BillsPCMenu` leaves the speech box empty.
+func _gen1_bills_what() -> String:
+	return "" if _data.id == RomRegistry.YELLOW else _gen1_box("bills_pc", "what")
 
 
 func _confirm_gen1_bills_row(row: int) -> void:
@@ -3310,6 +3445,9 @@ func _confirm_gen1_bills_row(row: int) -> void:
 		return
 	if row == Gen2WorldPC.GEN1_BILLS_PC_CHANGE_BOX:
 		_open_gen1_ask(&"change_box", _gen1_box("change_box", "warning"))
+		return
+	if row == Gen2WorldPC.GEN1_BILLS_PC_PRINT_BOX:
+		_print_gen1_box()
 		return
 	var refusal: StringName = Gen2WorldPC.gen1_bills_pc_refusal(_save, row, _box_index)
 	if refusal != &"":
@@ -3350,7 +3488,7 @@ func _reopen_gen1_mon_list() -> void:
 ## `PrintListMenuEntries` clears only `hlcoord 5, 3`: `WhatText` stays.
 func _gen1_mon_box() -> void:
 	_gen1_quiet()
-	_summary = _gen1_box("bills_pc", "what")
+	_summary = _gen1_bills_what()
 
 
 func _confirm_gen1_mon_row() -> void:
@@ -3369,9 +3507,9 @@ func _confirm_gen1_mon_row() -> void:
 			&"release", _gen1_filled_mon("bills_pc_2", "once_released", 1)
 		)
 		return
-	## `BillsPCDeposit`: a starter out on the map answers `SleepingPikachuText2`.
+	## `BillsPCDeposit`: a starter that is not following answers `SleepingPikachuText2`.
 	if _gen1_bills_row == Gen2WorldPC.GEN1_BILLS_PC_DEPOSIT and _gen1_starter(mon) \
-			and _world != null and _world.pikachu != null and _world.pikachu.following():
+			and _world != null and _world.pikachu != null and not _world.pikachu.following():
 		_open_gen1_box_text("bills_pc_sleeping", "no_response", &"gen1_bills")
 		return
 	_mode = MODE.PC_MON_ACTION
@@ -3574,11 +3712,22 @@ func _confirm_gen1_oak(row: int) -> void:
 		return
 	## `DisplayDexRating`: `DexCompletionText`, and the row the count lands on
 	## behind `WaitForTextScrollButtonPress`'s arrow, which plays nothing.
-	var pages: Array = Gen2ProfOaksPC.rate(_data, _world.state).get("pages", [])
+	var rated: Dictionary = Gen2ProfOaksPC.rate(_data, _world.state)
+	var pages: Array = rated.get("pages", [])
 	if pages.size() < 2:
 		_close_gen1_oak()
 		return
-	_open_pc_text([_said(String(pages[0])), _said(String(pages[1]), &"arrow")], &"gen1_oak_closed", "")
+	var rating: Dictionary = _said(String(pages[1]), &"arrow")
+	rating["rating"] = int(rated["caught"])
+	_open_pc_text([_said(String(pages[0])), rating], &"gen1_oak_closed", "")
+
+
+## `PlayPokedexRatingSfx`, and `PlayDefaultMusic`'s wait before the map's piece.
+func _play_gen1_rating(owned: int) -> void:
+	var effect: Array[int] = Gen1Sfx.rating_effect(owned)
+	music_requested.emit(0)
+	gen1_music_requested.emit(effect.duplicate())
+	_hold_for_sound(map_music_requested.emit)
 
 
 func _close_gen1_oak() -> void:
@@ -3635,6 +3784,14 @@ func _open_gen1_text(texts: Array, after: StringName) -> void:
 	for text: Variant in texts:
 		said.append(_said(String(text), &"prompt", _gen1_instant))
 	_open_pc_text(said, after, "")
+
+
+## `.LogIn`'s `ClearPCItemScreen`, which `.CheckCanUsePC`'s refusal comes before.
+func _log_in_bills_pc() -> void:
+	if Gen2WorldPC.can_open(_save):
+		_clear_screen(_open_bills_pc_menu)
+		return
+	_open_bills_pc_menu()
 
 
 ## `_BillsPC`, the top menu the two lists and the box picker sit behind.
@@ -3762,10 +3919,23 @@ func _print_box() -> void:
 	_render_rows()
 
 
+## `BillsPCPrintBox`: `NoPokemonText` over an empty box, else `Printer Error 2` until B.
+func _print_gen1_box() -> void:
+	if Gen2WorldPC.gen1_box_count(_save, _box_index) <= 0:
+		_open_gen1_box_text("print_box", "no_mon", &"gen1_bills")
+		return
+	_pc_box_print = true
+	gen1_music_requested.emit(Gen2DiplomaScreen.GEN1_MUSIC_PRINTER)
+	_render_rows()
+
+
 ## `CheckCancelPrint`'s B, `Printer_ExitPrinter` and `_ChangeBox.loop`.
 func _cancel_box_print() -> void:
 	_pc_box_print = false
 	map_music_requested.emit()
+	if _gen1_pc:
+		_open_gen1_bills()
+		return
 	_open_box_list()
 
 
@@ -3826,11 +3996,11 @@ func _open_mail_submenu(index: int) -> void:
 func _confirm_mail_submenu(row: int) -> void:
 	match row:
 		Gen2WorldPC.MAILBOXITEM_READ:
-			_open_mail_reader()
+			_fade_to_menu(_open_mail_reader)
 		Gen2WorldPC.MAILBOXITEM_PUT_IN_PACK:
 			_open_mail_confirm()
 		Gen2WorldPC.MAILBOXITEM_ATTACH:
-			_open_mail_attach()
+			_fade_to_menu(_open_mail_attach)
 		_:
 			_open_mailbox()
 
@@ -3867,6 +4037,8 @@ func _open_mail_reader() -> void:
 	_set_overlay_open(true)
 	host.z_index = 5
 	host.closed.connect(_on_mail_reader_closed)
+	host.music_requested.connect(music_requested.emit)
+	host.map_music_requested.connect(map_music_requested.emit)
 	_service_hardware.display(host)
 
 
@@ -3877,6 +4049,7 @@ func _on_mail_reader_closed() -> void:
 	_set_overlay_open(false)
 	## `.ReadMail` ends in `CloseSubmenu`, which is back into `MailboxPC.loop`.
 	_open_mailbox()
+	_close_submenu()
 
 
 func _open_mail_attach() -> void:
@@ -3929,6 +4102,7 @@ func _on_mail_attach_selected(party_index: int) -> void:
 func _leave_mail_attach() -> void:
 	_close_mail_attach()
 	_open_mailbox()
+	_close_submenu()
 
 
 func _close_mail_attach() -> void:
@@ -3968,6 +4142,18 @@ func _on_boxes_cry(species: int) -> void:
 	cry_requested.emit(species)
 
 
+func _open_hall_of_fame_machine() -> void:
+	_hof_faded = menu_transition != null
+	_open_hall_of_fame(0)
+
+
+func _leave_hall_of_fame_machine() -> void:
+	_open_pc(&"pokemon_center")
+	if _hof_faded:
+		_hof_faded = false
+		_close_submenu()
+
+
 ## `_HallOfFamePC.MasterLoop`: one stored team at a time, newest first, until
 ## the records run out or B leaves; `PKMNLeaguePC` walks them oldest first.
 func _open_hall_of_fame(index: int) -> void:
@@ -3977,7 +4163,7 @@ func _open_hall_of_fame(index: int) -> void:
 	)
 	if pages.is_empty():
 		## `.absent` and `.invalid` both answer carry, back to the machine's menu.
-		_open_pc(&"pokemon_center")
+		_leave_hall_of_fame_machine()
 		return
 	var host := Gen2HallOfFameScreen.new()
 	host.viewer = true
@@ -3998,7 +4184,7 @@ func _on_hall_of_fame_closed() -> void:
 		_hof = null
 	_set_overlay_open(false)
 	if cancelled:
-		_open_pc(&"pokemon_center")
+		_leave_hall_of_fame_machine()
 		return
 	_open_hall_of_fame(_hof_index + 1)
 
@@ -4008,8 +4194,7 @@ func _on_boxes_closed(_result: Dictionary) -> void:
 		Gen2Screen.drop(_boxes)
 		_boxes = null
 	_set_overlay_open(false)
-	## Both lists `CloseWindow` back into `.UseBillsPC`'s loop, the top menu.
-	_open_bills_pc_menu()
+	_clear_screen(_open_bills_pc_menu)
 
 
 func _open_phone(request: Dictionary, data: Dictionary) -> void:
@@ -4065,9 +4250,13 @@ func _open_card(card: StringName) -> void:
 		_data, card, owned, text, _data.pokegear_text("ask_delete"),
 		_world.map_time_of_day()
 	):
-		_on_card_closed()
+		_leave_card()
 		return
 	_refresh_card()
+
+
+## What the CLOCK card drew; `.UpdateClock` redraws every frame, here a change.
+var _clock_drawn: Dictionary = {}
 
 
 func _refresh_card() -> void:
@@ -4075,10 +4264,10 @@ func _refresh_card() -> void:
 		return
 	match _pokegear.card():
 		Gen2PokegearScreen.CARD_CLOCK:
-			var clock: Dictionary = _world.world_clock()
+			_clock_drawn = _world.world_clock()
 			_pokegear.set_clock(
-				int(clock.get("day", 0)), int(clock.get("hour", 0)),
-				int(clock.get("minute", 0))
+				int(_clock_drawn.get("day", 0)), int(_clock_drawn.get("hour", 0)),
+				int(_clock_drawn.get("minute", 0))
 			)
 		Gen2PokegearScreen.CARD_RADIO:
 			var tuned: Dictionary = _world.radio_station()
@@ -4093,9 +4282,12 @@ func _refresh_card() -> void:
 				_radio_track = track
 				music_requested.emit(track)
 			var radio_show: Gen2RadioShow = _world.radio_show()
+			var station: String = String(tuned.get("name", "")) \
+				if bool(tuned.get("ok", false)) else ""
+			if station.is_empty() and radio_show != null:
+				station = radio_show.station_name()
 			_pokegear.set_radio(
-				_world.state.radio_knob(),
-				String(tuned.get("name", "")) if bool(tuned.get("ok", false)) else "",
+				_world.state.radio_knob(), station,
 				radio_show.lines() if radio_show != null else PackedStringArray()
 			)
 		Gen2PokegearScreen.CARD_PHONE:
@@ -4143,9 +4335,15 @@ func radio_music_playing() -> int:
 	return _radio_music
 
 
-## One hardware frame of whichever card is open. Only the radio card spends any:
-## `PlayRadioShow` is the one thing the Pokegear runs per frame.
+## One hardware frame of whichever card is open: the radio's `PlayRadioShow` and
+## the clock's `.UpdateClock`.
 func advance_frame() -> void:
+	## `FadeOutToWhite` and `CloseSubmenu` are inside the routine that called them.
+	if menu_transition == null or not menu_transition.active():
+		_advance_live_frame()
+
+
+func _advance_live_frame() -> void:
 	_advance_box_frame()
 	if _advance_frame_hold():
 		return
@@ -4174,10 +4372,15 @@ func advance_frame() -> void:
 	if _pokegear == null:
 		return
 	_pokegear.advance_frame()
-	if _pokegear != null and _pokegear.card() != Gen2PokegearScreen.CARD_RADIO:
+	if _pokegear == null:
 		return
-	if _pokegear != null and _world.advance_radio_frame():
-		_refresh_card()
+	match _pokegear.card():
+		Gen2PokegearScreen.CARD_CLOCK:
+			if _world.world_clock() != _clock_drawn:
+				_refresh_card()
+		Gen2PokegearScreen.CARD_RADIO:
+			if _world.advance_radio_frame():
+				_refresh_card()
 
 
 func _advance_prize_hold() -> bool:
@@ -4198,7 +4401,7 @@ func _advance_frame_hold() -> bool:
 	if not _hold_then.is_valid():
 		return false
 	if _hold_waits_sound:
-		if audio_player != null and audio_player.still_waiting(_hold_sound):
+		if bool(sound_busy.call(_hold_sound)):
 			return true
 		_hold_waits_sound = false
 	_hold_frames -= 1
@@ -4214,6 +4417,13 @@ func _hold(then: Callable, frames: int = 0) -> void:
 	_hold_frames = frames
 	_hold_sound = {}
 	_hold_waits_sound = true
+
+
+func _hold_for_sound(then: Callable) -> void:
+	if bool(sound_busy.call({})):
+		_hold(then)
+		return
+	then.call()
 
 
 func _on_card_tuned(knob: int) -> void:
@@ -4290,7 +4500,13 @@ func _on_card_deleted(contact: int) -> void:
 		_refresh_card()
 
 
+## `PokeGear.done`: `SFX_READ_TEXT_2` and `WaitSFX` behind every card's exit.
 func _on_card_closed() -> void:
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+	_hold(_leave_card)
+
+
+func _leave_card() -> void:
 	if _pokegear != null and _pokegear.card() == Gen2PokegearScreen.CARD_RADIO:
 		_world.close_radio()
 	_close_card()
@@ -4384,7 +4600,7 @@ func _open_town_map(from_request: bool) -> void:
 	_town_map.z_index = 5
 	_town_map.set_screen(_service_hardware)
 	add_child(_town_map)
-	_town_map.closed.connect(_on_town_map_closed)
+	_town_map.closed.connect(_on_town_map_card_closed)
 	_town_map.switched.connect(_on_card_switched)
 	# The Pokegear's own MAP card when the Pokegear opened it, `_TownMap`'s
 	# corner box when `OverworldTownMap` did.
@@ -4404,6 +4620,15 @@ func _open_town_map(from_request: bool) -> void:
 	)
 	if not opened:
 		_on_town_map_closed()
+
+
+## The MAP card leaves through `PokeGear.done` too; the poster and Gen 1's map do not.
+func _on_town_map_card_closed() -> void:
+	if not _town_map_from_request and _data.generation != RomRegistry.GEN1:
+		sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, false)
+		_hold(_on_town_map_closed)
+		return
+	_on_town_map_closed()
 
 
 func _on_town_map_closed() -> void:
@@ -4446,9 +4671,9 @@ func _move_cursor(delta: int) -> void:
 
 ## `hInMenu`: every `ScrollingMenu`, Bill's PC, the Pokegear, Mom's dial and
 ## every quantity dial, which `JoyTextDelay_ForcehJoyDown` turns it on for.
-func menu_repeats() -> bool:
+func menu_repeats(button: int) -> bool:
 	if _pack != null:
-		return _pack.menu_repeats()
+		return _pack.menu_repeats(button)
 	if _boxes != null or _pokegear != null or _town_map != null or _mom_dial != null:
 		return true
 	match _mode:
@@ -4492,6 +4717,34 @@ func _scrolling_rows() -> int:
 		if _mode == MODE.PC_BOX_LIST:
 			return 0
 	return int(SCROLLING_ROWS.get(_mode, 0))
+
+
+## The list a direction press would move, as [Gen2ScrollingMenu] reads it: the
+## cursor's row and the first row shown, in every host of a `ScrollingMenu`
+## (or, in Generation 1, a list menu) this screen has.
+func _list_position(button: int) -> Vector2i:
+	if not PokeButton.is_direction(button):
+		return Gen2ScrollingMenu.NOT_A_LIST
+	match _mode:
+		MODE.PC_ITEM_LIST, MODE.PC_MAILBOX, MODE.PC_BOX_LIST, MODE.PC_DECO_LIST, \
+		MODE.PC_MON_LIST, MODE.MENU:
+			if _scrolling_rows() > 0 and (_mode != MODE.PC_ITEM_LIST or _pc_item_stage == &""):
+				return Vector2i(_cursor, _pc_scroll)
+		MODE.MART:
+			if _mart_stage == MART_LIST or _mart_stage == MART_SELL:
+				return Vector2i(_cursor, _mart_scroll)
+		MODE.ELEVATOR:
+			return Vector2i(_cursor, _elevator_scroll)
+		MODE.SCRIPT_LIST:
+			return Vector2i(_cursor, _script_list_scroll)
+		MODE.BUENA_PRIZE:
+			if _buena_stage == &"list":
+				return Vector2i(_cursor, _buena_scroll)
+		MODE.APRICORN:
+			if _apricorns != null and not _apricorns.one_at_a_time \
+					and _apricorns.phase == Gen2WorldApricorn.SELECT_APRICORN:
+				return Vector2i(_apricorns.cursor_y, _apricorns.scroll)
+	return Gen2ScrollingMenu.NOT_A_LIST
 
 
 func _move_direction(direction: Vector2i) -> void:
@@ -4665,7 +4918,7 @@ func _cancel_pc_items() -> void:
 	_shut_down_pc()
 
 
-## `.b_2`: the mark is dropped and the list stays up.
+## `.b_2`: the mark is dropped and the list stays up; `.quit` is `CloseSubmenu`.
 func _cancel_pc_item_list() -> void:
 	if _pc_switch >= 0:
 		_pc_switch = -1
@@ -4673,6 +4926,7 @@ func _cancel_pc_item_list() -> void:
 		return
 	_save_pc_list_cursor()
 	_open_pc_items()
+	_close_submenu()
 
 
 func _save_pc_list_cursor() -> void:
@@ -4867,13 +5121,11 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		_service_drawn = false
 		_apply_layer_visibility()
 		return
-	_service_page.palette = box_palette
+	_service_page.palette = _faded_box_palette()
 	var labels: Array = [] if _mode in [MODE.PHONE, MODE.PC_TEXT] or _box_printing() \
 		else _row_labels(values)
 	var words: Array = _page_words()
-	var image: Image = _service_page.render_box_print(
-		_data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
-	) if _pc_box_print else _mom_bank_image() if _mode == MODE.MOM_BANK \
+	var image: Image = _box_print_image() if _pc_box_print else _mom_bank_image() if _mode == MODE.MOM_BANK \
 		else _dial_image() if _is_dial() else _service_page.render(
 		String(words[0]), String(words[1]), labels, _cursor if cursor < 0 else cursor,
 		words[2], _service_box(), _service_note(), _message_box(), _gen1_box_marks(),
@@ -4884,6 +5136,20 @@ func _render_service_page(values: Array, cursor: int = -1) -> void:
 		Gen2PicImage.show(_service_view, image)
 	_service_drawn = image != null
 	_apply_layer_visibility()
+
+
+func _box_print_image() -> Image:
+	var status: String = _data.printer_status_string(Gen2DiplomaScreen.STATUS_CONNECTION_ERROR)
+	if not _gen1_pc:
+		return _service_page.render_box_print(status)
+	var mons: Array = []
+	for entry: Dictionary in Gen2WorldPC.gen1_box_entries(_save, _box_index):
+		var mon: Gen2SaveMon = entry["mon"]
+		var species: String = String(_data.species(mon.species).get("name", ""))
+		mons.append([species, mon.nickname if not mon.nickname.is_empty() else species])
+	return _service_page.render_gen1_box_print(
+		_box_index, mons, status, _data.printer_status_string("press_b")
+	)
 
 
 func _row_labels(values: Array) -> Array:
@@ -5206,6 +5472,7 @@ const GEN1_PC_BOXES: Dictionary = {
 	MODE.PC_MON_ACTION: Rect2i(9, 10, 19, 17),
 }
 const GEN1_PC_TOP_BOTTOM: Dictionary = {3: 7, 4: 9, 5: 11}
+const GEN1_BILLS_ROW_STEP: int = 2
 ## `DisplayChangeBoxMenu`'s `hlcoord 11, 0 / lb bc, 12, 7`, whose names are one
 ## row apart: `BIT_DOUBLE_SPACED_MENU` names the bit that is set for a
 ## single-row step, and `HandleMenuInput` steps two rows when it is clear.
@@ -5225,13 +5492,16 @@ func _gen1_pc_box() -> Gen2MenuBox:
 	var corners: Rect2i = GEN1_PC_BOXES.get(_mode, Rect2i(
 		0, 0, 15, int(GEN1_PC_TOP_BOTTOM.get(_pc_rows.size(), 9))
 	))
+	if _mode == MODE.PC_BOXES:
+		corners.end.y = 1 + GEN1_BILLS_ROW_STEP * _pc_rows.size()
 	var menu_box: Gen2MenuBox = Gen2MenuBox.from_coords(
 		corners.position.x, corners.position.y, corners.end.x, corners.end.y,
 		Gen2MenuBox.STATICMENU_CURSOR
 	)
 	## `DisplayDepositWithdrawMenu` is drawn after `WhatText`, over the speech
-	## box's own right half.
-	menu_box.over_textbox = _mode == MODE.PC_MON_ACTION
+	## box's own right half, and Yellow's taller BILL'S PC menu over its left.
+	menu_box.over_textbox = _mode == MODE.PC_MON_ACTION \
+		or (_mode == MODE.PC_BOXES and _data.id == RomRegistry.YELLOW)
 	return menu_box
 
 

@@ -2,10 +2,9 @@ class_name Gen2ModPageScreen
 extends Control
 
 ## The one screen a mod may put behind a start-menu row, embedded in the overworld
-## the way the trainer card and the Hall of Fame are. A record of what a run has
-## done is what the cartridge's own trainer card is, and this is drawn the same
-## way: the screen's own frame and font, paged with the d-pad and left with B. The
-## mod supplies rows and nothing else, and the icons are
+## the way the trainer card and the Hall of Fame are, drawn the same way: the
+## screen's own frame and font, paged with the d-pad and left with B. The mod
+## supplies rows and nothing else, and the icons are
 ## [method Gen2MapNameSignPage.render_notice_icon]'s vocabulary. A locked row is
 ## drawn the way the Pokedex draws an unseen entry, its label replaced by `?` and
 ## its icon left off.

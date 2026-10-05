@@ -88,6 +88,7 @@ func _open_list(host: Gen2WorldServiceScreen, row: int) -> void:
 	for _step: int in row:
 		host.handle_button(PokeButton.DOWN)
 	host.handle_button(PokeButton.A)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 
 
@@ -100,6 +101,25 @@ func _walk_to(host: Gen2WorldServiceScreen, item: int) -> void:
 
 func _state() -> Gen2WorldState:
 	return _world_screen._world.state
+
+
+## `_ScrollingMenu.zero` redraws and reads no pad for five frames, and
+## `WaitBGMap` spends four more before the one read a pass allows: a held
+## direction moves the list every nine frames, inside the window or past it, and
+## the first repeat waits for the read after its fifteenth frame. PyBoy on
+## Crystal measures the same 18 and 9 frames for the pack and this list.
+func test_a_held_direction_waits_out_every_move_of_the_list() -> void:
+	var host: Gen2WorldServiceScreen = await _open_item_pc()
+	var more: Dictionary = {}
+	for item: int in range(30, 40):
+		more[item] = 1
+	_state().apply_changes({}, {}, {"pc_items": more})
+	_open_list(host, 0)
+	var moves: Array[int] = Fixture.hold_down(
+		func() -> void: host.handle_button(PokeButton.DOWN),
+		func() -> int: return host._cursor, 100
+	)
+	assert_eq(moves, [17, 26, 35, 44, 53, 62, 71, 80, 89, 98])
 
 
 ## `ScrollingMenu` draws CANCEL past `wPCItems`' terminator, and taking it is
@@ -236,12 +256,14 @@ func test_the_list_keeps_its_row_across_the_dial_the_question_and_the_menu() -> 
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "NO on the question")
 	host.handle_button(PokeButton.B)
+	Fixture.settle_menu_fade(_world_screen)
 	## `ExitMenu` reloads the header `_PushWindow` saved, whose `db 1` puts the
 	## menu back on WITHDRAW ITEM: a Crystal dump re-enters `DoNthMenu` with
 	## `wMenuCursorPosition` 1 behind TOSS ITEM.
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEMS)
 	assert_eq(host._cursor, 0, "the menu is back on its first row")
 	Fixture.press_through(host)
+	Fixture.settle_menu_fade(_world_screen)
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.PC_ITEM_LIST)
 	assert_eq(host._cursor, row, "the list opened again off the menu")
 

@@ -10,10 +10,10 @@ extends RefCounted
 ## The requests the host settles out of the save alone: `special HealParty`,
 ## `giveegg`, `GiveDratini`, a `givepoke` that names an OT and
 ## `DaycareGentlemanText`'s two `MoveMon` calls each run to completion inside the
-## command that asked. `pokemon_requested` is here for those and no further:
-## `GivePoke`'s `.wildmon` branch reaches `GiveANickname_YesNo`, so a screen that
-## can draw one intercepts it in front of this list and a driver that cannot
-## settles it with the species name, which is what NO answers.
+## command that asked. `pokemon_requested` is here for those only: `GivePoke`'s
+## `.wildmon` branch reaches `GiveANickname_YesNo`, so a screen that can draw one
+## intercepts it first and a driver that cannot settles it with the species name,
+## which is what NO answers.
 const UNATTENDED_REQUESTS: Array[StringName] = [
 	&"party_heal_requested", &"pokemon_requested", &"trade_requested",
 	&"contest_mon_requested", &"dratini_moveset_requested",
@@ -63,7 +63,9 @@ static func complete_runtime_request(
 		for key: Variant in result:
 			completion[key] = result[key]
 		if not completion.has("name"):
-			completion["name"] = String(request.get("values", {}).get("default_name", "SILVER"))
+			completion["name"] = String(request.get("values", {}).get(
+				"default_name", Gen2PlayerNameChoices.default_rival_name(world.data)
+			))
 		var resumed: Array = world.complete_runtime_request(completion)
 		if resumed.is_empty() or not bool(resumed[0].get("ok", false)):
 			return _unavailable(&"rival_name_request_failed", {
@@ -161,8 +163,7 @@ static func move_deleter_texts(data: GameData) -> Dictionary:
 	return _stub_run(data, Gen2Layout.MOVE_DELETER_TEXT_ORDER, "move_deleter_text")
 
 ## The Day-Care's own thirty-two, across its four runs, read and refused the same
-## way. Public for the same reason: the screenshot driver opens the routine with
-## no script behind it.
+## way. Public for the same reason as [method name_rater_texts].
 static func day_care_texts(data: GameData) -> Dictionary:
 	var order: Array[String] = []
 	for run: Array in Gen2Layout.DAY_CARE_TEXT_RUNS:

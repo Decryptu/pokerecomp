@@ -77,20 +77,24 @@ static func lay_out(
 	return out
 
 
-## The same pages with what each costs to reach. `enter` is `page` for a
-## `Paragraph`: a press, the box cleared and its 20 frames; `text` for the next
-## `PrintText` behind a `prompt`, the same without the frames; `scroll` for
-## `_ContText`, a press and two `TextScroll`s; `scroll_nowait` for
-## `_ContTextNoPause`, the scrolls alone; `start` for the first. `carried` is how
-## many of a page's first lines `TextScroll` moved up, being on screen already.
+## The same pages with what each costs to reach. `enter` is `page` for a `Paragraph`:
+## a press, the box cleared and its 20 frames; `text` for the next `PrintText` behind
+## a `prompt`, the same without the frames; `scroll` for `_ContText`, a press and two
+## `TextScroll`s; `scroll_nowait` for `_ContTextNoPause`, the scrolls alone; `start`
+## for the first. `carried` is how many first lines `TextScroll` moved up, on screen
+## already. `beats` are the page's sounds and pauses, see [method Gen2TextStream.split_sounds].
 static func lay_out_pages(
 	text: String, columns: int, rows: int, generation: int = RomRegistry.GEN2
 ) -> Array:
 	var out: Array = []
 	if rows <= 0 or columns <= 0:
 		return out
-	_refuse_unfilled(text)
+	refuse_unfilled(text)
+	var split: Dictionary = Gen2TextStream.split_sounds(text)
+	text = String(split["text"])
+	var beats: Array = split["beats"]
 	var page: PackedStringArray = PackedStringArray()
+	var page_beats: Array = []
 	var enter: StringName = &"start"
 	var carried: int = 0
 	var at: int = 0
@@ -104,19 +108,27 @@ static func lay_out_pages(
 			if candidate >= 0 and (stop < 0 or candidate < stop):
 				stop = candidate
 		var segment: String = text.substr(at, -1) if stop < 0 else text.substr(at, stop - at)
+		var due: Dictionary = _beats_in(beats, at, at + segment.length(), segment, columns, generation)
+		var line_at: int = 0
 		for line: String in wrap_lines(segment, columns, generation):
 			page.append(line)
+			page_beats.append_array(_placed(due.get(line_at, []), page, generation))
+			line_at += 1
 			if page.size() == rows:
-				out.append({"lines": page, "enter": enter, "carried": carried})
+				out.append({
+					"lines": page, "enter": enter, "carried": carried, "beats": page_beats,
+				})
 				page = PackedStringArray()
+				page_beats = []
 				enter = &"page"
 				carried = 0
 		if stop < 0:
 			break
 		var scrolled: bool = stop == scroll_at or stop == nowait_at
 		if not page.is_empty():
-			out.append({"lines": page, "enter": enter, "carried": carried})
+			out.append({"lines": page, "enter": enter, "carried": carried, "beats": page_beats})
 			page = PackedStringArray()
+			page_beats = []
 		enter = &"text" if stop == prompt_at else &"page"
 		carried = 0
 		if scrolled:
@@ -128,12 +140,43 @@ static func lay_out_pages(
 					carried = 1
 		at = stop + 1
 	if not page.is_empty():
-		out.append({"lines": page, "enter": enter, "carried": carried})
+		out.append({"lines": page, "enter": enter, "carried": carried, "beats": page_beats})
 	return out
 
 
-## Every screen lays text out here, so a host's unfilled marker fails its checks.
-static func _refuse_unfilled(text: String) -> void:
+static func _placed(due: Array, page: PackedStringArray, generation: int) -> Array:
+	var before: int = 0
+	for line: int in page.size() - 1:
+		before += _tiles(page[line], generation)
+	var out: Array = []
+	for beat: Dictionary in due:
+		var placed: Dictionary = beat.duplicate()
+		placed["at"] = before + int(beat["at"])
+		out.append(placed)
+	return out
+
+
+## The beats between [param from] and [param to], by the segment line they end and their column in it.
+static func _beats_in(
+	beats: Array, from: int, to: int, segment: String, columns: int, generation: int
+) -> Dictionary:
+	var out: Dictionary = {}
+	for beat: Dictionary in beats:
+		var offset: int = int(beat["at"])
+		if offset < from or offset > to:
+			continue
+		var lines: PackedStringArray = wrap_lines(segment.substr(0, offset - from), columns, generation)
+		var line: int = lines.size() - 1
+		if not out.has(line):
+			out[line] = []
+		var placed: Dictionary = beat.duplicate()
+		placed["at"] = _tiles(lines[line], generation)
+		(out[line] as Array).append(placed)
+	return out
+
+
+## Every screen's text passes here or [method Gen2Font.draw_text]: an unfilled marker fails.
+static func refuse_unfilled(text: String) -> void:
 	var marker: String = unfilled_marker(text)
 	if not marker.is_empty():
 		push_error("Gen2TextLayout: %s reached the screen unfilled: %s" % [marker, text.c_escape()])

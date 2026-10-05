@@ -232,12 +232,11 @@ static func from_data(data: GameData) -> Gen2TitlePage:
 
 ## What a screen wider than the hardware's own draws behind it: [param view]
 ## pixels of background, with the 160x144 rectangle at [param origin] left to
-## [method draw]. Nothing is invented and nothing is stretched:
-## `LoadTitleScreenTilemap` writes all thirty-two columns and the hardware only
-## shows twenty, so the twelve the screen never reached are the cartridge's own
-## answer to a wider window. Past those twelve the band repeats, seamless because
-## twelve is three of its pattern. Not the whole map through a wider window: it is
-## 256 pixels across and wraps, so the logo would come back round a second time.
+## [method draw]. Nothing is invented or stretched: `LoadTitleScreenTilemap` writes
+## all thirty-two columns and the hardware shows twenty, so the twelve it never
+## reached are the cartridge's own answer to a wider window. Past those the band
+## repeats, seamless because twelve is three of its pattern. Not the whole map: it
+## is 256 pixels across and wraps, so the logo would come back round.
 func draw_backdrop(view: Vector2i, origin: Vector2i) -> Image:
 	var width: int = maxi(view.x, 1)
 	var height: int = maxi(view.y, 1)
@@ -271,11 +270,10 @@ func draw_backdrop(view: Vector2i, origin: Vector2i) -> Image:
 	return Gen2PicImage.canvas_image(pixels, width, height)
 
 
-## The whole 160x144 screen for one frame of [param scene].
-##
-## The background is built at the BG map's own 256 pixels across and then
-## sampled through the scroll, because that map wraps: a cloud band walking left
-## brings the map's own right-hand columns back round rather than leaving a gap.
+## The whole 160x144 screen for one frame of [param scene]. The background is built
+## at the BG map's own 256 pixels across and then sampled through the scroll, because
+## that map wraps: a cloud band walking left brings the map's own right-hand columns
+## back round rather than leaving a gap.
 func draw(scene: Gen2TitleScene) -> Image:
 	var width: int = COLUMNS * TILE
 	var height: int = ROWS * TILE

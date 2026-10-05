@@ -55,6 +55,7 @@ var _gen1: Gen1SoundEngine = null
 var _gen1_tempo_request: int = -1
 ## `wLowHealthAlarm` as Yellow's `PlayCry` pushed it, or -1 outside a cry.
 var _gen1_alarm_held: int = -1
+var _gen1_bank_restore: int = -1
 var _generation: int = RomRegistry.GEN2
 var _apu: PokeApu = null
 var _music_key: String = ""
@@ -109,6 +110,28 @@ static var _current: Gen2AudioPlayer = null
 static func hold_low_volume(low: bool) -> void:
 	if _current != null:
 		_current.set_master_volume(LOW_VOLUME if low else Gen2SoundEngine.MAX_VOLUME)
+
+
+## `WaitSFX` for a screen with no player of its own: [method still_waiting] on
+## whichever is up, silent when none is.
+static func sound_wait(watch: Dictionary) -> bool:
+	return _current != null and _current.still_waiting(watch)
+
+
+## Answers [signal Gen2TextBox.sound_requested] out of [param data] on whichever player is up.
+static func play_text_sound(sound: Dictionary, data: GameData) -> void:
+	if _current == null or data == null:
+		return
+	var id: int = int(sound.get("id", 0))
+	var cry: bool = bool(sound.get("cry", false))
+	if id == Gen1Sfx.SFX_SWAP and data.generation == RomRegistry.GEN1:
+		_current.play_gen1_forget_swap(data, data.audio_assets())
+		return
+	var record: Dictionary = data.species_cry(id) if cry else (
+		data.gen1_sound(-1, id) if data.generation == RomRegistry.GEN1
+		else data.world_audio(&"sfx", id)
+	)
+	_current.play_record(record, &"cry" if cry else &"sound", data.audio_assets())
 
 
 func set_master_volume(level: int) -> void:
@@ -251,6 +274,10 @@ func _play_gen1_record(
 	var bank: int = int(record.get("bank", -1))
 	if id <= 0:
 		return {"ok": false, "played": false, "reason": &"audio_record_unplayable"}
+	if id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
+		_gen1.play_sound(id)
+		_forget_music()
+		return {"ok": true, "played": true, "stopped": true}
 	if _is_music(request_kind):
 		return _play_gen1_music(record, bank, id, assets, restart, request_kind)
 	## `wFrequencyModifier` and `wTempoModifier`: a cry's own row, or
@@ -272,10 +299,6 @@ func _play_gen1_music(
 	record: Dictionary, bank: int, id: int, assets: Dictionary, restart: bool,
 	request_kind: StringName
 ) -> Dictionary:
-	if id == Gen1SoundEngine.SFX_STOP_ALL_MUSIC:
-		_gen1.play_sound(id)
-		_forget_music()
-		return {"ok": true, "played": true, "stopped": true}
 	var key: String = "%d:%d" % [bank, id]
 	## `Music_RivalAlternateStart` restarts the piece to write its pointers.
 	var pointers: Array = record.get("pointers", [])
@@ -331,6 +354,7 @@ func _advance_driver() -> void:
 			_gen1.music_tempo = _gen1_tempo_request
 		_gen1.update_music()
 		_resume_gen1_alarm_after_cry()
+		_restore_bank_after_swap()
 		return
 	_engine.update_sound()
 
@@ -525,6 +549,39 @@ func _resume_gen1_alarm_after_cry() -> void:
 	_gen1_alarm_held = -1
 
 
+## `OneTwoAndText`'s `SFX_SWAP`: Red and Blue play it from the map's bank, Yellow
+## pauses the music and plays it from `BANK(SFX_Swap_1)` until it finishes.
+func play_gen1_forget_swap(data: GameData, assets: Dictionary) -> void:
+	if data == null:
+		return
+	var bank: int = Gen1Layout.AUDIO_BANK_ROM[0]
+	if data.id != RomRegistry.YELLOW:
+		play_record(data.gen1_sound(-1, Gen1Sfx.SFX_SWAP), &"sound", assets)
+		return
+	var record: Dictionary = data.gen1_sound(bank, Gen1Sfx.SFX_SWAP)
+	if record.is_empty():
+		return
+	_generation = RomRegistry.GEN1
+	_gen1.set_assets(assets)
+	_gen1.yellow = true
+	_start_stream()
+	if _gen1_bank_restore < 0:
+		_gen1_bank_restore = _gen1.audio_rom_bank
+	_gen1.mute_audio_and_pause_music = 1
+	_gen1.audio_rom_bank = bank
+	_gen1.saved_rom_bank = bank
+	_gen1.play_sound(Gen1Sfx.SFX_SWAP)
+
+
+func _restore_bank_after_swap() -> void:
+	if _gen1_bank_restore < 0 or _gen1.sound_to_finish():
+		return
+	_gen1.audio_rom_bank = _gen1_bank_restore
+	_gen1.saved_rom_bank = _gen1_bank_restore
+	_gen1.mute_audio_and_pause_music = 0
+	_gen1_bank_restore = -1
+
+
 ## `wMuteAudioAndPauseMusic`: the music channels held, an effect still playing.
 func set_gen1_music_paused(paused: bool) -> void:
 	if _generation == RomRegistry.GEN1:
@@ -550,8 +607,10 @@ func music_playing() -> bool:
 		else _engine.music_channels_active()
 
 
-## `_CheckSFX`, which is what `waitsfx` and the battle screen wait on.
+## `_CheckSFX`, which `waitsfx` and the battle screen wait on; a Pikachu clip holds the CPU, so it counts.
 func effect_playing() -> bool:
+	if not _clip.is_empty():
+		return true
 	return _gen1.sound_to_finish() if _generation == RomRegistry.GEN1 else _engine.sfx_active()
 
 
@@ -574,8 +633,12 @@ func still_waiting(watch: Dictionary, music: bool = false) -> bool:
 
 
 ## `.musicWaitLoop`'s read of one Generation 1 channel, bounded as [method still_waiting] is.
-func still_waiting_on_channel(watch: Dictionary, channel: int) -> bool:
-	if _generation != RomRegistry.GEN1 or _gen1.channel_sound_id(channel) == 0:
+## A [param sound] holds only while the channel carries that id.
+func still_waiting_on_channel(watch: Dictionary, channel: int, sound: int = 0) -> bool:
+	if _generation != RomRegistry.GEN1:
+		return false
+	var held: int = _gen1.channel_sound_id(channel)
+	if held == 0 or (sound > 0 and held != sound):
 		return false
 	return _serviced(watch, true)
 

@@ -19,6 +19,10 @@ var _sfx_watch: Dictionary = {}
 var _data: GameData = null
 ## The box standing under the machine, which is `PrintText`'s own.
 var _text: String = ""
+## Whether it is `.Text_PrintPayout`'s: symbol, indented first line and `▼`.
+var _win_box: bool = false
+## `hVBlankCounter`, the arrow's phase.
+var _frames: int = 0
 ## `wMenuCursorY` for whichever of the two menus is up.
 var _bet_cursor: int = 1
 var _yes_no: Gen2WorldMenu = Gen2WorldMenu.yes_no()
@@ -33,7 +37,6 @@ func _ready() -> void:
 
 ## [param coins] is `wCoins` and [param lucky] the `wScriptVar` the map's own
 ## `setval` left in front of the special.
-##
 ## Answers false on a cache with no slots art, which is what a caller refuses
 ## the special on rather than opening an empty machine.
 func open(
@@ -82,6 +85,7 @@ func prompt() -> int:
 func advance_frame() -> void:
 	if not _open or _machine == null:
 		return
+	_frames += 1
 	if _yes_no.holding():
 		_advance_yes_no_hold()
 		_refresh()
@@ -92,6 +96,8 @@ func advance_frame() -> void:
 			return
 		_sfx_watch = {}
 		_machine.sfx_finished()
+	if _machine is Gen1SlotMachine:
+		(_machine as Gen1SlotMachine).pad_held = PokeButton.text_accelerating()
 	if not _acted:
 		_pass()
 	_acted = false
@@ -174,18 +180,29 @@ func _drain() -> void:
 			&"music":
 				music_requested.emit(int(row["index"]))
 			&"text":
-				_text = _data.slots_text(String(row["name"])) if _data != null else ""
+				_print_box(row)
 			&"music_paused":
 				music_pause_requested.emit(bool(row["paused"]))
 			_:
 				pass
 
 
+## `PrintText`; `_SlotsLinedUpText` reads its coins from `wStringBuffer2`.
+func _print_box(row: Dictionary) -> void:
+	_text = _data.slots_text(String(row["name"])) if _data != null else ""
+	_win_box = row.has("payout")
+	if _win_box:
+		_text = Gen2TextStream.fill_marker(_text, Gen2TextStream.RAM_MARKER, str(int(row["payout"])))
+
+
 func overlay_state() -> Dictionary:
 	if _machine == null:
 		return {}
+	var blinking: bool = _win_box and _machine.prompt() == Gen2SlotMachine.Prompt.PRESS
 	return {
 		"text": _text,
+		"win_box": _win_box,
+		"blink": _frames if blinking else -1,
 		"menu": _bet_cursor if _machine.prompt() == Gen2SlotMachine.Prompt.BET else 0,
 		"yes_no": _yes_no.cursor + 1 \
 			if _machine.prompt() == Gen2SlotMachine.Prompt.PLAY_AGAIN else 0,

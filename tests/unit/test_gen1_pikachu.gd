@@ -128,3 +128,33 @@ func test_happiness_moves_by_the_table_and_the_mood_follows() -> void:
 	assert_eq(pikachu.happiness, 92)
 	pikachu.modify_happiness(Gen1Pikachu.HAPPY_FAINTED)
 	assert_eq(pikachu.happiness, 91)
+
+
+## `EndOfBattle` runs `UpdatePikachuMoodAfterBattle` with `d` at $82: a living
+## starter's mood is lifted to it and never lowered. It is reached by any link
+## battle and by `wBattleResult` zero, which a win and a wild mon that left both
+## leave; a run or a catch writes 2 and a loss 1.
+func test_a_fight_lifts_a_living_starters_mood_to_the_floor() -> void:
+	var pikachu := Gen1Pikachu.new()
+	pikachu.set_party(true, false)
+	pikachu.mood = 0x62
+	pikachu.raise_mood_after_battle()
+	assert_eq(pikachu.mood, 0x82)
+	pikachu.mood = 0x94
+	pikachu.raise_mood_after_battle()
+	assert_eq(pikachu.mood, 0x94)
+	pikachu.mood = 0x62
+	pikachu.set_party(false, false)
+	pikachu.raise_mood_after_battle()
+	assert_eq(pikachu.mood, 0x62, "a fainted starter is not alive")
+
+
+func test_only_the_endings_that_leave_wbattleresult_zero_reach_the_mood_floor() -> void:
+	var link_loss := {
+		"outcome": Gen2WorldBattleAdapter.OUTCOME_LOST, "request": {"kind": &"link_battle"},
+	}
+	assert_true(Gen2WorldScreen._reaches_mood_update({"battle_result": 0}))
+	assert_true(Gen2WorldScreen._reaches_mood_update(link_loss))
+	assert_false(Gen2WorldScreen._reaches_mood_update({"battle_result": 2}), "a run or a ball")
+	assert_false(Gen2WorldScreen._reaches_mood_update({"battle_result": 1}), "a loss")
+	assert_false(Gen2WorldScreen._reaches_mood_update({}))

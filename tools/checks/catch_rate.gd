@@ -8,8 +8,8 @@ var _r: RefCounted = null
 ## real dump directly; running the same rolls on hardware prints one line per
 ## case and this topic builds the same 4,779 here. The sweep is the whole corpus:
 ## every species against every ball, every byte boundary of the health term against
-## every status bit, and Level Ball's whole ladder. What is pinned is the digest
-## plus the rows below, which name the branch each one proves.
+## every status bit, and Level Ball's whole ladder; the rows below name the
+## branch each proves.
 
 ## `data/items/apricorn_balls.asm` and the four ordinary ones. MASTER_BALL is not
 ## here: it never reaches the multiplier table.

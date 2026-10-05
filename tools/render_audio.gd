@@ -1,11 +1,10 @@
 extends SceneTree
 
 ## Renders one imported audio record through the sound engine and the APU, and
-## writes a WAV plus the per-frame register trace beside it. The trace is the
-## parity artefact: a faithful implementation of the driver writes the same
-## registers in the same order on the same frames. Kinds are `music`, `sfx`,
-## `stereo_sfx`, `cry` and `mon_cry`; the id is the record index, the species for
-## `mon_cry`, `<bank>:<id>` on a Generation 1 cache, or `all`. Last is the panning.
+## writes a WAV plus the per-frame register trace (the parity artefact) beside it.
+## Kinds are `music`, `sfx`, `stereo_sfx`, `cry` and `mon_cry`;
+## the id is the record index, the species for `mon_cry`, `<bank>:<id>` on a
+## Generation 1 cache, or `all`; last is the panning.
 ##   ... -s res://tools/render_audio.gd -- crystal music 1 600 /tmp/out
 ##   ... -s res://tools/render_audio.gd -- red music 2:186 600 /tmp/out
 

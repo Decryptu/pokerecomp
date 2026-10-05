@@ -425,3 +425,28 @@ func test_gen1_battle_music_stops_everything_first_and_then_continues() -> void:
 	assert_false(_player._gen1.sfx_active(), "StopAllMusic took the cry")
 	assert_eq(_player._gen1.channel_sound_id(0), GEN1_MUSIC)
 	assert_true(_player.play_record(_gen1_record(GEN1_MUSIC), &"battle_music", _gen1_assets(false))["continued"])
+
+
+## `PlayPokedexRatingSfx`'s `cp [hl] / jr c` takes the first row an owned count is
+## below, so a count of exactly ten has already left the first, and each effect
+## plays from the bank its own label sits in.
+func test_the_dex_rating_effect_changes_on_each_threshold_and_names_its_bank() -> void:
+	assert_eq(Gen1Sfx.rating_effect(9), [Gen1Layout.AUDIO_BANK_ROM[2], Gen1Sfx.SFX_DENIED])
+	assert_eq(
+		Gen1Sfx.rating_effect(10), [Gen1Layout.AUDIO_BANK_ROM[0], Gen1Sfx.SFX_POKEDEX_RATING]
+	)
+	assert_eq(Gen1Sfx.rating_effect(89), [Gen1Layout.AUDIO_BANK_ROM[1], Gen1Sfx.SFX_CAUGHT_MON])
+	assert_eq(Gen1Sfx.rating_effect(149), [Gen1Layout.AUDIO_BANK_ROM[0], Gen1Sfx.SFX_GET_KEY_ITEM])
+	assert_eq(Gen1Sfx.rating_effect(151), [Gen1Layout.AUDIO_BANK_ROM[0], Gen1Sfx.SFX_GET_ITEM_2])
+
+
+## `PlaySound $ff` reaches the driver as a record with no row behind it, whether a
+## script asks for it as an effect or as music, and what it stops is forgotten so
+## the same piece asked for again starts over.
+func test_a_stop_all_music_record_silences_the_piece_and_lets_it_restart() -> void:
+	var assets: Dictionary = _gen1_assets(false)
+	assert_true(_player.play_record(_gen1_record(GEN1_MUSIC), &"map_music", assets)["played"])
+	var stop: Dictionary = {"index": 0, "bank": -1, "sound_id": Gen1SoundEngine.SFX_STOP_ALL_MUSIC}
+	assert_true(_player.play_record(stop, &"sound", assets)["stopped"])
+	assert_false(_player.music_playing())
+	assert_true(_player.play_record(_gen1_record(GEN1_MUSIC), &"map_music", assets)["played"])

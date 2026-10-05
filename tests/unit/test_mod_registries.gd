@@ -864,6 +864,29 @@ func test_the_progress_reading_answers_the_open_boxs_free_space() -> void:
 	assert_eq(int(Gen2ModProgress.of_save(save)[&"box_free_space"]), 0)
 
 
+## A save from before `beat_red` was stored holds only the cartridge's own trace:
+## the Hall of Fame cleared EVENT_RED_IN_MT_SILVER and Red's `disappear` set it
+## again. Loading writes the field, so the next save carries it.
+func test_a_save_without_the_stored_red_field_reads_red_from_the_flags() -> void:
+	var cases: Array = [
+		["Hall of Fame, flag set again", RomRegistry.CRYSTAL, true, true, true],
+		["Red not fought, flag cleared", RomRegistry.CRYSTAL, true, false, false],
+		["new game, flag set, no Hall of Fame", RomRegistry.CRYSTAL, false, true, false],
+		["Generation 1 numbers both differently", RomRegistry.RED, true, true, false],
+	]
+	for row: Array in cases:
+		var save := Gen2SaveData.new()
+		save.game_id = row[1]
+		save.world = Gen2WorldSnapshot.new()
+		var state: Gen2WorldState = save.world.world_state
+		state.set_hall_of_fame(row[2])
+		if row[3]:
+			state.set_event_flag(Gen2WorldState.EVENT_RED_IN_MT_SILVER)
+		var loaded: Gen2SaveData = Gen2SaveData.from_dict(save.to_dict())
+		assert_eq(Gen2ModProgress.of_save(loaded)[&"beat_red"], row[4], row[0])
+		assert_eq(loaded.world.world_state.beat_red, int(row[4]), "%s: stored" % row[0])
+
+
 func test_starter_progress_survives_party_changes_and_save_round_trip() -> void:
 	var save := Gen2SaveData.new()
 	save.game_id = RomRegistry.GOLD

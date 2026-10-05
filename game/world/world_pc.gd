@@ -443,9 +443,7 @@ const GEN1_BILLS_PC_DEPOSIT: int = 1
 const GEN1_BILLS_PC_RELEASE: int = 2
 const GEN1_BILLS_PC_CHANGE_BOX: int = 3
 const GEN1_BILLS_PC_SEE_YA: int = 4
-const GEN1_BILLS_PC_ROWS: Array[String] = [
-	"WITHDRAW <PKMN>", "DEPOSIT <PKMN>", "RELEASE <PKMN>", "CHANGE BOX", "SEE YA!",
-]
+const GEN1_BILLS_PC_PRINT_BOX: int = 5
 ## `DisplayDepositWithdrawMenu`'s three, its first row named by the parent.
 const GEN1_MON_ACTION_MOVE: int = 0
 const GEN1_MON_ACTION_STATS: int = 1
@@ -489,8 +487,12 @@ static func gen1_players_pc_menu() -> Array:
 	return _gen1_rows(GEN1_PLAYERS_PC_ROWS)
 
 
-static func gen1_bills_pc_menu() -> Array:
-	return _gen1_rows(GEN1_BILLS_PC_ROWS)
+## Each row carries its action, so PRINT BOX can sit ahead of SEE YA.
+static func gen1_bills_pc_menu(game: StringName = RomRegistry.RED) -> Array:
+	var out: Array = []
+	for row: Array in Gen1Layout.bills_pc_rows(game):
+		out.append({"row": int(row[0]), "name": String(row[1])})
+	return out
 
 
 ## `DisplayChangeBoxMenu`'s twelve, each carrying what

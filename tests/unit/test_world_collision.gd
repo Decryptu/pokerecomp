@@ -421,6 +421,21 @@ func test_gen1_water_tile_needs_a_water_tileset() -> void:
 	)
 
 
+## The shore tiles ($32, $48) are water on a water tileset except the dock's, and
+## Yellow's copy skips the Gym and the Dojo as well.
+func test_gen1_shore_tiles_are_land_on_the_dock_and_on_yellows_gym_and_dojo() -> void:
+	var gym: Gen2WorldTileset = _gen1_tileset(Gen1Layout.TILESET_GYM, [0x00], true)
+	var dojo: Gen2WorldTileset = _gen1_tileset(Gen1Layout.TILESET_DOJO, [0x00], true)
+	var dock: Gen2WorldTileset = _gen1_tileset(Gen1Layout.TILESET_SHIP_PORT, [0x00], true)
+	var overworld: Gen2WorldTileset = _gen1_tileset(Gen1Layout.TILESET_OVERWORLD, [0x00], true)
+	for tileset: Gen2WorldTileset in [gym, dojo]:
+		assert_eq(Gen2WorldCollision.gen1_permission(tileset, 0x32), Gen2WorldCollision.WATER_TILE)
+		assert_eq(Gen2WorldCollision.gen1_permission(tileset, 0x32, true), Gen2WorldCollision.WALL_TILE)
+	assert_eq(Gen2WorldCollision.gen1_permission(dock, 0x32), Gen2WorldCollision.WALL_TILE)
+	assert_eq(Gen2WorldCollision.gen1_permission(overworld, 0x32, true), Gen2WorldCollision.WATER_TILE)
+	assert_eq(Gen2WorldCollision.gen1_permission(gym, 0x14, true), Gen2WorldCollision.WATER_TILE)
+
+
 ## `TilePairCollisionsLand` and `TilePairCollisionsWater`: a row forbids crossing
 ## in either order, and only on the tileset it names.
 func test_gen1_tile_pairs_block_both_ways_on_their_own_tileset() -> void:

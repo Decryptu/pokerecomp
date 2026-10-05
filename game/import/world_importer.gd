@@ -232,11 +232,10 @@ static func read_world(
 ## The `cmdqueue` payloads, as a second pass over the scripts already collected. A
 ## `writecmdqueue` operand points at data rather than script, so the recursive
 ## walk cannot follow it the way it follows a call. Only Blackthorn Gym 2F and Ice
-## Path B1F write a queue and both write a CMDQUEUE_STONETABLE, so an entry of any
-## other type is kept for its pointer and left undecoded. A pointer that does not
-## resolve is skipped rather than fatal, since a slice running past its own end
-## can decode stray bytes as a `writecmdqueue`; what keeps this honest is
-## `tools/checks/command_queues.gd`, which asserts the two real tables.
+## Path B1F write a queue, both a CMDQUEUE_STONETABLE, so any other type is kept
+## for its pointer and left undecoded. A pointer that does not resolve is skipped,
+## since a slice running past its end can decode stray bytes as a `writecmdqueue`;
+## `tools/checks/command_queues.gd` asserts the two real tables.
 static func _read_command_queues(
 	rom: RomFile, script_data: Dictionary, text_data: Dictionary, movement_data: Dictionary
 ) -> Dictionary:

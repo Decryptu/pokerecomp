@@ -83,6 +83,7 @@ func _run_script() -> void:
 	_world_screen._show_script_results(
 		_world_screen._world.dispatch_script_events(TALK_CELL)
 	)
+	Fixture.settle_menu_fade(_world_screen)
 
 
 func _host() -> Gen2UnownPuzzleScreen:
@@ -96,6 +97,29 @@ func test_the_special_opens_the_board_and_holds_the_world() -> void:
 	assert_true(_host().visible)
 	assert_false(_world_screen.move_player(Vector2i.RIGHT))
 	assert_false(_world_screen.interact())
+
+
+## `UnownPuzzle` is `FadeToMenu`, `_UnownPuzzle` and `ExitAllMenus`, and the
+## script is inside the special for all three: the board is not up until the map
+## has faded out, and the answer is not given until it has faded back in.
+func test_the_script_waits_through_both_fades() -> void:
+	await _open_world()
+	_world_screen._show_script_results(
+		_world_screen._world.dispatch_script_events(TALK_CELL)
+	)
+	assert_null(_host(), "the map fades out first")
+	assert_false(_world_screen._world.pending_runtime_request().is_empty())
+	Fixture.settle_menu_fade(_world_screen)
+	assert_not_null(_host())
+
+	_world_screen.press_button(PokeButton.START)
+	assert_null(_host())
+	assert_false(
+		_world_screen._world.pending_runtime_request().is_empty(),
+		"the special has not returned while the map is white"
+	)
+	Fixture.settle_menu_fade(_world_screen)
+	assert_true(_world_screen._world.pending_runtime_request().is_empty())
 
 
 ## The `setval` in front of the special is which picture, and nothing else picks
@@ -124,6 +148,7 @@ func test_start_closes_the_board_and_answers_the_script_zero() -> void:
 	_run_script()
 	_world_screen.press_button(PokeButton.START)
 	assert_null(_host(), "START must close the board")
+	Fixture.settle_menu_fade(_world_screen)
 	assert_false(
 		_world_screen._world.state.is_event_flag_active(SOLVED_EVENT),
 		"an unsolved board must not take the `iftrue`"

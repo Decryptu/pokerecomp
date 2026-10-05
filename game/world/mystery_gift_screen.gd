@@ -14,9 +14,8 @@ signal closed()
 ## What is on screen, in the order the routine reaches them.
 enum STEP { PROMPT, EXCHANGING, MESSAGE }
 
-## `ExchangeMysteryGiftData`'s own four-second timeout, in hardware frames. The
-## screen spends it whether or not a partner is in the window, because that is
-## what the routine spends looking.
+## One pass of the infrared hello and listen. Nobody in the window times out into
+## `.restart`, which is the prompt again: only B ends it.
 const EXCHANGE_FRAMES: int = 60 * 4
 
 var _page: Gen2MysteryGiftPage = null
@@ -87,7 +86,10 @@ func handle_button(button: int) -> bool:
 				_frames = EXCHANGE_FRAMES
 				_refresh()
 			elif button == PokeButton.B:
-				closed.emit()
+				_cancel()
+		STEP.EXCHANGING:
+			if button == PokeButton.B:
+				_cancel()
 		STEP.MESSAGE:
 			if button in [PokeButton.A, PokeButton.B]:
 				var printed: bool = not _box.has_text_left()
@@ -125,6 +127,10 @@ func settle(limit: int = EXCHANGE_FRAMES + 8) -> void:
 ## behind it: the section this screen edited is the save's, so a gift lands in
 ## the slot that was chosen rather than in the one being played.
 func _exchange() -> void:
+	if _transport.status() == Gen2MysteryGift.MG_TIMED_OUT:
+		_step = STEP.PROMPT
+		_refresh()
+		return
 	var section: Dictionary = _section()
 	var player: Dictionary = Gen2MysteryGift.stage_player_data(
 		_save, section, _dex_caught, _random
@@ -134,6 +140,17 @@ func _exchange() -> void:
 		"decos": _data.mystery_gift_table(true),
 	}, _data)
 	_save.mystery_gift = section
+	_show_result()
+
+
+## `.LinkCanceled`.
+func _cancel() -> void:
+	_frames = 0
+	_result = {"outcome": Gen2MysteryGift.OUTCOME_CANCELED, "name": "", "retry": false}
+	_show_result()
+
+
+func _show_result() -> void:
 	_step = STEP.MESSAGE
 	## Every box ends in `prompt`.
 	_box.show_text(box_text(

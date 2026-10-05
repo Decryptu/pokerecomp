@@ -25,11 +25,10 @@ const SPARKLE_AT := Vector2i(88, 88)
 ## `ld c, 16 / call DelayFrames` after the tilemap and the sprites are cleared.
 const CLEANUP_FRAMES: int = 16
 ## `GameFreakPresentsEnd` reaches `ClearSprites` only after `ClearTilemap`, whose
-## `WaitBGMap` spends `ld c, 4 / call DelayFrames`. `ClearSpriteAnims` in front
-## of it takes the structs away without writing shadow OAM, so the buffer holds
-## its last frame and the sprite stays up over the cleared tilemap for those
-## four. Measured against a cartridge: the Ditto is in OAM for four frames past
-## the pass that sets the exit bit.
+## `WaitBGMap` spends `ld c, 4 / call DelayFrames`. `ClearSpriteAnims` in front of it
+## takes the structs away without writing shadow OAM, so the buffer holds its last
+## frame and the sprite stays up over the cleared tilemap for those four. Measured
+## against a cartridge: the Ditto is in OAM for four frames past the exit bit.
 const CLEAR_TILEMAP_FRAMES: int = 4
 
 ## The two `PlaceString`s. Crystal writes them with `CopyBytes` at (5,10) and
@@ -190,8 +189,7 @@ func word_positions() -> Array[Vector2i]:
 ## The buffer, not the live structs: `GameFreakPresentsInit` spawns one without
 ## writing shadow OAM, and a struct the scene half of a pass spawns is only drawn
 ## by the sprite half, which on Gold and Silver runs first and so does not see it
-## until the pass after. Nothing else clears the buffer, so it also survives
-## `ClearSpriteAnims` until `ClearSprites` reaches it.
+## until the pass after. It survives `ClearSpriteAnims` until `ClearSprites`.
 func sprites() -> Array[Dictionary]:
 	return _shadow.duplicate(true)
 
@@ -395,12 +393,11 @@ func _advance_sprites() -> void:
 		if actor.is_empty():
 			continue
 		if not _advance_actor(actor):
-			# `DeinitSpriteAnimStruct` zeroes the slot, so the next pass skips
-			# it. This one does not: `DoNextFrameForAllSprites` calls
-			# `UpdateAnimFrame` whether or not the function deinitialised the
-			# struct, so a sprite that dies is drawn one last time. Measured
-			# against a cartridge: Gold's star is in OAM for a frame after it
-			# has gone, and every sparkle in the spray is.
+			# `DeinitSpriteAnimStruct` zeroes the slot, so the next pass skips it. This one
+			# does not: `DoNextFrameForAllSprites` calls `UpdateAnimFrame` whether or not the
+			# function deinitialised the struct, so a sprite that dies is drawn one last time.
+			# Measured against a cartridge: Gold's star is in OAM for a frame after it has
+			# gone, and every sparkle in the spray is.
 			_actors[slot] = {}
 		_advance_frameset(actor)
 		if not bool(actor.get("visible", true)):

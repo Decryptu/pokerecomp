@@ -204,10 +204,9 @@ func open_dex_area(
 ## `_FlyMap`: the region map with the cursor walking the flypoints the player has
 ## visited. [param in_kanto] is which map `FlyMap` opens, which is the region the
 ## player is standing in, and [param visited] which `FLY_*` indexes
-## `CheckIfVisitedFlypoint` answers for.
-## The answer is taken with [method chosen_spawn] once this closes: -1 for a
-## cancel, and the flypoint's own spawn for a choice, which is exactly the byte
-## `.pressedA` leaves in `e`.
+## `CheckIfVisitedFlypoint` answers for. The answer is taken with [method
+## chosen_spawn] once this closes: -1 for a cancel, and the flypoint's own spawn for
+## a choice, which is exactly the byte `.pressedA` leaves in `e`.
 func open_fly(
 	data: GameData,
 	landmark: int,
@@ -489,11 +488,10 @@ func _refresh() -> void:
 	_refresh_cursor()
 
 
-## The dex area's shadow OAM, which holds one of three things whole rather than
-## a per-object position.
-## Every object the Generation 1 screen has up this frame, in shadow-OAM order
-## so the player's icon draws over what blinks under it: the nest set or the
-## cursor first, then the bird, then the player, who no blink ever hides.
+## The dex area's shadow OAM, which holds one of three things whole rather than a
+## per-object position. Every object the Generation 1 screen has up this frame, in
+## shadow-OAM order so the player's icon draws over what blinks under it: the nest
+## set or the cursor first, then the bird, then the player, who no blink ever hides.
 func _gen1_objects() -> Array:
 	var out: Array = []
 	if _map.screen == Gen2TownMap.SCREEN_DEX_AREA and _oam != OAM_CLEARED:

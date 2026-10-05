@@ -6,6 +6,8 @@ extends RefCounted
 
 const TILE: int = Gen2Font.TILE
 const MESSAGE_BOX := Rect2i(0, 12, 20, 6)
+const GEN1_COLUMNS: int = 20
+const GEN1_ROWS: int = 18
 ## A backdrop layer that blanks the screen, as `ClearPCItemScreen` and
 ## `BillsPC_ClearTilemap` do. Without one the layers stand over the map.
 const CLEAR_SCREEN: Dictionary = {"clear": true}
@@ -118,12 +120,65 @@ func render_box_print(status: String) -> Image:
 		Gen2DiplomaPage.STATUS_BOX_SIZE.x, Gen2DiplomaPage.STATUS_BOX_SIZE.y)
 	var line: int = 0
 	for row: String in status.split("\n"):
-		var text_at: Vector2i = Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, line)
+		var text_at: Vector2i = Gen2DiplomaPage.STATUS_TEXT_AT + Vector2i(0, Gen2DiplomaPage.STATUS_LINE_STEP * line)
 		font.draw_text(row, indices, width, text_at.x * TILE, text_at.y * TILE)
 		line += 1
 	var cancel: Vector2i = Gen2DiplomaPage.CANCEL_AT
 	font.draw_text(Gen2DiplomaPage.CANCEL_STRING, indices, width, cancel.x * TILE, cancel.y * TILE)
 	return Gen2PicImage.from_indices(indices, width, Gen2Screen.HEIGHT, _colors())
+
+
+## `PrintPCBox_DrawPage1` under the printer's status box; [param mons] are
+## (species, nickname) pairs.
+func render_gen1_box_print(
+	box_index: int, mons: Array, status: String, cancel: String
+) -> Image:
+	var map := PackedInt32Array()
+	map.resize(GEN1_COLUMNS * GEN1_ROWS)
+	map.fill(Gen1Text.SPACE)
+	for line: int in 6:
+		_gen1_put_text(map, 4, line * 3, "----------")
+		_gen1_put_text(map, 6, line * 3 + 1, "----------")
+	for cell: int in 11 * GEN1_COLUMNS:
+		map[cell] = Gen1Text.SPACE
+	for row: int in GEN1_ROWS:
+		map[row * GEN1_COLUMNS] = Gen1Text.BOX_SIDE
+		map[row * GEN1_COLUMNS + GEN1_COLUMNS - 1] = Gen1Text.BOX_SIDE
+	for column: int in GEN1_COLUMNS:
+		map[column] = Gen1Text.BOX_TOP
+	map[0] = Gen1Text.BOX_TOP_LEFT
+	map[GEN1_COLUMNS - 1] = Gen1Text.BOX_TOP_RIGHT
+	_gen1_put_text(map, 4, 4, "POKéMON LIST")
+	_gen1_put_text(map, 7, 6, "BOX")
+	_gen1_put_text(map, 11, 6, String.num_int64(box_index + 1))
+	for index: int in mini(mons.size(), 3):
+		var at_y: int = 9 + index * 3
+		_gen1_put_text(map, 4, at_y, "            ")
+		_gen1_put_text(map, 4, at_y + 1, "            ")
+		_gen1_put_text(map, 4, at_y, String(mons[index][0]))
+		_gen1_put_text(map, 5, at_y + 1, String(mons[index][1]))
+	var box: Array = Gen1Text.text_box_rows(Vector2i(18, 10))
+	for row: int in box.size():
+		for column: int in (box[row] as Array).size():
+			map[(5 + row) * GEN1_COLUMNS + column] = int(box[row][column])
+	var lines: PackedStringArray = status.split(Gen1Layout.MENU_ROW_BREAK)
+	for line: int in lines.size():
+		_gen1_put_text(map, 1, 7 + 2 * line, lines[line])
+	_gen1_put_text(map, 2, 15, cancel)
+	var indices := PackedByteArray()
+	indices.resize(Gen2Screen.WIDTH * Gen2Screen.HEIGHT)
+	for cell: int in map.size():
+		font.draw_code(
+			map[cell], indices, Gen2Screen.WIDTH,
+			cell % GEN1_COLUMNS * TILE, cell / GEN1_COLUMNS * TILE
+		)
+	return Gen2PicImage.from_indices(indices, Gen2Screen.WIDTH, Gen2Screen.HEIGHT, _colors())
+
+
+func _gen1_put_text(map: PackedInt32Array, x: int, y: int, text: String) -> void:
+	var codes: PackedByteArray = Gen1Text.encode(text)
+	for index: int in codes.size():
+		map[y * GEN1_COLUMNS + x + index] = codes[index]
 
 
 ## A printed box left standing under the windows a routine opened after it, as

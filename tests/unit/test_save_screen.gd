@@ -447,7 +447,6 @@ func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 	assert_eq(written.size(), 0, "the box is up for sixteen frames first")
 	prompt.frames_elapsed(1)
 	assert_eq(written.size(), 1)
-	assert_true(prompt.writing_now())
 	prompt.frames_elapsed(Gen2SavePrompt.WRITE_FRAMES)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVED)
 	assert_eq(prompt.lines[0], "RED saved")
@@ -455,6 +454,11 @@ func test_the_save_sequence_asks_twice_and_then_spends_its_frames() -> void:
 	prompt.text_printed()
 	assert_true(prompt.take_sfx())
 	assert_false(prompt.take_sfx(), "once")
+	var sounding: Array[bool] = [true]
+	prompt.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
+	assert_false(prompt.finished(), "`WaitSFX` holds the last frames until `SFX_SAVE` ends")
+	sounding[0] = false
 	prompt.frames_elapsed(Gen2SavePrompt.DONE_FRAMES)
 	assert_true(prompt.finished())
 	assert_false(prompt.refused())
@@ -539,7 +543,6 @@ func test_the_generation_1_save_holds_asks_once_and_writes_before_its_string() -
 	assert_eq(prompt.lines, Gen2SavePrompt.GEN1_SAVING_LINES)
 	assert_eq(prompt.letter_speed(), &"instant", "`NowSavingString` is a `PlaceString`")
 	assert_eq(written.size(), 1, "SaveGameData ran before the string went up")
-	assert_true(prompt.writing_now())
 	prompt.text_printed()
 	prompt.frames_elapsed(119)
 	assert_eq(prompt.step, Gen2SavePrompt.Step.SAVING)
@@ -1433,6 +1436,46 @@ func test_an_egg_is_offered_stats_and_switch_and_no_move_row() -> void:
 	assert_signal_emitted(screen, "closed")
 
 
+## `EggStatsScreen` plays `SFX_2_BOOPS` for an egg with fewer than six steps left,
+## and `StatsScreenWaitCry` (`WaitSFX` on Gold) reads no press until it ends.
+func test_an_egg_about_to_hatch_boops_and_holds_input_until_the_boops_end() -> void:
+	var egg := Gen2SaveMon.new()
+	egg.is_egg = true
+	egg.species = Fixture.PIKACHU
+	egg.happiness = 5
+	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, [egg])
+	var sounding: Array[bool] = [true]
+	screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(screen)
+	screen.announce()
+	assert_signal_emitted_with_parameters(screen, "sfx_requested", [Gen2Sfx.SFX_2_BOOPS])
+	assert_true(screen.handle_button(PokeButton.A), "the press is read and lost")
+	assert_signal_not_emitted(screen, "closed")
+	sounding[0] = false
+	screen.handle_button(PokeButton.A)
+	assert_signal_emitted(screen, "closed")
+
+	egg.happiness = 6
+	var quiet: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, [egg])
+	watch_signals(quiet)
+	quiet.announce()
+	assert_signal_not_emitted(quiet, "sfx_requested")
+
+
+func test_a_loaded_mons_cry_holds_the_stats_screens_input_until_it_ends() -> void:
+	var screen: Gen2MonStatsScreen = Gen2MonStatsScreen.create(_data, _save().party)
+	var sounding: Array[bool] = [true]
+	screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(screen)
+	screen.announce()
+	assert_signal_emitted(screen, "cry_requested")
+	screen.handle_button(PokeButton.RIGHT)
+	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.PINK_PAGE)
+	sounding[0] = false
+	screen.handle_button(PokeButton.RIGHT)
+	assert_eq(int(screen.snapshot()["page"]), Gen2StatsScreenPage.GREEN_PAGE)
+
+
 ## `BillsPCDepositFuncDeposit` ends with `xor a` into both cursor bytes, and
 ## `DepositPokemon` plays the stored Pokemon's cry on the way.
 func test_a_deposit_puts_the_cursor_back_on_the_first_row_and_plays_a_cry() -> void:
@@ -1527,3 +1570,71 @@ func test_a_move_down_one_list_lands_in_front_of_the_row_it_points_at() -> void:
 	for mon: Gen2SaveMon in save.party:
 		order.append(mon.nickname)
 	assert_eq(order, ["", "SPARKY", "THIRD", "FOURTH"], "GEODUDE carries no nickname")
+
+
+## `PartyMenuSelect` answers a press only once its click's `WaitSFX` has ended, so a
+## press read behind the click is lost and the answer arrives when the sound stops.
+func test_a_party_press_is_answered_once_its_click_has_ended() -> void:
+	await _open_party_screen(_save_with_two())
+	_party_screen.open_selection(Gen2PartyScreen.PROMPT_CHOOSE)
+	var sounding: Array[bool] = [true]
+	_party_screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	watch_signals(_party_screen)
+	_party_screen.handle_button(PokeButton.A)
+	assert_signal_emitted_with_parameters(
+		_party_screen, "sfx_requested", [Gen2Sfx.SFX_READ_TEXT_2, true]
+	)
+	assert_signal_not_emitted(_party_screen, "selection_made")
+	assert_true(_party_screen.handle_button(PokeButton.B), "read and lost behind the click")
+	sounding[0] = false
+	_party_screen._process(0.0)
+	assert_signal_emitted_with_parameters(_party_screen, "selection_made", [0])
+
+
+## `.ClearSprite` is `WaitPlaySFX` once per row: the second effect waits the first out.
+func test_a_party_swap_sounds_its_second_effect_after_the_first_has_ended() -> void:
+	await _open_party_screen(_save_with_two())
+	var sounding: Array[bool] = [false]
+	_party_screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	var swaps: Array[int] = []
+	_party_screen.sfx_requested.connect(func(index: int, _waited: bool) -> void:
+		if index == Gen2Sfx.SFX_SWITCH_POKEMON:
+			swaps.append(index)
+			sounding[0] = true)
+	_party_screen._begin_switch()
+	_party_screen._move_cursor(1)
+	_party_screen.handle_button(PokeButton.A)
+	assert_eq(swaps.size(), 1)
+	sounding[0] = false
+	_party_screen._process(0.0)
+	assert_eq(swaps.size(), 2)
+
+
+## `MoveScreenLoop`'s `.a_button` and `.swap_moves`: the click and each of the two
+## effects are waited out before the next press is read.
+func test_the_move_screen_reads_nothing_while_its_click_or_swap_effects_sound() -> void:
+	var screen: Gen2MoveScreen = Gen2MoveScreen.create(_data, _save().party)
+	var sounding: Array[bool] = [true]
+	screen.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
+	screen.handle_button(PokeButton.A)
+	assert_eq(int(screen.snapshot()["held"]), -1, "the move is lifted once the click ends")
+	assert_true(screen.handle_button(PokeButton.DOWN))
+	assert_eq(int(screen.snapshot()["cursor"]), 0)
+	sounding[0] = false
+	screen.advance_frame()
+	assert_eq(int(screen.snapshot()["held"]), 0)
+	screen.handle_button(PokeButton.DOWN)
+	assert_eq(int(screen.snapshot()["cursor"]), 1)
+
+	var effects: Array[int] = []
+	screen.sfx_requested.connect(func(index: int, _waited: bool) -> void:
+		effects.append(index)
+		sounding[0] = true)
+	screen.handle_button(PokeButton.A)
+	assert_eq(effects, [Gen2Sfx.SFX_READ_TEXT_2], "the swap waits behind its click")
+	sounding[0] = false
+	screen.advance_frame()
+	assert_eq(effects.size(), 2)
+	sounding[0] = false
+	screen.advance_frame()
+	assert_eq(effects.size(), 3, "the second swap effect follows the first")

@@ -111,6 +111,11 @@ func music_outlasts() -> bool:
 	return true
 
 
+## Red and Blue's `PlaySoundWaitForCurrent` stops the music; Yellow's `StopAllMusic` does not wait.
+func holds_for_sound() -> bool:
+	return not _yellow and _phase == Phase.OPEN and _left <= 1
+
+
 func bg_map() -> PackedInt32Array:
 	return _tilemap.duplicate()
 

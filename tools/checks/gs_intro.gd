@@ -40,13 +40,10 @@ const EXPECTED_SFX: int = 4
 const EXPECTED_MUSIC: int = 3
 
 ## The water scene asks shadow OAM for more than the forty it holds: Lapras is
-## twenty-seven sprites on its own and the magikarp triple six each, so
-## `UpdateAnimFrame` drops the last five rather than growing, the way
-## `IntroScene10` drops Pichu's last tile on Crystal. Pinned rather than
-## bounded, because the overflow is the finding. The count is what the structs
-## the loop reaches ask for: a full buffer returns carry and
-## `DoNextFrameForAllSprites` stops there, so the structs behind it are never
-## asked at all.
+## twenty-seven sprites and the magikarp triple six each, so `UpdateAnimFrame`
+## drops the last five, as `IntroScene10` drops Pichu's last tile on Crystal.
+## Pinned rather than bounded, because the overflow is the finding: a full
+## buffer returns carry and `DoNextFrameForAllSprites` asks no struct behind it.
 const PEAK_SPRITES: int = 45
 
 ## Each cartridge's section, so the two that carry one can be compared.

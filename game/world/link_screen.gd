@@ -23,13 +23,17 @@ const MODE_BATTLE_WAIT: int = 2
 ## `EndOfBattle`'s own versus box with YOU WIN, YOU LOSE or DRAW in it.
 const MODE_VERSUS_RESULT: int = 3
 
-## `LinkCommunications`' own `ld c, 80 / call DelayFrames` twice, spent behind
-## the "Please wait!" box while the two parties are exchanged.
+## `LinkCommunications`' two `ld c, 80`, on a blank screen before the box.
 const PLEASE_WAIT_FRAMES: int = 160
+## The box's own `DelayFrame`s (`CheckLinkTimeout_Gen2`, `ld c, 3`); the serial bytes are not counted.
+const PLEASE_BOX_FRAMES: int = 5
 ## `ld c, 100 / call DelayFrames` after both players have offered, and the fifty
 ## `PlaceWaitingTextAndSyncAndExchangeNybble` ends on.
 const OFFER_FRAMES: int = 100
 const WAITING_FRAMES: int = 50
+## `.save`'s `ld c, 40` over the border and `ld c, 50` under `String_TradeCompleted`.
+const BORDER_FRAMES: int = 40
+const COMPLETED_FRAMES: int = 50
 
 ## `LinkTradePartiesMenuMasterLoop`'s two lists.
 const LIST_PLAYER: int = 0
@@ -46,6 +50,7 @@ enum STEP {
 	GEN1_ASK_DELAY, GEN1_ASK, GEN1_WAITING, GEN1_TRADING, GEN1_MOVIE,
 	GEN1_COMPLETED_LEAD, GEN1_COMPLETED, GEN1_EXCHANGE, GEN1_CANCELED_DELAY,
 	VERSUS_LEAD, VERSUS, GEN1_TRANSITION, VERDICT, RECORD,
+	PLEASE_BOX, WAITING, TRADING, MOVIE, BORDER, COMPLETED,
 }
 
 ## `ShowLinkBattleParticipants`' and `ShowLinkBattleParticipantsAfterEnd`'s
@@ -81,10 +86,13 @@ var _message: Array = []
 var _message_spacing: int = Gen2LinkPage.MESSAGE_PRINTED_SPACING
 var _partner_choice: int = -1
 var _partner: Dictionary = {}
-## Generation 1 alone: what a `Waiting...!` goes on to and `TryEvolvingMon`'s plan.
 var _gen1: bool = false
+## What a `Waiting...!` goes on to, and the evolution the trade owes.
 var _gen1_after_waiting: int = STEP.SELECT
-var _gen1_evolution: Dictionary = {}
+var _after_waiting: int = STEP.SELECT
+var _evolution_plan: Dictionary = {}
+## Crystal's trade screen and cancel keys, as against Gold and Silver's.
+var _crystal: bool = true
 var _box: Gen2TextBox = null
 var _box_up: bool = false
 ## The offered row's partner, checked once `.try_trade`'s hundred frames are out.
@@ -113,6 +121,7 @@ func set_context(
 	persist = persist_writes
 	_page = Gen2LinkPage.from_data(data)
 	_gen1 = data != null and data.generation == RomRegistry.GEN1
+	_crystal = _page != null and (_gen1 or _page.has_screen_tilemap())
 	_partner = _transport.peer.duplicate(true)
 	if not _gen1 and _link_mode() == Gen2LinkSession.LINK_TIMECAPSULE:
 		_partner["party"] = (_partner.get("party", []) as Array).map(
@@ -143,13 +152,10 @@ func _ready() -> void:
 	elif _gen1:
 		_step = STEP.PLEASE_WAIT
 		_frames = Gen1Layout.CABLE_CLUB_EXCHANGE_FRAMES
-	elif not _transport.connected():
-		## A room whose cable has nothing on the other end never gets past
-		## `LinkCommunications`' own opening box; `Link_CheckCommunicationError`
-		## is what ends it, and the player walks back out.
-		_step = STEP.PLEASE_WAIT
-		_frames = PLEASE_WAIT_FRAMES
 	else:
+		## A room whose cable has nothing on the other end never gets past
+		## `LinkCommunications`' own opening; `Link_CheckCommunicationError` is
+		## what ends it, and the player walks back out.
 		_step = STEP.PLEASE_WAIT
 		_frames = PLEASE_WAIT_FRAMES
 	_refresh()
@@ -179,12 +185,23 @@ func advance_frame() -> void:
 	if _gen1:
 		_gen1_advance()
 		return
+	if _advance_step():
+		_refresh()
+
+
+## What the wait that ran out goes on to; false once the screen has nothing to draw.
+func _advance_step() -> bool:
 	match _step:
 		STEP.PLEASE_WAIT:
 			if not _transport.connected():
 				_step = STEP.LEAVING
 				closed.emit()
-				return
+				return false
+			## `Gen2ToGen2LinkComms`' `PlayMusic MUSIC_NONE`.
+			music_requested.emit(Gen2EvolutionScreen.MUSIC_NONE)
+			_step = STEP.PLEASE_BOX
+			_frames = PLEASE_BOX_FRAMES
+		STEP.PLEASE_BOX:
 			_step = STEP.SELECT
 			if mode == MODE_BATTLE_WAIT:
 				_step = STEP.VERSUS
@@ -193,22 +210,31 @@ func advance_frame() -> void:
 		STEP.VERSUS:
 			if mode == MODE_BATTLE_WAIT:
 				closed.emit()
-				return
+				return false
 			_step = STEP.VERDICT
 			_frames = VERDICT_FRAMES
 			_versus["result"] = _verdict
 		## `ReadAndPrintLinkBattleRecord`, then `WaitPressAorB_BlinkCursor`.
 		STEP.VERDICT:
 			_step = STEP.RECORD
+		STEP.WAITING:
+			_after_waiting_step()
 		STEP.OFFERING:
 			_check_offer()
-		STEP.RESULT:
+		STEP.TRADING:
+			_commit()
+			return false
+		STEP.BORDER:
+			_step = STEP.COMPLETED
+			_frames = COMPLETED_FRAMES
+			_place_message(Gen2LinkPage.TRADE_COMPLETED)
+		STEP.RESULT, STEP.COMPLETED:
 			_step = STEP.SELECT
 			_message = []
 		STEP.LEAVING:
 			closed.emit()
-			return
-	_refresh()
+			return false
+	return true
 
 
 ## Spends [param limit] frames of whatever wait is standing, for a driver that
@@ -254,17 +280,7 @@ func handle_button(button: int) -> bool:
 func _press_select(button: int) -> bool:
 	var rows: int = _rows(_list)
 	if _on_cancel:
-		match button:
-			PokeButton.A:
-				_leave()
-			PokeButton.UP:
-				_on_cancel = false
-				_list = LIST_PARTNER
-				_index = maxi(_rows(LIST_PARTNER) - 1, 0)
-			PokeButton.DOWN:
-				_on_cancel = false
-				_list = LIST_PLAYER
-				_index = 0
+		_press_cancel(button)
 		_refresh()
 		return true
 	match button:
@@ -277,14 +293,14 @@ func _press_select(button: int) -> bool:
 				_open_stats(LIST_PARTNER, _index)
 			else:
 				_step = STEP.FOOTER
-				_footer = FOOTER_TRADE
+				_footer = FOOTER_STATS
 		PokeButton.UP:
 			if _index > 0:
 				_index -= 1
 			elif _list == LIST_PARTNER:
 				_list = LIST_PLAYER
 				_index = maxi(_rows(LIST_PLAYER) - 1, 0)
-			else:
+			elif _crystal:
 				_on_cancel = true
 		PokeButton.DOWN:
 			if _index + 1 < rows:
@@ -296,6 +312,23 @@ func _press_select(button: int) -> bool:
 				_on_cancel = true
 	_refresh()
 	return true
+
+
+## `Link*MenuCheckCancel`: A leaves, UP goes back to the partner's last row, and
+## any other button is Crystal's way back to the first row and Gold's nothing.
+func _press_cancel(button: int) -> void:
+	match button:
+		PokeButton.A:
+			_leave()
+		PokeButton.UP:
+			_on_cancel = false
+			_list = LIST_PARTNER
+			_index = maxi(_rows(LIST_PARTNER) - 1, 0)
+		_:
+			if _crystal:
+				_on_cancel = false
+				_list = LIST_PLAYER
+				_index = 0
 
 
 ## `LinkTrade_TradeStatsMenu`: RIGHT and LEFT move between the two words, B goes
@@ -325,9 +358,23 @@ func _press_footer(button: int) -> bool:
 func _offer() -> void:
 	_partner_choice = _transport_choice()
 	_incoming = _partner_mon(_partner_choice)
-	_step = STEP.OFFERING
-	_frames = OFFER_FRAMES
 	_message = []
+	_wait_then(STEP.OFFERING)
+
+
+## `PlaceWaitingTextAndSyncAndExchangeNybble`: the box for fifty frames, then [param next].
+func _wait_then(next: int) -> void:
+	_step = STEP.WAITING
+	_after_waiting = next
+	_frames = WAITING_FRAMES
+
+
+## Each wait is followed by a hundred frames of its own.
+func _after_waiting_step() -> void:
+	_step = _after_waiting
+	_frames = OFFER_FRAMES
+	if _step == STEP.TRADING:
+		_message = []
 
 
 func _check_offer() -> void:
@@ -347,8 +394,8 @@ func _check_offer() -> void:
 
 
 ## `.abnormal` and the `CheckAnyOtherAliveMonsForTrade` branch beside it: both
-## print their box, then `String_TooBadTheTradeWasCanceled` for a hundred
-## frames, and go back to the listing.
+## print their box, then `String_TooBadTheTradeWasCanceled` (waiting box, then a
+## hundred frames) and go back to the listing.
 func _refuse(text: String) -> void:
 	_partner_choice = -1
 	_step = STEP.RESULT
@@ -372,7 +419,7 @@ func _press_box(button: int) -> void:
 	if printed and _step == STEP.RESULT:
 		_box_up = false
 		_place_message(Gen2LinkPage.TRADE_CANCELED)
-		_frames = OFFER_FRAMES
+		_wait_then(STEP.RESULT)
 		_refresh()
 
 
@@ -392,7 +439,9 @@ func _press_confirm(button: int) -> bool:
 				if _gen1:
 					_gen1_start_trade()
 				else:
-					_commit()
+					_message = []
+					_wait_then(STEP.TRADING)
+					_refresh()
 			else:
 				_cancel_trade()
 			return true
@@ -406,15 +455,14 @@ func _cancel_trade() -> void:
 	if _gen1:
 		_gen1_cancel_trade()
 		return
-	_step = STEP.RESULT
-	_frames = WAITING_FRAMES
 	_place_message(Gen2LinkPage.TRADE_CANCELED)
+	_wait_then(STEP.RESULT)
 	_refresh()
 
 
 ## `.do_trade`, whose whole save-side effect is
 ## [method Gen2WorldPartyHost.commit_link_trade]. `SaveAfterLinkTrade` is the
-## write that transaction already is.
+## write that transaction already is; [method animation_closed] starts `.save`.
 func _commit() -> void:
 	_confirm = 0
 	var result: Dictionary = Gen2WorldPartyHost.commit_link_trade(
@@ -422,19 +470,24 @@ func _commit() -> void:
 		{"name": String(_partner.get("name", "")), "link_mode": _link_mode()},
 		persist
 	)
-	_step = STEP.RESULT
-	_frames = WAITING_FRAMES
 	if not bool(result.get("ok", false)):
+		_step = STEP.RESULT
+		_frames = OFFER_FRAMES
 		_place_message(Gen2LinkPage.TRADE_CANCELED)
-	else:
-		_place_message(Gen2LinkPage.TRADE_COMPLETED)
-		## The row the partner gave up is gone from its party for the rest of
-		## this visit, the way the cartridge's own copy of it is.
-		_take_partner_mon(_partner_choice)
-		_index = mini(_index, maxi(_rows(LIST_PLAYER) - 1, 0))
-		traded.emit(result)
+		_partner_choice = -1
+		_refresh()
+		return
+	## The row the partner gave up is gone from its party for the rest of this
+	## visit, the way the cartridge's own copy of it is.
+	_take_partner_mon(_partner_choice)
+	_index = mini(_index, maxi(_rows(LIST_PLAYER) - 1, 0))
+	_evolution_plan = result.get("evolution_plan", {})
 	_partner_choice = -1
+	_step = STEP.MOVIE
+	_frames = 0
+	_message = []
 	_refresh()
+	traded.emit(result)
 
 
 ## `LinkTradePartymonMenuCheckCancel.a_button`, which sends `$f` and waits for
@@ -635,15 +688,20 @@ func _gen1_commit() -> void:
 	_take_partner_mon(_partner_choice)
 	_partner_choice = -1
 	_index = mini(_index, maxi(_rows(LIST_PLAYER) - 1, 0))
-	_gen1_evolution = result.get("evolution_plan", {})
+	_evolution_plan = result.get("evolution_plan", {})
 	_step = STEP.GEN1_MOVIE
 	_frames = 0
 	_refresh()
 	traded.emit(result)
 
 
-## After the movie and `TryEvolvingMon`: `ClearScreen` and `Waiting...!`.
+## After the movie and the evolution: `Waiting...!`, or Generation 2's `.save`.
 func animation_closed() -> void:
+	if not _gen1 and _step == STEP.MOVIE:
+		_step = STEP.BORDER
+		_frames = BORDER_FRAMES
+		_refresh()
+		return
 	if not _gen1 or _step != STEP.GEN1_MOVIE:
 		return
 	_gen1_wait_then(STEP.GEN1_COMPLETED_LEAD)
@@ -670,8 +728,8 @@ static func _versus_balls(rows: Array) -> Array:
 
 
 func take_evolution_plan() -> Dictionary:
-	var plan: Dictionary = _gen1_evolution
-	_gen1_evolution = {}
+	var plan: Dictionary = _evolution_plan
+	_evolution_plan = {}
 	return plan
 
 
@@ -695,6 +753,7 @@ func _open_stats(list: int, index: int) -> void:
 	_stats = Gen2MonStatsScreen.create(_data, mons, index)
 	_stats.closed.connect(_close_stats)
 	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.sfx_requested.connect(sfx_requested.emit)
 	_stats.announce()
 	_refresh()
 
@@ -760,42 +819,40 @@ func _species_name(species: int) -> String:
 	return String(_data.species(species).get("name", "")) if _data != null else ""
 
 
-## `_LinkAskTradeForText`, whose two `text_ram` buffers are the two nicknames.
+## `_LinkAskTradeForText`: species names, never nicknames.
 func _ask_message(incoming: Dictionary) -> String:
 	var mine: String = ""
 	if _save != null and _index < _save.party.size():
-		var mon: Gen2SaveMon = _save.party[_index]
-		mine = mon.nickname if not mon.nickname.is_empty() \
-			else _species_name(mon.species)
-	var theirs: String = String(incoming.get("nickname", ""))
-	if theirs.is_empty():
-		theirs = _species_name(int(incoming.get("species", 0)))
-	return _special_text("ask_trade", {"trademon_nickname": mine, 1: theirs})
+		mine = _listed_name((_save.party[_index] as Gen2SaveMon).to_dict())
+	return _special_text("ask_trade", {
+		"trademon_nickname": mine, Gen2Layout.STRING_BUFFER_1: _listed_name(incoming),
+	})
 
 
 func _abnormal_message(incoming: Dictionary) -> String:
-	return _special_text("abnormal_mon", {
-		1: _species_name(int(incoming.get("species", 0))),
-	})
+	return _special_text("abnormal_mon", {Gen2Layout.STRING_BUFFER_1: _listed_name(incoming)})
 
 
 func _cant_battle_message() -> String:
 	return _special_text("cant_battle", {})
 
 
-## One of the trade screen's three imported boxes, with its buffers filled.
+## One of the three imported boxes; a string key is a `text_ram` name, an integer a `wStringBuffer`.
 func _special_text(box: String, buffers: Dictionary) -> String:
 	if _data == null:
 		return ""
 	var text: String = _data.special_text("link", box)
-	for name_or_address: Variant in buffers:
-		var address: int = _data.special_text_ram(String(name_or_address)) \
-			if name_or_address is String else int(name_or_address)
+	var general: Array[int] = _data.string_buffer_addresses()
+	for name_or_buffer: Variant in buffers:
+		var address: int = _data.special_text_ram(String(name_or_buffer)) \
+			if name_or_buffer is String else (
+				general[int(name_or_buffer)] if int(name_or_buffer) < general.size() else -1
+			)
 		if address < 0:
 			continue
 		text = text.replace(
 			"%s%04X>" % [Gen2TextStream.RAM_MARKER, address],
-			String(buffers[name_or_address])
+			String(buffers[name_or_buffer])
 		)
 	return text
 
@@ -818,8 +875,8 @@ func _refresh() -> void:
 			_save.player_name if _save != null else "",
 			_save != null
 		)
-	elif _step == STEP.PLEASE_WAIT:
-		indices = _page.draw_please_wait()
+	elif _step == STEP.PLEASE_WAIT or _step == STEP.PLEASE_BOX:
+		indices = _page.draw_please_wait(_gen1 or _step == STEP.PLEASE_BOX)
 	elif _step == STEP.VERSUS_LEAD:
 		indices = _page.draw_gen1_trade({"blank": true})
 	elif _step == STEP.VERSUS or _step == STEP.VERDICT:
@@ -850,30 +907,33 @@ func trade_state() -> Dictionary:
 		"index": _index,
 		"cancel": _on_cancel,
 		"cancel_sent": _cancel_sent,
-		"partner_choice": _partner_choice,
+		"partner_choice": -1 if _step == STEP.WAITING and _after_waiting == STEP.OFFERING \
+			else _partner_choice,
 		"footer": _footer if _step == STEP.FOOTER else -1,
 		"confirm": _confirm if _step == STEP.CONFIRM and not (_box_up and _box.has_text_left()) \
 			else -1,
 		"message": _message.duplicate(),
 		"message_spacing": _message_spacing,
 		"box": _box if _box_up else null,
-		"waiting": _step in [STEP.OFFERING, STEP.LEAVING, STEP.GEN1_WAITING,
+		"waiting": _step in [STEP.WAITING, STEP.LEAVING, STEP.GEN1_WAITING,
 			STEP.GEN1_TRADING, STEP.GEN1_CANCELED_DELAY],
 		"held": _step in [STEP.FOOTER, STEP.GEN1_ASK_DELAY, STEP.GEN1_ASK, STEP.CONFIRM,
 			STEP.GEN1_TRADING, STEP.GEN1_CANCELED_DELAY] \
 			or (_step == STEP.GEN1_WAITING and _gen1_after_waiting != STEP.LEAVING),
 		"blank": _step in [STEP.GEN1_MOVIE, STEP.GEN1_COMPLETED_LEAD, STEP.GEN1_COMPLETED,
-			STEP.GEN1_EXCHANGE]
+			STEP.GEN1_EXCHANGE, STEP.TRADING, STEP.MOVIE, STEP.BORDER, STEP.COMPLETED]
 			or (_step == STEP.GEN1_WAITING and _gen1_after_waiting == STEP.GEN1_COMPLETED_LEAD),
 	}
 
 
-## `PlaceTradePartnerNamesAndParty` prints the species name and not the
-## nickname, which is the one place either list does. `GetPokemonName` runs
-## over the party species list, whose egg entry is EGG's own name.
+## `GetPokemonName` over a species list: an egg is EGG, a nickname is never used.
+func _listed_name(row: Dictionary) -> String:
+	return Gen2StatsScreenPage.EGG_STRING if bool(row.get("is_egg", false)) \
+		else _species_name(int(row.get("species", 0)))
+
+
 func _party_names(rows: Array) -> Array:
 	var out: Array = []
 	for row: Dictionary in rows:
-		out.append(Gen2StatsScreenPage.EGG_STRING if bool(row.get("is_egg", false))
-			else _species_name(int(row.get("species", 0))))
+		out.append(_listed_name(row))
 	return out

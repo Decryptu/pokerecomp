@@ -45,13 +45,10 @@ static func decode_tile(data: PackedByteArray, offset: int) -> PackedByteArray:
 
 
 ## Decodes [param count] consecutive 1bpp tiles into a single strip of indices,
-## eight pixels tall and [param count] * 8 wide.
-##
-## The font and text box borders are stored this way and are addressed by
-## character code rather than grid position, so a single row makes a glyph's
-## position arithmetic on that code. A short or absent source leaves the
-## remaining tiles blank rather than failing: a hole in the strip is visible on
-## screen, which is the point.
+## eight pixels tall and [param count] * 8 wide. The font and text box borders are
+## stored this way, addressed by character code rather than grid position, so a
+## single row makes a glyph's position arithmetic on that code. A short or absent
+## source leaves the remaining tiles blank rather than failing: a hole is visible.
 static func decode_1bpp_strip(data: PackedByteArray, offset: int, count: int) -> PackedByteArray:
 	var width: int = count * TILE_WIDTH
 	var out: PackedByteArray = PackedByteArray()

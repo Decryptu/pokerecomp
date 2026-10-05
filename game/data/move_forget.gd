@@ -30,7 +30,7 @@ const TEXTS: Dictionary = {
 	&"which": "Which move should\nbe forgotten?",
 	&"stop": "Stop learning\n%s?",
 	&"did_not_learn": "%s\ndid not learn\ue001%s.",
-	&"forgot": "1, 2 and… Poof!\ue000%s forgot\n%s.\ue000And…",
+	&"forgot": "1, 2 and…%s Poof!%s\ue000%s forgot\n%s.\ue000And…",
 	&"learned": "%s learned\n%s!",
 	&"cant_forget_hm": "HM moves can't be\nforgotten now.",
 }
@@ -39,7 +39,7 @@ const GEN1_TEXTS: Dictionary = {
 	&"which": "Which move should\nbe forgotten?",
 	&"stop": "Abandon learning\n%s?",
 	&"did_not_learn": "%s\ndid not learn\ue001%s!",
-	&"forgot": "1, 2 and... Poof!\ue000%s forgot\n%s!\ue000And...",
+	&"forgot": "1, 2 and...%s Poof!%s\ue000%s forgot\n%s!\ue000And...",
 	&"learned": "%s learned\n%s!",
 	&"cant_forget_hm": "HM techniques\ncan't be deleted!",
 }
@@ -107,18 +107,30 @@ static func did_not_learn_text(
 	return _text(&"did_not_learn", generation) % [mon_name, move_name]
 
 
-## `Text_1_2_and_Poof` then `_MoveForgotText`; `OneTwoAndText` through `ForgotAndText`.
+## `Text_1_2_and_Poof` then `_MoveForgotText`; `OneTwoAndText` through `ForgotAndText`. A `text_pause`
+## ends each half and a `text_asm` sounds between them, over which the text runs on but for Yellow's.
 static func forgot_text(
-	mon_name: String, old_move_name: String, generation: int = RomRegistry.GEN2
+	mon_name: String, old_move_name: String, generation: int = RomRegistry.GEN2,
+	yellow: bool = false
 ) -> String:
-	return _text(&"forgot", generation) % [mon_name, old_move_name]
+	var gen1: bool = generation == RomRegistry.GEN1
+	var effect: String = Gen2TextStream.sound_token(
+		Gen1Sfx.SFX_SWAP if gen1 else Gen2Sfx.SFX_SWITCH_POKEMON,
+		Gen2TextStream.SOUND_MARK if yellow else Gen2TextStream.PLAY_MARK
+	)
+	return _text(&"forgot", generation) % [
+		Gen2TextStream.PAUSE_MARK + effect, Gen2TextStream.PAUSE_MARK, mon_name, old_move_name,
+	]
 
 
-## `LearnedMoveText` and `LearnedMove1Text`.
+## `LearnedMoveText` and `LearnedMove1Text`, with their fanfares.
 static func learned_text(
 	mon_name: String, move_name: String, generation: int = RomRegistry.GEN2
 ) -> String:
-	return _text(&"learned", generation) % [mon_name, move_name]
+	var fanfare: int = Gen1Sfx.SFX_GET_ITEM_1 if generation == RomRegistry.GEN1 \
+		else Gen2Sfx.SFX_DEX_FANFARE_50_79
+	return _text(&"learned", generation) % [mon_name, move_name] \
+		+ Gen2TextStream.sound_token(fanfare)
 
 
 ## `MoveCantForgetHMText` and `HMCantDeleteText`; `.hmmove` is `jr .loop`.

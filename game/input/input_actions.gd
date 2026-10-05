@@ -298,9 +298,8 @@ static func from_event(event: InputEvent) -> Dictionary:
 ## `keyboard_get_label_from_physical` returns a key rather than a string, and
 ## refuses with an error on a display server that reads no keyboard layout: a
 ## headless run, every handheld, and the console. Asking how many layouts it has
-## is the same question without the error, and it is answered by every display
-## server rather than by a list of platform names, so a settings page no longer
-## puts fourteen refusals into every bug report a phone or a Switch sends.
+## is the same question without the error, and every display server answers it
+## rather than a list of platform names.
 static func _labelled_key(code: int) -> int:
 	if DisplayServer.keyboard_get_layout_count() <= 0:
 		return code

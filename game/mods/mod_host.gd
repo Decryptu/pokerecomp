@@ -33,11 +33,10 @@ const RENDERER_SURFACE_METHOD: String = "uses_hardware_viewport"
 ## created and whenever the window changes it. Only reached by a renderer that
 ## asked for the native layer. Shared by both renderer kinds.
 const RENDERER_RESIZE_METHOD: String = "set_native_size"
-## Optional, world renderers only. Called with the screen's [Gen2WorldEffects]
-## when the renderer is built. It holds the sprites the engine draws over the
-## map rather than as objects, and `offset()`, the earthquake's own scroll, which
-## is the background's and moves no sprite. All of it is presentation with no
-## world state behind it, so a renderer that draws its own effects can ignore it.
+## Optional, world renderers only. Called with the screen's [Gen2WorldEffects] when
+## the renderer is built. It holds the sprites the engine draws over the map rather
+## than as objects, and `offset()`, the earthquake's scroll, which is the
+## background's and moves no sprite. A renderer that draws its own effects can ignore it.
 const RENDERER_EFFECTS_METHOD: String = "set_effects"
 ## Optional, world renderers only. Called with the screen's [Gen2WorldActors]
 ## when the renderer is built. It holds the sprites registered mods put in the
@@ -56,11 +55,10 @@ const RENDERER_DRAW_LIST_METHOD: String = "set_draw_list"
 ## Optional, world renderers only. Read with [constant RENDERER_DRAW_LIST_METHOD]:
 ## the hardware pixels past the drawn surface the list carries connected rows to.
 const RENDERER_DRAW_REACH_METHOD: String = "draw_reach_pixels"
-## Optional, world renderers only. Called with one step of a map fade: the
-## palette order `DmgToCgbTimePals` applies to every palette on screen, and
-## `FillWhiteBGColor` beside it on the way out. The host spends the fade's own
-## frames either way, so a renderer that ignores this cuts to the new map on the
-## frame the cartridge is at its whitest rather than desynchronising.
+## Optional, world renderers only. Called with one step of a map fade: the palette
+## order `DmgToCgbTimePals` applies to every palette on screen, and `FillWhiteBGColor`
+## beside it on the way out. The host spends the fade's frames either way, so a
+## renderer that ignores this cuts to the new map when the cartridge is at its whitest.
 const RENDERER_FADE_METHOD: String = "set_fade"
 ## Optional, battle renderers only. Called with a [Gen2BattleWorldContext] once
 ## per battle, before the first [code]set_view[/code], saying where the fight is
@@ -76,10 +74,9 @@ const RENDERER_INPUT_METHOD: String = "handle_world_input"
 ## Optional, battle renderers only. The same seam on the battle side: every event
 ## [Gen2BattleScreen] did not claim, so a renderer composing its own shot can let
 ## someone steer it. Answering true consumes the event.
-## A [PokeButton] never arrives here, on either side. The screen routes every one
-## of them to whatever owns it first, so a text box, the forget-move list and
-## ball selection all take their press before a renderer could see it, and what
-## is left is pointer and stick motion the screen has no opinion about.
+## A [PokeButton] never arrives here, on either side: the screen routes each to its
+## owner first (a text box, the forget-move list, ball selection), so what is left
+## is pointer and stick motion the screen has no opinion about.
 const RENDERER_BATTLE_INPUT_METHOD: String = "handle_battle_input"
 ## Optional, both renderer kinds. How opaque the screen draws the field of its own
 ## text box while this renderer is on the native layer, from 0 to 1. The frame's
@@ -102,10 +99,10 @@ const RENDERER_INTERFACE_MASK_METHOD: String = "set_interface_masked"
 ## Optional, both renderer kinds, and only meaningful on the native layer. Called
 ## beside [constant RENDERER_RESIZE_METHOD] with the cartridge's own 160x144
 ## screen expressed in that layer's pixels.
-## Every hardware-pixel number a renderer is handed -- the text box's rectangle,
-## first -- has to land somewhere inside the surface it draws on. Framed, that
-## mapping was the surface itself, because it was a whole multiple of 160x144.
-## A surface filling the window is not, so this is where the screen is.
+## Every hardware-pixel number a renderer is handed (the text box's rectangle,
+## first) has to land inside the surface it draws on. Framed, that mapping was the
+## surface itself, a whole multiple of 160x144; a surface filling the window is not,
+## so this is where the screen is.
 const RENDERER_SCREEN_RECT_METHOD: String = "set_screen_rect"
 ## The id of the built-in 2D renderer, which is always registered for both
 ## renderer kinds.
@@ -174,8 +171,7 @@ const FIRST_MOD_POCKET: int = 5
 
 ## The three shapes a registered setting can take: a ladder of values the player
 ## steps along, a whole number in a range, and a button that does something the
-## moment it is pressed. A button stores nothing, because "recentre the camera
-## now" has no value to keep.
+## moment it is pressed. A button stores nothing, having no value to keep.
 ## A number is not a ladder with every rung written out: a randomizer's seed has
 ## ten thousand, and four one-digit ladders spend four menu rows on one field.
 const OPTION_LADDER: StringName = &"ladder"
@@ -363,12 +359,11 @@ func create_world_renderer() -> Node:
 
 
 ## Registers a world ACTOR under [param id]: one sprite in the overworld, drawn
-## with the map's own objects. [param actor] is an object and not a script,
-## because an actor is a pose and not a view: it must be a [RefCounted], never a
-## [Node], and must answer [constant Gen2WorldActors.ACTOR_METHODS], a
-## registration missing one being refused here where the mod's name is in hand.
-## Two more are OPTIONAL and offered only to an actor that defines them. See
-## `docs/MODS.md` for the entry shape.
+## with the map's own objects. [param actor] is an object, not a script, because
+## an actor is a pose, not a view: it must be a [RefCounted], never a [Node], and
+## must answer [constant Gen2WorldActors.ACTOR_METHODS], a registration missing one
+## being refused here where the mod's name is in hand. Two more are OPTIONAL and
+## offered only to an actor that defines them. See `docs/MODS.md` for the entry shape.
 func register_world_actor(id: StringName, actor: Object) -> Dictionary:
 	return _register_provider(
 		_world_actors, Gen2WorldActors.ACTOR_METHODS, id, actor, "actor"
@@ -423,12 +418,11 @@ func requeue_hidden_items(cells: Array[Vector2i]) -> void:
 	_hidden_item_requests = out
 
 
-## Asks the world screen to hand [param item] over, [param quantity] of it,
-## through `verbosegiveitem`'s own transaction: the bag write, the fanfare, the
-## received line, the pocket line and the pack-full branch. A REQUEST and never
-## the act, for the reason [method request_hidden_item] is one, and queued the
-## same way. An item number the cartridge does not know is refused when the queue
-## is spent, not here. Unlike a hidden item there is no cell, flag or map.
+## Asks the world screen to hand [param item] over, [param quantity] of it, through
+## `verbosegiveitem`'s own transaction: the bag write, the fanfare, the received
+## line, the pocket line and the pack-full branch. A REQUEST and never the act, as
+## [method request_hidden_item] is, and queued the same way. An item number the
+## cartridge does not know is refused when the queue is spent, not here.
 func request_item_gift(item: int, quantity: int = 1) -> void:
 	if item <= 0 or quantity <= 0:
 		return
@@ -441,8 +435,7 @@ func take_item_gift_requests() -> Array[Dictionary]:
 	return out
 
 
-## What a drain could not spend this frame, put back in front of anything asked
-## for since. See [method requeue_hidden_items].
+## Like [method requeue_hidden_items], for item gifts.
 func requeue_item_gifts(gifts: Array[Dictionary]) -> void:
 	if gifts.is_empty():
 		return
@@ -581,11 +574,10 @@ func set_hidden_items_source(source: Callable) -> void:
 	_hidden_items_source = source
 
 
-## The live world's own `{item: quantity}`, the copy a
-## [method register_repel_renewal] provider is handed, and empty when no world is
-## open. Read only, and a copy: writing the bag is the host's.
-## One narrow accessor rather than a handle on [Gen2WorldAPI], because a
-## non-renderer mod is deliberately given no world at all.
+## The live world's own `{item: quantity}`, the copy a [method register_repel_renewal]
+## provider is handed, and empty when no world is open. Read only, and a copy:
+## writing the bag is the host's. One narrow accessor rather than a handle on
+## [Gen2WorldAPI], because a non-renderer mod is deliberately given no world at all.
 func inventory() -> Dictionary:
 	if not _inventory_source.is_valid():
 		return {}
@@ -601,11 +593,10 @@ func set_progress_source(source: Callable) -> void:
 		_progress = {}
 
 
-## What the run being played has achieved: badges, the Hall of Fame, the dex
-## counts, what is kept, money, coins, the play timer. `{}` with no world open.
-## A copy rather than a handle, and read only: every field is state the host
-## owns. See [Gen2ModProgress] for the fields and for why an absent one is absent
-## rather than zero.
+## What the run being played has achieved: badges, the Hall of Fame, the dex counts,
+## what is kept, money, coins, the play timer. `{}` with no world open. A copy, and
+## read only: every field is state the host owns. See [Gen2ModProgress] for the
+## fields and for why an absent one is absent rather than zero.
 func progress() -> Dictionary:
 	if not _progress_source.is_valid():
 		return {}
@@ -634,10 +625,9 @@ func progress_for(save: Gen2SaveData, data: GameData = null) -> Dictionary:
 
 
 ## Re-reads the live run and emits [signal progress_changed] where a field moved.
-## Called by [Gen2WorldScreen] once a world pass.
-## Nothing is read while nothing is connected: walking the party and every box is
-## the expensive half of a reading, and a build with no mod watching must not pay
-## for it.
+## Called by [Gen2WorldScreen] once a world pass. Nothing is read while nothing is
+## connected: walking the party and every box is the expensive half of a reading,
+## and a build with no mod watching must not pay for it.
 func refresh_progress() -> void:
 	if not _progress_source.is_valid() or not progress_changed.has_connections():
 		return
@@ -661,11 +651,10 @@ func world_actors() -> Array:
 
 ## Registers a VISIBLE ENCOUNTER provider under [param id]: a bounded population
 ## of wild Pokemon standing on the map, met by walking into one, instead of the
-## roll a step takes. [param provider] is an object and not a script, for the
-## reason an actor is; it must be a [RefCounted], never a [Node], and must answer
-## [constant Gen2WorldEncounters.PROVIDER_METHODS]. The provider owns its
-## population and nothing else, and while at least one is registered a step's
-## roll meets only a roamer.
+## roll a step takes. [param provider] is an object, not a script, as an actor is: it
+## must be a [RefCounted], never a [Node], and must answer
+## [constant Gen2WorldEncounters.PROVIDER_METHODS]. The provider owns its population
+## and nothing else, and while one is registered a step's roll meets only a roamer.
 func register_visible_encounters(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(
 		_visible_encounters, Gen2WorldEncounters.PROVIDER_METHODS, id, provider
@@ -714,10 +703,9 @@ func visible_encounter_providers() -> Array:
 ## Registers an alternate FIELD MOVE SOURCE under [param id]: a read-only policy
 ## saying that an HM's own field move may be used without a party member who knows
 ## it. [param provider] answers [constant FIELD_MOVE_SOURCE_METHODS]'
-## `allows_field_move(move)`, one question per move, and that is the whole of what
-## a mod decides. Which item teaches which move, whether the badge is in hand,
-## whether the tile in front allows it and everything the move then does are the
-## host's.
+## `allows_field_move(move)`, one question per move, and that is all a mod decides.
+## Which item teaches which move, whether the badge is in hand, whether the tile in
+## front allows it and everything the move then does are the host's.
 func register_field_move_source(id: StringName, provider: Object) -> Dictionary:
 	return _register_provider(
 		_field_move_sources, FIELD_MOVE_SOURCE_METHODS, id, provider
@@ -1155,12 +1143,11 @@ func selected_view() -> StringName:
 
 
 ## Chooses the view, by mod id, for both surfaces at once: whichever of the two
-## renderer kinds [param id] registered is used and the built-in one keeps the
-## other. Registering both under one id is how a mod says the two are one view of
-## one world, and this is the only thing that ever selects either. Persisted per
-## installation, so the choice survives a restart. A live screen rebuilds on
-## [signal view_changed], so the launcher's page, the start menu's row and the key
-## that cycles views are one path rather than three.
+## renderer kinds [param id] registered is used and the built-in one keeps the other.
+## Registering both under one id is how a mod says the two are one view of one world,
+## and this is the only thing that ever selects either. Persisted per installation.
+## A live screen rebuilds on [signal view_changed], so the launcher's page, the start
+## menu's row and the key that cycles views are one path rather than three.
 func select_view(id: StringName) -> Dictionary:
 	if id != BUILT_IN_RENDERER and not _world_renderers.has(id) \
 		and not _battle_renderers.has(id):
@@ -1272,9 +1259,8 @@ func _fill_start_entry(
 ## [method register_menu_entry] a row here is about a SLOT, so both halves are
 ## Callables taking the one-based slot: the label so a mod can say something
 ## different on the slot it owns, and the handler so it knows which was chosen.
-## Outside battle only: a battle's party list is a switch, and a row that ran a
-## mod's field action mid-turn would be world state changing while the turn owns
-## it.
+## Outside battle only: a battle's party list is a switch, and a row that ran a mod's
+## field action mid-turn would be world state changing while the turn owns it.
 func register_party_member_menu(id: StringName, entry: Dictionary) -> Dictionary:
 	if String(id).is_empty():
 		return {"ok": false, "reason": &"invalid_party_menu_entry"}
@@ -1581,6 +1567,36 @@ func option_mod_ids() -> Array[StringName]:
 	for id: StringName in _options:
 		ids.append(id)
 	return ids
+
+
+## One level of the MODS entry: `{kind: &"category" | &"mod", label, id}`, categories first.
+func option_menu(path: Array) -> Array:
+	var categories: Array = []
+	var named: Dictionary = {}
+	var mods: Array = []
+	for id: StringName in option_mod_ids():
+		var manifest: PokeModManifest = _manifests.get(id)
+		var at: Array[String] = []
+		if manifest != null:
+			at = manifest.menu_path
+		if at.size() < path.size() or not _menu_path_under(at, path):
+			continue
+		if at.size() == path.size():
+			mods.append({
+				"kind": &"mod", "label": manifest.name if manifest != null else String(id),
+				"id": id,
+			})
+		elif not named.has(at[path.size()].to_lower()):
+			named[at[path.size()].to_lower()] = true
+			categories.append({"kind": &"category", "label": at[path.size()], "id": &""})
+	return categories + mods
+
+
+static func _menu_path_under(at: Array[String], path: Array) -> bool:
+	for index: int in path.size():
+		if at[index].to_lower() != String(path[index]).to_lower():
+			return false
+	return true
 
 
 ## One mod's settings, in registration order, as

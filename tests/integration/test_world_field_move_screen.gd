@@ -889,14 +889,17 @@ func test_talking_to_a_rock_asks_and_then_smashes_it() -> void:
 	assert_string_contains(String(used[0]["event"]["text"]), "used")
 	assert_not_null(world.object_at(ROCK_CELL), "the rock is still there mid-script")
 
-	# closetext, WaitSFX and playsound SFX_STRENGTH, which the host answers
-	# before the earthquake, the disappear and the roll.
+	# closetext, `special WaitSFX` and then playsound SFX_STRENGTH, which the host
+	# answers before the earthquake, the disappear and the roll.
 	var sound: Array = world.run_event_queue(true)
 	assert_eq(
 		sound[0]["event"]["request"]["kind"], &"audio_requested", JSON.stringify(sound)
 	)
+	assert_eq(sound[0]["event"]["request"]["values"]["kind"], &"sound_wait")
 	# Answered on the world rather than through Gen2WorldHost, which would want
 	# audio data this synthetic cache does not carry.
+	var struck: Array = world.complete_runtime_request({"ok": true})
+	assert_eq(struck[0]["event"]["request"]["values"]["kind"], &"sound", JSON.stringify(struck))
 	var shaken: Array = world.complete_runtime_request({"ok": true})
 	assert_eq(shaken[0]["status"], &"waiting", JSON.stringify(shaken))
 	assert_true(
@@ -926,6 +929,7 @@ func test_a_talked_rock_that_rolls_an_encounter_asks_for_a_battle() -> void:
 	world.run_event_queue(true)
 	world.choose_script_input(0)
 	world.run_event_queue(true)
+	world.complete_runtime_request({"ok": true})
 	world.complete_runtime_request({"ok": true})
 	var after_sound: Array = world.finish_script_waits()
 	assert_eq(after_sound[0]["status"], &"waiting", JSON.stringify(after_sound))

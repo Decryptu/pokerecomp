@@ -17,6 +17,8 @@ enum {
 	ANIM_MON_EVOLVE,
 	ANIM_MON_HATCH,
 	ANIM_MON_HOF,
+	ANIM_MON_EGG1,
+	ANIM_MON_EGG2,
 }
 
 ## `PokeAnim_SetupCommands`, indexed by the `pokeanim` macro's own byte.
@@ -59,6 +61,8 @@ const SCENES: Dictionary = {
 		SETUP_CRY_NO_WAIT, SETUP_SETUP, SETUP_PLAY, SETUP_SET_WAIT, SETUP_WAIT,
 		SETUP_IDLE, SETUP_PLAY, SETUP_FINISH,
 	],
+	ANIM_MON_EGG1: [SETUP_SETUP, SETUP_PLAY, SETUP_FINISH],
+	ANIM_MON_EGG2: [SETUP_IDLE, SETUP_PLAY, SETUP_FINISH],
 }
 
 ## `PokeAnim_Setup2`'s `ld b, 4`, which `PokeAnim_GetDuration` divides by 16.

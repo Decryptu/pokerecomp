@@ -66,15 +66,17 @@ func test_two_coins_is_not_enough_and_ends_the_game() -> void:
 	assert_true(game.finished())
 
 
-## `.loop`'s `xor $1` runs at the end of an iteration, so the card A takes is the
-## one the border is standing on rather than the one it is about to move to.
-func test_a_press_takes_the_card_the_border_is_on() -> void:
+## `.loop` toggles after its delay and tests A on the next pass, before it
+## draws the border again, so the card A takes is the one the border is not on
+## (PyBoy on Crystal: the border on card 0 at the press leaves card 1 chosen).
+func test_a_press_takes_the_card_the_border_is_not_on() -> void:
 	var game: Gen2CardFlip = _table()
 	assert_true(_drive_to(game, Prompt.CHOOSE))
-	var lit: int = game.border_at()
-	assert_eq(lit, game.which_card(), "the border stands on the lit card")
+	var shown: int = game.border_at()
+	assert_eq(shown, game.which_card(), "the border stands on one card")
 	game.press_a()
-	assert_eq(game.which_card(), lit, "the press takes the card it was showing")
+	assert_eq(game.which_card(), shown ^ 1, "the press takes the other card")
+	assert_eq(game.border_at(), shown ^ 1, "and the flashes are drawn on it")
 
 
 ## `.loop2` flashes three times before the bet, so the border is still the only

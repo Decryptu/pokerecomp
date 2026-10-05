@@ -11,6 +11,7 @@ static func from_battle_mon(mon: Gen2BattleMon) -> Gen2SaveMon:
 	var out := Gen2SaveMon.new()
 	out.species = mon.persistent_species()
 	out.item = mon.item
+	out.catch_rate = mon.catch_rate
 	out.level = mon.level
 	out.exp = mon.exp
 	out.ot_id = maxi(mon.ot_id, 0)
@@ -50,6 +51,9 @@ static func to_battle_mon(data: GameData, saved: Gen2SaveMon) -> Gen2BattleMon:
 	)
 	if out == null:
 		return null
+	## An old record has none; `create` read the species' own.
+	if saved.catch_rate > 0:
+		out.catch_rate = saved.catch_rate
 	## The stored stats, not ones rebuilt from today's stat experience: a battle
 	## copies `MON_MAXHP` onward out of the party struct.
 	if saved.stats.size() == Gen2BattleMon.STAT_KEYS.size():

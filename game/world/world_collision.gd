@@ -265,12 +265,10 @@ static func side_wall_step_blocked(from_code: int, to_code: int, direction: Vect
 
 ## home/map.asm's GetMovementPermissions: the wTilePermissions byte for a player
 ## standing on [param standing_code] with its four neighbours already read. The
-## leave rule is byte identical between the games; the enter rule is not. The pins
-## diverge only in `.ok_down`/`.ok_up`/`.ok_right`/`.ok_left`, where Crystal ORs the
-## matching FACE_* and Gold always sets bit RIGHT, because those four were written
-## with wWalkingDirection's transposed bit layout, so every enter-rule match blocks
-## DOWN alone on Gold and Silver. No shipped map of theirs reaches it; the split
-## stays because a mod-authored map could.
+## enter rule differs only in `.ok_down`/`.ok_up`/`.ok_right`/`.ok_left`: Crystal
+## ORs the matching FACE_* and Gold always sets bit RIGHT (transposed
+## wWalkingDirection layout), so every enter-rule match blocks DOWN alone on Gold
+## and Silver. No shipped map reaches it; a mod-authored one could.
 static func tile_permissions(
 	standing_code: int, up_code: int, down_code: int, left_code: int, right_code: int,
 	is_crystal: bool = true,
@@ -546,10 +544,12 @@ const GEN1_DUNGEON_TILESETS: Array[int] = [3, 7, 10, 12, 13, 15, 17, 18, 19, 20,
 ## that keeps `CollisionCheckOnWater` surfing is water and the passable list
 ## answers the rest, which is why $14 is Red's own doormat off a water tileset
 ## and why the Vermilion dock's own $32 is a landing rather than more sea.
-static func gen1_permission(tileset: Gen2WorldTileset, tile: int) -> int:
+static func gen1_permission(
+	tileset: Gen2WorldTileset, tile: int, yellow: bool = false
+) -> int:
 	if tileset == null or tile < 0:
 		return WALL_TILE
-	if Gen1Layout.is_shore_or_water(tileset.number, tileset.water, tile):
+	if Gen1Layout.is_shore_or_water(tileset.number, tileset.water, tile, yellow):
 		return WATER_TILE
 	return LAND_TILE if tileset.tile_passable(tile) else WALL_TILE
 
@@ -630,7 +630,7 @@ static func cell_code(
 ## [constant LAND_TILE], [constant WATER_TILE] or [constant WALL_TILE].
 static func cell_permission(data: GameData, tileset: Gen2WorldTileset, code: int) -> int:
 	if _is_gen1(data):
-		return gen1_permission(tileset, code)
+		return gen1_permission(tileset, code, data.id == RomRegistry.YELLOW)
 	return permission_for(code)
 
 

@@ -5399,3 +5399,76 @@ func test_a_benched_gainer_says_one_level_for_several() -> void:
 	assert_gt(holder.level, 6, "the share crossed several levels")
 	assert_eq(lines.size(), 1)
 	assert_eq(int(lines[0]["new_level"]), holder.level)
+
+
+func _pay_day_battle() -> Gen2Battle:
+	_data.generation = RomRegistry.GEN1
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([
+			_mon(Fixture.PIKACHU, 50, [Fixture.PAY_DAY]),
+			_mon(Fixture.CHARMANDER, 50, [Fixture.TACKLE]),
+		]),
+		Gen2Party.of(_mon(Fixture.GEODUDE, 50, [Fixture.SPLASH])),
+		_rng
+	)
+	battle.take_turn(0, 0)
+	assert_eq(battle.pay_day_money, 100)
+	return battle
+
+
+func _pay_day_collected(battle: Gen2Battle, won: bool, caught: bool = false) -> int:
+	return int(Gen2WorldBattleAdapter.earnings(battle, null, won, caught)["pay_day"])
+
+
+## `EndOfBattle` collects Pay Day money while `wBattleResult` is zero. A wild mon
+## that left (Teleport, Roar) writes nothing, so the coins are still collected; a
+## run and a landed ball write 2, and a faint that nothing avenged writes 1.
+func test_generation_1_collects_pay_day_money_only_while_wbattleresult_is_zero() -> void:
+	var left: Gen2Battle = _pay_day_battle()
+	left.force_out(Gen2Battle.ENEMY)
+	assert_eq(_pay_day_collected(left, false), 100)
+	assert_eq(left.gen1_battle_result(), 0)
+
+	var ran: Gen2Battle = _pay_day_battle()
+	ran.take_actions(Gen2Battle.run_away(), Gen2Battle.use_move(0))
+	assert_true(ran.has_fled())
+	assert_eq(_pay_day_collected(ran, false), 0)
+
+	assert_eq(_pay_day_collected(_pay_day_battle(), true, true), 0, "a ball writes 2")
+
+	var fainted: Gen2Battle = _pay_day_battle()
+	fainted.player.hp = 0
+	fainted.note_faint(Gen2Battle.PLAYER, [])
+	fainted.force_out(Gen2Battle.ENEMY)
+	assert_eq(_pay_day_collected(fainted, false), 0)
+
+
+## `FaintEnemyPokemon` writes 0 over the 1 `RemoveFaintedPlayerMon` left, so a
+## win after losing a member still collects the coins.
+func test_generation_1_pay_day_survives_a_faint_the_player_avenged() -> void:
+	var battle: Gen2Battle = _pay_day_battle()
+	battle.note_faint(Gen2Battle.PLAYER, [])
+	battle.note_faint(Gen2Battle.ENEMY, [])
+	assert_eq(battle.gen1_battle_result(), 0)
+
+
+## Yellow's `ItemUsePPRestore.chooseMove` sends `ItemUseNotTime` for the Pokemon
+## out while it is Transformed; Red and Blue ask which move and fill the party row.
+func test_yellow_refuses_a_pp_item_on_the_transformed_mon_out() -> void:
+	_data.generation = RomRegistry.GEN1
+	var benched: Gen2BattleMon = _mon(Fixture.PIKACHU, 20, [Fixture.TACKLE])
+	var battle: Gen2Battle = Gen2Battle.create_parties(
+		_data,
+		Gen2Party.create([_mon(Fixture.DITTO, 20, [Fixture.TRANSFORM]), benched]),
+		Gen2Party.of(_mon(Fixture.GEODUDE, 20, [Fixture.TACKLE])),
+		_rng
+	)
+	var ether: int = 0x50
+	assert_false(battle.pp_item_refused(ether, 0), "not Transformed yet")
+	assert_true(battle.player.transform_into(battle.enemy))
+	_data.id = RomRegistry.YELLOW
+	assert_true(battle.pp_item_refused(ether, 0))
+	assert_false(battle.pp_item_refused(ether, 1), "the bench is not the Pokemon out")
+	_data.id = RomRegistry.RED
+	assert_false(battle.pp_item_refused(ether, 0))

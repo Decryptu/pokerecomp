@@ -26,6 +26,9 @@ const GOLD_SILVER_BOX_TILES: Array[int] = [2, 3, 4, 5, 1, 6, 0, 7]
 ## on Crystal, where the whole block sits at `vTiles2` tile zero.
 const PLAYER_NAME_AT: Vector2i = Vector2i(4, 0)
 const PARTNER_NAME_AT: Vector2i = Vector2i(4, 8)
+## Gold and Silver's names start two columns in and write no `$14`.
+const GOLD_PLAYER_NAME_AT: Vector2i = Vector2i(2, 0)
+const GOLD_PARTNER_NAME_AT: Vector2i = Vector2i(2, 8)
 const PLAYER_LIST_AT: Vector2i = Vector2i(7, 1)
 const PARTNER_LIST_AT: Vector2i = Vector2i(7, 9)
 const NAME_END_TILE: int = 0x14
@@ -48,6 +51,14 @@ const CANCEL_STRING: String = "CANCEL"
 const CANCEL_ARROW_AT: Vector2i = Vector2i(9, 17)
 const CANCEL_ARROW: String = "▶"
 const CANCEL_ARROW_SENT: String = "▷"
+## Gold and Silver's `PlaceTradeScreenFooter`: rows 16 and 17 of `$7e`, row 16 cleared
+## from column 1, `CANCEL` at (2, 16) and the `▶` at (1, 16).
+const GOLD_CANCEL_AT: Vector2i = Vector2i(2, 16)
+const GOLD_CANCEL_ARROW_AT: Vector2i = Vector2i(1, 16)
+const GOLD_FILL_TILE: int = 8
+const GOLD_FILL_ROWS: int = 2
+const GOLD_FILL_CLEAR_AT: Vector2i = Vector2i(1, 16)
+const GOLD_FILL_CLEAR_CELLS: int = COLUMNS - 2
 
 ## `LinkTrade_TradeStatsMenu`: a one-row box across the bottom and the two words
 ## in it, with the cursor at column 1 or column 11.
@@ -224,12 +235,19 @@ func draw_trade(state: Dictionary) -> PackedByteArray:
 	indices.resize(WIDTH * HEIGHT)
 	if font == null:
 		return indices
+	if bool(state.get("blank", false)):
+		_draw_message(indices, state, MESSAGE_BOX, MESSAGE_AT)
+		return indices
+	var gold: bool = _screen.is_empty()
 	_draw_trade_background(indices)
 	var player: Dictionary = state.get("player", {})
 	var partner: Dictionary = state.get("partner", {})
-	_draw_party(indices, player, PLAYER_NAME_AT, PLAYER_LIST_AT)
-	_draw_party(indices, partner, PARTNER_NAME_AT, PARTNER_LIST_AT)
-	_text(indices, CANCEL_STRING, CANCEL_AT)
+	_draw_party(indices, player, GOLD_PLAYER_NAME_AT if gold else PLAYER_NAME_AT, PLAYER_LIST_AT)
+	_draw_party(indices, partner, GOLD_PARTNER_NAME_AT if gold else PARTNER_NAME_AT, PARTNER_LIST_AT)
+	if gold:
+		_draw_gold_footer(indices)
+	else:
+		_text(indices, CANCEL_STRING, CANCEL_AT)
 
 	var partner_choice: int = int(state.get("partner_choice", -1))
 	if partner_choice >= 0:
@@ -241,7 +259,7 @@ func draw_trade(state: Dictionary) -> PackedByteArray:
 		_text(
 			indices,
 			CANCEL_ARROW_SENT if bool(state.get("cancel_sent", false)) else CANCEL_ARROW,
-			CANCEL_ARROW_AT
+			GOLD_CANCEL_ARROW_AT if gold else CANCEL_ARROW_AT
 		)
 	else:
 		_draw_cursor(indices, state)
@@ -273,9 +291,9 @@ func draw_trade(state: Dictionary) -> PackedByteArray:
 	return indices
 
 
-## `LinkCommunications`' opening screen, which is the border with one box on it
-## and nothing else: the two parties have not been exchanged yet.
-func draw_please_wait() -> PackedByteArray:
+## `LinkCommunications`' opening: one box on a blank screen, and nothing while
+## its two `ld c, 80` run ([param box] false).
+func draw_please_wait(box: bool = true) -> PackedByteArray:
 	var indices := PackedByteArray()
 	indices.resize(WIDTH * HEIGHT)
 	if font == null:
@@ -284,7 +302,8 @@ func draw_please_wait() -> PackedByteArray:
 		_box(indices, GEN1_PLEASE_WAIT_BOX)
 		_text(indices, String(strings.get("please_wait", "")), GEN1_PLEASE_WAIT_AT)
 		return indices
-	_draw_trade_background(indices)
+	if not box:
+		return indices
 	_box(indices, PLEASE_WAIT_BOX)
 	_text(indices, PLEASE_WAIT_STRING, PLEASE_WAIT_AT)
 	return indices
@@ -493,6 +512,15 @@ func _draw_trade_background(indices: PackedByteArray) -> void:
 		_blit(indices, int(_screen[cell]), Vector2i(cell % COLUMNS, cell / COLUMNS))
 	_blit_strip(indices, _cable_top, 0)
 	_blit_strip(indices, _cable_bottom, ROWS - 2)
+
+
+func _draw_gold_footer(indices: PackedByteArray) -> void:
+	for row: int in GOLD_FILL_ROWS:
+		for column: int in COLUMNS:
+			_blit(indices, GOLD_FILL_TILE, Vector2i(column, GOLD_FILL_CLEAR_AT.y + row))
+	for column: int in GOLD_FILL_CLEAR_CELLS:
+		_clear(indices, GOLD_FILL_CLEAR_AT + Vector2i(column, 0))
+	_text(indices, CANCEL_STRING, GOLD_CANCEL_AT)
 
 
 func _blit_strip(indices: PackedByteArray, strip: PackedByteArray, top: int) -> void:

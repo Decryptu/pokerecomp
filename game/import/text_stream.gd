@@ -2,13 +2,11 @@ class_name Gen2TextStream
 extends RefCounted
 
 ## `home/text.asm`'s printer: the layer above [Gen2Text]. A cartridge text is two
-## languages, not one. `DoTextUntilTerminator` reads *text commands*, `$00` to
-## `$16`, each with its own operand width; `TX_START` hands what follows to
-## `PlaceString`, which reads *characters*. The same byte means different things
-## in the two: `$16` is `TX_FAR` to one and `<CR>` to the other, and `$50` ends a
-## literal for one and the whole text for the other, which is why a reader that
-## treated it as a page break walked straight into the next text. Names are
-## substituted here, because `PrintPlayerName` is a `CheckDict` entry.
+## languages: `DoTextUntilTerminator` reads *text commands*, `$00` to `$16`, each with
+## its own operand width, and `TX_START` hands what follows to `PlaceString`, which
+## reads *characters*. The same byte differs in the two: `$16` is `TX_FAR` or `<CR>`,
+## and `$50` ends a literal or the whole text. Names are substituted here, because
+## `PrintPlayerName` is a `CheckDict` entry.
 
 ## `macros/scripts/text.asm`, the `TextCommands` indices.
 const TX_START: int = 0x00
@@ -40,15 +38,38 @@ const CHAR_PLAY_G: int = 0x14
 const RAM_MARKER: String = "<RAM_"
 const NUMBER_MARKER: String = "<NUM_"
 
-## `TextSFX`: the seven command bytes that play an effect and `WaitSFX`.
-const TX_SOUND: Array[int] = [0x0B, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13]
+## `TextSFX`: the command bytes that `PlaySFX` and `WaitSFX`, and the index each plays.
+const TEXT_SFX: Dictionary = {
+	0x0B: Gen2Sfx.SFX_DEX_FANFARE_50_79, 0x0E: Gen2Sfx.SFX_DEX_FANFARE_20_49,
+	0x0F: Gen2Sfx.SFX_ITEM, 0x10: Gen2Sfx.SFX_CAUGHT_MON,
+	0x11: Gen2Sfx.SFX_DEX_FANFARE_80_109, 0x12: Gen2Sfx.SFX_FANFARE,
+	0x13: Gen2Sfx.SFX_SLOT_MACHINE_START,
+}
 
 ## Generation 1's `TextCommands` agree as far as `TX_PAUSE` and then part: $14 to
 ## $16 are three more cries where Crystal has the buffer, the weekday and TX_FAR.
-const GEN1_TX_SOUND: Array[int] = [
-	0x0B, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
-]
 const GEN1_TX_FAR: int = 0x17
+## `TextCommandSounds`: each command's `PlaySound` id, or for the three cries a
+## Pokedex number (Yellow's $14 is `STARTER_PIKACHU`). Both end in `WaitForSoundToFinish`.
+const GEN1_TEXT_SOUNDS: Dictionary = {
+	0x0B: Gen1Sfx.SFX_GET_ITEM_1, 0x0E: Gen1Sfx.SFX_POKEDEX_RATING,
+	0x0F: Gen1Sfx.SFX_GET_ITEM_1, 0x10: Gen1Sfx.SFX_GET_ITEM_2,
+	0x11: Gen1Sfx.SFX_GET_KEY_ITEM, 0x12: Gen1Sfx.SFX_CAUGHT_MON,
+	0x13: Gen1Sfx.SFX_DEX_PAGE_ADDED,
+}
+const GEN1_TEXT_CRIES: Dictionary = {0x14: 30, 0x15: 18, 0x16: 87}
+const GEN1_YELLOW_CRY: int = 25
+
+## A sound where `TextCommand_SOUND` stood: a mark and a private-use character holding
+## the id. [constant SOUND_MARK] waits the effect out, [constant CRY_MARK] plays a cry
+## and waits it out, [constant PLAY_MARK] lets the text run over the effect.
+const SOUND_MARK: String = "\ue004"
+const CRY_MARK: String = "\ue005"
+const PLAY_MARK: String = "\ue006"
+const SOUND_BASE: int = 0xE100
+## `TextCommand_PAUSE` in both generations: [constant PAUSE_FRAMES] of `DelayFrames`, unless A or B is held.
+const PAUSE_MARK: String = "\ue007"
+const PAUSE_FRAMES: int = 30
 
 ## `CheckDict` entries that are not characters.
 const CHAR_NULL: int = 0x00
@@ -140,7 +161,6 @@ static func _run(
 ) -> Dictionary:
 	var gen1: bool = is_gen1(context)
 	var far_command: int = GEN1_TX_FAR if gen1 else TX_FAR
-	var sounds: Array[int] = GEN1_TX_SOUND if gen1 else TX_SOUND
 	var out: String = ""
 	var at: int = offset
 	var prompt: bool = false
@@ -161,8 +181,9 @@ static func _run(
 					"prompt": bool(placed.get("prompt", false)),
 				}
 			continue
-		if command in sounds:
-			# The effect plays and `WaitSFX` holds the printer; nothing is drawn.
+		var sound: String = _sound_command(command, context)
+		if not sound.is_empty():
+			out += sound
 			continue
 		if command == far_command:
 			var far: Dictionary = _far_command(data, at, context, depth, out)
@@ -241,7 +262,7 @@ static func _step_command(
 			# the box's business rather than the string's.
 			return {"text": PAGE_BREAK, "at": at, "prompt": true}
 		TX_PAUSE:
-			return {"at": at}
+			return {"text": PAUSE_MARK, "at": at}
 		TX_DECIMAL:
 			# `text_decimal address, bytes, digits`: a number printed out of
 			# live RAM. Marked rather than skipped, the way TX_RAM is, so a
@@ -315,6 +336,55 @@ static func _dict(byte: int, context: Dictionary, gen1: bool) -> String:
 ## Whether [param context] names a Generation 1 cartridge; absent is Generation 2.
 static func is_gen1(context: Dictionary) -> bool:
 	return int(context.get("generation", RomRegistry.GEN2)) == RomRegistry.GEN1
+
+
+static func _sound_command(command: int, context: Dictionary) -> String:
+	if not is_gen1(context):
+		return sound_token(int(TEXT_SFX[command])) if TEXT_SFX.has(command) else ""
+	if GEN1_TEXT_SOUNDS.has(command):
+		return sound_token(int(GEN1_TEXT_SOUNDS[command]))
+	if not GEN1_TEXT_CRIES.has(command):
+		return ""
+	var yellow: bool = bool(context.get("yellow", false)) and command == 0x14
+	return sound_token(GEN1_YELLOW_CRY if yellow else int(GEN1_TEXT_CRIES[command]), CRY_MARK)
+
+
+static func sound_token(id: int, mark: String = SOUND_MARK) -> String:
+	return mark + String.chr(SOUND_BASE + id)
+
+
+## [param text] without its sounds and pauses. `sounds` are `{at, id, cry, wait}`, `at` an offset
+## into the rest; `beats` add each pause as `{at, pause}`.
+static func split_sounds(text: String) -> Dictionary:
+	if not (text.contains(SOUND_MARK) or text.contains(CRY_MARK) or text.contains(PLAY_MARK) \
+		or text.contains(PAUSE_MARK)):
+		return {"text": text, "sounds": [], "beats": []}
+	var out: String = ""
+	var sounds: Array = []
+	var beats: Array = []
+	var at: int = 0
+	while at < text.length():
+		var mark: String = text[at]
+		if mark == PAUSE_MARK:
+			beats.append({"at": out.length(), "pause": true})
+			at += 1
+			continue
+		if mark in [SOUND_MARK, CRY_MARK, PLAY_MARK] and at + 1 < text.length():
+			var sound: Dictionary = {
+				"at": out.length(), "id": text.unicode_at(at + 1) - SOUND_BASE,
+				"cry": mark == CRY_MARK, "wait": mark != PLAY_MARK,
+			}
+			sounds.append(sound)
+			beats.append(sound)
+			at += 2
+			continue
+		out += mark
+		at += 1
+	return {"text": out, "sounds": sounds, "beats": beats}
+
+
+static func strip_sounds(text: String) -> String:
+	return String(split_sounds(text)["text"])
 
 
 static func _name(context: Dictionary, key: String, fallback: String) -> String:

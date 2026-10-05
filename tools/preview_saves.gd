@@ -5,9 +5,8 @@ extends SceneTree
 ## [page] is `saves`, `new`, `party`, `boxes`, `boxes_move`, `boxes_insert`,
 ## `editor`, `editor_boxes` (the first boxed Pokemon's form) or `editor_items`
 ## (the item picker open); [game]
-## picks a cartridge rather than the first cached one. The size is an argument
-## rather than a constant: a phone portrait and a desktop window are one command
-## twice, and it is what says whether a page is responsive.
+## picks a cartridge rather than the first cached one. The size is an argument,
+## so a phone portrait and a desktop window are one command twice.
 
 var _output: String = ""
 var _frames: int = 0

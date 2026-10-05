@@ -726,10 +726,10 @@ const CABLE_CLUB_STRING_MAX: int = 48
 const CABLE_CLUB_PREPARING_FRAMES: int = 60
 const CABLE_CLUB_TIMEOUT_FRAMES: int = 90
 ## `.establishedConnection`'s `DelayFrame` and `ld c, 50`, `CloseLinkConnection`'s
-## `Delay3`, and `TX_PAUSE`.
+## `Delay3`, and the wait standing in for `PlaySoundWaitForCurrent`'s `SFX_SAVE`.
 const CABLE_CLUB_CONNECTED_FRAMES: int = 51
 const CABLE_CLUB_CLOSE_FRAMES: int = 3
-const CABLE_CLUB_PAUSE_FRAMES: int = 30
+const CABLE_CLUB_SAVE_FRAMES: int = 30
 ## `LinkMenu`'s `ld c, 40` hold, `.choseCancel`'s two `Delay3`s, `PleaseWaitText`'s
 ## 50, and the 20 each side of `PrepareForSpecialWarp`.
 const LINK_MENU_HOLD_FRAMES: int = 40
@@ -885,6 +885,16 @@ const EVOLUTION_TEXT_AT: Dictionary = {
 	"evolved": 0x00, "into": 0x05, "stopped_evolving": 0x0A, "is_evolving": 0x0F,
 }
 const STONE_REFUSAL_TEXT_AT: Dictionary = {"refusing": 0x00}
+const POKECENTER_PIKACHU_TEXT_AT: Dictionary = {"looks_content": 0x00}
+const NURSE_MOVEMENTS: int = 3
+## Yellow's `DisplayPokemonCenterDialogue_` `ld c` counts.
+const NURSE_TURN_FRAMES: int = 6
+const NURSE_BOW_FRAMES: int = 64
+const NURSE_MACHINE_LEAD_FRAMES: int = 30
+const NURSE_FIT_FRAMES: int = 40
+## Red and Blue's `Delay3` after the turn and `ld c, $14` for the bow.
+const NURSE_RED_TURN_FRAMES: int = 3
+const NURSE_RED_BOW_FRAMES: int = 20
 ## `engine/movie/trade.asm`'s eight stubs, each behind the routine that prints
 ## it, so the offsets from `TradeWentToText` are not five apart.
 const TRADE_ANIM_TEXT_AT: Dictionary = {
@@ -1187,6 +1197,20 @@ const BG_MAP_ATTRIBUTES_DMA_UNIT: int = 16
 const POKEDEX_TILES: int = 18
 const POKEDEX_FIRST_CODE: int = 0x60
 const POKEDEX_BALL_CODE: int = 0x72
+## `BillsPCMenuText` as (action, label).
+const BILLS_PC_ROWS: Array = [
+	[0, "WITHDRAW <PKMN>"], [1, "DEPOSIT <PKMN>"], [2, "RELEASE <PKMN>"],
+	[3, "CHANGE BOX"], [4, "SEE YA!"],
+]
+const BILLS_PC_ROWS_YELLOW: Array = [
+	[0, "WITHDRAW <PKMN>"], [1, "DEPOSIT <PKMN>"], [2, "RELEASE <PKMN>"],
+	[3, "CHANGE BOX"], [5, "PRINT BOX"], [4, "SEE YA!"],
+]
+const PRINT_BOX_TEXT_AT: Dictionary = {"no_mon": 0x00}
+const POKEDEX_SIDE_ROWS: Array[String] = ["DATA", "CRY", "AREA", "QUIT"]
+const POKEDEX_SIDE_ROWS_YELLOW: Array[String] = ["DATA", "CRY", "AREA", "PRNT", "QUIT"]
+const POKEDEX_COLUMN: Dictionary = {"rule": 8, "seen": 2, "own": 5, "menu": 10}
+const POKEDEX_COLUMN_YELLOW: Dictionary = {"rule": 6, "seen": 1, "own": 4, "menu": 8}
 
 ## `LoadTownMap`: `WorldMapTileGraphics` at `vChars2 tile $60` over the text box
 ## sheet, and `CompressedMap`'s runs, each byte a tile nybble from that base and
@@ -1264,8 +1288,7 @@ const SEAFOAM_MOVE_OBJECT: int = 2
 ## Gate 1F's and Route 18 Gate 1F's per-frame scripts open with.
 const ALWAYS_ON_BIKE_BIT: int = 5
 
-## `ItemUsePokeFlute`'s two maps and the events each branch reads. Yellow's third
-## branch is Pikachu at PEWTER_POKECENTER, who does not follow the player here.
+## `ItemUsePokeFlute`'s two maps and the events each branch reads.
 const ROUTE_12: int = 0x17
 const ROUTE_16: int = 0x1B
 const SNORLAX_FLUTE_ROW_SIZE: int = 2
@@ -1304,8 +1327,11 @@ const CUT_BLOCK_SWAP_SIZE: int = 2
 const CUT_BLOCK_SWAP_END: int = 0xFF
 
 ## `IsNextTileShoreOrWater`'s two shore tiles, which its `cp SHIP_PORT` skips on
-## the Vermilion dock alone.
+## the Vermilion dock.
 const SHORE_TILES: Array[int] = [0x48, 0x32]
+## Yellow's `cp GYM` and `cp DOJO` beside it.
+const TILESET_DOJO: int = 5
+const YELLOW_NO_SHORE_TILESETS: Array[int] = [TILESET_DOJO, TILESET_GYM]
 
 ## `IsSurfingAllowed`'s Seafoam branch and the two events its map script sets.
 const SEAFOAM_B4F_STAIRS := Vector2i(7, 11)
@@ -1895,10 +1921,13 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"safari_low_cost", "safari_nag", "name_rater_check_ot", "name_rater_screen",
 	"display_mon_front_sprite_in_box", "surfing_minigame", "high_score_page",
 	"print_diploma", "print_high_score", "print_portrait",
+	"celadon_elevator_warps", "rocket_elevator_warps", "silph_elevator_warps",
 ]
-## The three of those a `farcall` spends nothing on.
+## The ones a call spends nothing on; `Gen1ScriptNodes._gen1_seed_warp_entry`
+## stores the elevators' warps.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
 	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
+	"celadon_elevator_warps", "rocket_elevator_warps", "silph_elevator_warps",
 ]
 ## `Music_RivalAlternateStart` and the three beside it.
 const SCRIPT_ALTERNATE_MUSIC: Array[String] = [
@@ -1909,30 +1938,41 @@ const SCRIPT_ALTERNATE_MUSIC: Array[String] = [
 const SCRIPT_SOUND_CALLS: Dictionary = {
 	"play_sound": "sound", "play_sound_wait": "sound", "play_cry": "cry",
 	"play_music": "music", "stop_all_music": "stop_all", "wait_for_sound": "wait",
-	"play_default_music": "map_music",
+	"play_default_music": "map_music", "force_bike_or_surf": "map_music",
 }
-## The routines that spend nothing here: a press already ends every box, and
+## The routines that spend nothing here. A press already ends every box and the
+## printer's preview, as the Hall of Fame's ends `Gen1Credits.END_HOLD_FRAMES`;
 ## `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
-	"wait_for_button",
-	"auto_textbox_on", "auto_textbox_off", "count_set_bits", "update_sprites",
-	"load_gym_names",
-	"random",
-	## The image index is drawn.
-	"set_sprite_image", "set_sprite_image_2",
-	## A wait is frames of nothing. The three trainer rows every fighting map's
-	## own table opens with are the sight walk
-	## `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
-	"delay_frame", "delay_frames", "delay_3", "check_map_trainers",
-	"start_trainer_battle", "end_trainer_battle",
-	"force_bike_or_surf",
-	"serial_connect", "fade_out_white", "fade_in_white", "fade_out_black",
-	"fade_in_black", "get_sprite_position", "init_battle_enemy",
-	"gb_pal_white_out_delay", "restore_screen_tiles", "load_gb_pal",
-	"save_screen_1", "load_screen_1", "save_screen_2",
-	"load_screen_2", "reload_map_data", "copy_data", "reload_tileset_patterns",
-	"gb_pal_normal", "load_current_map_view",
+	"wait_for_button", "auto_textbox_on", "auto_textbox_off",
+	## Answers the walk reads from RAM, or tables a node carries: `wNumSetBits`,
+	## `Random`, `_gym_statue_nodes`' names, the elevators' and the aide's copies.
+	"count_set_bits", "random", "load_gym_names", "copy_data",
+	## Upkeep and reads with no `DelayFrame` inside; the image index is drawn.
+	"update_sprites", "set_sprite_image", "set_sprite_image_2", "get_sprite_position",
+	## The three trainer rows every fighting map's own table opens with are the
+	## sight walk `Gen2WorldAPI.dispatch_sight_events` runs behind this script.
+	"check_map_trainers", "start_trainer_battle", "end_trainer_battle",
+	"init_battle_enemy", "serial_connect",
+	## `DisableLCD` waits for a scanline, not a frame; the screen buffers are copies.
+	"reload_map_data", "reload_tileset_patterns", "load_current_map_view",
+	"save_screen_1", "load_screen_1", "save_screen_2", "load_screen_2",
 ]
+## The routines that spend a fixed number of `DelayFrame`s: `DelayFrame` and
+## `RestoreScreenTilesAndReloadTilePatterns`' `jr Delay3`.
+const SCRIPT_FIXED_DELAYS: Dictionary = {"delay_frame": 1, "restore_screen_tiles": 3}
+## `SetSpriteFacingDirectionAndDelay`'s `ld c, 6`.
+const SPRITE_FACING_DELAY_FRAMES: int = 6
+## `rBGP` per step and the frames each step holds. `GBFadeOutToWhite` and its
+## three siblings `ld c, 8` a step; `GBPalWhiteOutWithDelay3` is `Delay3` on a
+## white screen, and `LoadGBPal` and `GBPalNormal` put the map's palette back.
+const GB_FADES: Dictionary = {
+	"fade_out_white": [[0x90, 0x40, 0x00], 8], "fade_in_white": [[0x40, 0x90, 0xE4], 8],
+	"fade_out_black": [[0xE4, 0xF9, 0xFE, 0xFF], 8],
+	"fade_in_black": [[0xFF, 0xFE, 0xF9, 0xE4], 8],
+	"gb_pal_white_out_delay": [[0x00], 3], "load_gb_pal": [[0xE4], 0],
+	"gb_pal_normal": [[0xE4], 0],
+}
 const SCRIPT_CONDITIONAL_CALLS: Array[int] = [0xC4, 0xCC, 0xD4, 0xDC]
 ## The two of them the zero flag answers, `true` calling on a clear one.
 const SCRIPT_ZERO_CALLS: Dictionary = {0xC4: true, 0xCC: false}
@@ -2551,6 +2591,9 @@ const CHAMPION_STARTER_MOVES: Array = [
 ]
 const CHAMPION_BIRD_MOVE: int = 0x8F
 const RIVAL3_CLASS: int = 0x2B
+## Yellow's `AIGetTypeEffectiveness` singles out `LORELEI` and `DEWGONG` (dex number).
+const LORELEI_CLASS: int = 0x2C
+const DEWGONG_DEX: int = 87
 
 ## Sides in tiles: `_LoadTrainerPic`'s `ld a, $77`, the widest front pic, and
 ## every back pic, which `ScaleSpriteByTwo` doubles before a battle draws it.
@@ -3066,6 +3109,9 @@ const RED_BLUE: Dictionary = {
 	"is_player_on_dungeon_warp": 0x46981,
 	"load_spinner_arrow_tiles": 0x44FD7,
 	"pewter_guys": 0x37CA1,
+	"celadon_elevator_warps": 0x4861C,
+	"rocket_elevator_warps": 0x4572C,
+	"silph_elevator_warps": 0x457DC,
 	"pewter_guys_coords": 0x37CE6,
 	"convert_npc_directions": 0x0F9A0,
 	"heal_party": 0x0F6A5,
@@ -3177,6 +3223,9 @@ const YELLOW: Dictionary = {
 	"trade_info_text": 0x41C62,
 	"link_enemy_trainer_name": 0xD886,
 	"stone_refusal_text": 0x0D8A2,
+	"pokecenter_pikachu_text": 0x06EEB,
+	"print_box_text": 0xE8E1F,
+	"pikachu_nurse_movements": 0xFD294,
 	"coin_case_text": 0x0E0F4,
 	"party_menu_text": 0x11A38,
 	"toss_text": 0x0E699,
@@ -3692,6 +3741,9 @@ const YELLOW: Dictionary = {
 	"is_player_on_dungeon_warp": 0x46BF3,
 	"load_spinner_arrow_tiles": 0x45077,
 	"pewter_guys": 0x1A6E5,
+	"celadon_elevator_warps": 0x48527,
+	"rocket_elevator_warps": 0x45980,
+	"silph_elevator_warps": 0x45A30,
 	"pewter_guys_coords": 0x1A72A,
 	"convert_npc_directions": 0x0F830,
 	"heal_party": 0x0F52B,
@@ -4064,6 +4116,23 @@ static func poison_blackout_ends_safari(id: StringName) -> bool:
 	return id == RomRegistry.YELLOW
 
 
+static func escape_refused_maps(id: StringName) -> Array[int]:
+	return [AGATHAS_ROOM, BILLS_HOUSE, POKEMON_FAN_CLUB] if id == RomRegistry.YELLOW \
+		else [AGATHAS_ROOM]
+
+
+static func bills_pc_rows(id: StringName) -> Array:
+	return BILLS_PC_ROWS_YELLOW if id == RomRegistry.YELLOW else BILLS_PC_ROWS
+
+
+static func pokedex_side_rows(id: StringName) -> Array[String]:
+	return POKEDEX_SIDE_ROWS_YELLOW if id == RomRegistry.YELLOW else POKEDEX_SIDE_ROWS
+
+
+static func pokedex_column(id: StringName) -> Dictionary:
+	return POKEDEX_COLUMN_YELLOW if id == RomRegistry.YELLOW else POKEDEX_COLUMN
+
+
 static func credits_string_count(id: StringName) -> int:
 	return CREDITS_STRINGS_YELLOW if id == RomRegistry.YELLOW else CREDITS_STRINGS_RED_BLUE
 
@@ -4336,14 +4405,33 @@ static func cut_block_swap(block: int) -> int:
 	return int(CUT_BLOCK_SWAPS.get(block, -1))
 
 
+## `MON_CATCH_RATE`, a held item to Generation 2 through the Time Capsule.
+## `AddPartyMon` and `SendNewMonToBox` copy the species' header byte; Yellow
+## overwrites a Kadabra's with `TWISTEDSPOON_GSC` and gives its starter `LIGHT_BALL_GSC`.
+const TWISTEDSPOON_GSC: int = 0x60
+const LIGHT_BALL_GSC: int = 0xA3
+const SPECIES_KADABRA: int = 64
+
+
+static func stored_catch_rate(game: StringName, species: int, header_rate: int) -> int:
+	if game == RomRegistry.YELLOW and species == SPECIES_KADABRA:
+		return TWISTEDSPOON_GSC
+	return header_rate
+
+
 ## `IsNextTileShoreOrWater`: a tileset off `WaterTilesets` answers no whatever is
-## in front, and the dock's own $32 is a landing rather than more sea.
-static func is_shore_or_water(tileset: int, water: bool, tile: int) -> bool:
+## in front, and the dock's own $32 is a landing rather than more sea. Yellow's
+## copy skips the shore tiles on the Gym and Dojo tilesets as well.
+static func is_shore_or_water(
+	tileset: int, water: bool, tile: int, yellow: bool = false
+) -> bool:
 	if not water:
 		return false
 	if tile == WATER_TILE:
 		return true
-	return tileset != TILESET_SHIP_PORT and SHORE_TILES.has(tile)
+	if tileset == TILESET_SHIP_PORT or (yellow and tileset in YELLOW_NO_SHORE_TILESETS):
+		return false
+	return SHORE_TILES.has(tile)
 
 
 ## Where `wStatusFlags1`'s two bits sit in the shared engine flag space.
@@ -4494,7 +4582,7 @@ const SFX_ROLES: Dictionary = {
 	Gen2Sfx.SFX_WRONG: Gen1Sfx.SFX_DENIED,
 	Gen2Sfx.SFX_STRENGTH: Gen1Sfx.SFX_PUSH_BOULDER, ## which TryPushingBoulder plays
 	Gen2Sfx.SFX_ENTER_DOOR: Gen1Sfx.SFX_GO_INSIDE,
-	Gen2Sfx.SFX_SWITCH_POKEMON: Gen1Sfx.SFX_SWITCH,
+	Gen2Sfx.SFX_SWITCH_POKEMON: Gen1Sfx.SFX_SWAP, ## SwitchPartyMon_ClearGfx, once a row
 	Gen2Sfx.SFX_TRANSACTION: Gen1Sfx.SFX_PURCHASE,
 	Gen2Sfx.SFX_EXIT_BUILDING: Gen1Sfx.SFX_GO_OUTSIDE,
 	Gen2Sfx.SFX_BUMP: Gen1Sfx.SFX_COLLISION,

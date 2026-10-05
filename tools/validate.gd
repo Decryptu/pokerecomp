@@ -47,8 +47,8 @@ const GROUPS: Dictionary = {
 	&"gen1": [
 		&"gen1_tables", &"gen1_pics", &"gen1_maps", &"gen1_walk", &"gen1_battle",
 		&"gen1_battle_anims", &"gen1_catch", &"gen1_trainers", &"gen1_audio",
-		&"gen1_opening", &"gen1_surfing", &"played", &"pokedex", &"slots", &"evolutions",
-		&"link", &"nuzlocke", &"second_screen",
+		&"gen1_opening", &"gen1_surfing", &"gen1_scripts", &"played", &"pokedex", &"slots",
+		&"evolutions", &"link", &"nuzlocke", &"second_screen", &"gen1_sram",
 	],
 }
 
@@ -57,6 +57,7 @@ var _names: PackedStringArray = []
 
 
 func _initialize() -> void:
+	DirAccess.remove_absolute(Gen2OptionsStore.path())
 	var topics: PackedStringArray = _available()
 	_names = _requested(topics)
 	if _names.is_empty():

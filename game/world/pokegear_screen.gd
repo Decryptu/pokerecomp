@@ -6,8 +6,8 @@ extends Control
 ## [Gen2Screen] and puts the two objects `InitPokegearTilemap` spawns on top: the
 ## mode indicator arrow and the radio card's tuning knob. The MAP card is
 ## [Gen2TownMapScreen], which owns the region map's own cursor, player icon and
-## landmark walk. Nothing here decides anything: the world owns the clock, the
-## dial and the contact list, so a press is reported and the host reopens the card.
+## landmark walk. Nothing here decides anything: the world owns the clock, dial
+## and contact list, so a press is reported and the host reopens the card.
 
 signal closed()
 ## Left or right, which is `Pokegear_SwitchPage` and is the host's to resolve:

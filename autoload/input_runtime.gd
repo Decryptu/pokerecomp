@@ -43,8 +43,23 @@ var _repeat_clock: Dictionary = {}
 ## The direction a repeat has just been sent for, cleared by the event arriving.
 ## Without it the gate would swallow the very press it emitted.
 var _repeat_open: Dictionary = {}
+## Whether the direction being delivered is the hardware's repeat (`hJoyLast`)
+## rather than a fresh press (`hJoyPressed`), for the length of that delivery. A
+## screen that ignores repeats alone, as `Pokedex_ArrowCursorDelay` does, reads
+## it while handling the press.
+var press_is_repeat: bool = false
 ## `hInMenu`, under which alone `JoyTextDelay` repeats; unset always repeats.
+## Takes the [PokeButton] about to repeat.
 var repeat_gate: Callable = Callable()
+## Frames before a held direction repeats; the world screen sets Generation 1's.
+var repeat_delay_frames: int = REPEAT_DELAY_FRAMES
+## Seconds until a menu redrawing a list next reads the pad, and between its
+## reads after; zero reads every frame. See [method stall].
+var _read_in: float = 0.0
+var _read_every: float = 0.0
+var _reading: bool = true
+## Buttons pressed while no read was due, delivered at the next if still down.
+var _held_back: Array[int] = []
 ## Whether all four reset buttons were down last frame, so the chord fires once
 ## per press rather than once per frame it is held.
 var _reset_chord_down: bool = false
@@ -60,9 +75,13 @@ var _pads: Array[Control] = []
 ## pressed again and the counter is reloaded with 5.
 const REPEAT_DELAY_FRAMES: int = 15
 const REPEAT_INTERVAL_FRAMES: int = 5
+## `JoypadLowSensitivity` (`home/joypad2.asm`): 30 on a fresh press, 5 after.
+const GEN1_REPEAT_DELAY_FRAMES: int = 30
 ## Counted in seconds so the repeat keeps the source's rate on a host drawing at
 ## something other than 60 Hz.
 const FRAME_SECONDS: float = 1.0 / 60.0
+## A wait is spent within this of zero, past a frame sum's rounding.
+const SPENT_EPSILON: float = 0.0001
 
 ## The four buttons a Game Boy resets on. `home/init.asm` wires them to the
 ## hardware rather than to a routine, so no game code can decline the chord.
@@ -228,21 +247,22 @@ func send_action(action: StringName, pressed: bool) -> void:
 
 
 ## Whether this event is a directional press nothing should act on. A stick sends
-## a fresh [InputEventJoypadMotion] on every value change and each is an action
-## press, so one push walked a menu the length of its list; a held key repeats at
-## the OS rate for the same reason. The extras are swallowed in front of the
-## engine's own focus navigation, and [method _advance_direction_repeat] puts back
-## the repeat the hardware had.
+## a fresh [InputEventJoypadMotion] on every value change and a held key repeats
+## at the OS rate, so one push walked a menu the length of its list. The extras
+## are swallowed before the engine's focus navigation, and
+## [method _advance_direction_repeat] puts back the hardware's repeat.
 func _gate_direction_repeat(event: InputEvent) -> bool:
 	var button: int = PokeButton.direction_in(event)
 	if button == PokeButton.NONE:
 		return false
 	if bool(_repeat_open.get(button, false)):
 		_repeat_open[button] = false
+		press_is_repeat = true
 		return false
 	if _repeat_clock.has(button):
 		return true
-	_repeat_clock[button] = FRAME_SECONDS * float(REPEAT_DELAY_FRAMES)
+	_repeat_clock[button] = FRAME_SECONDS * float(repeat_delay_frames)
+	press_is_repeat = false
 	return false
 
 
@@ -251,6 +271,46 @@ func _gate_direction_repeat(event: InputEvent) -> bool:
 ## system's key repeat is not the rate the hardware walked at.
 func held_direction() -> int:
 	return _direction_order.back() if not _direction_order.is_empty() else PokeButton.NONE
+
+
+## A list that has just moved reads no pad for [param frames], then once every
+## [param every]. A repeat falling inside, or a press still held, is heard at the read.
+func stall(frames: int, every: int = 1) -> void:
+	_read_in = FRAME_SECONDS * float(frames)
+	_read_every = FRAME_SECONDS * float(every)
+	_reading = false
+
+
+func _advance_reads(delta: float) -> void:
+	if _read_in <= 0.0:
+		_reading = true
+		return
+	_read_in -= delta
+	_reading = _read_in <= SPENT_EPSILON
+	if not _reading:
+		return
+	var back: Array[int] = _held_back.duplicate()
+	_held_back.clear()
+	_read_in = _read_every if not _repeat_clock.is_empty() else 0.0
+	for button: int in back:
+		if _button_down(button):
+			_push_press(button)
+
+
+## Whether the stalled menu misses this press. A repeating direction is the gate's.
+func _hold_back(event: InputEvent) -> bool:
+	if _reading or _read_in <= 0.0:
+		return false
+	var button: int = PokeButton.direction_in(event)
+	if button != PokeButton.NONE and _repeat_clock.has(button):
+		return false
+	if button == PokeButton.NONE:
+		button = PokeButton.pressed_in(event)
+	if button == PokeButton.NONE:
+		return false
+	if not _held_back.has(button):
+		_held_back.append(button)
+	return true
 
 
 func _notification(what: int) -> void:
@@ -287,6 +347,7 @@ func _poll_reset_chord() -> void:
 ## seen pressed carries a clock; when it runs out the direction is pressed again
 ## on the player's behalf, which is what lets a held d-pad walk a list at all.
 func _advance_direction_repeat(delta: float) -> void:
+	_advance_reads(delta)
 	for button: int in PokeButton.DIRECTIONS:
 		if not _direction_pressed(button):
 			_repeat_clock.erase(button)
@@ -295,23 +356,25 @@ func _advance_direction_repeat(delta: float) -> void:
 		if not _repeat_clock.has(button):
 			continue
 		var left: float = float(_repeat_clock[button]) - delta
-		if left > 0.0:
+		if left > SPENT_EPSILON:
 			_repeat_clock[button] = left
 			continue
+		if not _reading:
+			_repeat_clock[button] = 0.0
+			continue
 		_repeat_clock[button] = FRAME_SECONDS * float(REPEAT_INTERVAL_FRAMES)
-		if repeat_gate.is_valid() and not bool(repeat_gate.call()):
+		if repeat_gate.is_valid() and not bool(repeat_gate.call(button)):
 			continue
 		_repeat_open[button] = true
-		_emit_repeat(button)
+		_push_press(button)
+		press_is_repeat = false
 
 
-## One repeat, pushed into the tree rather than sent through
-## [method Input.parse_input_event]: a repeat is an edge, not a state. `Input`
-## keeps an action's API half apart from its device half and reports either as
-## pressed, and only an action release clears the API half, so a repeat sent as a
-## press latched the direction. The key came up, [method PokeButton.held] stayed
-## true, and the walk, the menu and the repeat ran on with nothing to stop them.
-func _emit_repeat(button: int) -> void:
+## One repeat or held-back press, pushed into the tree rather than sent through
+## [method Input.parse_input_event]: it is an edge, not a state. `Input` keeps an
+## action's API half apart from its device half, and only an action release
+## clears the API half, so a repeat sent as a press latched the direction.
+func _push_press(button: int) -> void:
 	var viewport: Viewport = get_viewport()
 	if viewport == null:
 		return
@@ -328,12 +391,17 @@ static func _direction_pressed(button: int) -> bool:
 		or Input.is_action_pressed(PokeButton.UI_ACTIONS[button])
 
 
+static func _button_down(button: int) -> bool:
+	return _direction_pressed(button) if PokeButton.is_direction(button) \
+		else PokeButton.held(button)
+
+
 ## Watches every event and consumes none, except a directional press the
 ## hardware would not have reported: see [method _gate_direction_repeat]. What
 ## counts as another device being picked up is
 ## [method PokeInputDevice.evidence_of] rather than where the event came from.
 func _input(event: InputEvent) -> void:
-	if _gate_direction_repeat(event):
+	if _hold_back(event) or _gate_direction_repeat(event):
 		var viewport: Viewport = get_viewport()
 		if viewport != null:
 			viewport.set_input_as_handled()

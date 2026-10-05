@@ -51,10 +51,9 @@ const OPTION_MAIL_QUIT: StringName = &"mail_quit"
 const MAX_SUBMENU_ITEMS: int = 8
 
 ## `PartyMenuStrings`' two rows this screen reaches: `ChooseAMonString` for
-## `PARTYMENUACTION_CHOOSE_POKEMON`, which `StartMenu_Pokemon` writes, and
-## `UseOnWhichPKMNString` for the `PARTYMENUACTION_HEALING_ITEM` that
-## `.SelectMilkDrinkRecipient` sets. Engine text no importer reads, like the rest
-## of `data/text/common_*.asm`.
+## `PARTYMENUACTION_CHOOSE_POKEMON` and `UseOnWhichPKMNString` for the
+## `PARTYMENUACTION_HEALING_ITEM` that `.SelectMilkDrinkRecipient` sets. Engine
+## text no importer reads, like the rest of `data/text/common_*.asm`.
 ## `constants/menu_constants.asm`'s PARTYMENUACTION_*. Two reach this screen:
 ## `SelectMonFromParty`'s own zero, which every service writes, and the GIVE_MON
 ## both `SelectTradeOrDayCareMon` callers write.
@@ -165,8 +164,16 @@ var _heal_line: String = ""
 var _cursor_memory: Dictionary = {"cursor": 0}
 ## `wLinkMode`, set by the world while the player stands in a Cable Club room.
 var in_link_room: bool = false
+## Yellow's starter while `CheckPikachuFollowingPlayer` says it is not following:
+## no icon and no answer to A.
+var sleeping_member: int = -1
 var _read_only: bool = false
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
+## `WaitSFX` behind `PartyMenuSelect`'s click and `_SwitchPartyMons`' first effect.
+var sound_busy: Callable = Gen2AudioPlayer.sound_wait
+var _sound_holding: bool = false
+var _sound_watch: Dictionary = {}
+var _sound_then: Callable = Callable()
 ## `OpenPartyStats`' own screen, standing over the whole party menu while it is
 ## up, and the page that draws it.
 var _stats: Gen2MonStatsScreen = null
@@ -359,6 +366,8 @@ func _party_size() -> int:
 ## Button driver for the embedded overworld view, mirroring
 ## Gen2StartMenuScreen.handle_button. Returns whether the button was used.
 func handle_button(button: int) -> bool:
+	if _sound_holding:
+		return true
 	## `StatsScreenInit` runs its own joypad loop over the whole screen, so
 	## nothing below it is reachable while it is up.
 	if _stats != null:
@@ -388,14 +397,14 @@ func handle_button(button: int) -> bool:
 			_move_cursor(1)
 			return true
 		PokeButton.A:
-			_click()
-			_remember_press()
-			_confirm()
+			_click_then(func() -> void:
+				_remember_press()
+				_confirm())
 			return true
 		PokeButton.B:
-			_click()
-			_remember_press()
-			_cancel()
+			_click_then(func() -> void:
+				_remember_press()
+				_cancel())
 			return true
 	return false
 
@@ -407,8 +416,36 @@ func _remember_press() -> void:
 
 
 ## `PartyMenuSelect`'s click, waited on Gen 2; `MonMenuLoop`'s and Gen 1's are not.
-func _click() -> void:
-	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, not _gen1() and not _submenu_open)
+func _click_then(then: Callable) -> void:
+	var waits: bool = not _gen1() and not _submenu_open
+	sfx_requested.emit(Gen2Sfx.SFX_READ_TEXT_2, waits)
+	if waits and not _item_menu_open:
+		_hold_for_sound(then)
+	else:
+		then.call()
+
+
+func _hold_for_sound(then: Callable) -> void:
+	_sound_watch = {}
+	_sound_then = then
+	_sound_holding = true
+	_release_sound()
+
+
+func _release_sound() -> void:
+	if not _sound_holding or bool(sound_busy.call(_sound_watch)):
+		return
+	_sound_holding = false
+	var then: Callable = _sound_then
+	_sound_then = Callable()
+	then.call()
+
+
+## Yellow's `HandlePartyMenuInput` on a starter that is not following: its line,
+## then the menu returns as a cancelled one.
+func _say_sleeping_starter() -> void:
+	_message_after = _cancel
+	_say(_data.special_text("bills_pc_sleeping", "no_response"))
 
 
 func _gen1() -> bool:
@@ -443,6 +480,9 @@ func _on_cancel_row() -> bool:
 
 
 func _confirm() -> void:
+	if _member_cursor == sleeping_member and not _submenu_open and _switch_from < 0:
+		_say_sleeping_starter()
+		return
 	## `PartyMenuSelect` answers CANCEL with the same carry a B press sets, so
 	## the row and the button are one path.
 	if _on_cancel_row() and not _submenu_open:
@@ -541,6 +581,7 @@ func _open_stats() -> void:
 	_stats = Gen2MonStatsScreen.create(_data, _save.party, _member_cursor, _save)
 	_stats.closed.connect(_close_stats)
 	_stats.cry_requested.connect(cry_requested.emit)
+	_stats.sfx_requested.connect(func(index: int) -> void: sfx_requested.emit(index, false))
 	_stats.pikachu_clip_requested.connect(pikachu_clip_requested.emit)
 	## `StatsScreenInit` clears the tilemap before it draws, so the submenu is
 	## gone rather than standing behind the screen.
@@ -681,9 +722,15 @@ func _finish_switch() -> void:
 		var held: Gen2SaveMon = _save.party[from]
 		_save.party[from] = _save.party[_member_cursor]
 		_save.party[_member_cursor] = held
-		## `.ClearSprite` runs once per row and ends on `WaitPlaySFX`, so the
-		## effect is asked for twice and the second waits the first out.
+		## `.ClearSprite`'s `WaitPlaySFX` per row: the second waits the first out.
 		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
+		_hold_for_sound(_reopen_after_switch.bind(true))
+		return
+	_reopen_after_switch(false)
+
+
+func _reopen_after_switch(swapped: bool) -> void:
+	if swapped:
 		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, true)
 	_member_cursor = clampi(_member_cursor, 0, _row_count() - 1)
 	## The icons are respawned rather than stepped: `LoadPartyMenuGFX` and
@@ -807,6 +854,9 @@ func _exit_tree() -> void:
 ## One hardware frame of `PlaySpriteAnimations`, which only `MonMailAction`'s menu
 ## and Generation 1's own stop.
 func _process(delta: float) -> void:
+	_release_sound()
+	if _moves != null:
+		_moves.advance_frame()
 	if _view == null or _page == null:
 		return
 	var frames: int = _frame_clock.tick(delta)
@@ -898,6 +948,7 @@ func _rows() -> Array:
 			"fainted": not mon.is_egg and mon.hp <= 0,
 			"egg": mon.is_egg,
 			"quality": _row_quality(mon),
+			"hidden": index == sleeping_member,
 		})
 	return out
 
