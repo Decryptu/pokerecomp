@@ -724,7 +724,7 @@ static func _write_slots(cache_directory: String, manifest: Dictionary) -> void:
 		"bet_how_many": "Bet how many\ncoins?", "start": "Start!",
 		"not_enough_coins": "Not enough\ncoins.",
 		"ran_out_of_coins": "Darn… Ran out of\ncoins…",
-		"play_again": "Play again?", "lined_up": "lined up!\nWon @ coins!",
+		"play_again": "Play again?", "lined_up": "lined up!\nWon <RAM_D086> coins!",
 		"darn": "Darn!",
 	}
 

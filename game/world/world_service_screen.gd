@@ -3043,6 +3043,9 @@ func _switch_save_box() -> void:
 		_save.current_box = _box_index
 
 
+const QUICK_SAVE_FRAMES: int = 30
+
+
 func _advance_save_prompt() -> void:
 	if _save_prompt == null:
 		return
@@ -3060,8 +3063,9 @@ func _advance_save_prompt() -> void:
 	_save_after = &""
 	set_process(false)
 	if after == &"quick_save":
-		## TRUE for a save that was written, FALSE for one that was not.
-		_finish_runtime({"ok": true, "script_value": 0 if refused else 1})
+		## TRUE for a save that was written, FALSE for one that was not; then `ld c, 30`.
+		var answer: Dictionary = {"ok": true, "script_value": 0 if refused else 1}
+		_hold(_finish_runtime.bind(answer), QUICK_SAVE_FRAMES)
 		return
 	if after == &"change_box":
 		_open_box_list()
@@ -4033,6 +4037,8 @@ func _open_mail_reader() -> void:
 	_set_overlay_open(true)
 	host.z_index = 5
 	host.closed.connect(_on_mail_reader_closed)
+	host.music_requested.connect(music_requested.emit)
+	host.map_music_requested.connect(map_music_requested.emit)
 	_service_hardware.display(host)
 
 

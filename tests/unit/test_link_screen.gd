@@ -63,3 +63,47 @@ func test_a_colosseum_battle_ends_on_its_verdict_and_then_the_record() -> void:
 	screen.handle_button(PokeButton.A)
 	assert_true(bool(closed[0]))
 	screen.free()
+
+
+func _screen_on_the_lists(crystal: bool) -> Gen2LinkScreen:
+	var save: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
+		_data.id, _data.sha1, 1,
+		Gen2Party.of(Gen2BattleMon.create(_data, Fixture.PIKACHU, 20, [Fixture.TACKLE])),
+		"RED"
+	)
+	var screen := Gen2LinkScreen.new()
+	screen.set("_data", _data)
+	screen.set("_save", save)
+	screen.set("_partner", {"name": "BLUE", "party": [save.party[0].to_dict()]})
+	screen.set("_page", Gen2LinkPage.new())
+	screen.set("_step", Gen2LinkScreen.STEP.SELECT)
+	screen.set("_crystal", crystal)
+	return screen
+
+
+## `LinkTradePartymonMenuCheckCancel` and `LinkTradeOTPartymonMenuCheckCancel`:
+## UP at the top of the player's list reaches CANCEL on Crystal and wraps back to
+## the first row on Gold and Silver, whose CANCEL is reached from the partner's
+## last row; once there, Crystal sends every button but A and UP back to the
+## first row and Gold and Silver ignore them.
+func test_the_cancel_row_answers_the_buttons_its_cartridge_reads() -> void:
+	var crystal: Gen2LinkScreen = _screen_on_the_lists(true)
+	crystal.handle_button(PokeButton.UP)
+	assert_true(crystal.trade_state()["cancel"], "Crystal reaches CANCEL going up")
+	crystal.handle_button(PokeButton.B)
+	var state: Dictionary = crystal.trade_state()
+	assert_false(state["cancel"], "B leaves CANCEL on Crystal")
+	assert_eq([state["list"], state["index"]], [Gen2LinkScreen.LIST_PLAYER, 0])
+	crystal.free()
+	var gold: Gen2LinkScreen = _screen_on_the_lists(false)
+	gold.handle_button(PokeButton.UP)
+	assert_false(gold.trade_state()["cancel"], "going up from the first row stays on it")
+	gold.handle_button(PokeButton.DOWN)
+	gold.handle_button(PokeButton.DOWN)
+	assert_true(gold.trade_state()["cancel"], "the partner's last row goes down to CANCEL")
+	for button: int in [PokeButton.B, PokeButton.START, PokeButton.DOWN, PokeButton.LEFT]:
+		gold.handle_button(button)
+		assert_true(gold.trade_state()["cancel"], "button %d is ignored on CANCEL" % button)
+	gold.handle_button(PokeButton.UP)
+	assert_eq(gold.trade_state()["list"], Gen2LinkScreen.LIST_PARTNER)
+	gold.free()

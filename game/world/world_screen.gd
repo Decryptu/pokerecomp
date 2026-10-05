@@ -217,6 +217,7 @@ var _hall_of_fame_host: Gen2HallOfFameScreen = null
 ## `LinkCommunications`' own screen: the Trade Center's two-list menu and the
 ## link record sign. The Colosseum runs through the battle host instead.
 var _link_host: Gen2LinkScreen = null
+var _link_music_stopped: bool = false
 ## The peer a Colosseum battle is being fought against, for the record
 ## `AddLastLinkBattleToLinkRecord` writes when it ends.
 var _link_battle_peer: Dictionary = {}
@@ -2714,6 +2715,31 @@ func _open_diploma(request: Dictionary) -> bool:
 	## no frame would otherwise stand with the map around it.
 	_apply_interface_mask()
 	_script_prompt = "Diploma"
+	_refresh_labels()
+	return true
+
+
+## `PhotoStudio`'s `PrintPartymon`: the chosen member's page under the printer's error.
+func _open_party_print(request: Dictionary) -> bool:
+	if _diploma_host != null or _world == null or _data == null:
+		return false
+	var save: Gen2SaveData = _injected_save if _injected_save != null \
+		else _selected_runtime_save()
+	var slot: int = int((request.get("values", {}) as Dictionary).get("slot", -1))
+	if save == null or slot < 0 or slot >= save.party.size():
+		return false
+	var snapshot: Dictionary = Gen2MonStatsScreen.snapshot_of(_data, save.party[slot])
+	var host := Gen2DiplomaScreen.new()
+	host.z_index = 30
+	_screen.display(host)
+	if not host.open_party_print(_data, snapshot):
+		Gen2Screen.drop(host)
+		return false
+	host.closed.connect(_on_diploma_closed)
+	host.music_requested.connect(_play_music)
+	_diploma_host = host
+	_apply_interface_mask()
+	_script_prompt = "Photo Studio"
 	_refresh_labels()
 	return true
 
@@ -7165,8 +7191,9 @@ func _open_link_screen(screen_mode: int) -> bool:
 	host.closed.connect(_on_link_screen_closed)
 	host.traded.connect(_on_link_traded)
 	host.cry_requested.connect(_play_species_cry)
-	host.music_requested.connect(_play_evolution_music)
+	host.music_requested.connect(_on_link_music)
 	host.sfx_requested.connect(_play_sfx)
+	_link_music_stopped = false
 	_link_host = host
 	_screen.display(host)
 	if _link_host == null:
@@ -7176,6 +7203,12 @@ func _open_link_screen(screen_mode: int) -> bool:
 		else "Trade Center"
 	_refresh_labels()
 	return true
+
+
+## `Gen2ToGen2LinkComms`' `PlayMusic MUSIC_NONE`; `MAPSETUP_LINKRETURN` restores the room's.
+func _on_link_music(music: int) -> void:
+	_link_music_stopped = _link_music_stopped or music == Gen2EvolutionScreen.MUSIC_NONE
+	_play_evolution_music(music)
 
 
 ## `LinkTrade`'s `.do_trade`, which comes back to the trade screen.
@@ -7210,6 +7243,9 @@ func _on_link_screen_closed() -> void:
 		if to_battle and _start_link_battle(battle):
 			return
 	_close_faded_menu(func() -> void:
+		if _link_music_stopped:
+			_link_music_stopped = false
+			_play_current_map_music()
 		_show_script_results(_world.complete_runtime_request({"ok": true})))
 	if _renderer != null:
 		_renderer.refresh()
@@ -8331,6 +8367,8 @@ func _open_mail_reader(mail: Gen2SaveMail) -> void:
 	_mail_host = host
 	host.z_index = 20
 	host.closed.connect(_on_mail_reader_closed)
+	host.music_requested.connect(_play_music)
+	host.map_music_requested.connect(_play_current_map_music)
 	_screen.display(host)
 	_apply_interface_mask()
 	_refresh_labels()
@@ -9016,6 +9054,7 @@ const REQUEST_OPENERS: Dictionary = {
 	## `ret z` on an empty dex, and the same for a cache with no glyphs or art.
 	&"unown_printer_requested": [&"_open_unown_printer", &"values", {"ok": true}],
 	&"diploma_requested": [&"_open_diploma", &"values", {"ok": true}],
+	&"party_print_requested": [&"_open_party_print", &"values", {"ok": true}],
 	## No puzzle art answers an unsolved board, the `iftrue` the map takes anyway.
 	&"unown_puzzle_requested": [
 		&"_open_unown_puzzle", &"values", {"ok": true, "script_value": 0},

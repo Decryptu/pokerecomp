@@ -1,9 +1,7 @@
 extends RefCounted
 
-## Link play on all three cartridges: the path a single console gets and the
-## one a peer gets, both driven on the real map, and `LinkCommsBorderGFX` as
-## the two things it is, seventy tiles and a tilemap on Crystal against nine
-## tiles and none on Gold and Silver.
+## Link play on all three cartridges: a single console's path and a peer's on the
+## real map, and `LinkCommsBorderGFX` (70 tiles and a tilemap, or 9 and none).
 
 ## `TradeAnimation` is swept over every species the corpus ships.
 
@@ -19,13 +17,9 @@ const TRADE_ANIM_RECEIVED: int = 25
 ## Where the offered Pokemon's picture and its stats are both on screen.
 const TRADE_ANIM_DRAWN_FRAME: int = 180
 
-## `InternalClockTradeAnim` with BULBASAUR for IVYSAUR: the frame each routine
-## of `InternalClockTradeFuncSequence` starts on, `Trade_LoadMonSprite` and the
-## inner `Trade_ShowClearedWindow` included, the cries and `SFX_HEAL_HP`'s wait
-## spent on the silent driver. Red's hooks put the routines at 0, 3, 8, 315, 332,
-## 500, 741, 841, 844, 1184, 1350, 1653, 1894, 1897, 1914, 2010, 2016, 2325 and
-## 2425 and Yellow's at 0, 3, 8, 319, 341, 509, 781, 881, 884, 1224, 1390, 1693,
-## 1965, 1968, 1990, 2086, 2092, 2408 and 2508; `pic_load_frames` is the rest.
+## `InternalClockTradeAnim` with BULBASAUR for IVYSAUR: the frame each routine of
+## `InternalClockTradeFuncSequence` starts on, measured from Red's and Yellow's hooks,
+## with the cries and `SFX_HEAL_HP`'s wait spent on the silent driver.
 const GEN1_TRADE_ROUTINES: Dictionary = {
 	RomRegistry.RED: [
 		1, 2, 8, 312, 329, 497, 738, 838, 841, 1181, 1347, 1650, 1891, 1894, 1911,
@@ -84,10 +78,11 @@ const CONSOLE_CELL: Vector2i = Vector2i(3, 4)
 const EVENT_GAVE_MYSTERY_EGG_TO_ELM: int = 31
 
 ## How many script steps a receptionist path is given before it is called stuck.
-const STEP_CAP: int = 400
+const STEP_CAP: int = 800
 
 ## A party that passes every Time Capsule test: two Kanto species, no mail and
 ## no move past `STRUGGLE`.
+const KADABRA: int = 64
 const LEGAL_PARTY: Dictionary = {
 	"species": [1, 4], "held_items": [0, 0], "moves": [[1, 2], [3, 4]],
 	"names": ["ONE", "TWO"],
@@ -100,6 +95,9 @@ func run(r: RefCounted) -> void:
 	_r = r
 	_r.each_game(func() -> void:
 		_verify_border()
+		_verify_trade_layout()
+		_verify_ask_names()
+		_verify_trade_flow()
 		_verify_texts()
 		_verify_trade_anim_art()
 		_verify_trade_anim_texts()
@@ -112,6 +110,7 @@ func run(r: RefCounted) -> void:
 		_verify_record_sign()
 	)
 	_verify_compatibility()
+	_r.each_game(_verify_time_capsule_buffers)
 	_verify_record()
 	_r.each_game_of(RomRegistry.GEN1, func() -> void:
 		_verify_gen1_trade_anim_art()
@@ -514,6 +513,136 @@ func _verify_border() -> void:
 	)
 
 
+## Names and CANCEL: Crystal at (4, 0) and (10, 17), Gold and Silver at (2, 0) and (2, 16) over `$7e`.
+func _verify_trade_layout() -> void:
+	var page: Gen2LinkPage = Gen2LinkPage.from_data(_r.data)
+	if page == null:
+		return
+	var state: Dictionary = {
+		"player": {"name": "GOLD", "species": ["ONE", "TWO"]},
+		"partner": {"name": "KRIS", "species": ["THREE"]},
+		"list": 0, "index": 0, "footer": -1, "confirm": -1, "cancel": true,
+	}
+	var drawn: PackedByteArray = page.draw_trade(state)
+	var crystal: bool = page.has_screen_tilemap()
+	var name_at: Vector2i = Vector2i(4, 0) if crystal else Vector2i(2, 0)
+	var cancel_at: Vector2i = Vector2i(10, 17) if crystal else Vector2i(2, 16)
+	var arrow_at: Vector2i = Vector2i(9, 17) if crystal else Vector2i(1, 16)
+	_r.check(_drew(page, drawn, "GOLD", name_at), "the player's name is not at %s" % [name_at])
+	_r.check(_drew(page, drawn, "KRIS", name_at + Vector2i(0, 8)), "the partner's name is not at %s" % [name_at + Vector2i(0, 8)])
+	_r.check(_drew(page, drawn, "CANCEL", cancel_at), "CANCEL is not at %s" % [cancel_at])
+	_r.check(_drew(page, drawn, "▶", arrow_at), "the cancel arrow is not at %s" % [arrow_at])
+	if not crystal:
+		var pattern := PackedByteArray()
+		pattern.resize(Gen2LinkPage.WIDTH * Gen2LinkPage.HEIGHT)
+		page.call("_blit", pattern, Gen2LinkPage.GOLD_FILL_TILE, Vector2i(0, 17))
+		_r.check(_same_cell(drawn, Vector2i(0, 17), pattern, Vector2i(0, 17)),
+			"row 17 is not the `$7e` pattern")
+
+
+func _drew(page: Gen2LinkPage, drawn: PackedByteArray, text: String, at: Vector2i) -> bool:
+	var expected := PackedByteArray()
+	expected.resize(Gen2LinkPage.WIDTH * Gen2LinkPage.HEIGHT)
+	page.font.draw_text(text, expected, Gen2LinkPage.WIDTH, at.x * Gen2LinkPage.TILE, at.y * Gen2LinkPage.TILE)
+	for cell: int in Gen2Font.fit(text, -1).size():
+		if not _same_cell(drawn, at + Vector2i(cell, 0), expected, at + Vector2i(cell, 0)):
+			return false
+	return true
+
+
+func _same_cell(a: PackedByteArray, a_at: Vector2i, b: PackedByteArray, b_at: Vector2i) -> bool:
+	for row: int in Gen2LinkPage.TILE:
+		for column: int in Gen2LinkPage.TILE:
+			var at_a: int = (a_at.y * Gen2LinkPage.TILE + row) * Gen2LinkPage.WIDTH + a_at.x * Gen2LinkPage.TILE + column
+			var at_b: int = (b_at.y * Gen2LinkPage.TILE + row) * Gen2LinkPage.WIDTH + b_at.x * Gen2LinkPage.TILE + column
+			if a[at_a] != b[at_b]:
+				return false
+	return true
+
+
+## `_LinkAskTradeForText` names species (EGG for an egg), never nicknames.
+func _verify_ask_names() -> void:
+	var data: GameData = _r.data
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0)
+	var mon: Gen2SaveMon = save.party[0]
+	mon.nickname = "NICKY"
+	var screen := Gen2LinkScreen.new()
+	screen.set("_data", data)
+	screen.set("_save", save)
+	var ask: String = screen.call("_ask_message", {"species": 4, "nickname": "THEIRS"})
+	var mine: String = String(data.species(mon.species).get("name", ""))
+	var theirs: String = String(data.species(4).get("name", ""))
+	_r.check(ask.contains(mine) and ask.contains(theirs) and not ask.contains("NICKY")
+		and not ask.contains("THEIRS") and not ask.contains("<RAM_"),
+		"the question reads %s" % ask.c_escape())
+	var egg: String = screen.call("_ask_message", {"species": 4, "is_egg": true})
+	_r.check(egg.contains("EGG"), "an offered egg reads %s" % egg.c_escape())
+	screen.free()
+
+
+## A trade from the lists to the lists again: the footer opens on STATS, the music
+## stops, the frames of each wait are spent and the received Kadabra's evolution is kept.
+func _verify_trade_flow() -> void:
+	var data: GameData = _r.data
+	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0)
+	var kadabra: Gen2SaveMon = Gen2SaveMon.from_dict(save.party[0].to_dict())
+	kadabra.species = KADABRA
+	kadabra.exp = Gen2Experience.total_exp_at(
+		int(data.species(KADABRA).get("growth_rate", 0)), kadabra.level
+	)
+	save.party = [save.party[0], Gen2SaveMon.from_dict(save.party[0].to_dict())]
+	var world: Gen2WorldAPI = _r.open_world(
+		CABLE_CLUB_GROUP, TRADE_CENTER, Vector2i(4, 5), Gen2WorldState.new()
+	)
+	if world == null:
+		return
+	var partner := Gen2LinkTransport.new()
+	partner.peer = {
+		"name": "BLUE", "id": 4242, "gender": 0, "generation": Gen2LinkTransport.GENERATION_2,
+		"room": Gen2LinkSession.CABLECLUBROOM_TRADECENTER,
+		"party": [kadabra.to_dict()],
+	}
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var host := Gen2LinkScreen.new()
+	host.set_context(data, world, save, partner, Gen2LinkScreen.MODE_TRADE, false)
+	var music: Array = []
+	host.music_requested.connect(func(index: int) -> void: music.append(index))
+	tree.root.add_child(host)
+	host.set_process(false)
+	var spent: Callable = func(until: Callable, cap: int = 1500) -> int:
+		var frames: int = 0
+		while frames < cap and not until.call():
+			host.advance_frame()
+			frames += 1
+		return frames
+	spent.call(func() -> bool: return host.step() == Gen2LinkScreen.STEP.SELECT)
+	_r.check(music == [Gen2EvolutionScreen.MUSIC_NONE], "the exchange sent music %s" % [music])
+	host.handle_button(PokeButton.DOWN)
+	host.handle_button(PokeButton.A)
+	_r.check(host.step() == Gen2LinkScreen.STEP.FOOTER
+		and int(host.trade_state().get("footer", -1)) == Gen2LinkScreen.FOOTER_STATS,
+		"A on a row opened the footer on %s" % [host.trade_state().get("footer", -1)])
+	host.handle_button(PokeButton.RIGHT)
+	host.handle_button(PokeButton.A)
+	var offered: int = spent.call(func() -> bool: return host.step() == Gen2LinkScreen.STEP.CONFIRM)
+	_r.check(offered == Gen2LinkScreen.WAITING_FRAMES + Gen2LinkScreen.OFFER_FRAMES,
+		"the offer took %d frames" % offered)
+	var traded: Array = []
+	host.traded.connect(func(result: Dictionary) -> void: traded.append(result))
+	spent.call(func() -> bool: return int(host.trade_state().get("confirm", -1)) >= 0)
+	host.handle_button(PokeButton.A)
+	var lead: int = spent.call(func() -> bool: return host.step() == Gen2LinkScreen.STEP.MOVIE)
+	_r.check(lead == Gen2LinkScreen.WAITING_FRAMES + Gen2LinkScreen.OFFER_FRAMES and traded.size() == 1,
+		"the movie opened after %d frames (%d trades, step %d)" % [lead, traded.size(), host.step()])
+	var plan: Dictionary = host.take_evolution_plan()
+	_r.check(not plan.is_empty(), "the trade of a Kadabra carries no evolution")
+	host.animation_closed()
+	var closing: int = spent.call(func() -> bool: return host.step() == Gen2LinkScreen.STEP.SELECT)
+	_r.check(closing == Gen2LinkScreen.BORDER_FRAMES + Gen2LinkScreen.COMPLETED_FRAMES,
+		"the lists came back after %d frames" % closing)
+	host.queue_free()
+
+
 ## The trade screen's three imported boxes, each by the words that identify it
 ## and by the `text_ram` it names.
 func _verify_texts() -> void:
@@ -703,9 +832,8 @@ static func _ink(image: Image) -> int:
 	return count
 
 
-## The path a single console gets, which is the only one a player without a
-## second save file can reach: `WaitForLinkedFriend` times out, the receptionist
-## says the friend is not ready, and the script ends where it stands.
+## A single console's path: `WaitForLinkedFriend` times out, the receptionist says
+## the friend is not ready, and the script ends where it stands.
 func _verify_no_cable() -> void:
 	var world: Gen2WorldAPI = _open_center(null)
 	if world == null:
@@ -729,9 +857,7 @@ func _verify_no_cable() -> void:
 		session.connection_status == Gen2LinkSession.CONNECTION_NOT_ESTABLISHED,
 		"a timed-out link left the serial port open"
 	)
-	## `Text_PleaseWait` is the box the timeout stands behind, and the one that
-	## follows it is `.FriendNotReady`'s, which the script prints and closes
-	## without a `waitbutton` of its own.
+	## `Text_PleaseWait` stands behind the timeout; `.FriendNotReady`'s box follows, with no `waitbutton`.
 	_r.check(
 		not _said(results, "Please wait").is_empty(),
 		"the receptionist did not print the waiting box"
@@ -800,11 +926,8 @@ func _verify_with_peer() -> void:
 	)
 
 
-## The Time Capsule with a Gen 2 peer, which is the one room two of these
-## cartridges can never open: `SetBitsForTimeCapsuleRequest` asks for
-## `CABLECLUBROOM_NULL` and `readmem wOtherPlayerLinkMode` is non-zero for a
-## Gen 2 game, so the script takes `CheckBothSelectedSameRoom` and the
-## incompatible-rooms box.
+## The Time Capsule with a Gen 2 peer, a room two of these cartridges never open:
+## `wOtherPlayerLinkMode` is non-zero, so the script takes the incompatible-rooms box.
 func _verify_time_capsule_receptionist() -> void:
 	var world: Gen2WorldAPI = _open_center(
 		_peer(Gen2LinkSession.CABLECLUBROOM_NULL)
@@ -841,9 +964,7 @@ func _verify_rooms() -> void:
 		if world == null:
 			continue
 		_settle_results(world, world.dispatch_map_entry())
-		## `MAPCALLBACK_OBJECTS` runs `CableClubCheckWhichChris`, which is the
-		## internal clock's side here: the player who opened the receptionist
-		## holds it, so the friend on the left is the one shown.
+		## `CableClubCheckWhichChris` is the internal clock's side here: the friend on the left shows.
 		_r.check(
 			state.link_session().which_chris(state.link_transport()) == 0,
 			"room %d put the wrong friend on screen" % int(room[0])
@@ -925,6 +1046,34 @@ func _verify_compatibility() -> void:
 	)
 
 
+## `CheckTimeCapsuleCompatibility`'s names: species in buffer 1, move in 2, an egg is EGG.
+func _verify_time_capsule_buffers() -> void:
+	var data: GameData = _r.data
+	var party: Dictionary = {
+		"species": [1, 4], "held_items": [0, 0], "moves": [[1], [166]],
+		"names": ["ONE", "NICKNAME"], "eggs": [false, false],
+	}
+	var text: Dictionary = _capsule_buffers(data, party)
+	var species_name: String = String(data.species(4).get("name", ""))
+	var move_name: String = String(data.move(166).get("name", ""))
+	_r.check(text.get(Gen2Layout.STRING_BUFFER_1) == species_name
+		and text.get(Gen2Layout.STRING_BUFFER_2) == move_name,
+		"a move too new names %s" % [text])
+	party["eggs"] = [false, true]
+	party["moves"] = [[1], [1]]
+	text = _capsule_buffers(data, party)
+	_r.check(text.get(Gen2Layout.STRING_BUFFER_1) == "EGG",
+		"an egg is refused as %s" % [text.get(Gen2Layout.STRING_BUFFER_1)])
+
+
+func _capsule_buffers(data: GameData, party: Dictionary) -> Dictionary:
+	var runner: Gen2WorldScriptRunner = Gen2WorldScriptRunner.begin(
+		data, Gen2WorldState.new(), {"party": party}
+	)
+	runner.call("_check_time_capsule_compatibility")
+	return runner.text_context().get("buffers", {})
+
+
 ## `AddLastLinkBattleToLinkRecord`: the totals, an opponent's own row, and the
 ## cap neither carries past.
 func _verify_record() -> void:
@@ -1001,9 +1150,7 @@ func _talk(world: Gen2WorldAPI, cell: Vector2i) -> Array:
 	return results
 
 
-## Answers everything the script asks for that is not a choice, the way the
-## screen answers it: the frames a link routine spends, the quick save it asks
-## to write, and the movements between the receptionist and the door.
+## Answers everything the script asks for but a choice, as the screen does.
 func _settle(world: Gen2WorldAPI) -> Array:
 	var out: Array = []
 	for _step: int in STEP_CAP:

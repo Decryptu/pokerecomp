@@ -1,8 +1,7 @@
 extends RefCounted
 
-## Sweeps `_SlotMachine` and `PromptUserToPlaySlots` on real caches. Every
-## expectation is transcribed from the sources rather than read back out of the
-## implementation, and whole spins on pinned seeds assert what stopped where.
+## Sweeps `_SlotMachine` and `PromptUserToPlaySlots` on real caches: expectations come
+## from the sources, and whole spins on pinned seeds assert what stopped where.
 
 ## `Reel1Tilemap`, `Reel2Tilemap` and `Reel3Tilemap`, byte for byte, including
 ## the first three symbols each repeats behind itself.
@@ -24,9 +23,7 @@ const REELS: Array[Array] = [
 ## `Slots_GetPayout.PayoutTable`, in `SLOTS_*` order.
 const PAYOUTS: Array[int] = [300, 50, 6, 8, 10, 15]
 
-## `.InitGFX`'s own loads: which tile each run is decompressed to and how many
-## tiles it is. `Slots2LZ` is loaded twice, which is why the section carries it
-## once and two banks index it.
+## `.InitGFX`'s loads: the tile each run decompresses to and its length (`Slots2LZ` loads twice).
 const SECTION: Dictionary = {"slots_1": 37, "slots_2": 64, "slots_3": 64}
 
 ## `Slots_StopReel3`'s two blocks, as (threshold, action) walked in order. The
@@ -82,9 +79,7 @@ const GEN1_TEXTS: Dictionary = {
 const GEN1_SPIN_FRAME_CAP: int = 3200
 const GEN1_PRESS_GAP: int = 7
 
-## How many spins a sweep drives per cartridge, and how long one is given to
-## reach its own end. A spin is three A presses and a payout animation of up to
-## three hundred coins, which is `PAYOUTS[0]` times the two frames each takes.
+## Spins per sweep, and the frames one is given: three presses and up to 300 coins at two frames each.
 const SPINS: int = 64
 const SPIN_FRAME_CAP: int = 2400
 
@@ -106,6 +101,7 @@ func run(r: RefCounted) -> void:
 		_verify_strips(game_id, data)
 		_verify_text(game_id, data)
 		_verify_spins(game_id, data)
+		_verify_win_box(game_id, data)
 	_r.game_id = &""
 	_verify_gen1_tables()
 	_r.each_game_of(RomRegistry.GEN1, _gen1_game)
@@ -222,9 +218,55 @@ func _verify_text(game_id: StringName, data: GameData) -> void:
 	)
 
 
-## Whole spins on a pinned seed, every bet and both machines, against the
-## source's own arithmetic rather than a pinned outcome: the coins the bet took,
-## the payout the match is worth, and a match really lined up on a paid row.
+## The first win on the real strips: its box holds the table's coins and no marker,
+## and the page indents the first line and draws `▼`.
+func _verify_win_box(game_id: StringName, data: GameData) -> void:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	for seed_value: int in SPINS:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var screen := Gen2SlotMachineScreen.new()
+		tree.root.add_child(screen)
+		if not screen.open(data, 200, true, rng):
+			_r.fail("%s: the screen would not open." % game_id)
+			screen.free()
+			return
+		for _frame: int in SPIN_FRAME_CAP:
+			if screen.prompt() == Gen2SlotMachine.Prompt.PRESS:
+				break
+			if screen.prompt() in [Gen2SlotMachine.Prompt.BET, Gen2SlotMachine.Prompt.TEXT]:
+				screen.handle_button(PokeButton.A)
+			if screen.machine().jumptable_index() in [
+				Gen2SlotMachine.SLOTS_WAIT_REEL1, Gen2SlotMachine.SLOTS_WAIT_REEL2,
+				Gen2SlotMachine.SLOTS_WAIT_REEL3,
+			]:
+				screen.handle_button(PokeButton.A)
+			screen.advance_frame()
+		var won: bool = screen.text().begins_with("lined up!")
+		if won:
+			var payout: int = PAYOUTS[screen.machine().matched() / 4]
+			_r.check(screen.text().ends_with("Won %d coins!" % payout),
+				"%s: the win box reads %s." % [game_id, screen.text().c_escape()])
+			var shown: Dictionary = screen.overlay_state()
+			shown["blink"] = 0
+			var with_win: Image = screen.page().render(screen.machine(), shown)
+			var plain: Image = screen.page().render(screen.machine(), {"text": screen.text()})
+			_r.check(_cell(with_win, Vector2i(5, 14)) == _cell(plain, Vector2i(1, 14)),
+				"%s: the first line of the win box is not at column 5." % game_id)
+			_r.check(_cell(with_win, Vector2i(18, 17)) != _cell(plain, Vector2i(18, 17)),
+				"%s: the win box has no arrow." % game_id)
+		screen.free()
+		if won:
+			return
+	_r.fail("%s: no seed in the sweep paid." % game_id)
+
+
+static func _cell(image: Image, cell: Vector2i) -> PackedByteArray:
+	return image.get_region(Rect2i(cell * Gen2SlotMachinePage.TILE, Vector2i.ONE * Gen2SlotMachinePage.TILE)).get_data()
+
+
+## Whole spins on a pinned seed, every bet and both machines: the coins taken, the
+## payout, and a match really lined up on a paid row.
 func _verify_spins(game_id: StringName, data: GameData) -> void:
 	var spins: int = 0
 	var wins: int = 0
@@ -319,9 +361,7 @@ func _verify_window(
 		windows.append(window)
 	if matched == Gen2SlotMachine.SLOTS_NO_MATCH:
 		return true
-	## `Slots_CheckMatchedAllThreeReels`' own five rows, in the order the bet
-	## reaches them: the middle row for one coin, the outer two for two, and the
-	## diagonals for three.
+	## `Slots_CheckMatchedAllThreeReels`' rows by bet: the middle, then the outer two, then the diagonals.
 	var lines: Array[Array] = [[1, 1, 1]]
 	if bet >= 2:
 		lines.append([0, 0, 0])

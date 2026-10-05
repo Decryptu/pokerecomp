@@ -592,6 +592,8 @@ const ITEM_FROM_MEM: int = 0xFF
 const SPECIAL_PRINT_TODAYS_LUCKY_NUMBER: int = 85
 const SPECIAL_TRAINER_HOUSE: int = 103
 const SPECIAL_PHOTO_STUDIO: int = 104
+## `PhotoStudio`'s `farcall PrintPartymon`; negative, as it is no special of the table.
+const SPECIAL_PRINT_PARTYMON: int = -104
 const SPECIAL_DIPLOMA: int = 107
 const SPECIAL_PRINT_DIPLOMA: int = 108
 ## `_GiveOddEgg`. The special itself sits in the mobile bank, but nothing in it
@@ -1316,6 +1318,7 @@ const COMPLETION_HANDLERS: Dictionary = {
 	&"dratini_moveset_requested": &"_complete_plain_request",
 	&"diploma_requested": &"_complete_plain_request",
 	&"unown_printer_requested": &"_complete_plain_request",
+	&"party_print_requested": &"_complete_party_print",
 	## `TryQuickSave` answers TRUE for a save that was written and FALSE for
 	## one that was not, which is the branch both of its sites read.
 	&"quick_save_requested": &"_complete_plain_request",
@@ -4338,6 +4341,7 @@ const SPECIAL_HANDLERS: Dictionary = {
 	SPECIAL_POKE_SEER: &"_special_poke_seer",
 	SPECIAL_CHECK_MAGIKARP_LENGTH: &"_special_party_selection",
 	SPECIAL_PHOTO_STUDIO: &"_special_party_selection",
+	SPECIAL_PRINT_PARTYMON: &"_special_print_partymon",
 	SPECIAL_RETURN_SHUCKIE: &"_special_party_selection",
 	SPECIAL_GIVE_SHUCKLE: &"_special_give_shuckle",
 	SPECIAL_ASK_REMEMBER_PASSWORD: &"_special_ask_remember_password",
@@ -4438,9 +4442,15 @@ func _special_set_bits_for_time_capsule_request(_special: int) -> Dictionary:
 
 
 func _special_wait_for_linked_friend(special: int) -> Dictionary:
-	_script_value = _link_session().wait_for_linked_friend(_link_transport())
+	var session: Gen2LinkSession = _link_session()
+	var asked: bool = session.player_link_action != Gen2LinkSession.CABLECLUBROOM_NULL
+	_script_value = session.wait_for_linked_friend(_link_transport())
 	if _script_value == 0:
-		return {"ok": true}
+		return _stage_frame_wait(
+			Gen2LinkSession.WAIT_FOR_FRIEND_TIMEOUT_FRAMES
+				+ (Gen2LinkSession.WAIT_FOR_FRIEND_SETUP_FRAMES if asked else 0),
+			{"special": special, "kind": &"link_wait"}
+		)
 	return _stage_frame_wait(
 		Gen2LinkSession.WAIT_FOR_FRIEND_CONNECTED_FRAMES,
 		{"special": special, "kind": &"link_wait"}
@@ -5313,6 +5323,28 @@ func _special_diploma(special: int) -> Dictionary:
 	})
 
 
+var _photo_slot: int = -1
+
+
+func _special_print_partymon(special: int) -> Dictionary:
+	return _stage_runtime_request(&"party_print_requested", {
+		"special": special, "slot": _photo_slot,
+	})
+
+
+## `hPrinter` is set, so `PhotoStudio` takes `.cancel`.
+func _complete_party_print(
+	_kind: StringName, _asked: Dictionary, result: Dictionary
+) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		return _fail(StringName(result.get("reason", "party_print_failed")), result)
+	_pending = {}
+	var no_photo: String = _special_box("photo_studio", "no_photo")
+	if no_photo.is_empty():
+		return {"ok": false, "reason": &"missing_special_text", "special": SPECIAL_PHOTO_STUDIO}
+	return _stage_internal_text(no_photo, false, {"special": SPECIAL_PHOTO_STUDIO})
+
+
 ## A loop with its own windows, run whole by [Gen2WorldServiceScreen].
 func _special_buena_prize(special: int) -> Dictionary:
 	return _stage_runtime_request(&"buena_prize_requested", {"special": special})
@@ -5728,18 +5760,19 @@ func _check_time_capsule_compatibility() -> Dictionary:
 	_script_value = int(verdict["value"])
 	if _script_value == Gen2LinkSession.TIME_CAPSULE_OK:
 		return {"ok": true}
+	## The move goes in `wStringBuffer2`, the species name (never the nickname) in `wStringBuffer1`.
 	if _script_value == Gen2LinkSession.TIME_CAPSULE_MOVE_TOO_NEW and data != null:
 		_set_text_buffer(
-			Gen2Layout.STRING_BUFFER_1,
+			Gen2Layout.STRING_BUFFER_2,
 			String(data.move(int(verdict["move"])).get("name", "")),
 			&"time_capsule_move", {"move": int(verdict["move"])}
 		)
-	var names: Array = party.get("names", [])
-	var slot: int = int(verdict["slot"])
-	if slot >= 0 and slot < names.size():
+	var species: int = int(verdict["species"])
+	if int(verdict["slot"]) >= 0 and data != null:
 		_set_text_buffer(
-			Gen2Layout.STRING_BUFFER_3, String(names[slot]), &"time_capsule_mon",
-			{"slot": slot, "species": int(verdict["species"])}
+			Gen2Layout.STRING_BUFFER_1,
+			"EGG" if species == Gen2Layout.EGG_SPECIES else String(data.species(species).get("name", "")),
+			&"time_capsule_mon", {"slot": int(verdict["slot"]), "species": species}
 		)
 	return {"ok": true}
 
@@ -6411,10 +6444,10 @@ func _finish_deferred_party_selection(
 			## `PrintPartymon` is a Game Boy Printer transfer, and `hPrinter`
 			## reports an error for every attempt made without one attached, so
 			## `.cancel` is the branch this project can reach and the picture is
-			## never taken.
+			## never taken: the printer's screen holds until B, then `.cancel`'s box.
+			_photo_slot = int(result.get("party_index", -1))
 			return _stage_internal_text(photo_box, false, {
-				"special": special,
-				"next_internal_texts": [_special_box("photo_studio", "no_photo")],
+				"special": special, "special_after_text": SPECIAL_PRINT_PARTYMON,
 			})
 		&"magikarp_length":
 			if species != Gen2WorldPartyHost.SPECIES_MAGIKARP:

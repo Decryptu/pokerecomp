@@ -53,6 +53,14 @@ static func create(
 	return out
 
 
+## [method snapshot] of one Pokemon with no screen up: no `LowVolume`, cry or animation.
+static func snapshot_of(data: GameData, mon: Gen2SaveMon) -> Dictionary:
+	var out := Gen2MonStatsScreen.new()
+	out._data = data
+	out._mons = [mon]
+	return out.snapshot()
+
+
 ## `StatsScreen_PlaceFrontpic`, called once the screen is up and again by
 ## [method handle_button] on every UP or DOWN. Crystal's cry is `ANIM_MON_MENU`'s
 ## opening `PokeAnim_CryNoWait`, so a Pokemon `CheckFaintedFrzSlp` answers yes

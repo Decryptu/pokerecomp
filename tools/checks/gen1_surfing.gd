@@ -28,6 +28,7 @@ const HOLD_FROM: int = 400
 const WAVE_KINDS: Dictionary = {"choose": 1, "advance": 113, "reset": 9, "hold": 1}
 ## `UnknownPacket_72751`'s one box.
 const TITLE_PALETTE_CELLS: int = 72
+const GAME_OVER_FRAMES: int = 60
 const PAGES: Array[String] = ["diploma", "high_score", "portrait"]
 
 
@@ -46,6 +47,7 @@ func _run_one() -> void:
 	_check_tables(data)
 	_check_idle_run(data)
 	_check_held_run(data)
+	_check_game_over(data)
 	_check_printer_pages(data)
 
 
@@ -116,6 +118,36 @@ func _check_held_run(data: GameData) -> void:
 	_r.note("gen1 surfing held run %d frames, total $%04X, run from %d" % [
 		game.frame(), game.total_score(), int(firsts.get(Gen1SurfingMinigame.Routine.RUN, -1)),
 	])
+
+
+## Drained of HP, `Oh no..` bounces up from its baseline (`FlippingPika` keeps -|sine|)
+## and the game-over screen asks for tempo 117.
+func _check_game_over(data: GameData) -> void:
+	var game: Gen1SurfingMinigame = _new_game(data)
+	if game == null:
+		return
+	while game.routine() != Gen1SurfingMinigame.Routine.RUN and game.frame() < FRAME_CAP:
+		game.advance_frame()
+	game.set(&"_hp", 0)
+	var lowest: int = 0
+	var seen: int = 0
+	for _frame: int in GAME_OVER_FRAMES:
+		game.advance_frame()
+		var objects: Gen1AnimatedObjects = game.get(&"_objects")
+		for index: int in Gen1AnimatedObjects.OBJECTS:
+			var struct: PackedByteArray = objects.object(index)
+			if struct[Gen1AnimatedObjects.STRUCT_LIVE] == 0 \
+					or struct[Gen1AnimatedObjects.STRUCT_CALLBACK] != Gen1SurfingMinigame.CALLBACK_FLIPPING:
+				continue
+			seen += 1
+			lowest = maxi(lowest, (struct[Gen1AnimatedObjects.STRUCT_Y]
+				+ struct[Gen1AnimatedObjects.STRUCT_YOFF]) & 0xFF)
+	_r.check(game.routine() == Gen1SurfingMinigame.Routine.GAME_OVER and seen > 0,
+		"a drained run never showed Oh no.. (routine %d)." % game.routine())
+	_r.check(lowest <= Gen1SurfingMinigame.OH_NO_Y,
+		"Oh no.. sank to line %d, below its baseline." % lowest)
+	_r.check(game.tempo_request == Gen1SurfingMinigame.TEMPO_DEFAULT,
+		"the game-over screen asks for tempo %d." % game.tempo_request)
 
 
 ## A pressed while a state waits on it, RIGHT held from [param hold_from].

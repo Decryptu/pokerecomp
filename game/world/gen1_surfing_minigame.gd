@@ -955,9 +955,8 @@ func _move_clouds() -> void:
 
 
 ## `UpdateMusicTempo`: the live driver answers its note gate, so the tempo rides
-## [member tempo_request].
+## [member tempo_request], which a disabled game leaves for `ResetMusicTempo`.
 func _update_music_tempo() -> void:
-	tempo_request = -1
 	if not _tempo_enabled:
 		return
 	var tempos: Array = _tables.get("tempos", [])
@@ -1000,7 +999,7 @@ func _flipping_callback(struct: PackedByteArray) -> void:
 	var angle: int = struct[Gen1AnimatedObjects.STRUCT_VAR2]
 	struct[Gen1AnimatedObjects.STRUCT_VAR2] = (angle + 1) & 0xFF
 	var offset: int = _sine(angle, amplitude) & 0xFF
-	if offset >= 0x80:
+	if offset < 0x80:
 		offset = (-offset) & 0xFF
 	struct[Gen1AnimatedObjects.STRUCT_YOFF] = offset
 

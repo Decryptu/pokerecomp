@@ -133,7 +133,6 @@ func has_battle_extra() -> bool:
 
 
 ## Draws one character code at a tile position, in pixels from the top left.
-##
 ## [param font] says which strip is loaded. Under
 ## [constant Gen2Text.FONT_BATTLE_EXTRA] a code in $60 to $78 comes off the
 ## battle-extra sheet; everything else comes off the main font either way,
@@ -175,6 +174,7 @@ func draw_text(
 	text: String, into: PackedByteArray, into_width: int, at_x: int, at_y: int,
 	font: StringName = Gen2Text.FONT_MAIN, max_tiles: int = -1
 ) -> int:
+	Gen2TextLayout.refuse_unfilled(text)
 	var codes: PackedByteArray = fit(text, max_tiles, font, _generation)
 	for i: int in codes.size():
 		draw_code(codes[i], into, into_width, at_x + i * TILE, at_y, font)
@@ -296,7 +296,6 @@ func draw_border(
 ## Copies one tile out of a strip, clipped to the destination. Clipping rather
 ## than refusing, because a text box that runs off the edge of the screen should
 ## look wrong at the edge and be right everywhere else.
-##
 ## Public because every sheet in this project is a strip and they all draw from
 ## one the same way; [Gen2BattleTiles] is the other caller.
 static func blit_slot(

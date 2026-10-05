@@ -2,12 +2,9 @@ extends RefCounted
 
 var _r: RefCounted = null
 
-## Sweeps Mystery Gift against freshly imported real caches on all three
-## cartridges: both gift tables end to end, every box `DoMysteryGift` can end on,
-## the screen each cartridge draws, and the whole decision chain between the
-## exchange and the gift. The class this stops is a chain answering the wrong box:
-## every refusal in `DoMysteryGift` is one `jp` from the next and a happy-path test
-## never sees the other seven, so the chain is driven once per outcome.
+## Sweeps Mystery Gift on real caches: both gift tables, every box `DoMysteryGift` can
+## end on, each cartridge's screen and the decision chain, driven once per outcome so
+## a chain answering the wrong box fails.
 
 ## `MysteryGiftItems` and `MysteryGiftDecos`. The first and last row of each is
 ## what tells a table read forwards from one read backwards, and the pair of
@@ -17,9 +14,7 @@ const LAST_ITEM: int = 0xBD
 const FIRST_DECO: int = 0x16
 const LAST_DECO: int = 0x27
 
-## Crystal's `_CGB_MysteryGift` copies two palettes and Gold and Silver's copies
-## one, which is the one thing about the screen that is not the same on all
-## three.
+## Crystal's `_CGB_MysteryGift` copies two palettes, Gold and Silver's one.
 const PALETTES: Dictionary = {&"crystal": 2, &"gold": 1, &"silver": 1}
 
 ## `.String_PressAToLink_BToCancel`'s own four lines.
@@ -52,14 +47,13 @@ func run(r: RefCounted) -> void:
 		screens[game_id] = _verify_screen(game_id, data)
 		_verify_chain(game_id, data)
 		_verify_live_screen(game_id, data)
+		_verify_empty_window(game_id, data)
 	_r.game_id = &""
 	_verify_screens_agree(screens)
 
 
-## Both tables are their own length, open and close on their own rows, and
-## every row of `MysteryGiftDecos` names a decoration that is not a trophy: the
-## two trophy dolls sit past `NUM_NON_TROPHY_DECOS` and the received-decoration
-## flag array has no room for one.
+## Both tables have their own length and ends, and no deco row is a trophy
+## (`NUM_NON_TROPHY_DECOS`: the received-decoration flags have no room for one).
 func _verify_tables(game_id: StringName, data: GameData) -> void:
 	for decorations: bool in [false, true]:
 		var table: Array = data.mystery_gift_table(decorations)
@@ -102,9 +96,7 @@ func _verify_tables(game_id: StringName, data: GameData) -> void:
 		)
 
 
-## All eight `text_far` stubs decode, and each says what only it says. A run
-## pinned one stub out would still decode eight boxes, so the content is what
-## the check is on.
+## All eight `text_far` stubs decode, each saying what only it says.
 func _verify_boxes(game_id: StringName, data: GameData) -> void:
 	var contains: Dictionary = {
 		Gen2MysteryGift.OUTCOME_CANCELED: "cancelled",
@@ -173,9 +165,7 @@ func _verify_screen(game_id: StringName, data: GameData) -> PackedByteArray:
 		highest < tiles,
 		"%s: the screen indexes tile %d of %d." % [game_id, highest, tiles]
 	)
-	## Every cell of the attrmap names a palette the layout copied, which is
-	## what says Crystal's second one is reached and Gold's single one is not
-	## overrun.
+	## Every attrmap cell names a palette the layout copied.
 	var banks: int = int(PALETTES[game_id])
 	var worst: int = 0
 	for attribute: int in page.attributes():
@@ -194,9 +184,7 @@ func _verify_screen(game_id: StringName, data: GameData) -> PackedByteArray:
 	return image.get_data()
 
 
-## `DoMysteryGift` from the exchange down, once per box it can end on. Each case
-## is the same partner with exactly one thing changed, so a chain that tests in
-## the wrong order answers the wrong box and fails here.
+## `DoMysteryGift` from the exchange down, once per box: the same partner with one thing changed.
 func _verify_chain(game_id: StringName, data: GameData) -> void:
 	var tables: Dictionary = {
 		"items": data.mystery_gift_table(false),
@@ -213,9 +201,7 @@ func _verify_chain(game_id: StringName, data: GameData) -> void:
 		## A gift already waiting at the counter, and then the partner's own.
 		[Gen2MysteryGift.OUTCOME_RETRIEVE, {"backup_item": 1}, {}],
 		[Gen2MysteryGift.OUTCOME_FRIEND_NOT_READY, {}, {"backup_item": 1}],
-		## A decoration nobody has received yet goes home; the same decoration a
-		## second time falls through to the item, which is the one branch in the
-		## chain that does not end where it started.
+		## A new decoration goes home; the same one again falls through to the item.
 		[Gen2MysteryGift.OUTCOME_SENT_HOME, {}, {"sent_deco": 1}],
 		[Gen2MysteryGift.OUTCOME_SENT,
 			{"decorations_received": [int(tables["decos"][0])]}, {"sent_deco": 1}],
@@ -252,9 +238,7 @@ func _verify_chain(game_id: StringName, data: GameData) -> void:
 	)
 
 
-## The art differs between Crystal and the other two on purpose, and Gold and
-## Silver's is the same run at the same address, so their two screens are one
-## picture. A difference there would be a wrong pin on one of them.
+## Crystal's art differs on purpose; Gold's and Silver's are one run at one address.
 func _verify_screens_agree(screens: Dictionary) -> void:
 	if screens.size() < 3:
 		return
@@ -269,10 +253,29 @@ func _verify_screens_agree(screens: Dictionary) -> void:
 	)
 
 
-## The live path, which an offline chain cannot reach: the screen is built,
-## displayed, and driven with the two buttons the routine has. What it settles
-## is that the section the screen edits is the save's, so a gift received here
-## is in the file the counter reads and not in a copy of it.
+## Nobody in the window: `.restart` is the prompt again, and B ends it with `.LinkCanceled`.
+func _verify_empty_window(game_id: StringName, data: GameData) -> void:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var save := Gen2SaveData.new()
+	save.player_name = "GOLD"
+	var host := Gen2MysteryGiftScreen.new()
+	host.set_context(data, save, Gen2MysteryGiftTransport.new(), 30, 0, RandomNumberGenerator.new())
+	tree.root.add_child(host)
+	host.set_process(false)
+	host.handle_button(PokeButton.A)
+	host.settle()
+	_r.check(host.step() == Gen2MysteryGiftScreen.STEP.PROMPT,
+		"%s: an empty window left the prompt on step %d." % [game_id, host.step()])
+	host.handle_button(PokeButton.B)
+	_r.check(host.step() == Gen2MysteryGiftScreen.STEP.MESSAGE
+		and StringName(host.result().get("outcome", &"")) == Gen2MysteryGift.OUTCOME_CANCELED
+		and host.visible_text().contains("cancel"),
+		"%s: B at the prompt did not print the cancelled box (%s)." % [game_id, host.visible_text()])
+	host.queue_free()
+
+
+## The live screen, driven with the routine's two buttons: the section it edits is
+## the save's, so a gift received is in the file the counter reads.
 func _verify_live_screen(game_id: StringName, data: GameData) -> void:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:

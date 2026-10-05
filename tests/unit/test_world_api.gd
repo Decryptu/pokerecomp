@@ -10541,6 +10541,30 @@ func test_a_cancelled_party_list_prints_the_two_boxes_that_have_one() -> void:
 			assert_eq(results[0]["event"]["text"], String(row[1 if chosen < 0 else 2]))
 
 
+## `PhotoStudio` calls `PrintPartymon` between "Hold still" and `.cancel`'s box:
+## the printer's own screen stands there until B, and the box follows it.
+func test_the_photo_studio_stands_on_the_printer_between_its_two_boxes() -> void:
+	_write_special_script([
+		Gen2WorldScript.SPECIAL, Gen2WorldScriptRunner.SPECIAL_PHOTO_STUDIO, 0,
+		Gen2WorldScript.END,
+	])
+	var world: Gen2WorldAPI = _special_world()
+	_run_special(world)
+	while world.pending_runtime_request().is_empty():
+		_run_script(world, world.run_event_queue(true))
+	var results: Array = _run_script(world, world.complete_runtime_request({
+		"ok": true, "party_index": 0, "species": 1, "nickname": "KARP",
+		"original_trainer": "RED", "ot_id": 0, "level": 10,
+	}))
+	assert_eq(results[0]["event"]["text"], "Hold still.")
+	_run_script(world, world.run_event_queue(true))
+	var request: Dictionary = world.pending_runtime_request()
+	assert_eq(request.get("kind"), &"party_print_requested")
+	assert_eq(request["values"]["slot"], 0)
+	results = _run_script(world, world.complete_runtime_request({"ok": true}))
+	assert_eq(results[0]["event"]["text"], "No picture?")
+
+
 ## A Generation 1 cache: three maps whose collision grid holds the tile each cell
 ## draws, which is what `CheckTilePassable` reads. Map 0 is a town with a door
 ## tile and a ledge, map 1 the house behind it, whose mat warps back through

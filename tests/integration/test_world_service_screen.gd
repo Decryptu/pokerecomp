@@ -78,6 +78,17 @@ func _quit_mart(host: Gen2WorldServiceScreen) -> void:
 ## `InterpretTwoOptionMenu`'s `DelayFrames` behind an answered YES/NO. The host
 ## spends a menu's hold on its own frame and a save question's on the save
 ## prompt's, so both are turned and only the one that is holding moves.
+## `PokeGear.done`'s `WaitSFX` stands between a card's exit and the map, and the
+## world counts hardware frames off wall-clock time in `_process`: one awaited
+## frame spends however many that delta holds. Spend them by hand until the
+## host has gone, the terminal state.
+func _spend_until_the_service_closes(host: Gen2WorldServiceScreen) -> void:
+	for _frame: int in Gen2AudioPlayer.WAIT_CAP_FRAMES + 1:
+		if _world_screen._service_host == null:
+			return
+		host.advance_frame()
+
+
 func _spend_answer_hold(host: Gen2WorldServiceScreen) -> void:
 	for _frame: int in Gen2WorldMenu.ANSWER_HOLD_FRAMES:
 		host.advance_frame()
@@ -201,7 +212,12 @@ func test_try_quick_save_asks_before_it_writes_and_answers_the_script() -> void:
 	host.advance_save_frames(Gen2SavePrompt.SAVING_FRAMES + Gen2SavePrompt.WRITE_FRAMES)
 	_read_save(host)
 	host.advance_save_frames(Gen2SavePrompt.DONE_FRAMES)
-	await get_tree().process_frame
+	## `ld c, 30 / call DelayFrames` stands between the answer and the script.
+	assert_not_null(_world_screen._service_host, "the thirty frames stand behind the write")
+	for _frame: int in Gen2WorldServiceScreen.QUICK_SAVE_FRAMES:
+		if _world_screen._service_host == null:
+			break
+		host.advance_frame()
 	assert_null(_world_screen._service_host)
 	assert_not_null(_world_screen._injected_save.world, "the write landed")
 
@@ -1106,7 +1122,7 @@ func test_phone_list_shows_registered_numbers_and_can_close() -> void:
 	assert_eq(host._pokegear.selected_contact(), 0)
 	## B on a card is that card's own `.quit`, which leaves the Pokegear.
 	assert_true(host.handle_button(PokeButton.B))
-	await get_tree().process_frame
+	_spend_until_the_service_closes(host)
 	assert_null(_world_screen._service_host)
 
 
@@ -1249,9 +1265,12 @@ func test_pokegear_clock_card_renders_source_time_and_returns_to_cards() -> void
 	var map: PackedInt32Array = host._pokegear._tilemap()
 	assert_eq(_row_text(map, Gen2TownMapPage.CLOCK_DAY_AT, 9), "WEDNESDAY")
 	assert_eq(_row_text(map, Gen2TownMapPage.CLOCK_TIME_AT, 8), "12:07 AM")
-	## Any button quits the clock card, and `.quit` leaves the Pokegear.
+	## Any button quits the clock card, and `.quit` leaves the Pokegear once
+	## `WaitSFX` ends. The wait is the sound's, so the frames are spent by hand:
+	## the screen's own `_process` counts wall-clock time, and one frame awaited
+	## spends however many hardware frames that delta holds.
 	assert_true(host.handle_button(PokeButton.A))
-	await get_tree().process_frame
+	_spend_until_the_service_closes(host)
 	assert_null(_world_screen._service_host)
 
 
@@ -1402,7 +1421,7 @@ func test_the_map_card_stays_when_nothing_is_owned_past_it() -> void:
 	assert_eq(host._mode, Gen2WorldServiceScreen.MODE.TOWN_MAP)
 	assert_not_null(host._town_map)
 	assert_true(host.handle_button(PokeButton.B))
-	await get_tree().process_frame
+	_spend_until_the_service_closes(host)
 	assert_null(_world_screen._service_host)
 
 

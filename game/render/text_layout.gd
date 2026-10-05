@@ -89,7 +89,7 @@ static func lay_out_pages(
 	var out: Array = []
 	if rows <= 0 or columns <= 0:
 		return out
-	_refuse_unfilled(text)
+	refuse_unfilled(text)
 	var split: Dictionary = Gen2TextStream.split_sounds(text)
 	text = String(split["text"])
 	var beats: Array = split["beats"]
@@ -175,8 +175,8 @@ static func _beats_in(
 	return out
 
 
-## Every screen lays text out here, so a host's unfilled marker fails its checks.
-static func _refuse_unfilled(text: String) -> void:
+## Every screen's text passes here or [method Gen2Font.draw_text]: an unfilled marker fails.
+static func refuse_unfilled(text: String) -> void:
 	var marker: String = unfilled_marker(text)
 	if not marker.is_empty():
 		push_error("Gen2TextLayout: %s reached the screen unfilled: %s" % [marker, text.c_escape()])

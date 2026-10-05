@@ -167,3 +167,56 @@ func test_the_world_moves_again_once_the_machine_closes() -> void:
 	assert_null(_host(), "cancelling the bet must close the machine")
 	Fixture.settle_menu_fade(_world_screen)
 	assert_true(_world_screen.move_player(Vector2i.RIGHT))
+
+
+## A screen driven through real presses to the `SlotsAction_RestartOrQuit` wait
+## behind a win, or null if no seed in the sweep pays.
+func _spin_to_a_win() -> Gen2SlotMachineScreen:
+	for seed_value: int in 64:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed_value
+		var screen := Gen2SlotMachineScreen.new()
+		add_child_autofree(screen)
+		if not screen.open(_data, COINS, true, rng):
+			return null
+		for _frame: int in 2400:
+			match screen.prompt():
+				Gen2SlotMachine.Prompt.BET, Gen2SlotMachine.Prompt.TEXT:
+					screen.handle_button(PokeButton.A)
+			if screen.machine().jumptable_index() in [
+				Gen2SlotMachine.SLOTS_WAIT_REEL1, Gen2SlotMachine.SLOTS_WAIT_REEL2,
+				Gen2SlotMachine.SLOTS_WAIT_REEL3,
+			]:
+				screen.handle_button(PokeButton.A)
+			screen.advance_frame()
+			if screen.prompt() == Gen2SlotMachine.Prompt.PRESS:
+				break
+		if screen.text().begins_with("lined up!"):
+			return screen
+		screen.queue_free()
+	return null
+
+
+## `.Text_PrintPayout`: `_SlotsLinedUpText` reads its coins from the string the
+## payout table copied into `wStringBuffer2`, the first line starts four tiles in
+## beside the symbol, and `▼` stands at 18, 17 for `WaitPressAorB_BlinkCursor`.
+func test_the_win_box_prints_the_payout_with_its_indent_and_arrow() -> void:
+	var screen: Gen2SlotMachineScreen = _spin_to_a_win()
+	assert_not_null(screen, "some seed in the sweep must line three up")
+	if screen == null:
+		return
+	var machine: Gen2SlotMachine = screen.machine()
+	var payout: int = Gen2SlotMachine.PAYOUTS[machine.matched() / 4]
+	assert_false(screen.text().contains("<RAM_"), "the box names no buffer: %s" % screen.text())
+	assert_true(screen.text().ends_with("Won %d coins!" % payout), screen.text())
+	var page: Gen2SlotMachinePage = screen.page()
+	var shown: Dictionary = screen.overlay_state()
+	shown["blink"] = 0
+	var with_win: Image = page.render(machine, shown)
+	var plain: Image = page.render(machine, {"text": screen.text()})
+	var tile: Callable = func(image: Image, cell: Vector2i) -> PackedByteArray:
+		return image.get_region(Rect2i(cell * Gen2SlotMachinePage.TILE, Vector2i.ONE * Gen2SlotMachinePage.TILE)).get_data()
+	assert_eq(tile.call(with_win, Vector2i(5, 14)), tile.call(plain, Vector2i(1, 14)),
+		"the first line begins at column 5, past the symbol")
+	assert_ne(tile.call(with_win, Vector2i(18, 17)), tile.call(plain, Vector2i(18, 17)),
+		"the corner arrow is drawn")

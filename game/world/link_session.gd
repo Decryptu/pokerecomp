@@ -54,6 +54,10 @@ const MAX_LINK_RECORD: int = 9999
 ## None of them is free, and a receptionist that answers instantly is the same
 ## class of defect the missing fades were.
 const WAIT_FOR_FRIEND_CONNECTED_FRAMES: int = 50
+## `WaitForLinkedFriend` with nobody there: 3 `DelayFrame`s when a room is asked for,
+## then `wLinkTimeoutFrames`' `$02ff` passes.
+const WAIT_FOR_FRIEND_SETUP_FRAMES: int = 3
+const WAIT_FOR_FRIEND_TIMEOUT_FRAMES: int = 510
 const ENTER_TIME_CAPSULE_FRAMES: int = 50
 const WAIT_FOR_OTHER_PLAYER_FRAMES: int = 12
 const CLOSE_LINK_FRAMES: int = 6
@@ -195,7 +199,7 @@ func which_chris(transport: Gen2LinkTransport) -> int:
 ## moves; the slot named is the one the test stopped on. [param party] is
 ## [method Gen2WorldAPI.set_party_summary]'s mirror.
 static func time_capsule_compatibility(party: Dictionary) -> Dictionary:
-	var species: Array = party.get("species", [])
+	var species: Array = _listed_species(party)
 	var held_items: Array = party.get("held_items", [])
 	var moves: Array = party.get("moves", [])
 	for slot: int in species.size():
@@ -214,6 +218,16 @@ static func time_capsule_compatibility(party: Dictionary) -> Dictionary:
 					int(move)
 				)
 	return _incompatible(TIME_CAPSULE_OK, -1, 0, 0)
+
+
+## `wPartySpecies`: EGG's `$FD` in an egg's slot, which is too new whatever hatches.
+static func _listed_species(party: Dictionary) -> Array:
+	var species: Array = (party.get("species", []) as Array).duplicate()
+	var eggs: Array = party.get("eggs", [])
+	for slot: int in mini(species.size(), eggs.size()):
+		if bool(eggs[slot]):
+			species[slot] = Gen2Layout.EGG_SPECIES
+	return species
 
 
 static func _species_at(species: Array, slot: int) -> int:
