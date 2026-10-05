@@ -1,12 +1,10 @@
 class_name Gen2TextBox
 extends TextureRect
 
-## A bordered text window at the games' own measurements: six frame tiles as
-## box-drawing characters, text one tile in on every second row, since a line
-## is eight pixels tall in a box whose rows are sixteen apart. It composes into
-## one index buffer, so a glyph and a Pokemon are lit by the same code.
-## [method advance] and [method finish] are plain methods as well as key
-## handlers, so a screen can be photographed mid-sentence.
+## A bordered text window at the games' own measurements: six frame tiles, text one tile in
+## on every second row, since a line is eight pixels tall in a box whose rows are sixteen apart.
+## It composes into one index buffer, so a glyph and a Pokemon are lit by the same code.
+## [method advance] and [method finish] are plain methods, so a screen can be photographed mid-sentence.
 
 ## Emitted when the last page has been shown and advanced past.
 signal finished
@@ -28,11 +26,9 @@ const TEXT_LEFT: int = 1
 const TEXT_TOP: int = 2
 const LINE_SPACING: int = 2
 
-## `LoadBlinkingCursor` writes '▼' at screen tile (18, 17) and
-## `UnloadBlinkingCursor` puts the '─' of the border back. The box's own top
-## row is 12, so that is column 18 of its bottom row, and the arrow is what
-## every wait for a button looks like: `Paragraph`, `_ContText` and
-## `PromptText` all load it before `PromptButton` and unload it after.
+## `LoadBlinkingCursor` writes '▼' at screen tile (18, 17), column 18 of the box's bottom row, and
+## `UnloadBlinkingCursor` puts the border's '─' back: `Paragraph`, `_ContText` and `PromptText`
+## all load it before `PromptButton` and unload it after.
 const CURSOR_CODE: int = 0xEE
 const CURSOR_COLUMN: int = 18
 ## `PromptButton.blink_cursor` reads `hVBlankCounter` and `and 1 << 4`, so the
@@ -126,7 +122,9 @@ var _scroll_elapsed: float = 0.0
 var _scroll_page: int = -1
 ## The clock an undriven box reveals on; see [method _process].
 var _frame_clock := Gen2WorldAnimation.FrameClock.new()
-var _sounds: Array = []
+## The page's sound and pause tokens not yet reached, and the frames of a pause left.
+var _beats: Array = []
+var _pause_frames: int = 0
 var _sound_hold: bool = false
 var _sound_watch: Dictionary = {}
 ## `WaitSFX`'s test, for a caller that owns the audio.
@@ -163,10 +161,8 @@ func _ready() -> void:
 	set_process(false)
 
 
-## One hardware frame of the reveal, for a caller spending frames by hand rather
-## than by real time: the overworld's own pump while an overlay is up, a check, a
-## screenshot driver, a replay. `PrintLetterDelay` is a frame count on the
-## cartridge, so this is the same clock [method _process] converts real time into.
+## One hardware frame of the reveal, for a caller spending frames by hand: an overlay's pump,
+## a check, a screenshot driver, a replay. It is the clock [method _process] converts real time into.
 func advance_frame() -> void:
 	_advance()
 
@@ -185,14 +181,17 @@ func _advance() -> void:
 	if _paragraph_frames > 0:
 		_paragraph_frames -= 1
 		return
-	if not _run_sounds():
+	if _pause_frames > 0:
+		_pause_frames -= 1
+		return
+	if not _run_beats():
 		return
 	if _shown < float(_tiles_on_page):
-		var reach: float = float(_tiles_on_page) if _sounds.is_empty() \
-			else float(int(_sounds[0]["at"]))
+		var reach: float = float(_tiles_on_page) if _beats.is_empty() \
+			else float(int(_beats[0]["at"]))
 		_shown = minf(_shown + FRAME_SECONDS * _reveal_rate(), reach)
 		_redraw()
-		_run_sounds()
+		_run_beats()
 		return
 	if _pages.is_empty():
 		set_process(false)
@@ -209,38 +208,34 @@ func _advance() -> void:
 		_redraw()
 
 
-## False while a reached sound holds the text.
-func _run_sounds() -> bool:
+## False while a reached sound or pause holds the text.
+func _run_beats() -> bool:
 	while true:
 		if _sound_hold and bool(sound_busy.call(_sound_watch)):
 			return false
 		_sound_hold = false
-		if not _sound_reached():
+		if _beats.is_empty() or float(int(_beats[0]["at"])) > _shown:
 			return true
-		_play_sound(_sounds.pop_front())
+		var beat: Dictionary = _beats.pop_front()
+		if not bool(beat.get("pause", false)):
+			sound_requested.emit(beat)
+			_sound_hold = bool(beat.get("wait", true))
+			_sound_watch = {}
+		elif not (accelerated or PokeButton.text_accelerating()):
+			## `TextCommand_PAUSE` reads the pad once, and a held A or B skips the wait.
+			_pause_frames = Gen2TextStream.PAUSE_FRAMES
+			return false
 	return true
-
-
-func _sound_reached() -> bool:
-	return not _sounds.is_empty() and float(int(_sounds[0]["at"])) <= _shown
-
-
-func _play_sound(sound: Dictionary) -> void:
-	sound_requested.emit(sound)
-	_sound_hold = bool(sound.get("wait", true))
-	_sound_watch = {}
 
 
 func place_at_bottom() -> void:
 	position = Vector2(0, STANDARD_TOP * TILE)
 
 
-## Lays [param text] out and starts revealing its first page. [param blink_cursor]
-## is whether the *last* page loads the arrow, which is not whether it waits:
-## `WaitPressAorB_BlinkCursor` needs the cursor shown before it is called. A page
-## with another behind it always blinks; the last blinks only if the text ends in
-## `prompt`. So no arrow is drawn for a text ending in `done` (`SendOutMonText`
-## runs on) or a caller that waits with `JoyWaitAorB` (every page of `ProfOaksPCBoot`).
+## Lays [param text] out and starts revealing its first page. [param blink_cursor] is whether the
+## *last* page loads the arrow, which is not whether it waits: a page with another behind it always
+## blinks, the last only if the text ends in `prompt`. No arrow is drawn for a text ending in `done`
+## (`SendOutMonText` runs on) or a caller that waits with `JoyWaitAorB` (`ProfOaksPCBoot`).
 func show_text(text: String, blink_cursor: bool = true) -> void:
 	_pages = Gen2TextLayout.lay_out_pages(
 		text, text_columns(), text_rows(),
@@ -264,13 +259,11 @@ func set_blink_cursor(blink: bool) -> void:
 	_redraw()
 
 
-## How many hardware frames the box still owes before it reaches its `PromptButton`:
-## the rest of the page, or the rest of a `TextScroll`. Zero while it is waiting on a
-## press. Public so a caller settling a screen by frames settles the text with it: a
-## screen that owns the frame has no other way to know a printing text is not
-## finished, and a press cannot shorten it.
+## How many hardware frames the box still owes before it reaches its `PromptButton`: the rest of
+## the page, a scroll or a pause. Zero while it waits on a press. Public so a caller settling a
+## screen by frames settles the text with it; a press cannot shorten it.
 func frames_left() -> int:
-	return _paragraph_frames + _printing_frames_left()
+	return _paragraph_frames + _pause_frames + _printing_frames_left()
 
 
 func _printing_frames_left() -> int:
@@ -300,7 +293,7 @@ func _reveal_rate() -> float:
 ## has reached its `PromptButton` yet.
 func is_revealing() -> bool:
 	return _scroll_page >= 0 or _paragraph_frames > 0 or _shown < float(_tiles_on_page) \
-		or _sound_hold or not _sounds.is_empty()
+		or _sound_hold or _pause_frames > 0 or not _beats.is_empty()
 
 
 func has_text_left() -> bool:
@@ -332,8 +325,9 @@ func finish() -> void:
 	if _scroll_page >= 0:
 		_end_scroll()
 	_paragraph_frames = 0
+	_pause_frames = 0
 	_shown = float(_tiles_on_page)
-	_sounds = []
+	_beats = []
 	_sound_hold = false
 	set_process(false)
 	_redraw()
@@ -408,7 +402,7 @@ func _begin_scroll(next_page: int) -> void:
 	_scroll_elapsed = 0.0
 	_scroll_page = next_page
 	_lines = []
-	_sounds = []
+	_beats = []
 	_tiles_on_page = 0
 	_shown = 0.0
 	set_process(not driven)
@@ -472,15 +466,16 @@ func _start_page() -> void:
 
 	_shown = float(already)
 	_blink = 0.0
-	_sounds = (_pages[_page].get("sounds", []) as Array).duplicate(true) \
+	_beats = (_pages[_page].get("beats", []) as Array).duplicate(true) \
 		if _page < _pages.size() else []
 	_sound_hold = false
+	_pause_frames = 0
 	_paragraph_frames = PARAGRAPH_FRAMES if _page > 0 and _enter_of(_page) == &"page" else 0
-	set_process((_tiles_on_page > 0 or _paragraph_frames > 0 or not _sounds.is_empty()) and not driven)
+	set_process((_tiles_on_page > 0 or _paragraph_frames > 0 or not _beats.is_empty()) and not driven)
 	if reveal_speed <= 0.0 or instant:
 		_shown = float(_tiles_on_page)
 	if _paragraph_frames == 0:
-		_run_sounds()
+		_run_beats()
 	_redraw()
 
 

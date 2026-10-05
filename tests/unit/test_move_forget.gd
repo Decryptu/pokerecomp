@@ -151,10 +151,14 @@ func test_prompts_name_the_pokemon_and_both_moves() -> void:
 		Gen2MoveForget.did_not_learn_text("GEODUDE", "STRENGTH"),
 		"GEODUDE\ndid not learn%sSTRENGTH." % cont
 	)
-	assert_eq(
-		Gen2MoveForget.forgot_text("GEODUDE", "TACKLE"),
-		"1, 2 and… Poof!%sGEODUDE forgot\nTACKLE.%sAnd…" % [para, para]
-	)
+	var forgot: Dictionary = Gen2TextStream.split_sounds(Gen2MoveForget.forgot_text("GEODUDE", "TACKLE"))
+	assert_eq(forgot["text"], "1, 2 and… Poof!%sGEODUDE forgot\nTACKLE.%sAnd…" % [para, para])
+	## `Text_MoveForgetCount` and `_MoveForgotText` each end on a `text_pause`, and the
+	## `text_asm` between them plays `SFX_SWITCH_POKEMON` without waiting for it.
+	assert_eq(forgot["beats"].map(func(beat: Dictionary) -> bool: return beat.has("pause")), [true, false, true])
+	assert_eq(forgot["sounds"], [{
+		"at": "1, 2 and…".length(), "id": Gen2Sfx.SFX_SWITCH_POKEMON, "cry": false, "wait": false,
+	}])
 	var learned: Dictionary = Gen2TextStream.split_sounds(
 		Gen2MoveForget.learned_text("GEODUDE", "STRENGTH")
 	)

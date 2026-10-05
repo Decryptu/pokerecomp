@@ -6418,7 +6418,6 @@ const EVENT_STATE_HANDLERS: Dictionary = {
 	## `FaintYourPokemon` and `FaintEnemyPokemon` sink the picture before
 	## either prints, so the line waits on the animation.
 	Gen2Battle.FAINTED: &"_begin_faint_event",
-	Gen2Battle.MOVE_FORGOTTEN: &"_play_move_forgotten",
 	Gen2Battle.SUBSTITUTE_PIC: &"_set_substitute_pic_event",
 	Gen2Battle.MINIMIZED: &"_set_minimize_pic_event",
 	Gen2Battle.SENT_OUT: &"_apply_sent_out",
@@ -6485,11 +6484,6 @@ func _apply_hud_drawn(event: Dictionary) -> void:
 
 func _begin_faint_event(event: Dictionary) -> void:
 	_begin_faint(int(event["side"]))
-
-
-func _play_move_forgotten(_event: Dictionary) -> void:
-	if _generation() != RomRegistry.GEN1:
-		_play_sfx(Gen2Sfx.SFX_SWITCH_POKEMON)
 
 
 func _set_substitute_pic_event(event: Dictionary) -> void:
@@ -6723,7 +6717,7 @@ const GEN1_LINES: Dictionary = {
 	Gen2Battle.STATUS_DIDNT_AFFECT: ["It didn't affect\n%s!", &"name:target"],
 	Gen2Battle.UNAFFECTED: ["%s\nis unaffected!", &"name:target"],
 	Gen2Battle.MIST_SET: ["%s's\nshrouded in mist!", &"name:side"],
-	Gen2Battle.FOCUS_ENERGY_SET: ["%s's\ngetting pumped!", &"name:side"],
+	Gen2Battle.FOCUS_ENERGY_SET: [Gen2TextStream.PAUSE_MARK + "%s's\ngetting pumped!", &"name:side"],
 	Gen2Battle.COINS_SCATTERED: ["Coins scattered\neverywhere!"],
 	Gen2Battle.TRANSFORMED: ["%s\ntransformed into" + SCROLL + "%s!", &"name:side", &"name:target"],
 	Gen2Battle.FLED_FROM_BATTLE: ["%s\nran from battle!", &"name:side"],
@@ -7159,7 +7153,8 @@ func _stat_changed_text(event: Dictionary) -> String:
 	var who: String = _battler_name(int(event["target"]))
 	var stat_name: String = STAT_NAMES.get(event["stat"], String(event["stat"]).to_upper())
 	var by: int = int(event["by"])
-	var scroll: String = Gen2TextStream.SCROLL_NOWAIT_BREAK
+	## `GreatlyRoseText` and `_BattleStatWentWayUpText` open on a `text_pause` and a `<SCROLL>`.
+	var scroll: String = Gen2TextStream.PAUSE_MARK + Gen2TextStream.SCROLL_NOWAIT_BREAK
 	if _generation() == RomRegistry.GEN1:
 		stat_name = GEN1_STAT_NAMES.get(event["stat"], stat_name)
 		var verb: String = " rose!" if by > 0 else " fell!"

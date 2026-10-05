@@ -2519,24 +2519,6 @@ func end_bug_contest() -> Dictionary:
 	return {"ok": true, "kind": &"bug_contest_ended"}
 
 
-## `_BugContestJudging`: the player's own score against the five contestants who
-## turned up, and where that placed them.
-func judge_bug_contest(random: RandomNumberGenerator) -> Dictionary:
-	var caught: Dictionary = state.contest_mon()
-	var result: Dictionary = Gen2WorldBugContest.judge(
-		int(caught.get("species", 0)),
-		Gen2WorldBugContest.score(caught),
-		data.bug_contestants(),
-		state.withdrawn_bug_contestants(),
-		random if random != null else RandomNumberGenerator.new()
-	)
-	result["ok"] = true
-	result["kind"] = &"bug_contest_judged"
-	result["score"] = Gen2WorldBugContest.score(caught)
-	result["caught"] = caught
-	return result
-
-
 ## `CanEncounterWildMon`: the whole condition on the tile the player stands on,
 ## before the rate is read.
 func can_encounter_wild_mon() -> bool:
@@ -5888,16 +5870,13 @@ func _script_start_bug_contest(_event: Dictionary) -> Array:
 	return [start_bug_contest()]
 
 
-func _script_select_contestants(_event: Dictionary) -> Array:
-	var withdrawn: Dictionary = Gen2WorldBugContest.select_withdrawn(
-		schedule_random if schedule_random != null else RandomNumberGenerator.new()
-	)
+func _script_select_contestants(event: Dictionary) -> Array:
+	var withdrawn: Array = event.get("withdrawn", [])
 	for index: int in Gen2WorldBugContest.NUM_CONTESTANTS:
 		state.set_event_flag(
-			Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index,
-			bool(withdrawn.get(index, false))
+			Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index, withdrawn.has(index)
 		)
-	return [{"type": &"bug_contestants_selected", "withdrawn": withdrawn.keys()}]
+	return [{"type": &"bug_contestants_selected", "withdrawn": withdrawn}]
 
 
 func _script_contest_drop_off(event: Dictionary) -> Array:

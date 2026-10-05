@@ -1269,6 +1269,7 @@ const SPECIAL_TEXT_FIRST_BOX: Dictionary = {
 	"poke_seer": ["see_all", "I see all."],
 	"buena_prize": ["ask_which_prize", "Which prize would"],
 	"mystery_gift": ["canceled", "The link has been"],
+	"bug_contest": ["first", "This Bug-Catching"],
 	## Four of the trade's boxes open on a `text_ram` marker whose address
 	## differs by profile, so the anchor is the one that opens on a literal.
 	"trade": ["take_good_care", "Take good care of"],

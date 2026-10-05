@@ -168,6 +168,9 @@ var _text_box_rect_held: int = 0
 var _clock: Gen2WorldClock = null
 var _audio_player: Gen2AudioPlayer = null
 var _audio_waiting: bool = false
+## `TextCommand_PAUSE` after an effect: the frames asked for, and those left once the pad is read.
+var _audio_pause_asked: int = 0
+var _audio_pause_left: int = 0
 ## What the wait completes its request with: a bare `waitsfx` answers `sound_finished`.
 var _audio_wait_result: Dictionary = {"ok": true, "sound_finished": true}
 var _script_prompt: String = ""
@@ -1250,8 +1253,17 @@ func _advance_field_move_tail() -> void:
 func _advance_audio_wait() -> void:
 	if not _audio_waiting or _audio_player == null:
 		return
+	if _audio_pause_left > 0:
+		_audio_pause_left -= 1
+		return
 	if _audio_player.still_waiting(_audio_watch):
 		return
+	if _audio_pause_asked > 0:
+		var asked: int = _audio_pause_asked
+		_audio_pause_asked = 0
+		if not PokeButton.text_accelerating():
+			_audio_pause_left = asked
+			return
 	_audio_waiting = false
 	var audio_result: Dictionary = Gen2WorldHost.complete_runtime_request(
 		_world, _audio_wait_result
@@ -3745,25 +3757,6 @@ func _swap_warped_map(entry: int = Gen2WorldAPI.MAP_ENTRY_DOOR) -> void:
 	_animation.configure(_world, _render_time_of_day())
 	_set_renderer_world()
 	_fade_to_map_music()
-
-
-## The three placings as one line. `_BugContestJudging` prints them as three
-## texts of its own, which no script points at and so nothing imports; the
-## placings themselves are the source's.
-func _bug_contest_placings_text(judged: Dictionary) -> String:
-	var parts: PackedStringArray = []
-	var places: Array[String] = ["1st", "2nd", "3rd"]
-	var placings: Array = judged.get("placings", [])
-	for index: int in placings.size():
-		var entry: Dictionary = placings[index]
-		var who: String = "You" if int(entry.get("id", 0)) == Gen2WorldBugContest.PLAYER_ID \
-			else "Contestant %d" % int(entry.get("id", 0))
-		parts.append("%s %s, %s (%d)" % [
-			places[index], who,
-			String(_data.species(int(entry.get("species", 0))).get("name", "-")),
-			int(entry.get("score", 0)),
-		])
-	return "Bug Contest: %s" % ", ".join(parts)
 
 
 ## `CheckRepelEffect`'s lead: the first party member not fainted, -1 with none.
@@ -8994,7 +8987,6 @@ const REQUEST_HANDLERS: Dictionary = {
 	&"trainer_approach_requested": &"_request_trainer_approach",
 	&"battle_requested": &"_request_battle",
 	&"catch_tutorial_requested": &"_request_battle",
-	&"bug_contest_judging_requested": &"_request_bug_contest_judging",
 	&"quick_save_requested": &"_request_quick_save",
 	&"swarm_requested": &"_request_swarm",
 	&"map_radio_requested": &"_request_map_radio",
@@ -9407,20 +9399,6 @@ func _request_trainer_approach(request: Dictionary) -> StringName:
 func _request_battle(request: Dictionary) -> StringName:
 	_start_battle_request(request)
 	return &"break"
-
-
-## `_BugContestJudging` scores the player, ranks them against the contestants who turned up
-## and leaves the placing in wScriptVar, which the results script branches on.
-func _request_bug_contest_judging(_request: Dictionary) -> StringName:
-	var judged: Dictionary = _world.judge_bug_contest(_encounter_random)
-	var judged_results: Array = _world.complete_runtime_request({
-		"ok": true,
-		"script_value": int(judged.get("player_place", 0)),
-		"judging": judged.duplicate(true),
-	})
-	_script_prompt = _bug_contest_placings_text(judged)
-	_show_script_results(judged_results)
-	return &"return"
 
 
 ## `TryQuickSave`, which is `Link_SaveGame` on the service screen, and below
@@ -10225,7 +10203,8 @@ func _handle_audio_request(request: Dictionary) -> Array:
 	## and so does a request that names its own (Bank of Mom's `SFX_TRANSACTION`).
 	var waits: bool = kind in [&"cry", &"special_sound"] \
 		or bool(request.get("values", {}).get("wait", false))
-	if waits and _audio_player.effect_playing():
+	_audio_pause_asked = int(request.get("values", {}).get("pause", 0))
+	if (waits and _audio_player.effect_playing()) or _audio_pause_asked > 0:
 		_audio_waiting = true
 		_audio_watch = {}
 		_audio_wait_result = answer

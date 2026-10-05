@@ -1320,8 +1320,9 @@ func _walk_the_link_menu() -> void:
 		"YES asked for %s rather than the save." % [save]):
 		return
 	world.complete_runtime_request({"ok": true})
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_SAVE_FRAMES)
+	## `PleaseWaitText`, whose `text_pause` is the box's own.
+	world.run_event_queue(true)
 	var menu: Dictionary = world.pending_runtime_request()
 	var rows: Array = (menu.get("values", {}) as Dictionary).get("rows", [])
 	var options: PackedStringArray = _r.data.special_text("cable_club_strings", "options").split("\n")
@@ -1451,8 +1452,9 @@ func _linked_menu() -> Gen2WorldAPI:
 	_spend_wait(world, Gen1Layout.CABLE_CLUB_CONNECTED_FRAMES)
 	world.choose_script_input(0)
 	world.complete_runtime_request({"ok": true})
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
-	_spend_wait(world, Gen1Layout.CABLE_CLUB_PAUSE_FRAMES)
+	_spend_wait(world, Gen1Layout.CABLE_CLUB_SAVE_FRAMES)
+	## `PleaseWaitText`, whose `text_pause` is the box's own.
+	world.run_event_queue(true)
 	return world if _r.check(
 		StringName(world.pending_runtime_request().get("kind", &"")) == &"gen1_menu_requested",
 		"the menu never opened.") else null

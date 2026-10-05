@@ -67,6 +67,9 @@ const SOUND_MARK: String = "\ue004"
 const CRY_MARK: String = "\ue005"
 const PLAY_MARK: String = "\ue006"
 const SOUND_BASE: int = 0xE100
+## `TextCommand_PAUSE` in both generations: [constant PAUSE_FRAMES] of `DelayFrames`, unless A or B is held.
+const PAUSE_MARK: String = "\ue007"
+const PAUSE_FRAMES: int = 30
 
 ## `CheckDict` entries that are not characters.
 const CHAR_NULL: int = 0x00
@@ -259,7 +262,7 @@ static func _step_command(
 			# the box's business rather than the string's.
 			return {"text": PAGE_BREAK, "at": at, "prompt": true}
 		TX_PAUSE:
-			return {"at": at}
+			return {"text": PAUSE_MARK, "at": at}
 		TX_DECIMAL:
 			# `text_decimal address, bytes, digits`: a number printed out of
 			# live RAM. Marked rather than skipped, the way TX_RAM is, so a
@@ -350,25 +353,34 @@ static func sound_token(id: int, mark: String = SOUND_MARK) -> String:
 	return mark + String.chr(SOUND_BASE + id)
 
 
-## [param text] without its sounds, and each as `{at, id, cry, wait}`, `at` an offset into the rest.
+## [param text] without its sounds and pauses. `sounds` are `{at, id, cry, wait}`, `at` an offset
+## into the rest; `beats` add each pause as `{at, pause}`.
 static func split_sounds(text: String) -> Dictionary:
-	if not (text.contains(SOUND_MARK) or text.contains(CRY_MARK) or text.contains(PLAY_MARK)):
-		return {"text": text, "sounds": []}
+	if not (text.contains(SOUND_MARK) or text.contains(CRY_MARK) or text.contains(PLAY_MARK) \
+		or text.contains(PAUSE_MARK)):
+		return {"text": text, "sounds": [], "beats": []}
 	var out: String = ""
 	var sounds: Array = []
+	var beats: Array = []
 	var at: int = 0
 	while at < text.length():
 		var mark: String = text[at]
+		if mark == PAUSE_MARK:
+			beats.append({"at": out.length(), "pause": true})
+			at += 1
+			continue
 		if mark in [SOUND_MARK, CRY_MARK, PLAY_MARK] and at + 1 < text.length():
-			sounds.append({
+			var sound: Dictionary = {
 				"at": out.length(), "id": text.unicode_at(at + 1) - SOUND_BASE,
 				"cry": mark == CRY_MARK, "wait": mark != PLAY_MARK,
-			})
+			}
+			sounds.append(sound)
+			beats.append(sound)
 			at += 2
 			continue
 		out += mark
 		at += 1
-	return {"text": out, "sounds": sounds}
+	return {"text": out, "sounds": sounds, "beats": beats}
 
 
 static func strip_sounds(text: String) -> String:

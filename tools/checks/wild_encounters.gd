@@ -889,6 +889,9 @@ func _verify_gate_errand() -> void:
 	var world: Gen2WorldAPI = _r.open_world(GATE_GROUP, GATE_NUMBER, Vector2i.ZERO)
 	if world == null:
 		return
+	world.script_random = RandomNumberGenerator.new()
+	world.script_random.seed = 13
+	world.set_player_name("GOLD")
 	world.set_world_clock(CONTEST_WEEKDAY, 12, 0)
 	_r.field_move_party(world)
 	var talked: Array = _talk_to_officer(world)
@@ -952,6 +955,7 @@ func _verify_gate_errand() -> void:
 			int(judged["score"]), int(judged["player_place"]),
 			str((judged["placings"] as Array)[0]),
 		])
+		_verify_announcement(world, judged)
 	_r.check(
 		not world.bug_contest_active(),
 		"BugContestResultsScript left the contest flag set."
@@ -1035,28 +1039,60 @@ func _talk_to_officer(world: Gen2WorldAPI) -> Array:
 
 ## The script run to its end: every text acknowledged and every movement frame
 ## the applymovements ask for spent, which is what the world screen does a frame
-## at a time.
+## at a time. Answers the `bug_contest_judged` event with the texts read meanwhile as `announced`.
 func _drain_script(world: Gen2WorldAPI) -> Dictionary:
 	var judged: Dictionary = {}
-	var random := RandomNumberGenerator.new()
-	random.seed = 13
+	var announced: Array = []
 	for _step: int in 4000:
 		if not world.pending_script_wait().is_empty():
 			world.advance_script_presentation_frame()
 			continue
 		if not world.script_busy():
-			return judged
-		## The one request this errand makes of its host: `BugContestJudging`
-		## leaves the placing in wScriptVar, which the script branches on.
-		var request: Dictionary = world.pending_runtime_request()
-		if StringName(request.get("kind", &"")) == &"bug_contest_judging_requested":
-			judged = world.judge_bug_contest(random)
-			world.complete_runtime_request({
-				"ok": true, "script_value": int(judged.get("player_place", 0)),
-			})
-			continue
-		world.run_event_queue(true)
+			break
+		for result: Dictionary in world.run_event_queue(true):
+			var shown: Dictionary = result.get("event", {})
+			if StringName(shown.get("type", &"")) == &"text":
+				announced.append(String(shown.get("text", "")))
+			for event: Dictionary in result.get("events", []):
+				if StringName(event.get("type", &"")) == &"bug_contest_judged":
+					judged = event
+	if not judged.is_empty():
+		judged["announced"] = announced
 	return judged
+
+
+## `_BugContestJudging`'s three `PrintText`s: third place, second and first, each naming the
+## winner and Pokemon, then its effect, then its score on the next paragraph.
+func _verify_announcement(world: Gen2WorldAPI, judged: Dictionary) -> void:
+	var effects: Array[int] = [
+		Gen2Sfx.SFX_3RD_PLACE, Gen2Sfx.SFX_2ND_PLACE, Gen2Sfx.SFX_1ST_PLACE,
+	]
+	var texts: Array = (judged["announced"] as Array).filter(func(text: String) -> bool:
+		for sound: Dictionary in Gen2TextStream.split_sounds(text)["sounds"]:
+			if int(sound["id"]) in effects:
+				return true
+		return false
+	)
+	if not _r.check(texts.size() == 3, "the judging announced %d placings." % texts.size()):
+		return
+	var placings: Array = judged["placings"]
+	for index: int in 3:
+		var place: Dictionary = placings[2 - index]
+		var split: Dictionary = Gen2TextStream.split_sounds(String(texts[index]))
+		var line: String = String(split["text"])
+		var sounds: Array = split["sounds"]
+		_r.check(
+			sounds.size() == 1 and int(sounds[0]["id"]) == effects[index],
+			"announcement %d plays %s." % [index, str(sounds)]
+		)
+		_r.check(
+			line.contains(String(world.data.species(int(place["species"]))["name"]))
+				and line.contains("%d points" % int(place["score"]))
+				and Gen2TextLayout.unfilled_marker(line).is_empty(),
+			"announcement %d does not name %s: %s" % [index, str(place), line.c_escape()]
+		)
+		if int(place["id"]) == Gen2WorldBugContest.PLAYER_ID:
+			_r.check(line.contains("GOLD"), "the player's own placing does not name them.")
 
 
 ## Runs the script on until it is waiting on a choice, which is the officer's

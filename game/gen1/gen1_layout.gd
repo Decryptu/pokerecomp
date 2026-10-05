@@ -726,10 +726,10 @@ const CABLE_CLUB_STRING_MAX: int = 48
 const CABLE_CLUB_PREPARING_FRAMES: int = 60
 const CABLE_CLUB_TIMEOUT_FRAMES: int = 90
 ## `.establishedConnection`'s `DelayFrame` and `ld c, 50`, `CloseLinkConnection`'s
-## `Delay3`, and `TX_PAUSE`.
+## `Delay3`, and the wait standing in for `PlaySoundWaitForCurrent`'s `SFX_SAVE`.
 const CABLE_CLUB_CONNECTED_FRAMES: int = 51
 const CABLE_CLUB_CLOSE_FRAMES: int = 3
-const CABLE_CLUB_PAUSE_FRAMES: int = 30
+const CABLE_CLUB_SAVE_FRAMES: int = 30
 ## `LinkMenu`'s `ld c, 40` hold, `.choseCancel`'s two `Delay3`s, `PleaseWaitText`'s
 ## 50, and the 20 each side of `PrepareForSpecialWarp`.
 const LINK_MENU_HOLD_FRAMES: int = 40

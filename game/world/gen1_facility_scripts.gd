@@ -459,18 +459,17 @@ static func _gen1_cable_club_steps(world: Gen2WorldAPI) -> Array:
 	]
 
 
-## YES: `SaveGameData` writes silently, `SFX_SAVE`, `PleaseWaitText`'s
+## YES: `SaveGameData` writes silently, `SFX_SAVE`, `PleaseWaitText` with its own
 ## `text_pause`, and `Serial_SyncAndExchangeNybble`, which a save-file peer answers.
 static func _gen1_cable_club_save_steps(world: Gen2WorldAPI) -> Array:
 	var please_wait: Dictionary = _gen1_facility_box(world, GEN1_CABLE_CLUB_RUN, "please_wait")
 	please_wait["press"] = false
 	return [
 		{"type": &"request", "values": {"kind": &"quick_save_requested", "values": {}}},
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES, {
+		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_SAVE_FRAMES, {
 			"sounds": [{"frame": 0, "gen1": true, "index": Gen1Sfx.SFX_SAVE}],
 		}),
 		please_wait,
-		_gen1_wait_step(&"cable_club_wait", Gen1Layout.CABLE_CLUB_PAUSE_FRAMES),
 	] + _gen1_link_menu_steps(world)
 
 

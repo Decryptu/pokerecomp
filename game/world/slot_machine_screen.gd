@@ -92,6 +92,8 @@ func advance_frame() -> void:
 			return
 		_sfx_watch = {}
 		_machine.sfx_finished()
+	if _machine is Gen1SlotMachine:
+		(_machine as Gen1SlotMachine).pad_held = PokeButton.text_accelerating()
 	if not _acted:
 		_pass()
 	_acted = false

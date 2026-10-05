@@ -2108,6 +2108,11 @@ const SPECIAL_TEXT_RUNS: Dictionary = {
 		["npc_trade_text", TRADE_TEXT_ORDER],
 	],
 	"npc_trade_newbie": [["npc_trade_newbie_text", TRADE_NEWBIE_TEXTS]],
+	## `engine/events/bug_contest/judging.asm`'s six, which no script reaches. A placing's
+	## stub is a `text_far` and a `text_asm` of 14 bytes, so the score stub is 18 on.
+	"bug_contest": [["bug_contest_text", [
+		"first", "first_score", "second", "second_score", "third", "third_score",
+	], [0, 18, 23, 41, 46, 64]]],
 }
 
 ## `engine/events/move_deleter.asm`'s eight, in the file's own order rather than
@@ -3128,6 +3133,7 @@ const GOLD_SILVER: Dictionary = {
 		## spell: the partner who sent the gift and the player it came home to.
 		## Gold and Silver's Mystery Gift block sits a page below Crystal's, the
 		## way their link block does.
+		"bug_contest_winner_name": 0xCF01,
 		"mystery_gift_partner_name": 0xC803,
 		"mystery_gift_player_name": 0xC853,
 		## `wMonOrItemNameBuffer`, which `StringBufferPointers` has no index for.
@@ -3148,6 +3154,7 @@ const GOLD_SILVER: Dictionary = {
 	"trade_sends_text": 0x295F3,
 	"trade_will_trade_text": 0x29618,
 	"mystery_gift_text": 0x29F31,
+	"bug_contest_text": 0x13AA7,
 	"magikarp_measure_text": 0xFBCAD,
 	"magikarp_record_text": 0xFBDEC,
 	"lucky_number_text": 0xC7BA3,
@@ -3713,6 +3720,7 @@ const CRYSTAL: Dictionary = {
 		"player_trademon_sender_name": 0xC6E7,
 		"ot_trademon_species_name": 0xC703,
 		"ot_trademon_sender_name": 0xC719,
+		"bug_contest_winner_name": 0xD016,
 		"mystery_gift_partner_name": 0xC903,
 		"mystery_gift_player_name": 0xC953,
 		"mon_or_item_name": 0xD050,
@@ -3730,6 +3738,7 @@ const CRYSTAL: Dictionary = {
 	"trade_sends_text": 0x2979A,
 	"trade_will_trade_text": 0x297BF,
 	"mystery_gift_text": 0x1049FD,
+	"bug_contest_text": 0x136EB,
 	"magikarp_measure_text": 0xFBBA9,
 	"magikarp_record_text": 0xFBCE8,
 	"lucky_number_text": 0x4D9C9,
@@ -4337,7 +4346,9 @@ static func special_text_offset(layout: Dictionary, run: String, name: String) -
 		if index < 0:
 			continue
 		var at: int = int(layout.get(String(entry[0]), 0))
-		return -1 if at <= 0 else at + index * TEXT_FAR_STUB_BYTES
+		var spacing: int = int((entry[2] as Array)[index]) if entry.size() > 2 \
+			else index * TEXT_FAR_STUB_BYTES
+		return -1 if at <= 0 else at + spacing
 	return -1
 
 

@@ -2249,8 +2249,6 @@ func _confirm_forget() -> void:
 		)
 		return
 	var target_name: String = _target_name(_forget_party_index)
-	if not _gen1_pack():
-		sfx_requested.emit(Gen2Sfx.SFX_SWITCH_POKEMON, false)
 	_show_pack_result("%s%s%s" % [
 		Gen2MoveForget.forgot_text(
 			target_name, String(entry.get("name", "")), _data.generation,

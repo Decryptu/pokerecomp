@@ -236,7 +236,7 @@ func _show(channel: int, context: Dictionary = {}) -> Gen2RadioShow:
 ## Runs frames until a segment actually prints, rather than until the box moves:
 ## `RadioScroll` clears the bottom row a frame before the next line lands on it.
 func _next_line(show: Gen2RadioShow) -> PackedStringArray:
-	for _frame: int in Gen2RadioShow.LINE_FRAMES + Gen2RadioShow.PAUSE_FRAMES + 3:
+	for _frame: int in Gen2RadioShow.LINE_FRAMES + Gen2TextStream.PAUSE_FRAMES + 3:
 		var before: StringName = show.segment()
 		show.advance_frame()
 		if before != Gen2RadioShow.SCROLL:
@@ -274,7 +274,7 @@ func test_a_text_pause_holds_the_first_half_for_thirty_frames() -> void:
 	for _line: int in 6:
 		_next_line(show)
 	assert_eq(_next_line(show)[1], "GIOVANNI! ")
-	for _frame: int in Gen2RadioShow.PAUSE_FRAMES - 1:
+	for _frame: int in Gen2TextStream.PAUSE_FRAMES - 1:
 		assert_false(show.advance_frame())
 	assert_true(show.advance_frame(), "the second half did not land on frame 30")
 	assert_eq(show.lines()[1], "GIOVANNI! Can you")
@@ -289,7 +289,7 @@ func test_rocket_radio_asks_for_the_boss_per_profile() -> void:
 		for _line: int in 8:
 			_next_line(show)
 		assert_eq(_next_line(show)[1], "")
-		for _frame: int in Gen2RadioShow.PAUSE_FRAMES:
+		for _frame: int in Gen2TextStream.PAUSE_FRAMES:
 			show.advance_frame()
 		assert_eq(show.lines()[1], "Where is our %s?" % ("boss" if crystal else "Boss"))
 

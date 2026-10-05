@@ -429,6 +429,18 @@ func _write_cache(game_id: String = "testworld") -> void:
 				"here_you_go": "Here you go!", "not_enough_points": "Not enough.",
 				"no_room": "No room.", "come_again": "Come again!",
 			},
+			## `engine/events/bug_contest/judging.asm`'s six, `text_pause` and all.
+			"bug_contest": {
+				"first": "This Bug-Catching\nContest winner is" + Gen2TextStream.PAUSE_MARK
+					+ "…" + Gen2TextStream.PAGE_BREAK + "<RAM_CF01>,\nwho caught a\n<RAM_CF6B>!",
+				"first_score": Gen2TextStream.PAGE_BREAK + "The winning score\nwas <NUM_CEEF> points!",
+				"second": "Placing second was\n<RAM_CF01>," + Gen2TextStream.PAGE_BREAK
+					+ "who caught a\n<RAM_CF6B>!",
+				"second_score": Gen2TextStream.PAGE_BREAK + "The score was\n<NUM_CEF3> points!",
+				"third": "Placing third was\n<RAM_CF01>," + Gen2TextStream.PAGE_BREAK
+					+ "who caught a\n<RAM_CF6B>!",
+				"third_score": Gen2TextStream.PAGE_BREAK + "The score was\n<NUM_CEF7> points!",
+			},
 		},
 		## Gold and Silver's own addresses, matching the buffer table above.
 		"special_text_ram": {
@@ -438,6 +450,7 @@ func _write_cache(game_id: String = "testworld") -> void:
 			"seer_time_of_day": 0xD01F,
 			"seer_ot": 0xD02A,
 			"seer_caught_level": 0xD036,
+			"bug_contest_winner_name": 0xCF01,
 		},
 	})
 
@@ -8385,25 +8398,85 @@ func test_ending_the_contest_clears_the_flag_and_keeps_what_was_caught() -> void
 	assert_eq(int(world.state.contest_mon()["species"]), 10, "judging still needs it")
 
 
-func test_the_judging_reads_the_contestants_that_turned_up() -> void:
-	var world := _contest_world()
-	for index: int in Gen2WorldBugContest.NUM_CONTESTANTS:
-		world.state.set_event_flag(
-			Gen2WorldState.EVENT_BUG_CATCHING_CONTESTANT_FIRST + index,
-			index >= Gen2WorldBugContest.CONTESTANTS_WITHDRAWN
+## `BugContestJudging` announces third, second and then first place, each with the
+## winner's name and Pokemon, its placing effect once they are up and its score on the
+## next paragraph, and leaves the player's own place for the results script. Every draw
+## comes off the generator the runner was handed.
+func test_the_judging_announces_third_second_then_first_from_the_injected_draws() -> void:
+	var judged: Dictionary = _judge_contest(7)
+	var texts: Array = judged["texts"]
+	assert_eq(texts.size(), 3, "three PrintTexts")
+	var placings: Array = judged["event"]["placings"]
+	var effects: Array[int] = [Gen2Sfx.SFX_3RD_PLACE, Gen2Sfx.SFX_2ND_PLACE, Gen2Sfx.SFX_1ST_PLACE]
+	for index: int in 3:
+		var place: Dictionary = placings[2 - index]
+		var split: Dictionary = Gen2TextStream.split_sounds(String(texts[index]))
+		assert_eq(
+			split["sounds"].map(func(sound: Dictionary) -> int: return int(sound["id"])),
+			[effects[index]], "the effect for place %d" % (3 - index)
 		)
-	assert_eq(
-		world.state.withdrawn_bug_contestants().size(),
-		Gen2WorldBugContest.NUM_CONTESTANTS - Gen2WorldBugContest.CONTESTANTS_WITHDRAWN
-	)
-	world.state.set_contest_mon({
-		"species": 10, "level": 12, "max_hp": 30, "hp": 30,
+		assert_string_contains(split["text"], "MON%d" % int(place["species"]))
+		assert_string_contains(split["text"], "%d points" % int(place["score"]))
+		assert_eq(Gen2TextLayout.unfilled_marker(split["text"]), "")
+	assert_eq(Gen2TextStream.split_sounds(texts[2])["beats"].size(), 2, "first place's pause and effect")
+	assert_eq(int(judged["event"]["score"]), 193)
+	assert_eq(int(judged["event"]["player_place"]), 1, "ahead of the best 157")
+	assert_string_contains(texts[2], "GOLD")
+	assert_eq(_judge_contest(7)["texts"], texts, "the same generator announces the same placings")
+	assert_ne(_judge_contest(8)["texts"], texts, "and another one does not")
+
+
+## Three contestants who turned up, each with the same three placings, against a
+## 193-point catch. Answers the texts the run showed in order and its judging event.
+func _judge_contest(seed_value: int) -> Dictionary:
+	var species: Array = []
+	for number: int in 20:
+		species.append({"number": number + 1, "name": "MON%d" % (number + 1)})
+	RomCache.write_json(RomCache.species_path(_directory), species)
+	var trainers: Array = [{
+		"number": 1, "name": "BUG CATCHER", "palette": [0, 0],
+		"trainers": [{"name": "DON", "party": []}, {"name": "ED", "party": []}, {"name": "BEN", "party": []}],
+	}]
+	RomCache.write_json(RomCache.trainers_path(_directory), trainers)
+	var encounters: Dictionary = RomCache.read_json(RomCache.world_encounters_path(_directory))
+	var placings: Array = [
+		{"species": 10, "score": 150}, {"species": 11, "score": 140}, {"species": 12, "score": 130},
+	]
+	encounters["bug_contest"]["contestants"] = [
+		{"trainer_class": 1, "trainer": 1, "placings": placings},
+		{"trainer_class": 1, "trainer": 2, "placings": placings},
+		{"trainer_class": 1, "trainer": 3, "placings": placings},
+	]
+	RomCache.write_json(RomCache.world_encounters_path(_directory), encounters)
+	var scripts: Dictionary = RomCache.read_json(RomCache.world_scripts_path(_directory))
+	scripts["48:6280"] = [Gen2WorldScript.SPECIAL, 20, 0, Gen2WorldScript.END]
+	RomCache.write_json(RomCache.world_scripts_path(_directory), scripts)
+
+	var state := Gen2WorldState.new()
+	state.set_contest_mon({
+		"species": 13, "level": 12, "max_hp": 30, "hp": 30,
 		"attack": 12, "defense": 13, "speed": 14,
 		"special_attack": 15, "special_defense": 16, "dvs": 0, "item": 0,
 	})
-	var judged: Dictionary = world.judge_bug_contest(_seeded())
-	assert_eq(int(judged["score"]), 193)
-	assert_true(judged["placings"].size() > 0)
+	var random := RandomNumberGenerator.new()
+	random.seed = seed_value
+	var runner := Gen2WorldScriptRunner.begin(
+		GameData.open_directory(_directory), state,
+		{"kind": &"test", "bank": 48, "script": 0x6280, "player_name": "GOLD"},
+		Callable(), random
+	)
+	var out: Dictionary = {"texts": [], "event": {}}
+	var result: Dictionary = runner.advance()
+	for _step: int in 8:
+		for event: Dictionary in result.get("events", []):
+			if StringName(event["type"]) == &"bug_contest_judged":
+				out["event"] = event
+		if StringName(result["status"]) != &"waiting":
+			break
+		out["texts"].append(String(result["event"]["text"]))
+		result = runner.advance(true)
+	assert_eq(result["status"], &"complete", JSON.stringify(result))
+	return out
 
 
 ## The park balls and what was caught survive a save and come back, since a

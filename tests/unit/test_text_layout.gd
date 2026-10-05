@@ -220,13 +220,38 @@ func test_a_sound_lands_on_its_page_at_the_tile_it_follows() -> void:
 		"Hello\nWorld" + fanfare + Gen2TextStream.PAGE_BREAK + "Next" + fanfare, COLUMNS, ROWS
 	)
 	assert_eq(pages[0]["lines"], PackedStringArray(["Hello", "World"]), "the token draws nothing")
-	assert_eq(int(pages[0]["sounds"][0]["at"]), 10)
-	assert_eq(int(pages[1]["sounds"][0]["at"]), 4)
+	assert_eq(int(pages[0]["beats"][0]["at"]), 10)
+	assert_eq(int(pages[1]["beats"][0]["at"]), 4)
 	var wrapped: Array = Gen2TextLayout.lay_out_pages(
 		"BULBASAUR used TACKLE" + fanfare, COLUMNS, ROWS
 	)
 	assert_eq(wrapped[0]["lines"], PackedStringArray(["BULBASAUR used", "TACKLE"]))
-	assert_eq(int(wrapped[0]["sounds"][0]["at"]), "BULBASAUR used".length() + "TACKLE".length())
+	assert_eq(int(wrapped[0]["beats"][0]["at"]), "BULBASAUR used".length() + "TACKLE".length())
+
+
+## `TextCommand_PAUSE` is 30 `DelayFrames` unless A or B is down when it is reached;
+## the tiles before it are on screen and the ones after it wait.
+func test_a_pause_holds_the_text_for_thirty_frames_unless_a_button_is_held() -> void:
+	var text: String = "AB" + Gen2TextStream.PAUSE_MARK + "CD"
+	var box: Gen2TextBox = _box()
+	box.reveal_speed = 60.0
+	box.show_text(text)
+	for _frame: int in 2:
+		box.advance_frame()
+	assert_eq(box.glyphs().size(), 2)
+	var held_for: int = 0
+	while box.glyphs().size() == 2 and held_for < 100:
+		box.advance_frame()
+		held_for += 1
+	assert_eq(held_for, Gen2TextStream.PAUSE_FRAMES + 1, "30 frames of delay, then CD starts")
+
+	var pressed: Gen2TextBox = _box()
+	pressed.reveal_speed = 60.0
+	pressed.accelerated = true
+	pressed.show_text(text)
+	for _frame: int in 3:
+		pressed.advance_frame()
+	assert_eq(pressed.glyphs().size(), 3, "a held A or B reads the pad once and skips the wait")
 
 
 ## `Paragraph` clears the box and spends `DelayFrames 20` before the next page

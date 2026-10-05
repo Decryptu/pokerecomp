@@ -158,6 +158,12 @@ const TEXT_SOUND_BOXES: Dictionary = {
 }
 
 
+## Every `text_pause` of the facility boxes: the Pokemon Center's two, the cable club's and the trade's.
+const TEXT_PAUSE_BOXES: Array[String] = [
+	"cable_club/please_wait", "npc_trade/traded_for", "pokecenter/farewell", "pokecenter/shall_we_heal",
+]
+
+
 func _verify_the_text_sounds() -> void:
 	var yellow: bool = _r.game_id == RomRegistry.YELLOW
 	var wanted: Dictionary = TEXT_SOUND_BOXES.duplicate()
@@ -165,8 +171,12 @@ func _verify_the_text_sounds() -> void:
 	if yellow:
 		wanted["safari_labels/one_ball"] = [Gen1Sfx.SFX_GET_ITEM_1]
 	var found: Dictionary = {}
+	var paused: Array[String] = []
 	for text_run: StringName in _r.data.text_runs():
 		for name: String in _r.data.text_names(text_run):
+			var split: Dictionary = Gen2TextStream.split_sounds(_r.data.text(text_run, name))
+			if (split["beats"] as Array).size() > (split["sounds"] as Array).size():
+				paused.append("%s/%s" % [text_run, name])
 			var ids: Array = []
 			for sound: Dictionary in Gen2TextStream.split_sounds(_r.data.text(text_run, name))["sounds"]:
 				ids.append(int(sound["id"]))
@@ -176,6 +186,8 @@ func _verify_the_text_sounds() -> void:
 			if not ids.is_empty():
 				found["%s/%s" % [text_run, name]] = ids
 	_r.check(found == wanted, "the facility boxes carry the sounds %s." % found)
+	paused.sort()
+	_r.check(paused == TEXT_PAUSE_BOXES, "the facility boxes carry the pauses %s." % [paused])
 
 
 ## `SFX_Headers_1` to `_3`, and `_4` on Yellow: the cache carries a whole ROM

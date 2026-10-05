@@ -196,6 +196,18 @@ func test_a_sound_command_leaves_its_effect_where_it_stood() -> void:
 	assert_eq(int(yellow["sounds"][0]["id"]), 25, "`sound_cry_pikachu`, where Red has Nidorina")
 
 
+## `TX_PAUSE` is `$0A` in both generations, and neither prints anything for it.
+func test_a_pause_command_leaves_its_mark_where_it_stood() -> void:
+	var bytes: PackedByteArray = PackedByteArray([0x00, 0x80, 0x50, 0x0A, 0x00, 0x81, 0x50, 0x50])
+	for context: Dictionary in [{}, {"generation": RomRegistry.GEN1}]:
+		var split: Dictionary = Gen2TextStream.split_sounds(
+			Gen2TextStream.decode(bytes, 0, context)["text"]
+		)
+		assert_eq(split["text"], "AB")
+		assert_eq(split["beats"], [{"at": 1, "pause": true}])
+		assert_eq(split["sounds"], [])
+
+
 ## `PlaceNextChar`'s dictionary is not `CheckDict`'s: $49 is `PageChar` there and
 ## `<MOM>` in Crystal, and Generation 1 has no `<LF>`, `<BSP>` or `<WBR>`.
 func test_generation_1_breaks_its_line_on_page_where_crystal_names_mom() -> void:

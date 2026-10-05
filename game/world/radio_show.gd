@@ -62,12 +62,10 @@ const CHANNEL_ENTRY: Dictionary = {
 	Gen2WorldRadio.EVOLUTION_RADIO: &"EvolutionRadio",
 }
 
-## `data/text/common_1.asm`, which no importer reads: one box line per text, with
-## `PAUSE` for a `text_pause` inside it. Braced names are the `text_ram` buffers.
-const PAUSE: String = "\u0001"
-## `TextCommand_PAUSE`, inside the segment that printed, so the 100-frame wait
-## follows it. A held A or B skips it; the show reads no pad.
-const PAUSE_FRAMES: int = 30
+## `data/text/common_1.asm`, which no importer reads: one box line per text, [constant
+## Gen2TextStream.PAUSE_MARK] for a `text_pause` inside it, and braced names for the `text_ram`
+## buffers. The pause runs inside the segment that printed, so the 100-frame wait follows it.
+const PAUSE: String = Gen2TextStream.PAUSE_MARK
 const TEXTS: Dictionary = {
 	&"OPT_IntroText1": "MARY: PROF.OAK'S",
 	&"OPT_IntroText2": "#MON TALK!",
@@ -393,7 +391,7 @@ func _print(text: String, next: StringName) -> void:
 	var halves: PackedStringArray = text.split(PAUSE)
 	_store(halves[0], _lines_printed == 1)
 	if halves.size() > 1:
-		_pause = PAUSE_FRAMES
+		_pause = Gen2TextStream.PAUSE_FRAMES
 		_pause_top = _lines_printed == 1
 		_pause_rest = text.replace(PAUSE, "")
 	_line = SCROLL

@@ -145,6 +145,8 @@ var lcd: Gen1Lcd = Gen1Lcd.new()
 var _data: GameData = null
 var _state: int = State.WHITE_OUT
 var _wait: int = 0
+## A or B down on this pass, which `TextCommand_PAUSE` reads once when it is reached.
+var pad_held: bool = false
 var _wheels: Array[Wheel] = []
 var _flags: int = 0
 var _allow_matches: int = 0
@@ -289,8 +291,6 @@ func dismiss_text() -> void:
 	match _state:
 		State.NOT_ENOUGH:
 			_open_bet_menu()
-		State.YEAH:
-			_reward_300()
 		State.LINED_UP:
 			_start_payout()
 		State.NOT_THIS_TIME:
@@ -334,6 +334,8 @@ func _step() -> void:
 		State.YES:
 			_light_balls(BALL_UNLIT, BET_ROWS.size())
 			_open_round()
+		State.YEAH:
+			_reward_300()
 		_:
 			pass
 
@@ -578,8 +580,10 @@ func _accept_match(symbol: int) -> void:
 	_matched = symbol
 	match reward:
 		REWARD_300:
-			_print(&"yeah", Prompt.TEXT)
+			## `YeahText` ends on a `text_pause`, not a press.
+			_print(&"yeah")
 			_state = State.YEAH
+			_wait = 0 if pad_held else Gen2TextStream.PAUSE_FRAMES
 			return
 		REWARD_100:
 			_play(Gen1Sfx.SFX_GET_KEY_ITEM)
@@ -591,7 +595,7 @@ func _accept_match(symbol: int) -> void:
 	_flash_pass()
 
 
-## `SlotReward300Func` behind `YeahText`'s press: half the time the flags are
+## `SlotReward300Func` behind `YeahText`'s pause: half the time the flags are
 ## cleared, and the allow-matches counter always is.
 func _reward_300() -> void:
 	_play(Gen1Sfx.SFX_GET_ITEM_2)

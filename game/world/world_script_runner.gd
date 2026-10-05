@@ -431,11 +431,11 @@ const TRADE_GENDER_SYMBOLS: Dictionary = {
 	Gen2Layout.TRADE_GENDER_MALE: "\u2642", Gen2Layout.TRADE_GENDER_FEMALE: "\u2640",
 }
 ## `TradedForText`'s own tail in order: the `PlayMusic MUSIC_NONE` its `text_asm`
-## spends, the `sound_dex_fanfare_80_109` behind it, and the `RestartMapMusic`
-## `NPCTrade` runs before the last box. The movie leaves MUSIC_EVOLUTION playing.
+## spends, the `sound_dex_fanfare_80_109` and `text_pause` of `_NPCTradeFanfareText`, and the
+## `RestartMapMusic` `NPCTrade` runs before the last box. The movie leaves MUSIC_EVOLUTION playing.
 const TRADE_AFTER_TEXT_AUDIO: Array[Array] = [
 	[&"music", {"address": 0}],
-	[&"sound", {"address": 0x0A}],
+	[&"sound", {"address": 0x0A, "wait": true, "pause": Gen2TextStream.PAUSE_FRAMES}],
 	[&"map_music", {"restart": true}],
 ]
 
@@ -1297,9 +1297,6 @@ const COMPLETION_HANDLERS: Dictionary = {
 	&"pc_requested": &"_complete_plain_request",
 	&"party_heal_requested": &"_complete_plain_request",
 	&"town_map_requested": &"_complete_plain_request",
-	## `BugContestJudging` answers with the placing, which the results script
-	## reads out of wScriptVar exactly as the marts and the PC do.
-	&"bug_contest_judging_requested": &"_complete_plain_request",
 	&"name_rater_requested": &"_complete_plain_request",
 	&"move_deleter_requested": &"_complete_plain_request",
 	## `MoveTutor` answers FALSE when the move was learned and -1 when the
@@ -4862,6 +4859,13 @@ func _special_move_tutor(special: int) -> Dictionary:
 	})
 
 
+## The keys and effects of `ContestJudging_*PlaceText`, first place to third.
+const BUG_CONTEST_PLACES: Array[String] = ["first", "second", "third"]
+const BUG_CONTEST_PLACE_SFX: Array[int] = [
+	Gen2Sfx.SFX_1ST_PLACE, Gen2Sfx.SFX_2ND_PLACE, Gen2Sfx.SFX_3RD_PLACE,
+]
+
+
 ## The host answers with the apricorn and how many, and B with `wScriptVar = 0`.
 func _special_select_apricorn_for_kurt(special: int) -> Dictionary:
 	return _stage_runtime_request(&"apricorn_selection_requested", {
@@ -4879,7 +4883,10 @@ func _special_give_park_balls(special: int) -> Dictionary:
 ## Five of the ten contestant flags set, which is both who competes in the judging and
 ## which sprites the park does not draw.
 func _special_select_random_bug_contestants(special: int) -> Dictionary:
-	_emit_runtime_event(&"bug_contestants_selected", {"special": special})
+	_emit_runtime_event(&"bug_contestants_selected", {
+		"special": special,
+		"withdrawn": Gen2WorldBugContest.select_withdrawn(_random).keys(),
+	})
 	return {"ok": true}
 
 
@@ -4918,12 +4925,72 @@ func _special_check_party_full_after_contest(special: int) -> Dictionary:
 	})
 
 
-## The judging prints three placings and leaves the player's own in wScriptVar, which
-## the results script branches on.
+## `_BugContestJudging`: the player's score ranked against the contestants who turned up, drawn from
+## the injected generator in the cartridge's order. Third, second and first place are a `PrintText`
+## each, and the player's place is left in wScriptVar.
 func _special_bug_contest_judging(special: int) -> Dictionary:
-	return _stage_runtime_request(&"bug_contest_judging_requested", {
-		"special": special,
+	if state == null or data == null:
+		return _fail(&"missing_world_state", {"special": special})
+	var caught: Dictionary = state.contest_mon()
+	var score: int = Gen2WorldBugContest.score(caught)
+	var judged: Dictionary = Gen2WorldBugContest.judge(
+		int(caught.get("species", 0)), score, data.bug_contestants(),
+		state.withdrawn_bug_contestants(), _random
+	)
+	var placings: Array = judged["placings"]
+	var announced: Array = []
+	for place: int in range(placings.size() - 1, -1, -1):
+		var text: String = _judging_text(place, placings[place] as Dictionary)
+		if text.is_empty():
+			return _fail(&"missing_special_text", {"special": special})
+		announced.append(text)
+	_script_value = int(judged["player_place"])
+	_emit_runtime_event(&"bug_contest_judged", {
+		"special": special, "placings": placings.duplicate(true),
+		"player_place": _script_value, "score": score,
 	})
+	if announced.is_empty():
+		return {"ok": true}
+	var head: String = String(announced.pop_front())
+	return _stage_internal_text(head, false, {} if announced.is_empty() else {
+		"next_internal_texts": announced,
+	})
+
+
+## `ContestJudging_FirstPlaceText`: the winner and Pokemon, the effect, then the score text.
+func _judging_text(place: int, entry: Dictionary) -> String:
+	var key: String = BUG_CONTEST_PLACES[place]
+	var text: String = data.special_text("bug_contest", key)
+	var score_text: String = data.special_text("bug_contest", key + "_score")
+	var buffers: Array[int] = data.string_buffer_addresses()
+	if text.is_empty() or score_text.is_empty() or buffers.size() <= Gen2Layout.STRING_BUFFER_1:
+		return ""
+	text = Gen2TextStream.fill_all_markers(
+		text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, data.special_text_ram("bug_contest_winner_name")],
+		_contestant_name(int(entry["id"]))
+	)
+	text = Gen2TextStream.fill_all_markers(
+		text, "%s%04X>" % [Gen2TextStream.RAM_MARKER, buffers[Gen2Layout.STRING_BUFFER_1]],
+		String(data.species(int(entry["species"])).get("name", ""))
+	)
+	score_text = Gen2TextStream.fill_marker(
+		score_text, Gen2TextStream.NUMBER_MARKER, str(int(entry["score"]))
+	)
+	return text + Gen2TextStream.sound_token(BUG_CONTEST_PLACE_SFX[place]) + score_text
+
+
+## `LoadContestantName`: the player's own, or a contestant's class and name. Entry zero of
+## `BugContestantPointers` is the player, so a contestant's row is two behind its id.
+func _contestant_name(contestant_id: int) -> String:
+	if contestant_id == Gen2WorldBugContest.PLAYER_ID:
+		return player_name
+	var row: Array = data.bug_contestants()
+	var contestant: Dictionary = row[contestant_id - 2] if contestant_id - 2 < row.size() else {}
+	var trainer_class: int = int(contestant.get("trainer_class", 0))
+	return "%s %s" % [
+		data.trainer_name(trainer_class),
+		String(data.trainer_party(trainer_class, int(contestant.get("trainer", 0)) - 1).get("name", "")),
+	]
 
 
 func _special_activate_fishing_swarm(special: int) -> Dictionary:
