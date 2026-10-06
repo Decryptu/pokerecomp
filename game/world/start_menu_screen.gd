@@ -1071,11 +1071,9 @@ func _release_sound() -> void:
 	_render_hardware()
 
 
-## Written on every change, matching the launcher card and the cartridge, which
-## commits each press to `wOptions` rather than on the way out.
+## Written on every press, as the cartridge commits each to `wOptions`.
 func _persist_options() -> void:
-	if Gen2OptionsStore.save(_options_menu.options()):
-		return
+	Gen2OptionsStore.save(_options_menu.options())
 
 
 func _render_options_menu() -> void:
@@ -1867,6 +1865,10 @@ func _confirm_use() -> void:
 	if item.is_empty():
 		return
 	var number: int = int(item.get("item", 0))
+	var field_move: int = Gen2WorldPack.item_field_move(_data, number)
+	if field_move > 0:
+		_use_item_field_move(number, field_move)
+		return
 	if _gen1_pack():
 		_confirm_gen1_use(number)
 		return
@@ -1969,6 +1971,16 @@ func _use_field_item(item: int) -> void:
 		field_item_used.emit(request)
 		return
 	_close_submenu(field_item_used.emit.bind(request))
+
+
+## A row's `field_move`: the pack closes as `.Field` does, and the world's one
+## field-move dispatch asks the badge and the tile and words the refusal.
+func _use_item_field_move(item: int, move: int) -> void:
+	var action: Dictionary = {"kind": &"field_move", "move": move, "slot": -1, "item": item}
+	if _using_registered or _gen1_pack():
+		field_move_chosen.emit(action)
+		return
+	_close_submenu(field_move_chosen.emit.bind(action))
 
 
 ## One `ItemEffects` entry each, in the order `Gen2WorldPack.FIELD_EFFECTS` names
@@ -3077,16 +3089,18 @@ func _process(delta: float) -> void:
 		or (_mode == Mode.PACK_RESULT and party_result_holding())
 	if not targets:
 		_target_clock.reset()
-		if not _box_timed():
+		if not _box_timed() and not _sound_holding:
 			_save_clock.reset()
 			return
 	for _frame: int in (_target_clock if targets else _save_clock).tick(delta):
 		advance_hardware_frame()
 
 
-## One hardware frame of whatever this menu times, by `_process`'s clock or a host's pump.
+## One hardware frame of whatever this menu times, a `WaitSFX` first, box or none.
 func advance_hardware_frame() -> void:
-	if _mode == Mode.PACK_TARGET:
+	if _sound_holding:
+		_release_sound()
+	elif _mode == Mode.PACK_TARGET:
 		advance_target_icons()
 	elif _mode == Mode.PACK_RESULT and party_result_holding():
 		advance_party_result()

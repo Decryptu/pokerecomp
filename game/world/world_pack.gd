@@ -477,6 +477,13 @@ static func field_use_kind(data: GameData, item: int) -> int:
 	return menu if menu >= ITEMMENU_CURRENT else ITEMMENU_NOUSE
 
 
+## The HM field move a mod's item row names as its USE, or 0.
+static func item_field_move(data: GameData, item: int) -> int:
+	if data == null:
+		return 0
+	return int(data.item(item).get("field_move", 0))
+
+
 ## The pack pocket a cartridge item number belongs to, or 0 when the item is
 ## unknown. Matches `ItemAttributes`' per-item type byte, not a guess from the
 ## item number's range.

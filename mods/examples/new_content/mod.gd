@@ -29,6 +29,8 @@ const PLASMA: int = Gen2ContentOverlay.FIRST_MOD_NUMBER
 ## or above Gen2ModHost.FIRST_MOD_POCKET; 1 to 4 are the cartridge's.
 const CELL_BATTERY: int = Gen2ContentOverlay.FIRST_MOD_NUMBER
 const CURIOS_POCKET: int = Gen2ModHost.FIRST_MOD_POCKET
+## A key item whose USE is FLASH.
+const LANTERN: int = Gen2ContentOverlay.FIRST_MOD_NUMBER + 1
 ## Cartridge numbers, for the two rows this mod changes rather than adds.
 const PIKACHU: int = 25
 const THUNDERBOLT: int = 85
@@ -512,6 +514,15 @@ func _play_differently(host: Gen2ModHost, manifest: PokeModManifest) -> void:
 	## which item teaches which move, whether it is in the bag, the badge, the
 	## tile and everything the move then does.
 	host.register_field_move_source(manifest.id, FieldMoves.new())
+	## Or an item that IS the move (`api_version` 60): USE runs it from no party
+	## member, and the bag holding it supplies it wherever an HM would. A patch
+	## naming `field_move` turns a cartridge row, HM05 itself, into the same.
+	host.register_content(Gen2ContentOverlay.KIND_ITEM, manifest.id, LANTERN, {
+		"name": "LANTERN",
+		"pocket": Gen2WorldPack.TYPE_KEY_ITEM,
+		"permissions": Gen2WorldPack.CANT_TOSS,
+		"field_move": Gen2WorldFieldMove.MOVE_FLASH,
+	})
 	## The step an active Repel runs out on. The mod picks the weakest item it
 	## owns; the prompt, the bag and the encounter ordering are the host's.
 	host.register_repel_renewal(manifest.id, RepelRenewal.new())

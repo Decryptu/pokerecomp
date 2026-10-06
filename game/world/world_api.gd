@@ -1438,17 +1438,17 @@ func field_move_source(move_id: int) -> Dictionary:
 	return {"kind": FIELD_MOVE_SOURCE_ITEM, "move": move_id, "slot": -1, "item": item}
 
 
-## The HM in the bag that teaches [param move_id] while a registered provider
-## allows it, or 0. Which item teaches which move is `GetTMHMItemMove`'s answer
-## rather than a second table.
+## The bag's item whose row names [param move_id] as its `field_move`, or the HM
+## teaching it (`GetTMHMItemMove`) while a registered provider allows that; or 0.
 func item_field_move_source(move_id: int) -> int:
-	if data == null or state == null \
-		or not Gen2WorldFieldMove.is_hm_field_move(move_id) \
-		or not Gen2ModHost.allows_item_field_move(move_id):
+	if data == null or state == null or not Gen2WorldFieldMove.is_hm_field_move(move_id):
 		return 0
+	var from_hm: bool = Gen2ModHost.allows_item_field_move(move_id)
 	for raw_item: Variant in state.items():
 		var item: int = int(raw_item)
-		if Gen2WorldTMHM.is_hm(item, data.generation) \
+		if Gen2WorldPack.item_field_move(data, item) == move_id:
+			return item
+		if from_hm and Gen2WorldTMHM.is_hm(item, data.generation) \
 			and Gen2WorldTMHM.move_for_item(data, item) == move_id:
 			return item
 	return 0

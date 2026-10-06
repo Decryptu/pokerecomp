@@ -1298,7 +1298,8 @@ func test_a_tm_on_an_egg_sounds_wrong_and_reopens_the_party_list() -> void:
 	assert_true(host.handle_button(PokeButton.DOWN), "the list is not read behind the sound")
 	assert_eq(int(host.get("_target_cursor")), row)
 	sounding[0] = false
-	host.advance_frame()
+	## The screen's own clock, which once spent only the party icons here.
+	host._process(0.1)
 	host.handle_button(PokeButton.DOWN)
 	assert_ne(int(host.get("_target_cursor")), row)
 	assert_eq(_world_screen._world.state.item_quantity(HM_ITEM), 1)
@@ -1980,13 +1981,20 @@ func test_b_returns_to_the_list_from_a_value_row() -> void:
 
 
 ## `_Option.joypad_loop`'s `PAD_START | PAD_B`, and Crystal's `.ExitOptions`
-## `SFX_TRANSACTION` behind a `WaitSFX`.
+## `SFX_TRANSACTION` behind a `WaitSFX`, which the screen's own clock spends
+## with no box up.
 func test_start_leaves_the_option_screen_with_crystals_exit_sound() -> void:
 	var host: Gen2StartMenuScreen = await _open_options_menu()
+	var sounding: Array[bool] = [true]
+	host.sound_busy = func(_watch: Dictionary) -> bool: return sounding[0]
 	watch_signals(host)
 	host.handle_button(PokeButton.START)
-	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
 	assert_signal_emitted_with_parameters(host, "sfx_requested", [Gen2Sfx.SFX_TRANSACTION, true])
+	host._process(0.1)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.OPTIONS)
+	sounding[0] = false
+	host._process(0.1)
+	assert_eq(host.get("_mode"), Gen2StartMenuScreen.Mode.LIST)
 
 
 ## `StartMenu_Status`'s `farcall TrainerCard`, as an overlay the world screen

@@ -1495,6 +1495,28 @@ func test_flash_lights_the_map_behind_its_white_fade() -> void:
 	assert_false(_world_screen._text_box.visible, "closetext")
 
 
+## An item whose row names FLASH: USE in the key pocket closes the pack and runs
+## the move from no party member, where it once fell to OAK's refusal.
+func test_an_item_naming_flash_runs_it_from_the_pack() -> void:
+	var lantern: int = Gen2ContentOverlay.FIRST_MOD_NUMBER
+	assert_true(bool(Gen2ModHost.instance().register_content(
+		Gen2ContentOverlay.KIND_ITEM, &"lantern", lantern, {
+			"name": "LANTERN", "pocket": Gen2WorldPack.TYPE_KEY_ITEM,
+			"permissions": Gen2WorldPack.CANT_TOSS,
+			"field_move": Gen2WorldFieldMove.MOVE_FLASH,
+		}
+	).get("ok", false)))
+	await _open_world(true, BattleFixture.TACKLE, Gen2WorldFieldMove.BADGE_ZEPHYR)
+	_world_screen._world.current_map.palette = Gen2WorldPalette.PALETTE_DARK
+	_world_screen.preview_field_item(lantern)
+	for _frame: int in SETTLE_FRAMES:
+		if _world_screen._field_move_text:
+			break
+		_world_screen.advance_frame()
+	assert_null(_world_screen._start_menu_host)
+	assert_eq(_shown_text(), "A blinding FLASH lights the area!")
+
+
 ## `.FlyScript`: `HideSprites`, `FlyFromAnim`'s 128 frames, the warp, then
 ## `FlyToAnim`'s 64 and `.ReturnFromFly`. The fixture ships no spawn point, so
 ## the warp refuses and the run ends there; what this covers is that no frame of

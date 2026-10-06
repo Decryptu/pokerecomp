@@ -129,6 +129,8 @@ const DEFAULTS: Dictionary = {
 		# acts on rather than a callback: `{"method": Gen2Layout.EVOLVE_*}`, with
 		# an optional `"parameter"`. Empty is every cartridge item.
 		"evolution": {},
+		# The `Gen2WorldFieldMove.HM_FIELD_MOVES` move USE runs, or 0.
+		"field_move": 0,
 	},
 	KIND_TRAINER: {
 		"name": "?",
@@ -406,6 +408,9 @@ func _validate_species(fields: Dictionary) -> Dictionary:
 
 
 func _validate_item(fields: Dictionary) -> Dictionary:
+	var move: int = int(fields.get("field_move", 0))
+	if move != 0 and not Gen2WorldFieldMove.is_hm_field_move(move):
+		return _invalid(&"invalid_content_field_move", "move %d" % move)
 	if not fields.has("evolution"):
 		return {"ok": true}
 	var evolution: Variant = fields["evolution"]

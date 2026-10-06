@@ -734,9 +734,7 @@ func field_move_source_ids() -> Array:
 
 
 ## Whether any registered provider allows [param move] to come from its HM.
-## Static and null-safe on the instance for the reason [method publish] is: this
-## sits on the path every field move takes, and a game with no mods must not
-## build a host to answer no.
+## Static and null-safe, as [method publish] is: every field move asks it.
 static func allows_item_field_move(move: int) -> bool:
 	if _instance == null:
 		return false
