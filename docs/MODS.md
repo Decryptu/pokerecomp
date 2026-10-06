@@ -134,6 +134,7 @@ installed but not loaded, and its own page offers to replace or remove it.
 | 27 | SMOOTH SCROLL reaching a span, an actor's pose and a walking wild, and `span` on an actor entry |
 | 28 | `height_offset_pixels` on an actor's drawn row, and `Gen2WorldAPI.jump_offset_for()` |
 | 29 | `register_experience_bystanders()`, and `bystander` on an `exp_gained` event |
+| 60 | `field_move` on an item row: USE runs that HM field move, and the bag holding the item supplies the move wherever an HM would |
 | 59 | Actor `yes_no` requests answering `accepted`; `Gen2ModHost.party()`; `destination`, `box` and `newly_caught` on a `pokemon_gift` answer |
 | 58 | Actor `text` and `step` requests; `id` and `frame` on an actor entry; the Dude's fight never sends the player's Pokemon out |
 | 57 | `Gen2WorldAPI.player_walk_cells()`, and the cells the player still has to cross in a visible-encounter context's `occupied` |
@@ -363,6 +364,26 @@ The host runs that method's own predicate and then the whole of
 the new moves stay in one place. `EVOLVE_TRADE` and `EVOLVE_ITEM` are the two
 methods available; an optional `"parameter"` is the stone `EVOLVE_ITEM` looks for,
 defaulting to the item's own number. An item without `evolution` keeps its normal behavior.
+
+### Items that run a field move
+
+An item may name one of the seven HM field moves as its USE:
+
+```gdscript
+host.patch_content(Gen2ContentOverlay.KIND_ITEM, manifest.id, hm05, {
+	"name": "FLASHLIGHT",
+	"pocket": Gen2WorldPack.TYPE_KEY_ITEM,
+	"field_move": Gen2WorldFieldMove.MOVE_FLASH,
+})
+```
+
+USE from the pack, or SELECT once registered, closes the pack and runs the move
+with no party member behind it, through the same dispatch as the party submenu:
+the badge, the tile or the map's darkness and the refusal text are the host's.
+While the item is in the bag it is also the move's source everywhere else, as an
+[alternate field-move source](#an-alternate-field-move-source) is, without
+registering one. A `field_move` outside `Gen2WorldFieldMove.HM_FIELD_MOVES` is
+refused as `invalid_content_field_move`.
 
 ### Art
 
@@ -2366,6 +2387,9 @@ The host owns everything else:
 | Whether the badge is in hand | Each `Try*OW`'s own `CheckBadge` |
 | Whether the tile allows it | The staged request the party submenu reaches |
 | What the move then does | The same commit, animation and script |
+
+An item row naming the move as its `field_move` is a source without a provider
+([Items that run a field move](#items-that-run-a-field-move)).
 
 The party is asked first. With no provider, the host resolves field moves through
 the cartridge rules, and a Pokemon that knows the move keeps its submenu row. Only
