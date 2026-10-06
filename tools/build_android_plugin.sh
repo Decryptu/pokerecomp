@@ -7,7 +7,7 @@
 # Unlike the iOS plugins beside them, nothing here is compiled against the
 # engine's own headers: an Android plugin is Kotlin against `godot-lib`, and that
 # library is a compile-time dependency only, so one AAR serves both export
-# targets. The library is fetched once into .references/ and cached there.
+# targets. Each engine version's library is fetched once into .references/.
 #
 # Every Kotlin class under `kotlin/` goes in, and each GodotPlugin needs its own
 # meta-data line in the manifest below.
@@ -20,8 +20,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN="$ROOT/addons/android_native"
 # The engine pin, which is the release the Android library is taken from. Bump
 # with the recorded pin.
-GODOT_TAG="${GODOT_TAG:-4.8-dev4}"
-GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-4.8.dev4}"
+GODOT_TAG="${GODOT_TAG:-4.8-dev7}"
+GODOT_LIB_VERSION="${GODOT_LIB_VERSION:-4.8.dev7}"
 # Built through a wrapper at a pinned Gradle rather than whatever gradle is on
 # the machine: 9.6 removed an internal API the Android plugin below still uses,
 # and a CI runner picking up 9.7 failed a release while this machine's 9.5
@@ -43,7 +43,7 @@ fi
 
 CACHE="$ROOT/.references/godot-android"
 mkdir -p "$CACHE"
-LIB="$CACHE/godot-lib.aar"
+LIB="$CACHE/godot-lib.$GODOT_LIB_VERSION.aar"
 if [ ! -f "$LIB" ]; then
 	URL="https://github.com/godotengine/godot-builds/releases/download/$GODOT_TAG/godot-lib.$GODOT_LIB_VERSION.template_release.aar"
 	echo "Fetching $URL"
@@ -96,7 +96,7 @@ android {
 		targetCompatibility JavaVersion.VERSION_17
 	}
 }
-kotlin { jvmToolchain(17) }
+kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
 dependencies { compileOnly files('godot-lib.aar') }
 GRADLE
 

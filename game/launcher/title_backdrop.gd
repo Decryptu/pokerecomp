@@ -13,13 +13,6 @@ const MAX_STEPS_PER_TICK: int = 4
 ## half of whatever the app block's music volume is.
 const VOLUME_SCALE: float = 0.5
 
-## How much of a frame the title lettering fills, which the launcher erases to
-## draw its own type over: Crystal's logo ends on row ten, Gold and Silver's on
-## row seven, and Generation 1's on `TITLE_LOGO_AT`'s seven plus a version line.
-const LETTERING_BOTTOM: Dictionary = {
-	RomRegistry.RED: 72, RomRegistry.BLUE: 72, RomRegistry.YELLOW: 72,
-	RomRegistry.GOLD: 60, RomRegistry.SILVER: 60, RomRegistry.CRYSTAL: 80,
-}
 ## The copyright is the final tile row on every one of them.
 const COPYRIGHT_TOP: int = 136
 
@@ -181,15 +174,20 @@ func _audio_assets() -> Dictionary:
 	return _data.audio_assets()
 
 
+func _lettering() -> Array[Rect2i]:
+	if _gen1 != null:
+		return Gen1Opening.title_lettering(_data.id)
+	return Gen2TitlePage.lettering(_data.id)
+
+
 ## Removes the title lettering from the launcher copy alone; every gameplay
 ## caller still receives the cartridge-accurate frame.
 func _clean_frame(frame: Image) -> Image:
 	if frame == null:
 		return null
-	frame.fill_rect(
-		Rect2i(0, 0, frame.get_width(), int(LETTERING_BOTTOM.get(_data.id, 60))),
-		frame.get_pixel(0, 0),
-	)
+	var field: Color = frame.get_pixel(0, 0)
+	for cells: Rect2i in _lettering():
+		frame.fill_rect(cells, field)
 	# Preserve each profile's lower-band colour instead of imposing a colour of
 	# the launcher's own.
 	for y: int in range(COPYRIGHT_TOP, frame.get_height()):

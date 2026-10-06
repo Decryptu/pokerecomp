@@ -51,6 +51,7 @@ const CRYSTAL_SUICUNE_PALETTE: int = 0
 ## The hardware has eight of each, and `_TitleScreen` fills both sets from one
 ## sixteen-palette run.
 const CRYSTAL_BG_PALETTES: int = 8
+const CRYSTAL_LETTERING_BOTTOM: int = 80
 
 ## `.OAMData_GSIntroHoOh1` through `5`, as `dbsprite` tile-and-pixel pairs
 ## already worked out: `(x, y, tile)` in pixels, with the 8x16 objects stepping
@@ -192,6 +193,13 @@ var _map: PackedInt32Array = PackedInt32Array()
 var _map_indices: PackedByteArray = PackedByteArray()
 var _base: PackedInt32Array = PackedInt32Array()
 var _base_indices: PackedByteArray = PackedByteArray()
+
+
+## The title lettering in pixels; Crystal's crystal falls behind it to line 80.
+static func lettering(profile: StringName) -> Array[Rect2i]:
+	if profile == RomRegistry.CRYSTAL:
+		return [Rect2i(0, 0, COLUMNS * TILE, CRYSTAL_LETTERING_BOTTOM)]
+	return [Rect2i(0, 0, COLUMNS * TILE, GS_TOP_ROWS * TILE)]
 
 
 ## Null on a cache with no title art, which is the caller's cue to skip the

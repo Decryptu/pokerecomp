@@ -91,7 +91,7 @@ func test_a_published_release_is_announced_without_committing_the_webhook() -> v
 	assert_false(workflow.contains("discord.com/api/webhooks/"), "the credential stays in secrets")
 
 
-## Four files name the engine, and a release mixes two engines the moment they
+## Five files name the engine, and a release mixes two engines the moment they
 ## disagree: the templates come from one commit and the iOS plugin linked into
 ## them from another. The 4.8.dev4 bump left `release.yml` behind by itself.
 func test_every_file_that_names_the_engine_names_the_same_one() -> void:

@@ -41,9 +41,9 @@ flags=(
   optimize=size
   lto=full
   debug_symbols=no
-  vulkan=no
-  d3d12=no
-  metal=no
+  # SConstruct defines RD_ENABLED unless this is off, whatever the drivers,
+  # and turning it off turns Vulkan, Direct3D 12 and Metal off.
+  rendering_device=no
   opengl3=yes
 )
 for m in "${DISABLED_MODULES[@]}"; do flags+=("module_${m}_enabled=no"); done
