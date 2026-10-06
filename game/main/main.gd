@@ -804,9 +804,7 @@ func _on_file_selected(path: String) -> void:
 	var game_id: StringName = identity["id"]
 	GameRuntime.select_game(game_id)
 	_selected_game_id = game_id
-	_finish_import(true, "%d species and %d trainer classes are ready." % [
-		int(result["species"]), int(result["trainers"]),
-	])
+	_finish_import(true, RomImport.ready_message(result))
 	_refresh_games()
 	_shelf.focus_game(game_id)
 	var seated: Gen2Cartridge = _shelf.cartridge(game_id)
