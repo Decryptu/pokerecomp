@@ -42,7 +42,7 @@ func _initialize() -> void:
 
 	var data: GameData = GameData.open(StringName(args[0]))
 	if data == null:
-		push_error("No cache for %s. Import roms/%s.gbc first." % [args[0], args[0]])
+		push_error("No cache for %s. Run tools/import_rom.gd first." % args[0])
 		quit(1)
 		return
 

@@ -54,7 +54,7 @@ func run(r: RefCounted) -> void:
 	for game_id: StringName in _r.GAME_IDS:
 		var data: GameData = GameData.open(game_id)
 		if data == null:
-			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
+			_r.fail("%s cache is unavailable. Run tools/import_rom.gd first." % game_id)
 			continue
 		_check_guide(game_id, data)
 		for trigger_index: int in ROUTE_TRIGGERS.size():

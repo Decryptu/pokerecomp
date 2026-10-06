@@ -188,12 +188,12 @@ func test_the_games_declaration_is_validated_by_shape_and_not_by_registry() -> v
 	assert_eq(PokeModManifest.from_dictionary(source, _directory)["reason"], &"invalid_games")
 	source["games"] = ["Crystal"]
 	assert_eq(PokeModManifest.from_dictionary(source, _directory)["reason"], &"invalid_game")
-	source["games"] = ["gold", "silver", "crystal", "emerald"]
+	source["games"] = ["gold", "silver", "crystal", "platinum"]
 	var read: Dictionary = PokeModManifest.from_dictionary(source, _directory)
 	assert_true(read["ok"], "an id this host does not know is still a legal declaration")
 	var manifest: PokeModManifest = read["manifest"]
-	assert_eq(manifest.games, [&"gold", &"silver", &"crystal", &"emerald"] as Array[StringName])
-	assert_eq(manifest.game_titles(), ["Gold", "Silver", "Crystal", "emerald"] as Array[String])
+	assert_eq(manifest.games, [&"gold", &"silver", &"crystal", &"platinum"] as Array[StringName])
+	assert_eq(manifest.game_titles(), ["Gold", "Silver", "Crystal", "platinum"] as Array[String])
 
 
 ## An absent declaration is every cartridge, and so is an unchosen one: the
@@ -1232,18 +1232,18 @@ func test_index_feed_parses_entries_and_keeps_the_listing_order() -> void:
 func test_index_feed_carries_the_games_a_row_declares() -> void:
 	var parsed: Dictionary = PokeModIndex.parse_feed(_feed([
 		{"id": "voxel", "download": "https://example.com/voxel.zip",
-		 "games": ["gold", "silver", "gold", "Bad Id", 7, "emerald"]},
+		 "games": ["gold", "silver", "gold", "Bad Id", 7, "platinum"]},
 		{"id": "plain", "download": "https://example.com/plain.zip"},
 		{"id": "wrong", "download": "https://example.com/wrong.zip", "games": "crystal"},
 	]))
 	var entries: Array = parsed["entries"]
 	# Deduplicated, malformed ids dropped on their own, and an id this build has
 	# never heard of kept, because a feed may list a mod for a later cartridge.
-	assert_eq(entries[0]["games"], [&"gold", &"silver", &"emerald"] as Array[StringName])
+	assert_eq(entries[0]["games"], [&"gold", &"silver", &"platinum"] as Array[StringName])
 	# No list at all, and a list that is not a list, are both "every cartridge".
 	assert_eq(entries[1]["games"], [] as Array[StringName])
 	assert_eq(entries[2]["games"], [] as Array[StringName])
-	assert_eq(PokeModManifest.titles_for(entries[0]["games"]), ["Gold", "Silver", "emerald"] as Array[String])
+	assert_eq(PokeModManifest.titles_for(entries[0]["games"]), ["Gold", "Silver", "platinum"] as Array[String])
 
 
 func test_index_feed_of_an_unknown_schema_is_refused_outright() -> void:

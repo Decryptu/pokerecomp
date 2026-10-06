@@ -93,6 +93,18 @@ over a one-pocket bag.
 | Silver (USA/Europe) | `49b163f7e57702bc939d642a18f591de55d92dae` |
 | Crystal (USA/Europe Rev 1) | `f2f52230b536214ef7c9924f483392993e226cfb` |
 
+Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
+the shelf. Their dumps are recognised and nothing past the header is decoded,
+so `tools/import_rom.gd` skips them unless given `--dev`.
+
+| Game | SHA-1 |
+|---|---|
+| Ruby (USA Rev 2) | `5b64eacf892920518db4ec664e62a086dd5f5bc8` |
+| Sapphire (USA Rev 2) | `89b45fb172e6b55d51fc0e61989775187f6fe63c` |
+| FireRed (USA Rev 1) | `dd5945db9b930750cb39d00c84da8571feebf417` |
+| LeafGreen (USA Rev 1) | `7862c67bdecbe21d1d69ce082ce34327e1c6ed5e` |
+| Emerald (USA) | `f3ae088181bf583e55daf962a92bb46f4f1d07b7` |
+
 ## Importing
 
 ```bash
@@ -107,7 +119,7 @@ one. The shelf marks that cartridge "Update needed", and pressing it says why an
 opens the picker: import the same dump again. Saves live under their own root and
 are not touched.
 
-The same sheet, behind the three dots above the shelf, also swaps a cartridge's
+The same sheet, behind the shelf's Options button, also swaps a cartridge's
 picture for one of your own: any PNG, WebP or JPEG, scaled to fit the shell
 whatever shape it is, with a way back to the shipped art. It is kept under
 `user://` beside the saves, so an update does not ask for it again.
@@ -140,11 +152,12 @@ rendering needs no duplicate images.
 godot --headless --path . --quit-after 30
 ```
 
-The launcher is a shelf of six cartridges. An unimported bay is drawn in the
+The launcher is a shelf of six cartridges, and five more with the dev setting
+on. An unimported bay is drawn in the
 cartridge's own outline: drop a dump on it, or click to browse. Behind the
 seated cartridge its own title screen plays, with the lettering taken off and
-its music under the interface. Mods, settings and about are in the dock
-underneath. Light and dark, and the same layout works
+its music under the interface. Mods, settings and about are in the tabs across
+the top. Light and dark, and the same layout works
 on a phone. The clock and the charge across the top are the machine's own; a
 device whose charge cannot be read shows none rather than a full cell.
 

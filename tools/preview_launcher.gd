@@ -91,6 +91,9 @@ func _initialize() -> void:
 	_mode = mode
 	_page = page
 	_state = state
+	# Photographing a dev cartridge needs it on the shelf; nothing is saved.
+	if RomRegistry.is_dev(_cartridge):
+		Gen2OptionsStore.current().dev_cartridges = true
 	var packed: PackedScene = load("res://game/main/main.tscn")
 	_launcher = packed.instantiate()
 	root.add_child(_launcher)

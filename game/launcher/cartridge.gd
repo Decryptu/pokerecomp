@@ -13,10 +13,26 @@ const ART: Dictionary = {
 	&"gold": preload("res://assets/cartridges/gold.webp"),
 	&"silver": preload("res://assets/cartridges/silver.webp"),
 	&"crystal": preload("res://assets/cartridges/crystal.webp"),
+	&"ruby": preload("res://assets/cartridges/ruby.webp"),
+	&"sapphire": preload("res://assets/cartridges/sapphire.webp"),
+	&"firered": preload("res://assets/cartridges/firered.webp"),
+	&"leafgreen": preload("res://assets/cartridges/leafgreen.webp"),
+	&"emerald": preload("res://assets/cartridges/emerald.webp"),
 }
 
-## The cartridge shells are 1058 by 1201.
+## Every card is a Game Boy shell's box; a wider shell is centred across it.
 const ASPECT: float = 1058.0 / 1201.0
+## Width over height, then the top moulding and label window as shell fractions.
+const GB_SHELL: Dictionary = {
+	"aspect": ASPECT,
+	"grip": Rect2(0.17, 0.05, 0.60, 0.17),
+	"label": Rect2(0.13, 0.28, 0.74, 0.60),
+}
+const GBA_SHELL: Dictionary = {
+	"aspect": 1058.0 / 607.0,
+	"grip": Rect2(0.30, 0.07, 0.40, 0.13),
+	"label": Rect2(0.13, 0.22, 0.74, 0.66),
+}
 
 const BAY_ICON_SIDE: float = 44.0
 const FAR_BAY_ICON_SIDE: float = 26.0
@@ -35,7 +51,7 @@ void fragment() {
 """
 
 var game_id: StringName = &""
-## Which bay of [constant RomRegistry.ORDER] this draws.
+## Which bay of the shelf this draws.
 var cache_state: StringName = RomCache.STATE_MISSING
 var imported: bool = false
 ## How far the cartridge is from the selected one, which decides its size and
@@ -111,8 +127,9 @@ func _build() -> void:
 	invitation.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Centred on the label window rather than on the bay, so the prompt sits where
 	# a cartridge would carry its sticker.
-	invitation.anchor_top = 0.28
-	invitation.anchor_bottom = 0.88
+	var window: Rect2 = _in_box(_shell()["label"], Vector2(1.0, 1.0 / ASPECT))
+	invitation.anchor_top = window.position.y * ASPECT
+	invitation.anchor_bottom = window.end.y * ASPECT
 	invitation.offset_top = 0.0
 	invitation.offset_bottom = 0.0
 	_bay.add_child(invitation)
@@ -230,7 +247,21 @@ func _draw() -> void:
 	var pad: float = size.x * 0.05
 	draw_style_box(
 		_theme.box(Color(0, 0, 0, 0), size.x * 0.09, _theme.accent, 6),
-		Rect2(Vector2(-pad, -pad), size + Vector2(pad, pad) * 2.0),
+		_in_box(Rect2(0, 0, 1, 1), size).grow(pad),
+	)
+
+
+func _shell() -> Dictionary:
+	return GBA_SHELL if RomRegistry.is_generation(game_id, RomRegistry.GEN3) else GB_SHELL
+
+
+## [param part], in shell fractions, placed in [param box].
+func _in_box(part: Rect2, box: Vector2) -> Rect2:
+	var height: float = box.x / float(_shell()["aspect"])
+	var top: float = (box.y - height) * 0.5
+	return Rect2(
+		Vector2(part.position.x * box.x, top + part.position.y * height),
+		part.size * Vector2(box.x, height),
 	)
 
 
@@ -244,7 +275,8 @@ func _draw_bay() -> void:
 		_theme.accent_wash(0.08) if _hover
 		else _theme.with_alpha(_theme.panel, 0.30 if _theme.is_dark() else 0.55)
 	)
-	var shell: PackedVector2Array = _silhouette(_bay.size)
+	var whole: Rect2 = _in_box(Rect2(0, 0, 1, 1), _bay.size)
+	var shell: PackedVector2Array = _silhouette(whole)
 	_bay.draw_colored_polygon(shell, fill)
 	var closed: PackedVector2Array = shell.duplicate()
 	closed.append(shell[0])
@@ -252,28 +284,41 @@ func _draw_bay() -> void:
 	# The grip at the top and the label window under it: the two details that make
 	# the outline read as a cartridge rather than as a card with a corner off.
 	var hint: Color = _theme.with_alpha(edge, 0.45)
-	_bay.draw_style_box(
-		_theme.box(Color(0, 0, 0, 0), _bay.size.y * 0.09, hint),
-		Rect2(_bay.size * Vector2(0.17, 0.05), _bay.size * Vector2(0.60, 0.17)),
-	)
+	var grip: Rect2 = _in_box(_shell()["grip"], _bay.size)
+	_bay.draw_style_box(_theme.box(Color(0, 0, 0, 0), grip.size.y * 0.5, hint), grip)
 	_bay.draw_style_box(
 		_theme.box(Color(0, 0, 0, 0), Gen2LauncherTheme.RADIUS_SM, hint),
-		Rect2(_bay.size * Vector2(0.13, 0.28), _bay.size * Vector2(0.74, 0.60)),
+		_in_box(_shell()["label"], _bay.size),
 	)
 
 
-## A rounded rectangle with the notch out of its top right corner that keeps a
-## cartridge from going into its slot the wrong way round.
-func _silhouette(box: Vector2) -> PackedVector2Array:
+## A Game Boy shell's notch keys its top right corner; a Game Boy Advance shell
+## steps in under both shoulders.
+func _silhouette(rect: Rect2) -> PackedVector2Array:
+	var box: Vector2 = rect.size
 	var radius: float = box.x * 0.07
-	var notch := Vector2(box.x * 0.10, box.y * 0.06)
 	var points := PackedVector2Array()
 	points.append_array(_corner(Vector2(radius, radius), radius, PI, PI * 1.5))
-	points.append(Vector2(box.x - notch.x, 0.0))
-	points.append(Vector2(box.x - notch.x, notch.y))
-	points.append(Vector2(box.x, notch.y))
-	points.append_array(_corner(Vector2(box.x - radius, box.y - radius), radius, 0.0, PI * 0.5))
-	points.append_array(_corner(Vector2(radius, box.y - radius), radius, PI * 0.5, PI))
+	if _shell() == GBA_SHELL:
+		var step := Vector2(box.x * 0.025, box.y * 0.19)
+		points.append_array(_corner(Vector2(box.x - radius, radius), radius, PI * 1.5, TAU))
+		points.append(Vector2(box.x, step.y))
+		points.append(Vector2(box.x - step.x, step.y))
+		points.append_array(_corner(
+			Vector2(box.x - step.x - radius, box.y - radius), radius, 0.0, PI * 0.5
+		))
+		points.append_array(_corner(Vector2(step.x + radius, box.y - radius), radius, PI * 0.5, PI))
+		points.append(Vector2(step.x, step.y))
+		points.append(Vector2(0.0, step.y))
+	else:
+		var notch := Vector2(box.x * 0.10, box.y * 0.06)
+		points.append(Vector2(box.x - notch.x, 0.0))
+		points.append(Vector2(box.x - notch.x, notch.y))
+		points.append(Vector2(box.x, notch.y))
+		points.append_array(_corner(Vector2(box.x - radius, box.y - radius), radius, 0.0, PI * 0.5))
+		points.append_array(_corner(Vector2(radius, box.y - radius), radius, PI * 0.5, PI))
+	for index: int in points.size():
+		points[index] += rect.position
 	return points
 
 

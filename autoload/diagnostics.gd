@@ -294,7 +294,7 @@ func _cartridge_lines() -> PackedStringArray:
 	var selected: StringName = runtime.selected_game_id if runtime != null else &""
 	for game_id: StringName in RomRegistry.ORDER:
 		var sha1: String = RomRegistry.sha1_for(game_id)
-		lines.append("  %-8s %-11s%s" % [
+		lines.append("  %-9s %-11s%s" % [
 			RomRegistry.title_for(game_id),
 			RomCache.state(RomCache.directory_for(game_id, sha1)),
 			"  (selected)" if game_id == selected else "",

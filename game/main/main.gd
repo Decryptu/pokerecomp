@@ -78,7 +78,7 @@ func _build() -> void:
 	add_child(_title_backdrop)
 
 	_shelf = Gen2ShelfPage.create(
-		_palette, _shell.compact, Gen2OptionsStore.current().last_played
+		_palette, _shell.compact, _offered(), Gen2OptionsStore.current().last_played
 	)
 	_shelf.insert_requested.connect(_open_import_dialog)
 	_shelf.play_requested.connect(_launch_game)
@@ -96,6 +96,7 @@ func _build() -> void:
 
 	_settings = Gen2SettingsPage.create(_palette, self)
 	_settings.appearance_changed.connect(_reload_appearance)
+	_settings.cartridges_changed.connect(_reload_appearance)
 	_shell.add_page(&"settings", "Settings", &"settings", _settings)
 
 	_about = Gen2AboutPage.create(_palette, self)
@@ -117,7 +118,7 @@ func _build() -> void:
 func _build_dialogs() -> void:
 	_file_dialog = _picker(
 		"Choose a cartridge dump",
-		PackedStringArray(["*.gbc; Cartridge dump", "*.gb; Cartridge dump"]),
+		_dump_filters(),
 	)
 	_file_dialog.file_selected.connect(_on_file_selected)
 
@@ -143,6 +144,13 @@ func _build_dialogs() -> void:
 		window.files_dropped.connect(_on_files_dropped)
 
 
+func _dump_filters() -> PackedStringArray:
+	var filters: PackedStringArray = []
+	for extension: String in RomRegistry.EXTENSIONS:
+		filters.append("*.%s; Cartridge dump" % extension)
+	return filters
+
+
 func _picker(title: String, filters: PackedStringArray) -> Gen2LauncherFilePicker:
 	var dialog: Gen2LauncherFilePicker = Gen2LauncherUI.file_picker(
 		_palette, title, FileDialog.FILE_MODE_OPEN_FILE, filters
@@ -151,10 +159,19 @@ func _picker(title: String, filters: PackedStringArray) -> Gen2LauncherFilePicke
 	return dialog
 
 
+## A rebuild keeps the page and settings section the press was made on.
 func _reload_appearance() -> void:
+	var page: StringName = _shell.current_page()
+	var section: StringName = _settings.current_section()
 	_palette = Gen2LauncherTheme.active()
 	_build()
 	_refresh_games()
+	_settings.select_section(section)
+	select_page(page)
+
+
+func _offered() -> Array[StringName]:
+	return Gen2OptionsStore.current().offered_cartridges()
 
 
 func _on_cartridge_selected(_game_id: StringName) -> void:
@@ -192,7 +209,7 @@ func _refresh_backdrop() -> void:
 
 
 func _refresh_games() -> void:
-	for game_id: StringName in RomRegistry.ORDER:
+	for game_id: StringName in _offered():
 		var data: GameData = GameData.open(game_id)
 		var state: StringName = cache_state_for(game_id) if data == null \
 			else RomCache.STATE_USABLE
@@ -518,17 +535,17 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 	if _importing:
 		return
 	for path: String in files:
-		match path.get_extension().to_lower():
-			"zip":
-				import_mod_path(path)
-				return
-			"gb", "gbc":
-				_on_file_selected(path)
-				return
+		var extension: String = path.get_extension().to_lower()
+		if extension == "zip":
+			import_mod_path(path)
+			return
+		if RomRegistry.EXTENSIONS.has(extension):
+			_on_file_selected(path)
+			return
 	_set_status(
 		&"error",
 		"Nothing to import there.",
-		"Drop a .gb or .gbc cartridge dump, or a mod .zip.",
+		"Drop a cartridge dump (.%s) or a mod .zip." % ", .".join(RomRegistry.EXTENSIONS),
 	)
 
 
@@ -536,7 +553,7 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 ## reaching into the controls the launcher creates dynamically.
 func launcher_snapshot() -> Dictionary:
 	var games: Dictionary = {}
-	for game_id: StringName in RomRegistry.ORDER:
+	for game_id: StringName in _offered():
 		var data: GameData = GameData.open(game_id)
 		games[String(game_id)] = {
 			"title": RomRegistry.title_for(game_id),
@@ -575,7 +592,7 @@ func preview_fade_step(step: int) -> void:
 
 ## Preview seam: every bay photographed on one machine. Nothing on disk moves.
 func preview_slot_states(states: Dictionary) -> void:
-	for game_id: StringName in RomRegistry.ORDER:
+	for game_id: StringName in _offered():
 		var state := StringName(states.get(String(game_id), RomCache.STATE_MISSING))
 		var detail: String = "Ready. 2 saves" if state == RomCache.STATE_USABLE \
 			else cache_state_note(state)
@@ -586,9 +603,7 @@ func preview_slot_states(states: Dictionary) -> void:
 ## Preview seam: turns the carousel without a press, so a shelf longer than the
 ## three cartridges on screen can be photographed whole.
 func preview_select_cartridge(game_id: StringName) -> void:
-	var index: int = RomRegistry.ORDER.find(game_id)
-	if index >= 0:
-		_shelf.stage().select(index, false)
+	_shelf.focus_game(game_id, false)
 
 
 ## Preview seam: opens one of the mods page's own views, so a mod's page and
@@ -748,6 +763,10 @@ func _on_file_selected(path: String) -> void:
 	if identity["status"] != RomVerifier.Status.OK:
 		_finish_import(false, String(identity["message"]))
 		return
+	if not _offered().has(StringName(identity["id"])):
+		_finish_import(false, "%s is a dev cartridge. Settings > Advanced > Dev cartridges "
+			% identity["title"] + "puts it on the shelf.")
+		return
 
 	# A re-import replaces one cartridge's cache, so it only accepts that
 	# cartridge's own dump. Without this, choosing the wrong file from the
@@ -840,7 +859,7 @@ func _report_previous_crash() -> void:
 func _print_allowlist() -> void:
 	var lines: PackedStringArray = []
 	for id: StringName in RomRegistry.ORDER:
-		lines.append("  %-8s %s" % [RomRegistry.title_for(id), RomRegistry.sha1_for(id)])
+		lines.append("  %-9s %s" % [RomRegistry.title_for(id), RomRegistry.sha1_for(id)])
 	print("pokerecomp supported cartridges:")
 	print("\n".join(lines))
 

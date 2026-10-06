@@ -109,7 +109,7 @@ func run(r: RefCounted) -> void:
 	for game_id: StringName in _r.GAME_IDS:
 		var data: GameData = GameData.open(game_id)
 		if data == null:
-			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
+			_r.fail("%s cache is unavailable. Run tools/import_rom.gd first." % game_id)
 			continue
 		_verify_route_5_gate(data, game_id)
 		_verify_cerulean(data, game_id)

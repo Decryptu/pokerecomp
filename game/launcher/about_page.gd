@@ -82,7 +82,7 @@ func _build() -> void:
 	accepted.add_child(Gen2LauncherUI.muted(
 		_theme, "A dump is matched by its SHA-1 hash, never by its filename."
 	))
-	for game_id: StringName in RomRegistry.ORDER:
+	for game_id: StringName in Gen2OptionsStore.current().offered_cartridges():
 		var sha1: String = RomRegistry.sha1_for(game_id)
 		var row: Dictionary = RomRegistry.lookup(sha1)
 		var line: HBoxContainer = Gen2LauncherUI.row(Gen2LauncherUI.GAP_MD)

@@ -103,8 +103,8 @@ func test_hashes_are_lowercase_hex() -> void:
 
 
 func test_unknown_id_yields_no_hash() -> void:
-	assert_eq(RomRegistry.sha1_for(&"emerald"), "")
-	assert_eq(RomRegistry.title_for(&"emerald"), "")
-	assert_eq(RomRegistry.generation_for(&"emerald"), 0)
-	assert_eq(RomRegistry.size_for(&"emerald"), 0)
-	assert_false(RomRegistry.is_playable(&"emerald"))
+	assert_eq(RomRegistry.sha1_for(&"a_cartridge_that_left"), "")
+	assert_eq(RomRegistry.title_for(&"a_cartridge_that_left"), "")
+	assert_eq(RomRegistry.generation_for(&"a_cartridge_that_left"), 0)
+	assert_eq(RomRegistry.size_for(&"a_cartridge_that_left"), 0)
+	assert_false(RomRegistry.is_playable(&"a_cartridge_that_left"))
