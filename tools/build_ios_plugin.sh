@@ -13,10 +13,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT_SOURCE="${GODOT_SOURCE:-$ROOT/.references/godot}"
-MIN_IOS="${MIN_IOS:-14.0}"
+# The plugin targets the same iOS as the app it is linked into.
+MIN_IOS="${MIN_IOS:-$(sed -n 's/^application\/min_ios_version="\(.*\)"$/\1/p' "$ROOT/export_presets.cfg")}"
 
 if [ ! -f "$GODOT_SOURCE/core/object/object.h" ]; then
 	echo "No engine headers at $GODOT_SOURCE. Set GODOT_SOURCE to a Godot checkout." >&2
+	exit 1
+fi
+PIN="$(sed -n 's/^  GODOT_COMMIT: //p' "$ROOT/.github/workflows/export-templates.yml")"
+HEAD="$(git -C "$GODOT_SOURCE" rev-parse HEAD 2>/dev/null || true)"
+if [ "$HEAD" != "$PIN" ]; then
+	echo "$GODOT_SOURCE is at ${HEAD:-no commit}, the templates at $PIN." >&2
 	exit 1
 fi
 

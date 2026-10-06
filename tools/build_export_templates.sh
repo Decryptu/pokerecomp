@@ -41,9 +41,9 @@ flags=(
   optimize=size
   lto=full
   debug_symbols=no
-  vulkan=no
-  d3d12=no
-  metal=no
+  # SConstruct defines RD_ENABLED unless this is off, whatever the drivers,
+  # and turning it off turns Vulkan, Direct3D 12 and Metal off.
+  rendering_device=no
   opengl3=yes
 )
 for m in "${DISABLED_MODULES[@]}"; do flags+=("module_${m}_enabled=no"); done
@@ -57,6 +57,15 @@ mkdir -p "$out"
 src="$(cd "$src" && pwd)"
 out="$(cd "$out" && pwd)"
 
+# display_server_windows.cpp includes the RD compositor outside RD_ENABLED,
+# where its own header already includes it inside, so `rendering_device=no`
+# fails on a shader header nothing generated. The other platforms guard it.
+unguard_windows_rd() {
+  local file="$src/platform/windows/display_server_windows.cpp"
+  sed -i.orig '/^#include "servers\/rendering\/renderer_rd\/renderer_compositor_rd.h"$/d' "$file"
+  rm -f "$file.orig"
+}
+
 for t in "$@"; do
   case "$t" in
     linux-x86_64)
@@ -66,9 +75,11 @@ for t in "$@"; do
       build linuxbsd arch=arm64
       cp "$src/bin/godot.linuxbsd.template_release.arm64" "$out/linux_release.arm64" ;;
     windows-x86_64)
+      unguard_windows_rd
       build windows arch=x86_64
       cp "$src/bin/godot.windows.template_release.x86_64.exe" "$out/windows_release_x86_64.exe" ;;
     windows-arm64)
+      unguard_windows_rd
       build windows arch=arm64
       cp "$src/bin/godot.windows.template_release.arm64.exe" "$out/windows_release_arm64.exe" ;;
     macos)

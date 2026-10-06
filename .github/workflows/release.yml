@@ -19,10 +19,10 @@ permissions:
   pull-requests: write
 
 env:
-  GODOT_VERSION: 4.8-dev4
-  GODOT_TEMPLATE_DIR: 4.8.dev4
+  GODOT_VERSION: 4.8-dev7
+  GODOT_TEMPLATE_DIR: 4.8.dev7
   # Plugin headers must match the template engine commit.
-  GODOT_COMMIT: b56a91878e7c94977e4af978968e41d0670c0a8b
+  GODOT_COMMIT: c971f93e7e76b0ef919bf6009e7b868bea04db7f
 
 jobs:
   version:
@@ -89,7 +89,7 @@ jobs:
           echo "GODOT=/usr/local/bin/godot" >> "$GITHUB_ENV"
           curl -fsSL "$base/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/tpz
-          # Template directory uses `version.txt` spelling: 4.8.dev4.
+          # Template directory uses `version.txt` spelling: 4.8.dev7.
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
           cp -R /tmp/tpz/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}/"
 
@@ -126,7 +126,7 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           EOF
 
-      # Export requires Godot 4.8.dev4's exact Android SDK package list.
+      # Export requires Godot 4.8.dev7's exact Android SDK package list.
       - name: Install the SDK packages the exporter insists on
         run: |
           set -euo pipefail
@@ -257,9 +257,6 @@ jobs:
           set -euo pipefail
           brew untap aws/tap 2>/dev/null || true
           brew install scons
-          # The plugin and templates must use the same engine commit.
-          grep -q "GODOT_COMMIT: $GODOT_COMMIT" .github/workflows/export-templates.yml \
-            || { echo "::error::the plugin pin disagrees with the template pin"; exit 1; }
           git init -q .references/godot
           git -C .references/godot remote add origin https://github.com/godotengine/godot.git
           git -C .references/godot fetch -q --depth 1 origin "$GODOT_COMMIT"

@@ -217,6 +217,17 @@ var _blink_timer: int = 0
 var _reset_counter: int = 0
 
 
+## The title lettering in pixels, and Yellow's bubble tail between Pikachu's ears.
+static func title_lettering(game_id: StringName) -> Array[Rect2i]:
+	if game_id != RomRegistry.YELLOW:
+		return [Rect2i(0, 0, Gen1Lcd.WIDTH, (TITLE_VERSION_AT.y + 1) * Gen1Lcd.TILE)]
+	return [
+		Rect2i(0, 0, Gen1Lcd.WIDTH, (TITLE_LOGO_AT.y + Gen1Layout.TITLE_LOGO_TILEMAP.y) * Gen1Lcd.TILE),
+		Rect2i(YELLOW_BUBBLE_TAIL_AT * Gen1Lcd.TILE,
+			Vector2i(YELLOW_BUBBLE_TAIL.size(), 1) * Gen1Lcd.TILE),
+	]
+
+
 ## Null on a cache with no opening section. [param title_only] starts at
 ## `DisplayTitleScreen` with neither movie in front of it, which is the loop the
 ## launcher's backdrop plays and which nothing else asks for.

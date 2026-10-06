@@ -23,12 +23,12 @@ on:
         type: string
 
 env:
-  GODOT_VERSION: 4.8-dev4
-  # This commit matches the stock 4.8.dev4 template build.
-  GODOT_COMMIT: b56a91878e7c94977e4af978968e41d0670c0a8b
-  # Switch needs a same-series Godot fork with `platform/nx`.
+  GODOT_VERSION: 4.8-dev7
+  # This commit matches the stock 4.8.dev7 template build.
+  GODOT_COMMIT: c971f93e7e76b0ef919bf6009e7b868bea04db7f
+  # Switch builds from GODOT_COMMIT plus one commit carrying `platform/nx`.
   GODOT_NX_REMOTE: https://github.com/Decryptu/godot.git
-  GODOT_NX_COMMIT: e25f31c1248c0955994e865a80d94d32520a53b9
+  GODOT_NX_COMMIT: 1467fbb330a5085e09f7abdbe308d6dd0e117957
 
 jobs:
   build:
@@ -75,7 +75,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: templates
-          key: templates-${{ matrix.host }}-${{ env.GODOT_VERSION }}-${{ hashFiles('tools/build_export_templates.sh') }}
+          key: templates-${{ matrix.host }}-${{ matrix.host == 'switch' && env.GODOT_NX_COMMIT || env.GODOT_COMMIT }}-${{ hashFiles('tools/build_export_templates.sh') }}
 
       - uses: actions/setup-java@v6
         if: steps.cache.outputs.cache-hit != 'true' && matrix.host == 'android'
@@ -132,6 +132,16 @@ jobs:
           git -C godot-src remote add origin "$remote"
           git -C godot-src fetch -q --depth 1 origin "$commit"
           git -C godot-src checkout -q FETCH_HEAD
+          # The fork is the stock commit plus its one platform commit, so a
+          # dev bump cannot leave Switch on the previous snapshot.
+          if [ "${{ matrix.host }}" = "switch" ]; then
+            git -C godot-src fetch -q --deepen 1 origin "$commit"
+            base=$(git -C godot-src rev-parse HEAD^)
+            if [ "$base" != "$GODOT_COMMIT" ]; then
+              echo "::error::GODOT_NX_COMMIT sits on $base, not GODOT_COMMIT $GODOT_COMMIT"
+              exit 1
+            fi
+          fi
 
           # Stock and custom templates must share a Godot series.
           pin=$(python3 -c "import runpy; v = runpy.run_path('godot-src/version.py'); print('%s.%s' % (v['major'], v['minor']))")

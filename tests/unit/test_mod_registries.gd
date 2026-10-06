@@ -260,6 +260,23 @@ func test_two_mods_claiming_one_renderer_id_is_named_rather_than_silently_won() 
 	)
 
 
+func test_a_reload_frees_the_host_a_mod_captured() -> void:
+	# The example connects a lambda holding the host to the host's own signal,
+	# which kept both alive across every mod reload.
+	var host: WeakRef = weakref(_load_the_example())
+	Gen2ModHost.reset()
+	assert_null(host.get_ref())
+
+
+func _load_the_example() -> Gen2ModHost:
+	var host: Gen2ModHost = Gen2ModHost.instance()
+	host.discover("res://mods/examples")
+	for candidate: PokeModManifest in host.manifests():
+		if candidate.id == &"new_content":
+			assert_true(bool(host.load_mod(candidate).get("ok", false)))
+	return host
+
+
 func test_the_shipped_example_mod_registers_everything_it_documents() -> void:
 	# mods/examples/new_content/ is the reference a mod author copies, so it is
 	# run here rather than only read: a registration it gets wrong would be
