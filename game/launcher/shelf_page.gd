@@ -21,14 +21,17 @@ var _details: Dictionary = {}
 var _compact: bool = false
 var _busy: bool = false
 var _opening: StringName = &""
+var _order: Array[StringName] = []
 
 
 static func create(
-	palette: Gen2LauncherTheme, compact: bool, opening: StringName = &""
+	palette: Gen2LauncherTheme, compact: bool, order: Array[StringName],
+	opening: StringName = &""
 ) -> Gen2ShelfPage:
 	var page := Gen2ShelfPage.new()
 	page._theme = palette
 	page._compact = compact
+	page._order = order
 	page._opening = opening
 	page._build()
 	return page
@@ -37,7 +40,7 @@ static func create(
 func _build() -> void:
 	add_theme_constant_override("separation", Gen2LauncherUI.GAP_MD)
 
-	_stage = Gen2CartridgeStage.create(_theme, RomRegistry.ORDER, _opening)
+	_stage = Gen2CartridgeStage.create(_theme, _order, _opening)
 	_stage.selection_changed.connect(_on_selection_changed)
 	_stage.insert_requested.connect(func(id: StringName) -> void: insert_requested.emit(id))
 	_stage.play_requested.connect(func(id: StringName) -> void: play_requested.emit(id))
@@ -119,10 +122,10 @@ func set_busy(busy: bool) -> void:
 
 ## Moves the selection onto [param game_id], used after an import so the freshly
 ## seated cartridge is the one on show.
-func focus_game(game_id: StringName) -> void:
-	var index: int = RomRegistry.ORDER.find(game_id)
+func focus_game(game_id: StringName, animated: bool = true) -> void:
+	var index: int = _order.find(game_id)
 	if index >= 0:
-		_stage.select(index)
+		_stage.select(index, animated)
 
 
 func set_compact(compact: bool) -> void:

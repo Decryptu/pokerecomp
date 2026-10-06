@@ -18,7 +18,6 @@ const PATHS: Dictionary = {
 	&"chevron": "chevron.svg",
 	&"close": "close.svg",
 	&"discord": "discord.svg",
-	&"dots": "dots.svg",
 	&"display": "display.svg",
 	&"download": "download.svg",
 	&"folder": "folder.svg",

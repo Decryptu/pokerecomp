@@ -51,7 +51,7 @@ func run(r: RefCounted) -> void:
 	for game_id: StringName in [&"crystal", &"gold", &"silver"]:
 		var data: GameData = GameData.open(game_id)
 		if data == null:
-			r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
+			r.fail("%s cache is unavailable. Run tools/import_rom.gd first." % game_id)
 			continue
 		_verify_corpus(r, game_id, data)
 		_verify_walk(r, game_id, data, CENTER_GROUP, CENTER_MAP, CENTER_STAIRS)

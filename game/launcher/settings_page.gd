@@ -1,12 +1,13 @@
 class_name Gen2SettingsPage
 extends BoxContainer
 
-## Edits [Gen2Options] in five sections, every change written immediately. One
+## Edits [Gen2Options] in six sections, every change written immediately. One
 ## section shows at a time, from a rail beside the rows on a wide window and a
-## strip above them on a narrow one: five cards in one pane was forty focus
+## strip above them on a narrow one: every card in one pane was forty focus
 ## stops from the first row to the last.
 
 signal appearance_changed
+signal cartridges_changed
 
 ## Label, then the values in the order the source cycles them.
 const TEXT_SPEEDS: Array[String] = ["Fast", "Mid", "Slow"]
@@ -30,6 +31,7 @@ const SECTIONS: Array[Dictionary] = [
 	{"id": &"controls", "label": "Controls", "glyph": &"pad"},
 	{"id": &"rules", "label": "Gameplay", "glyph": &"sparkle"},
 	{"id": &"game", "label": "In game", "glyph": &"text"},
+	{"id": &"advanced", "label": "Advanced", "glyph": &"settings"},
 ]
 const RAIL_WIDTH: float = 210.0
 const ROWS_WIDTH: float = 760.0
@@ -103,6 +105,7 @@ func _build() -> void:
 	_build_controls(_panes[&"controls"])
 	_build_rules(_panes[&"rules"])
 	_build_game(_panes[&"game"])
+	_build_advanced(_panes[&"advanced"])
 	for pane: StringName in _panes:
 		(_panes[pane] as VBoxContainer).add_child(Gen2LauncherUI.bottom_safe_space())
 	_apply_rail()
@@ -385,6 +388,22 @@ func _build_game(pane: VBoxContainer) -> void:
 		_theme,
 		"Print sets the Game Boy Printer's darkness. Nothing here can print, so "
 		+ "this only keeps the byte the cartridge stored."
+	))
+
+
+func _build_advanced(pane: VBoxContainer) -> void:
+	pane.add_child(Gen2LauncherUI.switch(
+		_theme, &"bug", "Dev cartridges", _options.dev_cartridges,
+		func(on: bool) -> void:
+			_options.dev_cartridges = on
+			_persist()
+			cartridges_changed.emit()
+	))
+	pane.add_child(Gen2LauncherUI.muted(
+		_theme,
+		"Puts the cartridges still being built on the shelf: %s. Their dumps "
+		% RomRegistry.titles_of(RomRegistry.dev_ids())
+		+ "are recognised, and nothing past that works yet."
 	))
 
 

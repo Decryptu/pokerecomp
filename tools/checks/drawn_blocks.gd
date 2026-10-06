@@ -26,7 +26,7 @@ func run(r: RefCounted) -> void:
 	for game: StringName in _r.GAME_IDS:
 		var data: GameData = GameData.open(game)
 		if data == null:
-			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game, game])
+			_r.fail("%s cache is unavailable. Run tools/import_rom.gd first." % game)
 			continue
 		_check_game(data)
 	if _failures > 0:

@@ -102,13 +102,14 @@ var max_fps: int = 0
 var second_screen: StringName = &"auto"
 var game_speed: StringName = &"normal"
 var ui_theme: StringName = &"light"
-## Button bindings, in the shape [PokeInputActions] stores, so the file is the
-## whole scheme.
+var dev_cartridges: bool = false
 ## What the engine does where this project and the cartridge disagree, and the
 ## difficulty. Its own object because it belongs to a run rather than to this
 ## installation: see [Gen2Rules] and [member Gen2SaveData.run_rules].
 var rules: Gen2Rules = Gen2Rules.new()
 
+## Button bindings, in the shape [PokeInputActions] stores, so the file is the
+## whole scheme.
 var controls: Dictionary = PokeInputActions.defaults()
 ## What the player bound a mod's own actions to, keyed by the [InputMap] action
 ## name rather than by a button. Separate from [member controls] because a mod's
@@ -124,6 +125,10 @@ var touch_layout: PokeTouchLayout = PokeTouchLayout.new()
 ## chord belongs to the machine: see [method Gen2InputRuntime.reset_chord_held].
 var soft_reset_acknowledged: bool = false
 var last_played: StringName = &""
+
+
+func offered_cartridges() -> Array[StringName]:
+	return RomRegistry.offered(dev_cartridges)
 
 
 ## The cartridge block as the bytes the hardware kept, `DefaultOptions` order.
@@ -227,6 +232,7 @@ func to_dict() -> Dictionary:
 		"second_screen": String(second_screen),
 		"game_speed": String(game_speed),
 		"ui_theme": String(ui_theme),
+		"dev_cartridges": dev_cartridges,
 		"rules": rules.to_dict(),
 		"controls": PokeInputActions.to_dict(controls),
 		"mod_controls": mod_controls.duplicate(true),
@@ -266,6 +272,7 @@ static func parse(raw: Variant) -> Gen2Options:
 	options.zoom_step = clampi(int(row.get("zoom_step", 0)), -32, 32)
 	options.game_speed = _one_of(row.get("game_speed", ""), GAME_SPEEDS)
 	options.ui_theme = _one_of(row.get("ui_theme", ""), UI_THEMES)
+	options.dev_cartridges = bool(row.get("dev_cartridges", false))
 	var fps: int = int(row.get("max_fps", 0))
 	## The old default moves with the default; a rate the player picked stays.
 	if int(row.get("format_version", 1)) < 2 and fps == 60:

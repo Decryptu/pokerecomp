@@ -40,6 +40,11 @@ const GAME_TINTS: Dictionary = {
 	&"gold": Color("#dfa63a"),
 	&"silver": Color("#93a6bd"),
 	&"crystal": Color("#3ab9bf"),
+	&"ruby": Color("#c42a4c"),
+	&"sapphire": Color("#2f5bb8"),
+	&"firered": Color("#e8643a"),
+	&"leafgreen": Color("#79bd4a"),
+	&"emerald": Color("#2fa874"),
 }
 
 var mode: StringName = LIGHT

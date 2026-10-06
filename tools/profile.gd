@@ -69,7 +69,7 @@ func _run() -> void:
 
 	_data = GameData.open(game)
 	if _data == null:
-		printerr("No cache for %s. Import roms/%s.gbc first." % [game, game])
+		printerr("No cache for %s. Run tools/import_rom.gd first." % game)
 		quit(1)
 		return
 

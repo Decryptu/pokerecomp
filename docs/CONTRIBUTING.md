@@ -30,13 +30,15 @@ the same hooks path enables it.
 |---|---|
 | `game/rom/` | SHA-1 allowlist, verification, bank addressing. Node-free statics |
 | `game/import/` | Decoders and the `user://` cache. Take bytes, return data |
+| `game/gen1/` | Generation 1's layout, decoders and importer, beside `game/import/`'s Generation 2 ones |
+| `game/gen3/` | Generation 3's header check, the root its importer grows from |
 | `game/data/` | `game_data.gd`, the sole engine-facing cartridge-content API |
 | `game/save/` | Project saves, versioned and scene-free. See [SAVES.md](SAVES.md) |
 | `game/world/` | Request resolution, separate from the screens that draw it |
 | `game/battle/` | Scene-free engine, seeded RNG, hardware integer order |
 | `game/render/` | Tile-grid pages; a `*_page.gd` draws, its model decides |
 | `game/mods/` | Manifest validation and the registry. See [MODS.md](MODS.md) |
-| `audio/` | The cartridge's own driver over an emulated APU |
+| `game/audio/` | The cartridge's own driver over an emulated APU |
 | `autoload/diagnostics.gd` | The log sink, the crash marker and the report bundle |
 
 Five boundaries are load-bearing and not obvious from one file:

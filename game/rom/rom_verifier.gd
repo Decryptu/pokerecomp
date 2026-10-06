@@ -1,10 +1,8 @@
 class_name RomVerifier
 extends RefCounted
 
-## Identifies a user-supplied ROM file by SHA-1 against [RomRegistry].
-## Pure and node-free so the whole import gate is testable headlessly. Nothing
-## here reads game content; it only answers "is this a cartridge we know?".
-## The importer that follows is entitled to assume a verified hash.
+## Identifies a user-supplied dump by SHA-1 against [RomRegistry], node-free and
+## reading no content. The importer that follows may assume a verified hash.
 
 enum Status {
 	OK,
@@ -13,8 +11,7 @@ enum Status {
 	UNKNOWN_ROM,
 }
 
-## Read in chunks so a 2 MiB file never lands in memory twice, and so the same
-## code path survives if a future platform hands us something larger.
+## Read in chunks so a dump is never held in memory just to be hashed.
 const CHUNK_SIZE: int = 65536
 
 
@@ -55,9 +52,8 @@ static func identify(path: String) -> Dictionary:
 		result["message"] = "No file at %s" % path
 		return result
 
-	# Cheap rejection before hashing: a supported cartridge is 1 MiB (Gen 1) or
-	# 2 MiB (Gen 2), so any other length is a wrong file, or a headered or
-	# trimmed dump, and hashing it would only waste the read.
+	# Cheap rejection before hashing: any length outside
+	# [constant RomRegistry.SIZES] is a wrong, headered or trimmed file.
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		result["message"] = "Could not open %s" % path
@@ -81,7 +77,7 @@ static func identify(path: String) -> Dictionary:
 		result["status"] = Status.UNKNOWN_ROM
 		result["message"] = (
 			"Unrecognised ROM (sha1 %s). pokerecomp supports %s."
-			% [sha1, _title_list()]
+			% [sha1, RomRegistry.titles_of(RomRegistry.offered(false))]
 		)
 		return result
 
@@ -97,8 +93,6 @@ static func is_valid(path: String) -> bool:
 	return identify(path)["status"] == Status.OK
 
 
-## The dump lengths and the cartridge titles the refusals name, both built from
-## the registry so adding a cartridge cannot leave a message behind.
 static func _size_list() -> PackedStringArray:
 	var out: PackedStringArray = []
 	for size: int in RomRegistry.SIZES.values():
@@ -106,10 +100,19 @@ static func _size_list() -> PackedStringArray:
 	return out
 
 
-static func _title_list() -> String:
-	var titles: PackedStringArray = []
-	for id: StringName in RomRegistry.ORDER:
-		titles.append(RomRegistry.title_for(id))
-	var last: String = titles[titles.size() - 1]
-	titles.remove_at(titles.size() - 1)
-	return "%s and %s" % [", ".join(titles), last]
+
+## The files in [param dir_path] with a dump's extension, sorted.
+static func candidates_in(dir_path: String) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var dir: DirAccess = DirAccess.open(dir_path)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var name: String = dir.get_next()
+	while name != "":
+		if not dir.current_is_dir() and RomRegistry.EXTENSIONS.has(name.get_extension().to_lower()):
+			out.append("%s/%s" % [dir_path, name])
+		name = dir.get_next()
+	dir.list_dir_end()
+	out.sort()
+	return out

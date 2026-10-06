@@ -31,7 +31,7 @@ func test_every_cartridge_is_lit_in_its_own_colour() -> void:
 		seen.append(tint)
 	# Anything the registry does not name falls back to the app accent rather
 	# than to an unset colour.
-	assert_eq(_light.tint_for(&"emerald"), _light.accent)
+	assert_eq(_light.tint_for(&"a_cartridge_that_left"), _light.accent)
 
 
 func test_the_appearance_choice_survives_the_options_file() -> void:
@@ -282,7 +282,7 @@ func test_every_glyph_the_launcher_asks_for_is_one_the_set_draws() -> void:
 	var used: Array[StringName] = [
 		&"shelf", &"mods", &"settings", &"about", &"play", &"plus", &"back",
 		&"folder", &"trash", &"refresh", &"download", &"check", &"warning",
-		&"save", &"dots", &"close", &"power", &"refresh_all", &"restart",
+		&"save", &"close", &"power", &"refresh_all", &"restart",
 		&"gallery",
 		&"bug", &"github", &"discord",
 	]
@@ -412,7 +412,7 @@ func test_a_switch_row_flips_on_a_press_and_carries_no_focus_of_its_own() -> voi
 
 
 func test_the_stage_holds_one_cartridge_per_supported_game() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	await get_tree().process_frame
 
@@ -424,7 +424,7 @@ func test_the_stage_holds_one_cartridge_per_supported_game() -> void:
 
 
 func test_every_cartridge_beside_the_selection_is_the_same_size_and_centred_on_it() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.size = Vector2(1000, 640)
 	await get_tree().process_frame
@@ -449,7 +449,7 @@ func test_every_cartridge_beside_the_selection_is_the_same_size_and_centred_on_i
 
 
 func test_the_carousel_turns_the_short_way_round_the_ring() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.size = Vector2(1000, 640)
 	await get_tree().process_frame
@@ -467,7 +467,7 @@ func test_the_carousel_turns_the_short_way_round_the_ring() -> void:
 
 
 func test_dragging_the_row_settles_on_whatever_it_was_left_nearest() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.size = Vector2(1000, 640)
 	await get_tree().process_frame
@@ -524,7 +524,7 @@ func _pointed_stage() -> Gen2CartridgeStage:
 	holder.size = Vector2i(1000, 640)
 	holder.handle_input_locally = true
 	add_child_autofree(holder)
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	holder.add_child(page)
 	page.size = Vector2(1000, 640)
 	await get_tree().process_frame
@@ -632,14 +632,14 @@ func test_a_card_opens_on_release_but_never_after_a_swipe() -> void:
 
 
 func test_an_icon_button_shrinks_its_actual_rect_without_a_container() -> void:
-	var button: Gen2LauncherButton = Gen2LauncherButton.icon_only(_light, &"dots", 0, 84)
+	var button: Gen2LauncherButton = Gen2LauncherButton.icon_only(_light, &"close", 0, 84)
 	add_child_autofree(button)
 	button.set_side(48)
 	assert_eq(button.size, Vector2(48, 48))
 
 
 func test_landscape_keeps_at_least_two_fifths_of_the_stage_for_the_cartridge() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, true)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, true, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.set_slot_state(&"gold", RomCache.STATE_USABLE, "Ready")
 	var sizes: Array[Vector2] = [
@@ -676,7 +676,7 @@ func _finger_drag(from: Vector2, by: Vector2) -> InputEventScreenDrag:
 
 
 func test_a_seated_cartridge_ends_its_animation_back_at_rest() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.size = Vector2(900, 600)
 	await get_tree().process_frame
@@ -696,7 +696,7 @@ func test_a_seated_cartridge_ends_its_animation_back_at_rest() -> void:
 
 
 func test_ejecting_a_cartridge_empties_its_bay() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.size = Vector2(900, 600)
 	await get_tree().process_frame
@@ -712,7 +712,7 @@ func test_ejecting_a_cartridge_empties_its_bay() -> void:
 ## Every registry cartridge walks to its Hall of Fame, so a seated one of
 ## either generation offers Play, and an empty bay still takes a dump.
 func test_a_seated_cartridge_of_either_generation_offers_play() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.size = Vector2(900, 600)
 	await get_tree().process_frame
@@ -734,7 +734,7 @@ func test_a_seated_cartridge_of_either_generation_offers_play() -> void:
 ## cartridge once, so a bay identical to one that was never filled sends them
 ## looking for a bug instead of at the one line that explains it.
 func test_a_cartridge_needing_its_file_again_does_not_look_unimported() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(_light, false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	page.size = Vector2(900, 600)
 	await get_tree().process_frame

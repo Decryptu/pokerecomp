@@ -76,7 +76,7 @@ func run(r: RefCounted) -> void:
 			continue
 		var data: GameData = GameData.open(game_id)
 		if data == null:
-			_r.fail("%s cache is unavailable. Import roms/%s.gbc first." % [game_id, game_id])
+			_r.fail("%s cache is unavailable. Run tools/import_rom.gd first." % game_id)
 			continue
 		_r.game_id = game_id
 		compared += _compare(pin, data)

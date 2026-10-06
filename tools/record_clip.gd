@@ -408,7 +408,7 @@ func _waiting_for_mods() -> bool:
 func _build() -> void:
 	var data: GameData = GameData.open(_game)
 	if data == null:
-		push_error("No cache for %s. Import roms/%s.gbc first." % [_game, _game])
+		push_error("No cache for %s. Run tools/import_rom.gd first." % _game)
 		_quit_failed()
 		return
 

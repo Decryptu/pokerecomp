@@ -85,12 +85,45 @@ func test_launcher_lists_every_supported_game() -> void:
 	var snapshot: Dictionary = _launcher.launcher_snapshot()
 	var games: Dictionary = snapshot["games"]
 
-	assert_eq(games.size(), RomRegistry.ORDER.size())
-	for game_id: StringName in RomRegistry.ORDER:
+	var offered: Array[StringName] = Gen2OptionsStore.current().offered_cartridges()
+	assert_eq(games.size(), offered.size())
+	for game_id: StringName in offered:
 		var row: Dictionary = games[String(game_id)]
 		assert_eq(row["title"], RomRegistry.title_for(game_id))
 		assert_true(row["imported"] is bool)
 		assert_false(row["selected"])
+
+
+## The dev cartridges reach the shelf only through Settings > Advanced, and the
+## press rebuilds the launcher without sending the player back to the shelf.
+func test_the_dev_switch_puts_the_dev_cartridges_on_the_shelf() -> void:
+	Gen2OptionsStore.use_test_path()
+	var options: Gen2Options = Gen2OptionsStore.current()
+	options.dev_cartridges = false
+	assert_true(Gen2OptionsStore.save(options))
+	await _open_launcher()
+	var dev: Array[StringName] = RomRegistry.dev_ids()
+	assert_false(dev.is_empty())
+	for game_id: StringName in dev:
+		assert_false(_launcher.launcher_snapshot()["games"].has(String(game_id)), String(game_id))
+
+	_launcher.preview_settings_section(&"advanced")
+	_setting_row(_launcher, "Dev cartridges").pressed.emit()
+	var snapshot: Dictionary = _launcher.launcher_snapshot()
+	assert_eq(snapshot["page"], "settings", "the rebuild keeps the page")
+	assert_eq(snapshot["games"].size(), RomRegistry.ORDER.size())
+	assert_true(Gen2OptionsStore.current().dev_cartridges, "and the choice is kept")
+	DirAccess.remove_absolute(Gen2OptionsStore.path())
+
+
+func _setting_row(root: Node, label: String) -> Gen2LauncherUI.SettingRow:
+	for node: Node in root.find_children("*", "Label", true, false):
+		var parent: Node = node.get_parent()
+		while parent != null and parent is not Gen2LauncherUI.SettingRow:
+			parent = parent.get_parent()
+		if parent != null and (node as Label).text == label and parent.is_visible_in_tree():
+			return parent
+	return null
 
 
 ## The shelf opens on the cartridge last launched rather than on the first bay,
@@ -746,7 +779,7 @@ func test_a_crashed_session_is_reported_at_the_next_launch() -> void:
 ## changes with what is actually in the bay: an empty one cannot be played and
 ## has nothing to open options on.
 func test_the_shelf_names_a_button_for_everything_it_offers() -> void:
-	var page: Gen2ShelfPage = Gen2ShelfPage.create(Gen2LauncherTheme.active(), false)
+	var page: Gen2ShelfPage = Gen2ShelfPage.create(Gen2LauncherTheme.active(), false, RomRegistry.ORDER)
 	add_child_autofree(page)
 	# The bar answers for the selected cartridge, and the carousel opens on the
 	# oldest one rather than on this generation's.
