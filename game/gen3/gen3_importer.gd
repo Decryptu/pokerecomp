@@ -1,8 +1,8 @@
 class_name Gen3Importer
 extends RefCounted
 
-## Generation 3's importer: species, moves, types and the matchup chart so far,
-## so the registry keeps these cartridges unplayable.
+## Generation 3's importer: species with dex entries, moves, types, matchups,
+## items and abilities so far, so the registry keeps these cartridges unplayable.
 
 ## The `GAME_CODE` and `GAME_REVISION` each pret Makefile hands `gbafix`.
 const HEADERS: Dictionary = {
@@ -28,6 +28,11 @@ const MYSTERY_TYPE_NAME: String = "???"
 const LAST_TYPE_NAME: String = "DARK"
 const FIRST_LEARNSET_WORD: int = (1 << Gen3Layout.LEARNSET_LEVEL_SHIFT) | 33
 const FIRST_EVOLUTION: Array[int] = [4, 16, 2]
+const UNUSED_ITEM_NAME: String = "????????"
+const FIRST_ITEM_NAME: String = "MASTER BALL"
+const FIRST_ABILITY_NAME: String = "STENCH"
+const LAST_ABILITY_NAME: String = "AIR LOCK"
+const DEX_ENDPOINTS: Dictionary = {1: ["SEED", 7, 69], 386: ["DNA", 17, 608]}
 
 static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_header,
@@ -39,6 +44,9 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_matchups,
 	_verify_learnsets,
 	_verify_evolutions,
+	_verify_items,
+	_verify_abilities,
+	_verify_dex_entries,
 ]
 
 
@@ -249,6 +257,90 @@ static func _verify_evolutions(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
+## Null when the pointer at [param at] leaves the cartridge or its string has no end.
+static func _pointed_text(rom: RomFile, at: int) -> Variant:
+	var offset: int = Gen3Layout.rom_offset(rom.u32le(at))
+	if not Gen3Text.ends_within(rom.bytes(), offset, Gen3Layout.TEXT_LIMIT):
+		return null
+	return Gen3Text.decode_fixed(rom.bytes(), offset, Gen3Layout.TEXT_LIMIT)
+
+
+static func _item_name(rom: RomFile, layout: Dictionary, item: int) -> String:
+	return Gen3Text.decode_fixed(
+		rom.bytes(), Gen3Layout.item_offset(layout, item), Gen3Layout.ITEM_NAME_SIZE
+	)
+
+
+## Each row's `itemId` is its index or `ITEM_NONE`, which no other stride gives.
+static func _verify_items(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var first: Array = [_item_name(rom, layout, 0), _item_name(rom, layout, 1)]
+	if first != [UNUSED_ITEM_NAME, FIRST_ITEM_NAME]:
+		return _fail("gItems opens on %s." % str(first))
+	for item: int in int(layout["item_count"]):
+		var at: int = Gen3Layout.item_offset(layout, item)
+		var id: int = rom.u16le(at + Gen3Layout.ITEM_ID)
+		if id != 0 and id != item:
+			return _fail("Item %d's row names item %d." % [item, id])
+		if _pointed_text(rom, at + Gen3Layout.ITEM_DESCRIPTION) == null:
+			return _fail("Item %d's description has no end." % item)
+	return _ok()
+
+
+static func _ability_name(rom: RomFile, layout: Dictionary, ability: int) -> String:
+	return Gen3Text.decode_fixed(
+		rom.bytes(), Gen3Layout.ability_name_offset(layout, ability),
+		Gen3Layout.ABILITY_NAME_SIZE,
+	)
+
+
+static func _verify_abilities(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var read: Array = [
+		_ability_name(rom, layout, 1), _ability_name(rom, layout, Gen3Layout.ABILITY_COUNT - 1),
+	]
+	if read != [FIRST_ABILITY_NAME, LAST_ABILITY_NAME]:
+		return _fail("gAbilityNames reads %s." % str(read))
+	for ability: int in Gen3Layout.ABILITY_COUNT:
+		if _pointed_text(rom, Gen3Layout.ability_description_pointer(layout, ability)) == null:
+			return _fail("Ability %d's description has no end." % ability)
+	return _ok()
+
+
+static func _verify_dex_entries(rom: RomFile, layout: Dictionary) -> Dictionary:
+	for number: int in DEX_ENDPOINTS:
+		var entry: Dictionary = _read_dex_entry(rom, layout, number)
+		var read: Array = [entry.get("category"), entry.get("height"), entry.get("weight")]
+		if read != DEX_ENDPOINTS[number]:
+			return _fail("Dex entry %d reads %s." % [number, str(read)])
+	for number: int in range(1, Gen3Layout.NATIONAL_DEX_COUNT + 1):
+		if _read_dex_entry(rom, layout, number).is_empty():
+			return _fail("Dex entry %d has a page with no end." % number)
+	return _ok()
+
+
+## Empty when a page pointer is wrong.
+static func _read_dex_entry(rom: RomFile, layout: Dictionary, number: int) -> Dictionary:
+	var at: int = Gen3Layout.dex_entry_offset(layout, number)
+	var pages: Array = []
+	for page: int in int(layout["dex_pages"]):
+		var text: Variant = _pointed_text(
+			rom, at + Gen3Layout.DEX_ENTRY_DESCRIPTION + page * Gen3Layout.POINTER_SIZE
+		)
+		if text == null:
+			return {}
+		pages.append(text)
+	var scales: int = at + int(layout["dex_entry_size"]) - Gen3Layout.DEX_ENTRY_SCALES_FROM_END
+	return {
+		"category": Gen3Text.decode_fixed(rom.bytes(), at, Gen3Layout.DEX_ENTRY_CATEGORY_SIZE),
+		"height": rom.u16le(at + Gen3Layout.DEX_ENTRY_HEIGHT),
+		"weight": rom.u16le(at + Gen3Layout.DEX_ENTRY_WEIGHT),
+		"pages": pages,
+		"pokemon_scale": rom.u16le(scales),
+		"pokemon_offset": rom.s16le(scales + 2),
+		"trainer_scale": rom.u16le(scales + 4),
+		"trainer_offset": rom.s16le(scales + 6),
+	}
+
+
 static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dictionary:
 	var started: int = Time.get_ticks_msec()
 	var directory: String = RomCache.directory_for(rom.id, rom.sha1)
@@ -267,11 +359,15 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 	var moves: Array = _import_moves(rom, layout, on_progress)
 	var types: Array = _import_types(rom, layout)
 	var matchups: Array = _read_matchups(rom, layout)
+	var items: Array = _import_items(rom, layout)
+	var abilities: Array = _import_abilities(rom, layout)
 	var sections: Dictionary = {
 		RomCache.species_path(directory): species,
 		RomCache.moves_path(directory): moves,
 		RomCache.types_path(directory): types,
 		RomCache.matchups_path(directory): matchups,
+		RomCache.items_path(directory): items,
+		RomCache.abilities_path(directory): abilities,
 	}
 	for path: String in sections:
 		if not RomCache.write_json(path, sections[path]):
@@ -286,6 +382,8 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"move_count": moves.size(),
 		"type_count": types.size(),
 		"matchup_count": matchups.size(),
+		"item_count": items.size(),
+		"ability_count": abilities.size(),
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -300,14 +398,16 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"moves": moves.size(),
 		"types": types.size(),
 		"matchups": matchups.size(),
+		"items": items.size(),
+		"abilities": abilities.size(),
 		"evolutions": evolutions,
 		"learnset_moves": learnset_moves,
 		"elapsed_ms": Time.get_ticks_msec() - started,
 	}, true)
-	result["message"] = ("%d species, %d moves, %d type matchups, %d evolutions and "
-		+ "%d level-up moves in %d ms.") % [
-		species.size(), moves.size(), matchups.size(), evolutions, learnset_moves,
-		int(result["elapsed_ms"]),
+	result["message"] = ("%d species, %d moves, %d type matchups, %d items, %d abilities, "
+		+ "%d evolutions and %d level-up moves in %d ms.") % [
+		species.size(), moves.size(), matchups.size(), items.size(), abilities.size(),
+		evolutions, learnset_moves, int(result["elapsed_ms"]),
 	]
 	return result
 
@@ -333,6 +433,7 @@ static func _import_species(rom: RomFile, layout: Dictionary, on_progress: Calla
 			"name": _species_name(rom, layout, species),
 			"learnset": _read_learnset(rom, layout, species),
 			"evolutions": _read_evolutions(rom, layout, species),
+			"dex": _read_dex_entry(rom, layout, number),
 		})
 		out.append(record)
 		if on_progress.is_valid():
@@ -424,5 +525,41 @@ static func _import_types(rom: RomFile, layout: Dictionary) -> Array:
 			"number": type,
 			"name": _type_name(rom, layout, type),
 			"special": Gen3Layout.is_special_type(type),
+		})
+	return out
+
+
+## Cartridge numbers, like [method _species_info]'s; pockets differ between games.
+static func _import_items(rom: RomFile, layout: Dictionary) -> Array:
+	var out: Array = []
+	for item: int in range(1, int(layout["item_count"])):
+		var at: int = Gen3Layout.item_offset(layout, item)
+		out.append({
+			"number": item,
+			"name": _item_name(rom, layout, item),
+			"unused": rom.u16le(at + Gen3Layout.ITEM_ID) == 0,
+			"price": rom.u16le(at + Gen3Layout.ITEM_PRICE),
+			"hold_effect": rom.u8(at + Gen3Layout.ITEM_HOLD_EFFECT),
+			"hold_effect_parameter": rom.u8(at + Gen3Layout.ITEM_HOLD_EFFECT_PARAM),
+			"description": _pointed_text(rom, at + Gen3Layout.ITEM_DESCRIPTION),
+			"importance": rom.u8(at + Gen3Layout.ITEM_IMPORTANCE),
+			"registrability": rom.u8(at + Gen3Layout.ITEM_REGISTRABILITY),
+			"pocket": rom.u8(at + Gen3Layout.ITEM_POCKET),
+			"type": rom.u8(at + Gen3Layout.ITEM_TYPE),
+			"battle_usage": rom.u8(at + Gen3Layout.ITEM_BATTLE_USAGE),
+			"secondary_id": rom.u8(at + Gen3Layout.ITEM_SECONDARY_ID),
+		})
+	return out
+
+
+static func _import_abilities(rom: RomFile, layout: Dictionary) -> Array:
+	var out: Array = []
+	for ability: int in Gen3Layout.ABILITY_COUNT:
+		out.append({
+			"number": ability,
+			"name": _ability_name(rom, layout, ability),
+			"description": _pointed_text(
+				rom, Gen3Layout.ability_description_pointer(layout, ability)
+			),
 		})
 	return out

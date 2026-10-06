@@ -42,6 +42,7 @@ var _dex_orders: Dictionary = {}
 var _items: Array = []
 var _world_trades: Array = []
 var _types: Array = []
+var _abilities: Array = []
 var _trainers: Array = []
 ## The matchup chart, folded into a lookup on load: attacker * TYPE_COUNT +
 ## defender to the multiplier in tenths. The chart is 110 rows of exceptions, so
@@ -299,6 +300,7 @@ func _read_cache(path: String) -> void:
 	_items = _read_array(RomCache.items_path(path))
 	_world_trades = _read_array(RomCache.world_trades_path(path))
 	_types = _read_array(RomCache.types_path(path))
+	_abilities = _read_array(RomCache.abilities_path(path))
 	_trainers = _read_array(RomCache.trainers_path(path))
 	_build_matchups(_read_array(RomCache.matchups_path(path)))
 
@@ -1539,8 +1541,8 @@ func egg_moves(number: int) -> Array[int]:
 ## Dictionary if there is no such number.
 ## [code]height[/code] and [code]weight[/code] are the cartridge's own numbers,
 ## not measurements: see [method RomImporter.read_dex_entry]. [code]pages[/code]
-## is the two description pages, in order. It goes through [method species] so a
-## mod that replaces a species replaces its dex entry with it.
+## is the pages in order, one on FireRed, LeafGreen and Emerald. It goes through
+## [method species] so a mod that replaces a species replaces its dex entry too.
 func dex_entry(number: int) -> Dictionary:
 	var entry: Variant = species(number).get("dex", {})
 	if not entry is Dictionary or (entry as Dictionary).is_empty():
@@ -1811,6 +1813,15 @@ func _type_row(number: int) -> Dictionary:
 		if int((candidate as Dictionary).get("number", -1)) == number:
 			return candidate
 	return {}
+
+
+## A Generation 3 ability from `ABILITY_NONE` as { number, name, description }.
+func ability(number: int) -> Dictionary:
+	return _entry(_abilities, number)
+
+
+func ability_count() -> int:
+	return _abilities.size()
 
 
 ## Which stat pair a type attacks and defends with. The cartridge's answer is

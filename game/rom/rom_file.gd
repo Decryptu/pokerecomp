@@ -90,6 +90,11 @@ func u16le(offset: int) -> int:
 	return _bytes[offset] | (_bytes[offset + 1] << 8)
 
 
+func s16le(offset: int) -> int:
+	var value: int = u16le(offset)
+	return value - 0x10000 if (value & 0x8000) != 0 else value
+
+
 func u32le(offset: int) -> int:
 	if not in_bounds(offset, 4):
 		return 0

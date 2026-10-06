@@ -1,8 +1,8 @@
 class_name Gen3Layout
 extends RefCounted
 
-## Dump offsets of each Generation 3 cartridge's tables, from the `.map` and
-## `.elf` of pret's byte-exact builds; a symbol is [constant ROM_BASE] plus one.
+## Dump offsets of each Generation 3 cartridge's tables, read off pret's
+## byte-exact builds: an offset is the symbol less [constant ROM_BASE].
 
 const ROM_BASE: int = 0x08000000
 const ROM_WINDOW: int = 0x02000000
@@ -63,6 +63,36 @@ const MATCHUP_FORESIGHT: int = 0xFE
 const MATCHUP_END: int = 0xFF
 const MATCHUP_MULTIPLIERS: Array[int] = [0, 5, 20]
 
+## `struct Item` is the same on all five; its two function pointers are left out.
+const ITEM_SIZE: int = 44
+const ITEM_NAME_SIZE: int = 14
+const ITEM_ID: int = 0x0E
+const ITEM_PRICE: int = 0x10
+const ITEM_HOLD_EFFECT: int = 0x12
+const ITEM_HOLD_EFFECT_PARAM: int = 0x13
+const ITEM_DESCRIPTION: int = 0x14
+const ITEM_IMPORTANCE: int = 0x18
+const ITEM_REGISTRABILITY: int = 0x19
+const ITEM_POCKET: int = 0x1A
+const ITEM_TYPE: int = 0x1B
+const ITEM_BATTLE_USAGE: int = 0x20
+const ITEM_SECONDARY_ID: int = 0x28
+
+const ABILITY_COUNT: int = 78
+const ABILITY_NAME_SIZE: int = 13
+
+## `gPokedexEntries` from `NATIONAL_DEX_NONE`. Emerald drops Ruby's second page
+## pointer, which FireRed and LeafGreen keep for an empty `unusedDescription`.
+const DEX_ENTRY_CATEGORY_SIZE: int = 12
+const DEX_ENTRY_HEIGHT: int = 0x0C
+const DEX_ENTRY_WEIGHT: int = 0x0E
+const DEX_ENTRY_DESCRIPTION: int = 0x10
+## Padding follows the last word, so the four start ten bytes from the end.
+const DEX_ENTRY_SCALES_FROM_END: int = 10
+
+## The longest pointed-to text is a dex page of 170 bytes.
+const TEXT_LIMIT: int = 512
+
 const LEARNSET_END: int = 0xFFFF
 const LEARNSET_MOVE_MASK: int = 0x01FF
 const LEARNSET_LEVEL_SHIFT: int = 9
@@ -75,7 +105,7 @@ const EVOLUTION_PARAMETER: int = 2
 const EVOLUTION_TARGET: int = 4
 const EVOLUTION_METHOD_LAST: int = 15  # EVO_BEAUTY
 
-## Keys name the table, not one cartridge's spelling (`gBaseStats`, `gSpeciesInfo`).
+## Keys name the table, not one cartridge's spelling; the last three are shapes.
 const RUBY: Dictionary = {
 	"species_names": 0x1F7184,  # gSpeciesNames
 	"move_names": 0x1F8338,  # gMoveNames
@@ -87,6 +117,13 @@ const RUBY: Dictionary = {
 	"species_info": 0x1FEC30,  # gBaseStats
 	"evolutions": 0x203B80,  # gEvolutionTable
 	"learnsets": 0x207BE0,  # gLevelUpLearnsets
+	"ability_descriptions": 0x1FA128,  # gAbilityDescriptions
+	"ability_names": 0x1FA260,  # gAbilityNames
+	"dex_entries": 0x3B1874,  # gPokedexEntries
+	"items": 0x3C5580,  # gItems
+	"item_count": 349,  # ITEMS_COUNT
+	"dex_entry_size": 36,
+	"dex_pages": 2,
 }
 
 const SAPPHIRE: Dictionary = {
@@ -100,6 +137,13 @@ const SAPPHIRE: Dictionary = {
 	"species_info": 0x1FEBC0,
 	"evolutions": 0x203B10,
 	"learnsets": 0x207B70,
+	"ability_descriptions": 0x1FA0B8,
+	"ability_names": 0x1FA1F0,
+	"dex_entries": 0x3B18D0,
+	"items": 0x3C55DC,
+	"item_count": 349,
+	"dex_entry_size": 36,
+	"dex_pages": 2,
 }
 
 const FIRERED: Dictionary = {
@@ -113,6 +157,13 @@ const FIRERED: Dictionary = {
 	"species_info": 0x2547F4,  # gSpeciesInfo
 	"evolutions": 0x2597C4,
 	"learnsets": 0x25D824,
+	"ability_descriptions": 0x24FB78,  # gAbilityDescriptionPointers
+	"ability_names": 0x24FCB0,
+	"dex_entries": 0x44E8B0,
+	"items": 0x3DB098,
+	"item_count": 375,
+	"dex_entry_size": 36,
+	"dex_pages": 1,
 }
 
 const LEAFGREEN: Dictionary = {
@@ -126,6 +177,13 @@ const LEAFGREEN: Dictionary = {
 	"species_info": 0x2547D0,
 	"evolutions": 0x2597A4,
 	"learnsets": 0x25D804,
+	"ability_descriptions": 0x24FB54,
+	"ability_names": 0x24FC8C,
+	"dex_entries": 0x44E2E0,
+	"items": 0x3DAED4,
+	"item_count": 375,
+	"dex_entry_size": 36,
+	"dex_pages": 1,
 }
 
 const EMERALD: Dictionary = {
@@ -139,6 +197,13 @@ const EMERALD: Dictionary = {
 	"species_info": 0x3203CC,
 	"evolutions": 0x32531C,
 	"learnsets": 0x32937C,
+	"ability_descriptions": 0x31BAD4,
+	"ability_names": 0x31B6DB,
+	"dex_entries": 0x56B5B0,
+	"items": 0x5839A0,
+	"item_count": 377,
+	"dex_entry_size": 32,
+	"dex_pages": 1,
 }
 
 
@@ -182,6 +247,22 @@ static func move_name_offset(layout: Dictionary, move: int) -> int:
 
 static func type_name_offset(layout: Dictionary, type: int) -> int:
 	return int(layout["type_names"]) + type * TYPE_NAME_SIZE
+
+
+static func item_offset(layout: Dictionary, item: int) -> int:
+	return int(layout["items"]) + item * ITEM_SIZE
+
+
+static func ability_name_offset(layout: Dictionary, ability: int) -> int:
+	return int(layout["ability_names"]) + ability * ABILITY_NAME_SIZE
+
+
+static func ability_description_pointer(layout: Dictionary, ability: int) -> int:
+	return int(layout["ability_descriptions"]) + ability * POINTER_SIZE
+
+
+static func dex_entry_offset(layout: Dictionary, national: int) -> int:
+	return int(layout["dex_entries"]) + national * int(layout["dex_entry_size"])
 
 
 static func evolution_offset(layout: Dictionary, species: int, slot: int) -> int:

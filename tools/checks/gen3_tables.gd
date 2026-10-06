@@ -1,7 +1,7 @@
 extends RefCounted
 
-## Generation 3's species, move and type tables. Pins come from pret's data
-## files; the sweeps catch a stride that still reads plausible bytes.
+## Generation 3's species, move, type, item, ability and Pokedex tables. Pins
+## come from pret's data files; the sweeps catch a stride that reads plausibly.
 
 const SPECIES_COUNT: int = 386
 const MOVE_COUNT: int = 354
@@ -33,6 +33,27 @@ const PINNED_MOVES: Dictionary = {
 	264: ["FOCUS PUNCH", 150, 1, 100, 20, -3],
 	354: ["PSYCHO BOOST", 140, 14, 90, 5, 0],
 }
+## Rows whose `itemId` is set: `ITEMS_COUNT` less the 68 `ITEM_NONE` rows.
+const NAMED_ITEMS: Dictionary = {
+	&"ruby": 281, &"sapphire": 281, &"firered": 307, &"leafgreen": 307, &"emerald": 309,
+}
+const LEFTOVERS: int = 200
+const LEFTOVERS_PIN: Array = ["LEFTOVERS", 200, 43, 10, 1]
+## FireRed and LeafGreen's POCKET_KEY_ITEMS is 2; the other three's is 5.
+const MACH_BIKE: int = 259
+const KEY_ITEMS_POCKET: Dictionary = {
+	&"ruby": 5, &"sapphire": 5, &"firered": 2, &"leafgreen": 2, &"emerald": 5,
+}
+const LEVITATE: Array = [26, "LEVITATE", "Not hit by GROUND attacks."]
+const PIKACHU_DEX: Array = ["MOUSE", 4, 60]
+const BULBASAUR_SCALES: Dictionary = {
+	&"ruby": [356, 17, 256, 0], &"sapphire": [356, 17, 256, 0],
+	&"firered": [356, 16, 256, -2], &"leafgreen": [356, 16, 256, -2],
+	&"emerald": [356, 17, 256, 0],
+}
+const DEX_PAGES: Dictionary = {
+	&"ruby": 2, &"sapphire": 2, &"firered": 1, &"leafgreen": 1, &"emerald": 1,
+}
 const TYPE_NAMES: Array = [
 	"NORMAL", "FIGHT", "FLYING", "POISON", "GROUND", "ROCK", "BUG", "GHOST", "STEEL",
 	"???", "FIRE", "WATER", "GRASS", "ELECTR", "PSYCHC", "ICE", "DRAGON", "DARK",
@@ -50,6 +71,10 @@ func _one_game() -> void:
 	_species()
 	_moves()
 	_types()
+	_items()
+	_abilities()
+	_dex_entries()
+	_undecoded_text()
 
 
 func _species() -> void:
@@ -141,3 +166,66 @@ func _types() -> void:
 		"FIRE on GRASS is %d, NORMAL on GHOST %d and %d under Foresight." % [
 			data.type_matchup(10, 12), data.type_matchup(0, 7), data.type_matchup(0, 7, true),
 		])
+
+
+func _items() -> void:
+	var data: GameData = _r.data
+	var named: int = 0
+	for number: int in range(1, data.item_count() + 1):
+		named += 0 if bool(data.item(number)["unused"]) else 1
+	_r.check(named == int(NAMED_ITEMS[data.id]), "%d named items." % named)
+	var leftovers: Dictionary = data.item(LEFTOVERS)
+	var read: Array = _ints([
+		leftovers["name"], leftovers["price"], leftovers["hold_effect"],
+		leftovers["hold_effect_parameter"], leftovers["pocket"],
+	])
+	_r.check(read == LEFTOVERS_PIN, "item %d reads %s." % [LEFTOVERS, str(read)])
+	var pocket: int = int(data.item(MACH_BIKE)["pocket"])
+	_r.check(pocket == int(KEY_ITEMS_POCKET[data.id]), "MACH BIKE is in pocket %d." % pocket)
+
+
+func _abilities() -> void:
+	var data: GameData = _r.data
+	var levitate: Dictionary = data.ability(int(LEVITATE[0]))
+	var read: Array = [int(levitate["number"]), levitate["name"], levitate["description"]]
+	_r.check(read == LEVITATE, "ability %d reads %s." % [LEVITATE[0], str(read)])
+	_r.check(data.ability_count() == Gen3Layout.ABILITY_COUNT,
+		"%d abilities." % data.ability_count())
+
+
+func _dex_entries() -> void:
+	var data: GameData = _r.data
+	var pikachu: Dictionary = data.dex_entry(25)
+	var read: Array = [pikachu["category"], pikachu["height"], pikachu["weight"]]
+	_r.check(read == PIKACHU_DEX, "Pikachu's dex entry reads %s." % str(read))
+	var dex: Dictionary = data.species(1)["dex"]
+	var scales: Array = _ints([
+		dex["pokemon_scale"], dex["pokemon_offset"], dex["trainer_scale"], dex["trainer_offset"],
+	])
+	_r.check(scales == BULBASAUR_SCALES[data.id], "Bulbasaur's scales read %s." % str(scales))
+	for number: int in range(1, SPECIES_COUNT + 1):
+		var pages: int = data.dex_entry(number)["pages"].size()
+		if not _r.check(pages == int(DEX_PAGES[data.id]), "species %d has %d pages." % [
+			number, pages,
+		]):
+			return
+
+
+## A code [Gen3Text] has no glyph for decodes as `<$nn>`.
+func _undecoded_text() -> void:
+	var data: GameData = _r.data
+	var texts: Array = []
+	for number: int in range(1, data.item_count() + 1):
+		texts.append_array([data.item(number)["name"], data.item(number)["description"]])
+	for ability: int in data.ability_count():
+		texts.append_array([data.ability(ability)["name"], data.ability(ability)["description"]])
+	for number: int in range(1, SPECIES_COUNT + 1):
+		texts.append(data.species(number)["name"])
+		texts.append(data.dex_entry(number)["category"])
+		texts.append_array(data.dex_entry(number)["pages"])
+	for move: int in range(1, MOVE_COUNT + 1):
+		texts.append(data.move(move)["name"])
+	var undecoded: Array = texts.filter(func(text: String) -> bool: return text.contains("<$"))
+	_r.check(undecoded.is_empty(), "%d texts hold codes with no glyph, first %s." % [
+		undecoded.size(), str(undecoded.slice(0, 1)),
+	])
