@@ -30,10 +30,19 @@ Each pret checkout builds a ROM that is byte for byte the retail cartridge:
 the hashes in a checkout's `roms.sha1` (Generation 3: one `<build>.sha1` per
 build) are the ones [`RomRegistry`](../game/rom/rom_registry.gd) matches a dump
 against. A `.sym` file from such a build (Generation 3: the `.map` file) is
-where every offset in `Gen1Layout` and `Gen2Layout` comes from, which is
-stronger evidence than searching a dump for known bytes. Building one needs
-`rgbds` (Generation 3: `agbcc` and an ARM binutils) and writes into the
+where every offset in `Gen1Layout`, `Gen2Layout` and `Gen3Layout` comes from,
+which is stronger evidence than searching a dump for known bytes. Building one
+needs `rgbds` (Generation 3: `agbcc` and an ARM binutils) and writes into the
 checkout, so build a copy outside `.references/` and leave the checkout clean.
+
+A Generation 3 `.map` omits `static` tables; `arm-none-eabi-nm -S` on the
+build's `.elf` lists them, with every symbol's size. `agbcc` is
+[pret/agbcc](https://github.com/pret/agbcc)'s `build.sh`, then its `install.sh`
+with the checkout's path. Without `arm-none-eabi-cpp`, `make CPP="cc -E"
+compare_firered_rev1` (and `compare` for Emerald) builds with the host
+preprocessor. `pokeruby` pipes into its preprocessor and into `agbcc` with no
+file name, so it needs a `CPP` wrapper that runs `cc -E -x c` with `-` when no
+file is named, and a `-` after `$(CC1)`'s output file in its C rule.
 
 ## Local checkout workflow
 

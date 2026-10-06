@@ -94,8 +94,9 @@ over a one-pocket bag.
 | Crystal (USA/Europe Rev 1) | `f2f52230b536214ef7c9924f483392993e226cfb` |
 
 Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
-the shelf. Their dumps are recognised and nothing past the header is decoded,
-so `tools/import_rom.gd` skips them unless given `--dev`.
+the shelf. An import reads their species, moves, types and matchup chart and
+nothing else, so none is playable, and `tools/import_rom.gd` skips them unless
+given `--dev`.
 
 | Game | SHA-1 |
 |---|---|

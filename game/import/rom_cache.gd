@@ -62,26 +62,20 @@ const PIC_ANIMS: String = "pic_anims.json"
 const BATTLE_TOWER: String = "battle_tower.json"
 const BATTLE_ANIM_GFX_DIR: String = "battle_anim_gfx"
 
-## The key a payload span is stored under, and how many numbers it holds. A
-## cartridge byte run written inline as JSON decimals costs about four bytes on
-## disk and about twenty-six resident once parsed into an Array of Variants.
-## Scripts, text and audio are almost entirely such runs, so they live in a
-## binary blob beside the JSON and the JSON keeps only [offset, length].
+## A byte run as JSON decimals costs about twenty-six resident bytes per byte, so
+## scripts, text and audio live in a blob beside the JSON, which keeps only the
+## [offset, length] span under [constant PAYLOAD_KEY].
 const PAYLOAD_KEY: String = "payload"
 const PAYLOAD_SPAN: int = 2
 const BYTES_KEY: String = "bytes"
 
-## Bumped whenever the on-disk shape changes. A cache written by an older
-## importer is discarded rather than migrated: every byte in it is derived from
-## a dump the owner still has, so re-importing costs a few seconds and a
-## migration would have to carry every past shape forever. Nothing but the cache
-## is thrown away, since saves live under their own root.
+## Bumped whenever the on-disk shape changes. An older cache is discarded rather
+## than migrated: it derives from a dump the owner still has, so re-importing
+## costs seconds, and saves live under their own root.
 const FORMAT_VERSION: int = 163
 
-## What [method state] answers. A stale cache is told from a missing one because
-## they need different things said to whoever is looking at it: one is a
-## cartridge that was never imported, the other one imported by an older build
-## and needing the same dump again.
+## What [method state] answers. Stale is told from missing because an older
+## build's import needs the same dump again, not a first import.
 const STATE_MISSING: StringName = &"missing"
 const STATE_STALE: StringName = &"stale"
 const STATE_INCOMPLETE: StringName = &"incomplete"
@@ -279,10 +273,8 @@ static func pic_path(directory: String, name: String) -> String:
 	return "%s/%s/%s.idx" % [directory, PICS_DIR, name]
 
 
-## Fixed tile sheets: the font, the text box borders and the battle HUD's
-## graphics. Kept apart from the pics because they are addressed by a tile number
-## rather than by species, and because a sheet has no palette of its own, so the
-## two never want the same accessor.
+## Fixed tile sheets (font, text box, battle HUD), apart from the pics: they are
+## addressed by tile number rather than species and carry no palette.
 static func tile_path(directory: String, name: String) -> String:
 	return "%s/%s/%s.idx" % [directory, TILES_DIR, name]
 
@@ -331,9 +323,8 @@ static func is_usable(directory: String) -> bool:
 	return state(directory) == STATE_USABLE
 
 
-## Why a cache cannot be read, for a caller that has to say so. An import writes
-## the manifest last and marks it complete last, so a run that was interrupted
-## leaves the directory behind and reads as incomplete rather than as stale.
+## Why a cache cannot be read. An import writes its manifest last, so an
+## interrupted run reads as incomplete rather than as stale.
 static func state(directory: String) -> StringName:
 	var manifest: Dictionary = read_manifest(directory)
 	if manifest.is_empty():
@@ -366,11 +357,9 @@ static func read_json(path: String) -> Variant:
 	return JSON.parse_string(text)
 
 
-## One cached grid of cartridge bytes, packed on the way out of JSON: a JSON number
-## returns as a float, and an Array of them costs about twenty-six resident bytes per
-## cartridge byte. Map block, collision and tileset tables are read once per drawn
-## tile and resident for every map, so they are unboxed here rather than at each
-## lookup. A non-array answers empty, which the record's bounds checks report as absent.
+## A cached grid of cartridge bytes, packed once rather than unboxed at every
+## lookup: map, collision and tileset tables are read per drawn tile. A non-array
+## answers empty, which the record's bounds checks report as absent.
 static func packed_bytes(value: Variant) -> PackedByteArray:
 	if value is PackedByteArray:
 		return value

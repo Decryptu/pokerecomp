@@ -1,14 +1,12 @@
 class_name RomFile
 extends RefCounted
 
-## A cartridge dump held in memory for the duration of an import. Node-free like
-## the rest of the ROM layer. [method open_verified] refuses anything
-## [RomVerifier] has not accepted, since every [Gen2Layout] offset is only
-## meaningful for a characterised dump. Reads are bounds-checked and return zero
-## rather than faulting: decoders walk data whose length is only known once
-## decoded, and a corrupt stream should end as an honest "that did not decode".
+## A cartridge dump held in memory for an import. [method open_verified] refuses
+## a dump [RomVerifier] has not accepted, since each layout's offsets belong to one
+## dump. Reads are bounds-checked and return zero, so a corrupt stream ends as
+## "did not decode" rather than a fault.
 
-## Cartridge banks are 16 KiB; the CPU sees one fixed and one switchable.
+## Game Boy banks are 16 KiB; the bank helpers below are Game Boy only.
 const BANK_SIZE: int = 0x4000
 
 var path: String = ""
@@ -18,8 +16,7 @@ var id: StringName = &""
 var _bytes: PackedByteArray = PackedByteArray()
 
 
-## Loads a ROM only if it verifies against the registry. Returns null otherwise;
-## call [method RomVerifier.identify] first if you want the reason.
+## Null unless the dump verifies; [method RomVerifier.identify] says why.
 static func open_verified(rom_path: String) -> RomFile:
 	var info: Dictionary = RomVerifier.identify(rom_path)
 	if info["status"] != RomVerifier.Status.OK:
@@ -38,8 +35,7 @@ static func open_verified(rom_path: String) -> RomFile:
 	return rom
 
 
-## Wraps bytes that have already been vouched for. For tests and tooling;
-## production paths should go through [method open_verified].
+## For tests and tooling; production goes through [method open_verified].
 static func from_bytes(data: PackedByteArray, game_id: StringName = &"") -> RomFile:
 	var rom := RomFile.new()
 	rom.id = game_id
@@ -47,23 +43,19 @@ static func from_bytes(data: PackedByteArray, game_id: StringName = &"") -> RomF
 	return rom
 
 
-## A bank number and a CPU address as the cartridge sees them, flattened to an
-## offset into the dump. Correct for both the fixed bank ($0000-$3FFF) and the
-## switchable window ($4000-$7FFF): only the low 14 bits of an address carry a
-## position within a bank.
+## A bank and CPU address as a dump offset. Only the low 14 bits of an address
+## locate it within a bank, so the fixed and switchable windows both resolve.
 static func linear(bank: int, address: int) -> int:
 	return bank * BANK_SIZE + (address & 0x3FFF)
 
 
-## The other way: the bank a dump offset falls in, for resolving a pointer that
-## carries an address but no bank number of its own.
+## The bank a dump offset falls in, for a pointer that carries no bank.
 static func bank_of(offset: int) -> int:
 	@warning_ignore("integer_division")
 	return offset / BANK_SIZE
 
 
-## Just past the last byte of a bank, which is where a run whose length nothing
-## states has to stop: a Generation 1 `text_far` target names no length.
+## Where a run with no stated length stops, as a Generation 1 `text_far` target.
 static func bank_end(bank: int) -> int:
 	return (bank + 1) * BANK_SIZE
 
@@ -98,13 +90,18 @@ func u16le(offset: int) -> int:
 	return _bytes[offset] | (_bytes[offset + 1] << 8)
 
 
+func u32le(offset: int) -> int:
+	if not in_bounds(offset, 4):
+		return 0
+	return u16le(offset) | (u16le(offset + 2) << 16)
+
+
 func slice(offset: int, length: int) -> PackedByteArray:
 	if not in_bounds(offset, length):
 		return PackedByteArray()
 	return _bytes.slice(offset, offset + length)
 
 
-## Reads a three-byte "bank, little-endian address" pointer, the form every
-## far-pointer table in these games uses. Returns { bank, address }.
+## A three-byte bank and little-endian address pointer, as { bank, address }.
 func far_pointer(offset: int) -> Dictionary:
 	return {"bank": u8(offset), "address": u16le(offset + 1)}

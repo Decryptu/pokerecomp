@@ -31,7 +31,7 @@ the same hooks path enables it.
 | `game/rom/` | SHA-1 allowlist, verification, bank addressing. Node-free statics |
 | `game/import/` | Decoders and the `user://` cache. Take bytes, return data |
 | `game/gen1/` | Generation 1's layout, decoders and importer, beside `game/import/`'s Generation 2 ones |
-| `game/gen3/` | Generation 3's header check, the root its importer grows from |
+| `game/gen3/` | Generation 3's layout, text codec and importer, which reads the species and move tables so far |
 | `game/data/` | `game_data.gd`, the sole engine-facing cartridge-content API |
 | `game/save/` | Project saves, versioned and scene-free. See [SAVES.md](SAVES.md) |
 | `game/world/` | Request resolution, separate from the screens that draw it |
@@ -93,10 +93,10 @@ either. What is shared is the ROM layer, the cache and `GameData`.
 
 | Layer | Shared | Per generation |
 |---|---|---|
-| Dump | `RomFile`, `RomHeader`, `RomVerifier`, `RomRegistry` | the row's `generation` and `playable` |
-| Offsets | | `Gen1Layout`, `Gen2Layout` |
-| Text | | `Gen1Text`, `Gen2Text` |
-| Decode | `RomImport` chooses one | `Gen1Importer`, `RomImporter` |
+| Dump | `RomFile`, `RomHeader`, `RomVerifier`, `RomRegistry` | the row's `generation` and `playable`; Generation 3's `GbaHeader` |
+| Offsets | | `Gen1Layout`, `Gen2Layout`, `Gen3Layout` |
+| Text | | `Gen1Text`, `Gen2Text`, `Gen3Text` |
+| Decode | `RomImport` chooses one | `Gen1Importer`, `RomImporter`, `Gen3Importer` |
 | Cache | `RomCache`, `GameData` | which sections get written |
 
 `RomImport` is the only place an importer is named, so adding a generation is a

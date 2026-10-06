@@ -1,16 +1,14 @@
 class_name RomImport
 extends RefCounted
 
-## Which importer reads a cartridge. The generations share the ROM layer, the
-## cache and [GameData] and nothing else. Every caller goes through here, so a
+## Which importer reads a cartridge. Every caller goes through here, so a
 ## generation is a row in this file and nothing in the launcher.
 
 static func _generation(rom: RomFile) -> int:
 	return RomRegistry.generation_for(rom.id)
 
 
-## Sanity-checks the offset table against the cartridge before anything is
-## decoded. Returns { ok, message }.
+## Checks the offset table against the cartridge before anything is decoded.
 static func verify_layout(rom: RomFile) -> Dictionary:
 	match _generation(rom):
 		RomRegistry.GEN1:
@@ -22,8 +20,7 @@ static func verify_layout(rom: RomFile) -> Dictionary:
 	return {"ok": false, "message": "No importer for %s." % rom.id}
 
 
-## Decodes the cartridge into its cache directory. Returns the importer's own
-## { ok, message, ... }; only `ok` and `message` are common to all of them.
+## The importer's own { ok, message, ... }; only `ok` and `message` are common.
 static func import_rom(
 	rom: RomFile, on_progress: Callable = Callable(), yield_ms: int = 0
 ) -> Dictionary:
@@ -33,8 +30,18 @@ static func import_rom(
 		RomRegistry.GEN2:
 			return await RomImporter.new().import_rom(rom, on_progress, yield_ms)
 		RomRegistry.GEN3:
-			return Gen3Importer.import_rom(rom)
+			return Gen3Importer.import_rom(rom, on_progress)
 	return {"ok": false, "message": "No importer for %s." % rom.id}
+
+
+## Counts are each importer's own keys; a missing one is left out.
+static func ready_message(result: Dictionary) -> String:
+	var trainers: int = int(result.get("trainers", 0))
+	if trainers == 0:
+		return "%d species are ready." % int(result.get("species", 0))
+	return "%d species and %d trainer classes are ready." % [
+		int(result.get("species", 0)), trainers,
+	]
 
 
 static func describe_header(rom: RomFile) -> PackedStringArray:
