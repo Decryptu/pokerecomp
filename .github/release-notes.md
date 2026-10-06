@@ -3,21 +3,17 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Settings > Advanced > Dev cartridges lists Ruby, Sapphire, FireRed, LeafGreen and Emerald on the shelf. Importing one reads its species, moves, types, items, abilities and Pokédex entries. None of them can be played yet.
-
-## Changed
-
-- Built with Godot 4.8 dev 7.
+- Mods can give an item a field move such as FLASH. Using the item from the pack runs the move without a Pokémon that knows it, and the item counts as the move for trees, water and boulders too. Mod API version 60.
 
 ## Fixed
 
-- Yellow: the top of Pikachu's head was cut off on the launcher's title backdrop.
-- Turning a mod on or off, or switching cartridge, kept the previous set of mods in memory.
+- Crystal: the game stopped responding after leaving the OPTION screen, while the music kept playing.
+- Gold, Silver and Crystal: the pack stopped responding after moving an item to a new position with SELECT.
 
 ## Updating this release
 
-- Cartridge cache format is now 164. Import each cartridge file again when the launcher requests it. **Saved games are kept separately and remain intact.**
-- Mod API version is still 59. Existing supported mods remain compatible.
+- No cartridge reimport is needed.
+- Mod API version is now 60. Existing supported mods remain compatible.
 
 ## Which file
 
