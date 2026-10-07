@@ -3,6 +3,8 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
+- Generation 3 dev cartridges import front/back pictures, normal and shiny palettes, every stored picture frame and all 28 Unown forms. They remain unplayable.
+
 - Mods can give an item a field move such as FLASH. Using the item from the pack runs the move without a Pokémon that knows it, and the item counts as the move for trees, water and boulders too. Mod API version 60.
 
 ## Fixed
@@ -12,7 +14,7 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Updating this release
 
-- No cartridge reimport is needed.
+- Reimport cartridges to rebuild their caches. Saves are preserved.
 - Mod API version is now 60. Existing supported mods remain compatible.
 
 ## Which file

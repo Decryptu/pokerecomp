@@ -1939,8 +1939,8 @@ func _build_matchups(rows: Array) -> void:
 			_foresight_matchups[key] = true
 
 
-## The four colours a species is drawn with, in index order.
-func palette(number: int, shiny: bool = false) -> PackedColorArray:
+## A species palette in index order; Generation 3 forms select a sixteen-colour row.
+func palette(number: int, shiny: bool = false, form: int = 0) -> PackedColorArray:
 	var entry: Dictionary = species(number)
 	var entry_palette: Dictionary = entry.get("palette", {})
 	if entry_palette.is_empty():
@@ -1955,6 +1955,13 @@ func palette(number: int, shiny: bool = false) -> PackedColorArray:
 		return _gen1_shiny_row(number, colors) if shiny else colors
 
 	var stored: Array = entry_palette["shiny" if shiny else "normal"]
+	if generation == RomRegistry.GEN3:
+		if form < 0 or (form + 1) * 16 > stored.size():
+			return PackedColorArray()
+		var colors := PackedColorArray()
+		for packed: Variant in stored.slice(form * 16, (form + 1) * 16):
+			colors.append(PokePalette.from_packed(int(packed)))
+		return colors
 	return PokePalette.pic_palette(PackedColorArray([
 		PokePalette.from_packed(int(stored[0])),
 		PokePalette.from_packed(int(stored[1])),
@@ -3474,13 +3481,11 @@ func tile_indices(name: String) -> PackedByteArray:
 	return indices
 
 
-## Where a species sits in its atlas, and how much of that cell it fills.
-## Cells are the size of the largest pic of their kind so a slot can be found by
-## arithmetic; a smaller pic sits in the top-left of its cell and the rest is
-## blank. Returns { atlas, slot, width, height } in pixels, or an empty
-## Dictionary for a species that is not in the cache. A mod species carries its
-## own pixels instead of a cell; see [method _supplied_pic].
-func species_pic(number: int, back: bool = false) -> Dictionary:
+## Where a species sits in an atlas: { atlas, slot, width, height } in pixels.
+## Smaller Game Boy pics occupy the top-left of a cell. Generation 3 frame -1
+## selects the cartridge's native picture; nonnegative frames select stored data.
+## Mod pictures carry their own pixels; see [method _supplied_pic].
+func species_pic(number: int, back: bool = false, frame: int = -1) -> Dictionary:
 	var entry: Dictionary = species(number)
 	if entry.is_empty():
 		return {}
@@ -3491,10 +3496,18 @@ func species_pic(number: int, back: bool = false) -> Dictionary:
 	if not supplied.is_empty():
 		return supplied
 
-	# Unown's main-table slot holds form A. Its other 25 forms are in an atlas
-	# of their own and are asked for by form, not by species.
+	# Unown's main slot is form A; the other forms have their own atlases.
 	var name: String = "back" if back else "front"
+	if generation == RomRegistry.GEN3:
+		var selected: int = frame
+		if selected < 0:
+			selected = int(entry.get("pic_default_frames", {}).get(name, 0))
+		if selected >= int(entry.get("pic_frames", {}).get(name, 0)):
+			return {}
+		name = name if selected == 0 else "%s_%d" % [name, selected]
 	var cell: int = int(atlas(name).get("cell", 0))
+	if cell <= 0:
+		return {}
 	if back:
 		return {"atlas": name, "slot": number - 1, "width": cell, "height": cell}
 
@@ -3664,16 +3677,21 @@ func _pic_anims() -> Dictionary:
 	return _pic_anims_section
 
 
-## One of Unown's 26 letter forms, which live outside the species tables.
-func unown_pic(form: int, back: bool = false) -> Dictionary:
-	if form < 0 or form >= Gen2Layout.UNOWN_FORMS:
+## One of Unown's forms, which live outside the species tables.
+func unown_pic(form: int, back: bool = false, frame: int = -1) -> Dictionary:
+	var forms: int = Gen3Layout.UNOWN_FORMS if generation == RomRegistry.GEN3 else Gen2Layout.UNOWN_FORMS
+	if form < 0 or form >= forms:
 		return {}
 
-	var pic: Dictionary = species_pic(Gen2Layout.UNOWN_SPECIES, back)
+	var pic: Dictionary = species_pic(Gen2Layout.UNOWN_SPECIES, back, frame)
 	if pic.is_empty():
 		return {}
 
 	pic["atlas"] = "unown_back" if back else "unown_front"
+	if generation == RomRegistry.GEN3 and frame > 0:
+		pic["atlas"] = "%s_%d" % [pic["atlas"], frame]
+	if atlas(pic["atlas"]).is_empty():
+		return {}
 	pic["slot"] = form
 	return pic
 

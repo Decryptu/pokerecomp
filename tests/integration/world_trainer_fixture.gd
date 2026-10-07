@@ -1144,24 +1144,7 @@ static func _write_battle_graphics(cache_directory: String, manifest: Dictionary
 	manifest["town_map"] = _town_map()
 	manifest["oak_ratings"] = _oak_ratings()
 
-	var cell: int = 7 * PokeTiles.TILE_WIDTH
-	var columns: int = 16
-	var atlas_width: int = columns * cell
-	var rows: int = int(ceil(float(BattleFixture.MAGCARGO) / float(columns)))
-	var atlas_indices: PackedByteArray = PackedByteArray()
-	atlas_indices.resize(atlas_width * rows * PokeTiles.TILE_PIXELS)
-	atlas_indices.fill(1)
-	var atlases: Dictionary = manifest.get("atlases", {})
-	for name: String in ["front", "back"]:
-		RomCache.write_indices(RomCache.pic_path(cache_directory, name), atlas_indices)
-		atlases[name] = {
-			"width": atlas_width,
-			"height": rows * cell,
-			"cell": cell,
-			"columns": columns,
-			"rows": rows,
-		}
-	manifest["atlases"] = atlases
+	manifest["atlases"] = BattleFixture.write_pic_atlases(cache_directory, 1)
 
 
 ## `OakRatings` and the four texts around it, at the real table's shape. The

@@ -461,6 +461,20 @@ static func build(
 	return GameData.open_directory(directory)
 
 
+static func write_pic_atlases(directory: String, ink: int = 0) -> Dictionary:
+	var atlases: Dictionary = {}
+	for kind: String in ["front", "back"]:
+		for unown: bool in [false, true]:
+			var name: String = "unown_" + kind if unown else kind
+			var cells: int = Gen2Layout.UNOWN_FORMS if unown else MAX_SPECIES
+			var atlas: Dictionary = PokeTiles.new_atlas(7, cells)
+			atlas["pixels"].fill(ink)
+			atlas["decoded"] = cells
+			RomCache.write_indices(RomCache.pic_path(directory, name), atlas["pixels"])
+			atlases[name] = PokeTiles.atlas_record(atlas)
+	return atlases
+
+
 ## The species table, indexed by number like the real one, with the gaps filled
 ## by entries that exist only so a number indexes its own row.
 static func _species() -> Array:

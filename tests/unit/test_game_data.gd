@@ -713,3 +713,53 @@ func test_a_short_dex_order_table_is_dropped() -> void:
 	RomCache.write_json(RomCache.dex_orders_path(_directory), {"new": [1, 2, 3]})
 	var data: GameData = GameData.open_directory(_directory)
 	assert_true(data.dex_order_new().is_empty())
+
+
+func test_generation_3_palettes_keep_every_color_and_select_forms() -> void:
+	_write_cache()
+	var row: Dictionary = _species(1, "SYNTHETIC", 0, 0)
+	var normal: Array = []
+	var shiny: Array = []
+	normal.resize(32)
+	shiny.resize(32)
+	normal.fill(0x001F)
+	shiny.fill(0x03E0)
+	normal[31] = 0x7C00
+	row["palette"] = {"normal": normal, "shiny": shiny}
+	RomCache.write_json(RomCache.species_path(_directory), [row])
+	var manifest: Dictionary = RomCache.read_manifest(_directory)
+	manifest["generation"] = RomRegistry.GEN3
+	RomCache.write_json(RomCache.manifest_path(_directory), manifest)
+	var data: GameData = GameData.open_directory(_directory)
+	assert_eq(data.palette(1).size(), 16)
+	assert_eq(data.palette(1)[0], Color.RED)
+	assert_eq(data.palette(1, true)[15], Color.GREEN)
+	assert_eq(data.palette(1, false, 1)[15], Color.BLUE)
+	assert_true(data.palette(1, false, 2).is_empty())
+	assert_true(data.palette(1, false, -1).is_empty())
+
+
+func test_generation_3_pictures_select_native_and_explicit_frames() -> void:
+	_write_cache()
+	var row: Dictionary = _species(1, "SYNTHETIC", 0, 0)
+	row["pic_frames"] = {"front": 2, "back": 1}
+	row["pic_default_frames"] = {"front": 1, "back": 0}
+	RomCache.write_json(RomCache.species_path(_directory), [row])
+	var manifest: Dictionary = RomCache.read_manifest(_directory)
+	manifest["generation"] = RomRegistry.GEN3
+	manifest["atlases"]["front_1"] = manifest["atlases"]["front"].duplicate()
+	RomCache.write_json(RomCache.manifest_path(_directory), manifest)
+	var data: GameData = GameData.open_directory(_directory)
+	assert_eq(data.species_pic(1)["atlas"], "front_1")
+	assert_eq(data.species_pic(1, false, 0)["atlas"], "front")
+	assert_true(data.species_pic(1, false, 2).is_empty())
+
+
+func test_species_without_picture_atlases_answers_empty() -> void:
+	_write_cache()
+	var manifest: Dictionary = RomCache.read_manifest(_directory)
+	manifest["atlases"] = {}
+	RomCache.write_json(RomCache.manifest_path(_directory), manifest)
+	var data: GameData = GameData.open_directory(_directory)
+	assert_true(data.species_pic(1).is_empty())
+	assert_true(data.species_pic(1, true).is_empty())

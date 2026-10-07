@@ -1257,6 +1257,10 @@ func test_the_stats_pic_is_mirrored_for_everything_but_an_unown() -> void:
 ## the letter its DVs pick rather than as the species' own picture, and
 ## `EggStatsScreen` draws `GetEggFrontpic`'s.
 func test_the_stats_pic_is_the_letter_for_an_unown_and_the_egg_for_an_egg() -> void:
+	var manifest: Dictionary = RomCache.read_manifest(_directory)
+	manifest["atlases"] = Fixture.write_pic_atlases(_directory)
+	RomCache.write_json(RomCache.manifest_path(_directory), manifest)
+	_data = GameData.open_directory(_directory)
 	var letter: Dictionary = Gen2StatsScreenPage.pic_record(_data, {
 		"species": Gen2Layout.UNOWN_SPECIES, "unown_form": 3, "egg": false,
 	})
