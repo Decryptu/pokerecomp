@@ -1,9 +1,6 @@
 class_name Gen3Importer
 extends RefCounted
 
-## Generation 3's importer: species with dex entries, moves, types, matchups,
-## items, abilities, trainers, pictures, map headers and wild encounters.
-
 ## The `GAME_CODE` and `GAME_REVISION` each pret Makefile hands `gbafix`.
 const HEADERS: Dictionary = {
 	RomRegistry.RUBY: ["AXVE", 2],

@@ -335,13 +335,21 @@ func map_count() -> int:
 	return _headers().size() if generation == RomRegistry.GEN3 else _maps().size()
 
 
-## GBA header metadata, with dump offsets for sections awaiting decoding.
+## GBA map metadata and event entry points, with offsets for graphics awaiting decoding.
 func world_map_header(group: int, number: int) -> Dictionary:
 	return _coerce_service_dictionary(_headers().get("%d:%d" % [group, number], {}))
 
 
 func world_map_headers() -> Array:
 	return _coerce_service_value(_headers().values(), PackedByteArray())
+
+
+func world_map_events(group: int, number: int) -> Dictionary:
+	return world_map_header(group, number).get("events", {})
+
+
+func world_map_script_entries(group: int, number: int) -> Array:
+	return world_map_header(group, number).get("map_scripts", [])
 
 
 func world_map(group: int, number: int) -> Gen2WorldMap:

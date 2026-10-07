@@ -5,8 +5,8 @@
 ## Source references
 
 <!--
-Behavior is re-derived from the pokered, pokeyellow, pokegold and pokecrystal
-disassemblies. For anything that reproduces cartridge behavior, cite path plus
+Behavior is re-derived from the pinned pret disassemblies in docs/REFERENCES.md.
+For anything that reproduces cartridge behavior, cite path plus
 symbol, one per line:
 
   engine/battle/core.asm, DetermineMoveOrder
