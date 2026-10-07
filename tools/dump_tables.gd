@@ -23,10 +23,7 @@ const SOURCES: Dictionary = {
 	"growth": RomCache.SPECIES,
 }
 
-## The six growth curves, in the cartridge's own byte order (GROWTH_MEDIUM_FAST
-## through GROWTH_SLOW). Only four are ever used by a real species in any of the
-## three games; the other two are named for completeness, not because a species
-## exercises them.
+## Generation 2 growth bytes; Generation 3 replaces the two unused curves.
 const GROWTH_NAMES: PackedStringArray = [
 	"medium fast", "slightly fast", "slightly slow", "medium slow", "fast", "slow",
 ]
@@ -85,6 +82,20 @@ const MATCHUP_SYMBOLS: Dictionary = {
 }
 
 
+const GEN3_GROWTH_NAMES: PackedStringArray = [
+	"medium fast", "erratic", "fluctuating", "medium slow", "fast", "slow",
+]
+const GEN3_EVOLVE_NAMES: Dictionary = {
+	1: "friendship", 2: "friendship by day", 3: "friendship by night", 4: "level",
+	5: "trade", 6: "trade holding", 7: "item", 8: "level, attack over defense",
+	9: "level, attack equals defense", 10: "level, attack under defense",
+	11: "level, low personality", 12: "level, high personality", 13: "level, Ninjask",
+	14: "level, Shedinja", 15: "beauty",
+}
+
+var _generation: int = RomRegistry.GEN2
+
+
 func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if args.is_empty():
@@ -97,29 +108,19 @@ func _initialize() -> void:
 	var id: StringName = StringName(args[0])
 	var wanted: String = args[1] if args.size() > 1 else "all"
 
-	var directory: String = _cache_for(id)
-	if directory.is_empty():
+	var data: GameData = GameData.open(id)
+	if data == null:
 		push_error("No cache for %s. Run tools/import_rom.gd first." % id)
 		quit(1)
 		return
 
+	var directory: String = data.directory
+	_generation = data.generation
 	print("%s  %s" % [id, ProjectSettings.globalize_path(directory)])
 	for table: String in TABLES:
 		if wanted == "all" or wanted == table:
 			_dump(directory, table)
 	quit(0)
-
-
-## The cache directory is keyed by hash as well as game, so it is found by
-## listing rather than built from an id.
-func _cache_for(id: StringName) -> String:
-	var dir: DirAccess = DirAccess.open(RomCache.ROOT)
-	if dir == null:
-		return ""
-	for name: String in dir.get_directories():
-		if name.begins_with("%s_" % id):
-			return "%s/%s" % [RomCache.ROOT, name]
-	return ""
 
 
 func _dump(directory: String, table: String) -> void:
@@ -192,17 +193,13 @@ func _dump_egg_moves(directory: String, rows: Array) -> void:
 	print("  %d egg moves across %d species" % [total, species])
 
 
-## Every species' growth rate and base experience yield, the two fields
-## [Gen2Experience] needs and nothing else reads. Neither has a self-checking
-## shape (a growth rate byte 0-5 and a base exp byte are both plausible
-## whatever the offset is), so what settles them is reading a name against a
-## curve published independently: Bulbasaur medium slow, Caterpie medium fast,
-## Chansey fast, Mewtwo slow.
+## Growth bytes are meaningful only in their own generation's order.
 func _dump_growth(rows: Array) -> void:
 	print("\ngrowth (%d species)" % rows.size())
 	for row: Dictionary in rows:
 		var rate: int = int(row.get("growth_rate", -1))
-		var rate_name: String = GROWTH_NAMES[rate] if rate >= 0 and rate < GROWTH_NAMES.size() else "?"
+		var names: PackedStringArray = GEN3_GROWTH_NAMES if _generation == RomRegistry.GEN3 else GROWTH_NAMES
+		var rate_name: String = names[rate] if rate >= 0 and rate < names.size() else "?"
 		print("  %3d  %-11s %-13s base exp %3d" % [
 			int(row["number"]), String(row["name"]), rate_name, int(row.get("base_exp", 0)),
 		])
@@ -229,11 +226,11 @@ func _dump_evolutions(directory: String, rows: Array) -> void:
 	print("  %d evolutions" % total)
 
 
-## Every trainer class, and behind it every individual trainer's own party.
-## Reading this is the check the runtime one cannot be: a level, a species and a
-## move number are in range whatever a wrong pointer does, but a group that reads
-## Falkner's Pidgey and Pidgeotto, or leaves the one empty class empty, is right.
+## Class parties on Generations 1 and 2; individual IDs on Generation 3.
 func _dump_trainers(directory: String, rows: Array) -> void:
+	if _generation == RomRegistry.GEN3:
+		_dump_gen3_trainers(directory, rows)
+		return
 	var species: Array = _names_in(RomCache.species_path(directory))
 	var moves: Array = _names_in(RomCache.moves_path(directory))
 	var items: Array = _names_in(RomCache.items_path(directory))
@@ -253,6 +250,22 @@ func _dump_trainers(directory: String, rows: Array) -> void:
 			print("    %-13s %s" % [String(trainer["name"]), "; ".join(parts)])
 
 	print("  %d trainers" % total)
+
+
+func _dump_gen3_trainers(directory: String, rows: Array) -> void:
+	var species: Array = _names_in(RomCache.species_path(directory))
+	var moves: Array = _names_in(RomCache.moves_path(directory))
+	var items: Array = _names_in(RomCache.items_path(directory))
+	print("\ntrainers (%d individuals)" % rows.size())
+	for row: Dictionary in rows:
+		var parts: PackedStringArray = []
+		for mon: Dictionary in row["party"]:
+			parts.append("%s IV byte %d" % [_describe_trainer_mon(mon, species, moves, items), int(mon["iv"])])
+		print("  %3d %s %s, picture %d, AI 0x%x, items %s, double %s" % [
+			int(row["number"]), row["class_name"], row["name"], int(row["picture"]),
+			int(row["ai_flags"]), str(row["items"]), str(row["double_battle"]),
+		])
+		print("    %s" % "; ".join(parts))
 
 
 ## A class's AI: which scoring routines run, how it treats a held item and when it
@@ -322,6 +335,10 @@ func _describe_evolution(evolution: Dictionary, items: Array, species: Array) ->
 	var method: int = int(evolution["method"])
 	var parameter: int = int(evolution["parameter"])
 	var target: String = _name_at(species, int(evolution["target"]))
+	if _generation == RomRegistry.GEN3:
+		var label: String = String(GEN3_EVOLVE_NAMES.get(method, "method %d" % method))
+		var argument: String = _name_at(items, parameter) if method in [6, 7] else str(parameter)
+		return "%s %s -> %s" % [label, argument, target]
 	var how: String = String(EVOLVE_NAMES.get(method, "method %d" % method))
 
 	match method:
@@ -369,22 +386,21 @@ func _name_at(names: Array, number: int) -> String:
 
 ## The chart as a grid, attacker down the side and defender across the top.
 ## Nobody checks a list of 110 rows; a grid gets checked, because the published
-## table has the same shape and a wrong cell stands out. Only the seventeen real
-## types are shown: the padding numbers between the two groups have names but no
-## matchups.
+## table has the same shape and a wrong cell stands out. Only real types appear.
 func _dump_matchups(directory: String, rows: Array) -> void:
-	var names: Array = _type_names(directory)
+	var names: Array = _names_in(RomCache.types_path(directory))
 	var chart: Dictionary = {}
 	for row: Dictionary in rows:
 		# Every row is in the grid, the flagged ones included: they are matchups
 		# that hold until Foresight cancels them, not extras it adds. Which two
 		# they are is printed under the grid.
-		chart[int(row["attacker"]) * Gen2Layout.TYPE_COUNT + int(row["defender"])] = \
+		chart[Gen2ContentOverlay.matchup_number(int(row["attacker"]), int(row["defender"]))] = \
 			int(row["multiplier"])
 
 	var types: Array = []
-	for number: int in Gen2Layout.TYPE_COUNT:
-		if Gen2Layout.is_matchup_type(number) and number < names.size():
+	for number: int in names.size():
+		var real_type: bool = number != Gen3Layout.TYPE_MYSTERY if _generation == RomRegistry.GEN3 else Gen2Layout.is_matchup_type(number)
+		if real_type and not String(names[number]).is_empty():
 			types.append(number)
 
 	var header: String = " ".repeat(10)
@@ -396,7 +412,7 @@ func _dump_matchups(directory: String, rows: Array) -> void:
 		var line: String = "%-10s" % String(names[attacker]).substr(0, 9)
 		for defender: int in types:
 			var multiplier: int = int(chart.get(
-				attacker * Gen2Layout.TYPE_COUNT + defender, Gen2Layout.MATCHUP_EFFECTIVE
+				Gen2ContentOverlay.matchup_number(attacker, defender), Gen2Layout.MATCHUP_EFFECTIVE
 			))
 			line += "%-4s" % String(MATCHUP_SYMBOLS.get(multiplier, "?"))
 		print("  %s" % line)
@@ -409,19 +425,6 @@ func _dump_matchups(directory: String, rows: Array) -> void:
 			])
 
 
-## The type names out of the same cache, so the grid is labelled with what the
-## cartridge calls them rather than with numbers.
-func _type_names(directory: String) -> Array:
-	var rows: Variant = RomCache.read_json(RomCache.types_path(directory))
-	if not rows is Array:
-		return []
-
-	var out: Array = []
-	for row: Dictionary in rows:
-		out.append(String(row["name"]))
-	return out
-
-
 func _describe(table: String, row: Dictionary) -> String:
 	var number: int = int(row["number"])
 	var name: String = String(row["name"])
@@ -432,7 +435,9 @@ func _describe(table: String, row: Dictionary) -> String:
 				int(row["pp"]), int(row["effect"]), int(row["effect_chance"]),
 			]
 		"trainers":
-			var palette: Array = row["palette"]
+			var palette: Array = row.get("palette", [])
+			if palette.size() < 2:
+				return "%3d  %-13s monochrome" % [number, name]
 			return "%3d  %-13s $%04X $%04X" % [
 				number, name, int(palette[0]), int(palette[1]),
 			]

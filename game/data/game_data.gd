@@ -3209,9 +3209,8 @@ func trainer_count() -> int:
 	return _trainers.size()
 
 
-## One trainer class by number, counting from Falkner at 1. Class 0 is the
-## player, who is a class in the cartridge's tables and has no pic, so the cache
-## does not carry an entry for them.
+## A trainer class in Generations 1 and 2, or an individual trainer ID in
+## Generation 3. Zero is reserved and has no cached entry.
 func trainer(number: int) -> Dictionary:
 	return _content(Gen2ContentOverlay.KIND_TRAINER, _trainers, number)
 
@@ -3220,33 +3219,38 @@ func trainer_name(number: int) -> String:
 	return String(trainer(number).get("name", ""))
 
 
-## The four colours a trainer class is drawn with. A class has one palette and
-## no shiny counterpart: only a Pokémon can be shiny.
+## A trainer palette in index order: four colours on GB, sixteen on GBA.
 func trainer_palette(number: int) -> PackedColorArray:
 	var entry: Dictionary = trainer(number)
 	if entry.is_empty():
 		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
-	var stored: Array = entry["palette"]
+	var stored: Array = entry.get("palette", [])
+	if generation == RomRegistry.GEN3:
+		var colors := PackedColorArray()
+		for packed: Variant in stored:
+			colors.append(PokePalette.from_packed(int(packed)))
+		return colors
+	if stored.size() < 2:
+		return PokePalette.monochrome()
 	return PokePalette.pic_palette(PackedColorArray([
 		PokePalette.from_packed(int(stored[0])),
 		PokePalette.from_packed(int(stored[1])),
 	]))
 
 
-## How many individual trainers trainer class [param number] carries. One class
-## in every game carries none: see [constant Gen2Layout.EMPTY_TRAINER_CLASS].
+## Individual trainers within a GB class, or one for a stored GBA trainer ID.
 func trainer_party_count(number: int) -> int:
+	if generation == RomRegistry.GEN3:
+		return 0 if trainer(number).is_empty() else 1
 	return (trainer(number).get("trainers", []) as Array).size()
 
 
-## One of a trainer class's individual trainers, as { name, type, party }, where
-## `party` is that trainer's Pokemon in the cartridge's own order, each
-## { level, species, item, moves }. Empty for a class or an index this class does
-## not have. `type` is one of the `Gen2Layout.TRAINER_MON_*` constants and decides
-## whether a member knows what its level teaches or the moves stored with it, and
-## whether it holds an item. See [Gen2TrainerParty].
-func trainer_party(number: int, index: int) -> Dictionary:
+## A GB class member or a GBA individual (index zero). Party fields are integers;
+## GBA rows also retain IV bytes and the trainer's own flags and attributes.
+func trainer_party(number: int, index: int = 0) -> Dictionary:
+	if generation == RomRegistry.GEN3:
+		return _gen3_trainer_party(number) if index == 0 else {}
 	var trainers: Array = trainer(number).get("trainers", [])
 	if index < 0 or index >= trainers.size():
 		return {}
@@ -3273,10 +3277,33 @@ func trainer_party(number: int, index: int) -> Dictionary:
 	}
 
 
-## A trainer class's own attributes: the two items its trainers may use, the
-## base money reward, and the two AI flag words [Gen2BattleAI] scores moves
-## against. Empty for a class the cache does not carry.
+## Restore Generation 3's scalar and array numbers without dropping its IV byte
+## or individual attributes, which the older class-party schema cannot express.
+func _gen3_trainer_party(number: int) -> Dictionary:
+	var entry: Dictionary = trainer(number).duplicate(true)
+	if entry.is_empty():
+		return {}
+	for key: String in ["number", "class", "type", "picture", "encounter_music", "ai_flags", "base_money", "pic_size"]:
+		entry[key] = int(entry[key])
+	for key: String in ["items", "palette"]:
+		entry[key] = (entry[key] as Array).map(func(value: Variant) -> int: return int(value))
+	for key: String in ["size", "y_offset"]:
+		entry["pic_coordinates"][key] = int(entry["pic_coordinates"][key])
+	for mon: Dictionary in entry["party"]:
+		for key: String in ["species", "level", "iv", "item"]:
+			mon[key] = int(mon[key])
+		mon["moves"] = (mon["moves"] as Array).map(func(move_number: Variant) -> int: return int(move_number))
+	return entry
+
+
+## A GB class's AI and reward, or a GBA individual's items, AI and battle flags.
 func trainer_attributes(number: int) -> Dictionary:
+	if generation == RomRegistry.GEN3:
+		var individual: Dictionary = _gen3_trainer_party(number)
+		if individual.is_empty():
+			return {}
+		return {"items": individual["items"], "ai_flags": individual["ai_flags"],
+			"base_money": individual["base_money"], "double_battle": individual["double_battle"]}
 	var entry: Dictionary = trainer(number)
 	if entry.is_empty():
 		return {}
@@ -3300,8 +3327,10 @@ func trainer_attributes(number: int) -> Dictionary:
 
 ## A trainer class's own DVs as [method Gen2BattleMon.create]'s [code]dv_word[/code],
 ## [constant Gen2BattleMon.PERFECT_DVS] for a class the cache does not carry.
-## Generation 1 has no table: `LoadEnemyMon` writes one word for every class.
+## Generation 1 writes one word for every class; Generation 3 has IVs, not DVs.
 func trainer_dvs(number: int) -> int:
+	if generation == RomRegistry.GEN3:
+		return 0
 	if generation == RomRegistry.GEN1:
 		return Gen1Layout.TRAINER_DVS
 	var entry: Dictionary = trainer(number)
@@ -3310,8 +3339,10 @@ func trainer_dvs(number: int) -> int:
 	return int(entry.get("dvs", Gen2BattleMon.PERFECT_DVS))
 
 
-## `TrainerEncounterMusic`'s or `PlayTrainerMusic`'s piece; empty keeps the map's.
+## A GB encounter track; GBA encounter categories await its music engine.
 func trainer_encounter_music(number: int) -> Dictionary:
+	if generation == RomRegistry.GEN3:
+		return {}
 	var track: int = int(trainer(number).get("encounter_music", -1))
 	if track <= 0:
 		return {}
@@ -3424,7 +3455,7 @@ func player_frontpic(slot: int = 0) -> Dictionary:
 	return {"atlas": "player_front", "slot": slot, "width": cell, "height": cell}
 
 
-## Where a class sits in the trainer atlas; every trainer fills its cell.
+## GB classes index atlas cells; GBA individuals carry a shared picture ID.
 func trainer_pic(number: int) -> Dictionary:
 	var entry: Dictionary = trainer(number)
 	if entry.is_empty():
@@ -3437,7 +3468,8 @@ func trainer_pic(number: int) -> Dictionary:
 	var cell: int = int(atlas("trainers").get("cell", 0))
 	if cell <= 0:
 		return {}
-	return {"atlas": "trainers", "slot": number - 1, "width": cell, "height": cell}
+	var slot: int = int(entry["picture"]) if generation == RomRegistry.GEN3 else number - 1
+	return {"atlas": "trainers", "slot": slot, "width": cell, "height": cell}
 
 
 func atlas(name: String) -> Dictionary:

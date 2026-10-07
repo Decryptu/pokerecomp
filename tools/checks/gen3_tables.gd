@@ -1,6 +1,6 @@
 extends RefCounted
 
-## Generation 3's content and picture tables. Pins
+## Generation 3's content, trainer and picture tables. Pins
 ## come from pret's data files; the sweeps catch a stride that reads plausibly.
 
 const SPECIES_COUNT: int = 386
@@ -75,6 +75,7 @@ func _one_game() -> void:
 	_abilities()
 	_dex_entries()
 	_pictures()
+	_trainers()
 	_undecoded_text()
 
 
@@ -226,6 +227,8 @@ func _undecoded_text() -> void:
 		texts.append_array(data.dex_entry(number)["pages"])
 	for move: int in range(1, MOVE_COUNT + 1):
 		texts.append(data.move(move)["name"])
+	for trainer: int in range(1, data.trainer_count() + 1):
+		texts.append_array([data.trainer(trainer)["name"], data.trainer(trainer)["class_name"]])
 	var undecoded: Array = texts.filter(func(text: String) -> bool: return text.contains("<$"))
 	_r.check(undecoded.is_empty(), "%d texts hold codes with no glyph, first %s." % [
 		undecoded.size(), str(undecoded.slice(0, 1)),
@@ -287,3 +290,72 @@ func _picture_coordinates(data: GameData) -> void:
 		var actual: Array = _ints([row["width"], row["height"], row["y_offset"]])
 		_r.check(actual == (front if kind == "front" else [48, 32, 16]),
 			"Bulbasaur's %s coordinates read %s." % [kind, actual])
+
+
+## Trainer and party files pin one member of each stored format; the sweep
+## reads every individual through GameData rather than treating IDs as classes.
+func _trainers() -> void:
+	var data: GameData = _r.data
+	var layout: Dictionary = Gen3Layout.for_id(data.id)
+	var expected: int = int(layout["trainer_count"]) - 1
+	if not _r.check(data.trainer_count() == expected, "%d trainers, expected %d." % [data.trainer_count(), expected]):
+		return
+	var formats: Array[int] = [0, 0, 0, 0]
+	for number: int in range(1, expected + 1):
+		var trainer: Dictionary = data.trainer_party(number)
+		formats[int(trainer["type"])] += 1
+		_r.check(trainer["party"].size() >= 1 and trainer["party"].size() <= 6,
+			"Trainer %d has an invalid party size." % number)
+		_r.check(data.trainer_party_count(number) == 1 and data.trainer_palette(number).size() == 16,
+			"Trainer %d loses its individual identity or palette." % number)
+		_r.check(int(data.trainer_pic(number)["slot"]) == int(trainer["picture"]),
+			"Trainer %d points at the wrong picture." % number)
+		for mon: Dictionary in trainer["party"]:
+			_r.check(not data.species(int(mon["species"])).is_empty(), "Trainer %d has an unknown species." % number)
+	var wanted: Array = [570, 85, 28, 10]
+	if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		wanted = [591, 103, 33, 15]
+	elif data.id == RomRegistry.EMERALD:
+		wanted = [672, 87, 31, 64]
+	_r.check(formats == wanted, "Trainer formats read %s." % str(formats))
+	_trainer_pins(data)
+	_trainer_pictures(data, int(layout["trainer_pic_count"]))
+
+
+func _trainer_pins(data: GameData) -> void:
+	var pins: Array = [
+		[1, "ARCHIE", 0, 0, 17, 367, 0, []],
+		[44, "DUSTY", 1, 50, 24, 28, 0, [91, 163, 28, 40]],
+		[114, "CINDY", 2, 0, 7, 263, 110, []],
+		[123, "CINDY", 3, 40, 36, 264, 110, [154, 300, 316, 28]],
+	]
+	if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		pins = [
+			[1, "", 0, 0, 5, 23, 0, []],
+			[142, "LIAM", 1, 0, 10, 74, 0, [33, 111, 0, 0]],
+			[317, "KOICHI", 2, 100, 37, 106, 207, []],
+			[410, "LORELEI", 3, 250, 52, 87, 0, [58, 57, 258, 219]],
+		]
+	elif data.id == RomRegistry.EMERALD:
+		pins = [
+			[1, "SAWYER", 0, 0, 21, 74, 0, []],
+			[38, "FELIX", 1, 0, 43, 308, 0, [94, 0, 0, 0]],
+			[114, "CINDY", 2, 0, 7, 263, 110, []],
+			[71, "RANDALL", 3, 255, 26, 277, 0, [98, 97, 17, 0]],
+		]
+	for pin: Array in pins:
+		var trainer: Dictionary = data.trainer_party(int(pin[0]))
+		var mon: Dictionary = trainer["party"][0]
+		var read: Array = [trainer["number"], trainer["name"], trainer["type"],
+			mon["iv"], mon["level"], mon["species"], mon["item"], mon["moves"]]
+		_r.check(read == pin, "Trainer %d reads %s." % [pin[0], str(read)])
+
+
+func _trainer_pictures(data: GameData, count: int) -> void:
+	var atlas: Dictionary = data.atlas("trainers")
+	_r.check(int(atlas.get("decoded", 0)) == count, "Trainer picture count is wrong.")
+	for picture: int in count:
+		var cell: Dictionary = Gen2PicImage.atlas_cell(data.atlas_indices("trainers"), atlas,
+			{"slot": picture, "width": 64, "height": 64})
+		_r.check(cell.get("indices", PackedByteArray()).size() == 4096,
+			"Trainer picture %d has no complete canvas." % picture)
