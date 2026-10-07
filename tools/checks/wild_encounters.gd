@@ -33,6 +33,7 @@ const DUNGEONS_GROUP: int = 3
 func run(r: RefCounted) -> void:
 	_r = r
 	_r.each_game(func() -> void:
+		_verify_table_order()
 		_verify_route_29()
 		_verify_union_cave()
 		_verify_enclosed_floor()
@@ -1500,3 +1501,20 @@ func _stand_on_first_warp(world: Gen2WorldAPI) -> void:
 					and world._reach_standable(cell):
 					world.player_cell = cell
 					return
+
+
+## Johto/Kanto grass and water rows, from pret's def_*_wildmons in source order.
+const TABLE_ORDER_DIGESTS: Dictionary = {
+	&"gold": "d390d5e5dfc9005b82bdce7aab03097d07229165",
+	&"silver": "d390d5e5dfc9005b82bdce7aab03097d07229165",
+	&"crystal": "41f1393fc33c79559b714c145d99e7ac18df9f4c",
+}
+
+
+func _verify_table_order() -> void:
+	var lines := PackedStringArray(["encounter_order"])
+	for method: StringName in [&"grass", &"water"]:
+		for region: String in ["johto", "kanto"]:
+			for row: Dictionary in _r.data.world_encounter_region_rows(method, region):
+				lines.append("%s,%s,%s" % [method, region, row["map"]])
+	_r.digest_matches("encounter_order", lines, TABLE_ORDER_DIGESTS[_r.data.id])
