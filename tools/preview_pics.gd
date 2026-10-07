@@ -156,7 +156,7 @@ func _render(
 
 ## One palette per cell of an atlas, in slot order.
 ## The kinds of atlas are indexed differently: a species atlas by species, the
-## trainer atlas by class, and Unown's by letter form, all of which
+## trainer atlas by class (Generation 3 by picture ID), and Unown's by letter form, all of which
 ## share the one species' colours. A Generation 1 cartridge names
 ## no colours for a trainer or a back pic, so those come out in Game Boy greys.
 func _palettes(directory: String, name: String, shiny: bool) -> Array:
@@ -166,6 +166,11 @@ func _palettes(directory: String, name: String, shiny: bool) -> Array:
 		return [_palette_of([])]
 
 	if name == "trainers":
+		var manifest: Dictionary = RomCache.read_manifest(directory)
+		if int(manifest.get("generation", 0)) == RomRegistry.GEN3:
+			for palette: Array in manifest.get("trainer_palettes", []):
+				out.append(_palette_of(palette))
+			return out
 		for entry: Dictionary in RomCache.read_json(RomCache.trainers_path(directory)):
 			out.append(_palette_of(entry.get("palette", [])))
 		return out

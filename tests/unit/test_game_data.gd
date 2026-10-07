@@ -531,6 +531,15 @@ func test_a_trainer_palette_has_no_shiny_half() -> void:
 	assert_ne(palette, data.trainer_palette(2))
 
 
+## Gen 1 omits trainer palette rows; a direct palette read must return its
+## grayscale colours. Existing trainer fixtures all carry Gen 2 colour pairs.
+func test_a_trainer_without_a_palette_uses_monochrome() -> void:
+	var data := GameData.new()
+	data.generation = RomRegistry.GEN1
+	data._trainers = [{"number": 1, "name": "YOUNGSTER"}]
+	assert_eq(data.trainer_palette(1), PokePalette.monochrome())
+
+
 func test_a_trainer_pic_always_fills_its_cell() -> void:
 	# Every trainer is drawn at one size, unlike a species front pic.
 	_write_cache()

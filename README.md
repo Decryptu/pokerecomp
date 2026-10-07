@@ -393,6 +393,7 @@ or a group, or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits of all six cartridges, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
+| `gen3` | Ruby, Sapphire, FireRed, LeafGreen and Emerald's content tables, individual trainer parties and all imported Pokémon and trainer pictures |
 | `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, the Hall of Fame's own pages, the opening from the copyright screen to the title on all three, the Cable Club from its receptionist through a trade and a Colosseum fight against another save of the same cartridge, every sound a script row plays and the rival's own theme, Yellow's follower: its emotion table, its faces, its 42 voice clips and the spawn every warp leaves it, and a new game played on the real screens from the copyright screen to the first badge on all three, every button through `press_button` and the sound driver clocked a frame a frame |
 
 The rest are previews and dumps, each driving a real screen or table:
@@ -400,7 +401,7 @@ The rest are previews and dumps, each driving a real screen or table:
 | Tool | Does |
 |---|---|
 | `dump_tables.gd <game> <table>` | Prints a decoded table: `species`, `moves`, `items`, `types`, `matchups`, `trainers`, `learnsets`, `egg_moves`, `evolutions`, `growth` or `all` |
-| `preview_pics.gd <game> <png> [kind]` | Contact sheet of `front`, `back`, `trainers`, `player_back`, `font` or `frames`, in either generation |
+| `preview_pics.gd <game> <png> [kind]` | Contact sheet of `front`, `back`, `trainers`, `player_back`, `font` or `frames`, from the imported cache |
 | `preview_*.gd` | One per screen: the intro, title, credits, Hall of Fame, region map, party, marts, mail, fishing, battle switch and animations, overworld sprites and collision |
 | `preview_world_story.gd` | Map entry callbacks, event-flag visibility, facing interactions and the whole story route, in either generation |
 | `replay_world.gd [game ...] [frames]` | Records `(frame, button)` from a real run and replays it into a fresh world; the same seed and log must reach the same snapshot, party and battle outcome byte for byte, at 30 fps and at 144. One route fights: a wild battle is spent from the world's own pump and steered through its own funnel |
@@ -424,9 +425,9 @@ real cartridge, so they run anywhere.
 godot --headless -s res://addons/gut/gut_cmdln.gd -gexit
 ```
 
-That is the unit tier, and the default: more than 3,300 tests in about a
-minute. The scene integration tier drives real screens and is slower, so it is
-asked for explicitly, which is how CI runs both:
+That is the unit tier and the default; it runs in about a minute. The scene
+integration tier drives real screens and is slower, so it is asked for
+explicitly, which is how CI runs both:
 
 ```bash
 godot --headless -s res://addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit

@@ -90,6 +90,15 @@ const ITEM_TYPE: int = 0x1B
 const ITEM_BATTLE_USAGE: int = 0x20
 const ITEM_SECONDARY_ID: int = 0x28
 
+## `Trainer` in pret's battle.h/data.h; agbcc rounds party rows to four bytes.
+const TRAINER_SIZE: int = 40
+const TRAINER_NAME_SIZE: int = 12
+const TRAINER_CLASS_NAME_SIZE: int = 13
+const PARTY_CUSTOM_MOVES: int = 1
+const PARTY_HELD_ITEM: int = 2
+const PARTY_STRIDES: Array[int] = [8, 16, 8, 16]
+const TRAINER_PARTY_LIMIT: int = 6
+
 const ABILITY_COUNT: int = 78
 const ABILITY_NAME_SIZE: int = 13
 
@@ -119,6 +128,16 @@ const EVOLUTION_METHOD_LAST: int = 15  # EVO_BEAUTY
 
 ## Keys name the table, not one cartridge's spelling; the last three are shapes.
 const RUBY: Dictionary = {
+	"trainers": 0x1f0514,
+	"trainer_count": 694,
+	"trainer_class_names": 0x1f0220,
+	"trainer_class_count": 58,
+	"trainer_pics": 0x1ec554,
+	"trainer_palettes": 0x1ec7ec,
+	"trainer_coords": 0x1ec408,
+	"trainer_pic_count": 83,
+	"trainer_money": 0x1f9908,
+
 	"front_pics": 0x1E836C,
 	"back_pics": 0x1E980C,
 	"normal_palettes": 0x1EA5CC,
@@ -145,6 +164,16 @@ const RUBY: Dictionary = {
 }
 
 const SAPPHIRE: Dictionary = {
+	"trainers": 0x1f04a4,
+	"trainer_count": 694,
+	"trainer_class_names": 0x1f01b0,
+	"trainer_class_count": 58,
+	"trainer_pics": 0x1ec4e4,
+	"trainer_palettes": 0x1ec77c,
+	"trainer_coords": 0x1ec398,
+	"trainer_pic_count": 83,
+	"trainer_money": 0x1f9898,
+
 	"front_pics": 0x1E82FC,
 	"back_pics": 0x1E979C,
 	"normal_palettes": 0x1EA55C,
@@ -171,6 +200,16 @@ const SAPPHIRE: Dictionary = {
 }
 
 const FIRERED: Dictionary = {
+	"trainers": 0x23eb38,
+	"trainer_count": 743,
+	"trainer_class_names": 0x23e5c8,
+	"trainer_class_count": 107,
+	"trainer_pics": 0x2395ec,
+	"trainer_palettes": 0x239a8c,
+	"trainer_coords": 0x23939c,
+	"trainer_pic_count": 148,
+	"trainer_money": 0x24f290,
+
 	"front_pics": 0x23511C,
 	"back_pics": 0x2365BC,
 	"normal_palettes": 0x23737C,
@@ -197,6 +236,16 @@ const FIRERED: Dictionary = {
 }
 
 const LEAFGREEN: Dictionary = {
+	"trainers": 0x23eb14,
+	"trainer_count": 743,
+	"trainer_class_names": 0x23e5a4,
+	"trainer_class_count": 107,
+	"trainer_pics": 0x2395c8,
+	"trainer_palettes": 0x239a68,
+	"trainer_coords": 0x239378,
+	"trainer_pic_count": 148,
+	"trainer_money": 0x24f26c,
+
 	"front_pics": 0x2350F8,
 	"back_pics": 0x236598,
 	"normal_palettes": 0x237358,
@@ -223,6 +272,16 @@ const LEAFGREEN: Dictionary = {
 }
 
 const EMERALD: Dictionary = {
+	"trainers": 0x310030,
+	"trainer_count": 855,
+	"trainer_class_names": 0x30fcd4,
+	"trainer_class_count": 66,
+	"trainer_pics": 0x305654,
+	"trainer_palettes": 0x30593c,
+	"trainer_coords": 0x3054e0,
+	"trainer_pic_count": 93,
+	"trainer_money": 0x31aeb8,
+
 	"front_pics": 0x30A18C,
 	"back_pics": 0x3028B8,
 	"normal_palettes": 0x303678,

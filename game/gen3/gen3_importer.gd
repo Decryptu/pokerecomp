@@ -2,7 +2,7 @@ class_name Gen3Importer
 extends RefCounted
 
 ## Generation 3's importer: species with dex entries, moves, types, matchups,
-## items, abilities and pictures; the registry keeps these cartridges unplayable.
+## items, abilities, trainers and pictures; the registry keeps these cartridges unplayable.
 
 ## The `GAME_CODE` and `GAME_REVISION` each pret Makefile hands `gbafix`.
 const HEADERS: Dictionary = {
@@ -48,6 +48,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_abilities,
 	_verify_dex_entries,
 	Gen3Pics.verify,
+	Gen3Trainers.verify,
 ]
 
 
@@ -360,6 +361,12 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 	if pics.is_empty():
 		result["message"] = "Could not write picture atlases."
 		return result
+	var trainers: Array = Gen3Trainers.read(rom, layout)
+	var trainer_pics: Dictionary = Gen3Trainers.import_pics(rom, layout, directory)
+	if trainer_pics.is_empty():
+		result["message"] = "Could not write trainer atlas."
+		return result
+	pics["trainers"] = trainer_pics
 	var moves: Array = _import_moves(rom, layout, on_progress)
 	var types: Array = _import_types(rom, layout)
 	var matchups: Array = _read_matchups(rom, layout)
@@ -372,6 +379,7 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		RomCache.matchups_path(directory): matchups,
 		RomCache.items_path(directory): items,
 		RomCache.abilities_path(directory): abilities,
+		RomCache.trainers_path(directory): trainers,
 	}
 	for path: String in sections:
 		if not RomCache.write_json(path, sections[path]):
@@ -388,6 +396,8 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"matchup_count": matchups.size(),
 		"item_count": items.size(),
 		"ability_count": abilities.size(),
+		"trainer_count": trainers.size(),
+		"trainer_palettes": Gen3Trainers.palettes(rom, layout),
 		"atlases": pics,
 		"complete": true,
 	}
@@ -405,14 +415,15 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"matchups": matchups.size(),
 		"items": items.size(),
 		"abilities": abilities.size(),
+		"trainers": trainers.size(),
 		"evolutions": evolutions,
 		"learnset_moves": learnset_moves,
 		"elapsed_ms": Time.get_ticks_msec() - started,
 	}, true)
 	result["message"] = ("%d species, %d moves, %d type matchups, %d items, %d abilities, "
-		+ "%d evolutions and %d level-up moves in %d ms.") % [
+		+ "%d trainers, %d evolutions and %d level-up moves in %d ms.") % [
 		species.size(), moves.size(), matchups.size(), items.size(), abilities.size(),
-		evolutions, learnset_moves, int(result["elapsed_ms"]),
+		trainers.size(), evolutions, learnset_moves, int(result["elapsed_ms"]),
 	]
 	return result
 
