@@ -1,6 +1,6 @@
 extends RefCounted
 
-## Generation 3's species, move, type, item, ability and Pokedex tables. Pins
+## Generation 3's content and picture tables. Pins
 ## come from pret's data files; the sweeps catch a stride that reads plausibly.
 
 const SPECIES_COUNT: int = 386
@@ -74,6 +74,7 @@ func _one_game() -> void:
 	_items()
 	_abilities()
 	_dex_entries()
+	_pictures()
 	_undecoded_text()
 
 
@@ -229,3 +230,60 @@ func _undecoded_text() -> void:
 	_r.check(undecoded.is_empty(), "%d texts hold codes with no glyph, first %s." % [
 		undecoded.size(), str(undecoded.slice(0, 1)),
 	])
+
+
+func _pictures() -> void:
+	var data: GameData = _r.data
+	for number: int in range(1, SPECIES_COUNT + 1):
+		var entry: Dictionary = data.species(number)
+		for back: bool in [false, true]:
+			_picture_frames(data, entry, number, back)
+		for shiny: bool in [false, true]:
+			for form: int in (4 if number == 351 else 1):
+				_r.check(data.palette(number, shiny, form).size() == 16,
+					"%s palette %d." % [entry["name"], form])
+	for back: bool in [false, true]:
+		_unown_pictures(data, back)
+	_picture_coordinates(data)
+	var native: String = "front" if data.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE] else "front_1"
+	_r.check(data.species_pic(386)["atlas"] == native, "Deoxys uses the wrong native picture.")
+
+
+func _picture_frames(data: GameData, entry: Dictionary, number: int, back: bool) -> void:
+	var kind: String = "back" if back else "front"
+	var expected: int = 4 if number == 351 else 1
+	if data.id == RomRegistry.EMERALD and not back \
+		or number == 386 and data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		expected = maxi(expected, 2)
+	_r.check(int(entry["pic_frames"][kind]) == expected,
+		"%s %s frame count." % [entry["name"], kind])
+	for frame: int in expected:
+		var pic: Dictionary = data.species_pic(number, back, frame)
+		var cell: Dictionary = Gen2PicImage.atlas_cell(
+			data.atlas_indices(pic["atlas"]), data.atlas(pic["atlas"]), pic)
+		_r.check(not cell.is_empty() and cell["indices"].size() == 4096,
+			"%s %s frame %d." % [entry["name"], kind, frame])
+	_r.check(data.species_pic(number, back, expected).is_empty(),
+		"%s has an extra %s frame." % [entry["name"], kind])
+
+
+func _unown_pictures(data: GameData, back: bool) -> void:
+	var forms: Dictionary = {}
+	for form: int in 28:
+		var pic: Dictionary = data.unown_pic(form, back)
+		var cell: Dictionary = Gen2PicImage.atlas_cell(
+			data.atlas_indices(pic["atlas"]), data.atlas(pic["atlas"]), pic)
+		forms[hash(cell.get("indices", PackedByteArray()))] = true
+	_r.check(forms.size() == 28,
+		"Unown has %d distinct %s forms." % [forms.size(), "back" if back else "front"])
+	_r.check(data.unown_pic(28, back).is_empty(), "Unown has a 29th form.")
+
+
+func _picture_coordinates(data: GameData) -> void:
+	var coordinates: Dictionary = data.species(1)["pic_coordinates"]
+	var front: Array = [40, 40, 16] if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else [32, 40, 14]
+	for kind: String in ["front", "back"]:
+		var row: Dictionary = coordinates[kind]
+		var actual: Array = _ints([row["width"], row["height"], row["y_offset"]])
+		_r.check(actual == (front if kind == "front" else [48, 32, 16]),
+			"Bulbasaur's %s coordinates read %s." % [kind, actual])

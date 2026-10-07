@@ -1,10 +1,8 @@
 class_name Gen2PicImage
 extends RefCounted
 
-## Colour indices plus a palette to an [Image]. The cache stores two bits per
-## pixel and no colour, so the palette is chosen at draw time and a shiny costs
-## one [PackedColorArray]. Built as one buffer for [method Image.create_from_data]:
-## per-pixel [method Image.set_pixel] on a 56x56 sprite is 3136 binding calls.
+## Colour indices and a draw-time palette to an [Image]. One buffer feeds
+## [method Image.create_from_data], avoiding per-pixel binding calls.
 
 const CHANNELS: int = 4
 ## Every fourth pixel each way is what [method field_color] counts: two samples

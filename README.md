@@ -95,8 +95,9 @@ over a one-pocket bag.
 
 Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
 the shelf. An import reads their species with Pokédex entries, moves, types,
-matchup chart, items and abilities and nothing else, so none is playable, and `tools/import_rom.gd` skips them unless
-given `--dev`.
+matchup chart, items, abilities and front/back pictures with normal and shiny
+palettes. Picture frames and all 28 Unown forms are retained; none of these
+cartridges is playable. `tools/import_rom.gd` skips them unless given `--dev`.
 
 | Game | SHA-1 |
 |---|---|

@@ -10,6 +10,18 @@ const ROM_WINDOW: int = 0x02000000
 ## `NUM_SPECIES` includes 25 unused Unown slots and the Hoenn run out of dex order.
 const SPECIES_COUNT: int = 412
 const NATIONAL_DEX_COUNT: int = 386
+const PIC_TABLE_COUNT: int = 440
+const PIC_ENTRY_SIZE: int = 8
+const PIC_TILES: int = 8
+const PIC_BYTES: int = 0x800
+const PALETTE_BYTES: int = 32
+const SHINY_TAG_BASE: int = 500
+const UNOWN_SPECIES: int = 201
+const UNOWN_B: int = 413
+const UNOWN_FORMS: int = 28
+const CASTFORM: int = 385
+const DEOXYS: int = 410
+
 const SPECIES_NAME_SIZE: int = 11
 const MOVE_NAME_SIZE: int = 13
 const TYPE_NAME_SIZE: int = 7
@@ -107,6 +119,12 @@ const EVOLUTION_METHOD_LAST: int = 15  # EVO_BEAUTY
 
 ## Keys name the table, not one cartridge's spelling; the last three are shapes.
 const RUBY: Dictionary = {
+	"front_pics": 0x1E836C,
+	"back_pics": 0x1E980C,
+	"normal_palettes": 0x1EA5CC,
+	"shiny_palettes": 0x1EB38C,
+	"front_coords": 0x1E7C8C,
+	"back_coords": 0x1E912C,
 	"species_names": 0x1F7184,  # gSpeciesNames
 	"move_names": 0x1F8338,  # gMoveNames
 	"type_effectiveness": 0x1F9738,  # gTypeEffectiveness
@@ -127,6 +145,12 @@ const RUBY: Dictionary = {
 }
 
 const SAPPHIRE: Dictionary = {
+	"front_pics": 0x1E82FC,
+	"back_pics": 0x1E979C,
+	"normal_palettes": 0x1EA55C,
+	"shiny_palettes": 0x1EB31C,
+	"front_coords": 0x1E7C1C,
+	"back_coords": 0x1E90BC,
 	"species_names": 0x1F7114,
 	"move_names": 0x1F82C8,
 	"type_effectiveness": 0x1F96C8,
@@ -147,6 +171,12 @@ const SAPPHIRE: Dictionary = {
 }
 
 const FIRERED: Dictionary = {
+	"front_pics": 0x23511C,
+	"back_pics": 0x2365BC,
+	"normal_palettes": 0x23737C,
+	"shiny_palettes": 0x23813C,
+	"front_coords": 0x234A3C,
+	"back_coords": 0x235EDC,
 	"species_names": 0x245F50,
 	"move_names": 0x247104,
 	"type_effectiveness": 0x24F0C0,
@@ -167,6 +197,12 @@ const FIRERED: Dictionary = {
 }
 
 const LEAFGREEN: Dictionary = {
+	"front_pics": 0x2350F8,
+	"back_pics": 0x236598,
+	"normal_palettes": 0x237358,
+	"shiny_palettes": 0x238118,
+	"front_coords": 0x234A18,
+	"back_coords": 0x235EB8,
 	"species_names": 0x245F2C,
 	"move_names": 0x2470E0,
 	"type_effectiveness": 0x24F09C,
@@ -187,6 +223,12 @@ const LEAFGREEN: Dictionary = {
 }
 
 const EMERALD: Dictionary = {
+	"front_pics": 0x30A18C,
+	"back_pics": 0x3028B8,
+	"normal_palettes": 0x303678,
+	"shiny_palettes": 0x304438,
+	"front_coords": 0x300D38,
+	"back_coords": 0x3021D8,
 	"species_names": 0x3185C8,
 	"move_names": 0x31977C,
 	"type_effectiveness": 0x31ACE8,

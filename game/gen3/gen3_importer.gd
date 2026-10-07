@@ -2,7 +2,7 @@ class_name Gen3Importer
 extends RefCounted
 
 ## Generation 3's importer: species with dex entries, moves, types, matchups,
-## items and abilities so far, so the registry keeps these cartridges unplayable.
+## items, abilities and pictures; the registry keeps these cartridges unplayable.
 
 ## The `GAME_CODE` and `GAME_REVISION` each pret Makefile hands `gbafix`.
 const HEADERS: Dictionary = {
@@ -47,6 +47,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_items,
 	_verify_abilities,
 	_verify_dex_entries,
+	Gen3Pics.verify,
 ]
 
 
@@ -317,7 +318,6 @@ static func _verify_dex_entries(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
-## Empty when a page pointer is wrong.
 static func _read_dex_entry(rom: RomFile, layout: Dictionary, number: int) -> Dictionary:
 	var at: int = Gen3Layout.dex_entry_offset(layout, number)
 	var pages: Array = []
@@ -356,6 +356,10 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		return result
 
 	var species: Array = _import_species(rom, layout, on_progress)
+	var pics: Dictionary = Gen3Pics.import_pics(rom, layout, directory, species, on_progress)
+	if pics.is_empty():
+		result["message"] = "Could not write picture atlases."
+		return result
 	var moves: Array = _import_moves(rom, layout, on_progress)
 	var types: Array = _import_types(rom, layout)
 	var matchups: Array = _read_matchups(rom, layout)
@@ -384,6 +388,7 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"matchup_count": matchups.size(),
 		"item_count": items.size(),
 		"ability_count": abilities.size(),
+		"atlases": pics,
 		"complete": true,
 	}
 	if not RomCache.write_json(RomCache.manifest_path(directory), manifest):
@@ -434,6 +439,9 @@ static func _import_species(rom: RomFile, layout: Dictionary, on_progress: Calla
 			"learnset": _read_learnset(rom, layout, species),
 			"evolutions": _read_evolutions(rom, layout, species),
 			"dex": _read_dex_entry(rom, layout, number),
+			"palette": Gen3Pics.palette(rom, layout, species),
+			"front_tiles": [Gen3Layout.PIC_TILES, Gen3Layout.PIC_TILES],
+			"pic_coordinates": Gen3Pics.coordinates(rom, layout, species),
 		})
 		out.append(record)
 		if on_progress.is_valid():

@@ -156,8 +156,8 @@ func _render(
 
 ## One palette per cell of an atlas, in slot order.
 ## The kinds of atlas are indexed differently: a species atlas by species, the
-## trainer atlas by class, and Unown's by letter form, all twenty-six of which
-## are the one species and so share its colours. A Generation 1 cartridge names
+## trainer atlas by class, and Unown's by letter form, all of which
+## share the one species' colours. A Generation 1 cartridge names
 ## no colours for a trainer or a back pic, so those come out in Game Boy greys.
 func _palettes(directory: String, name: String, shiny: bool) -> Array:
 	var out: Array = []
@@ -172,12 +172,13 @@ func _palettes(directory: String, name: String, shiny: bool) -> Array:
 
 	var data: GameData = GameData.open_directory(directory)
 	if name.begins_with("unown"):
-		for form: int in Gen2Layout.UNOWN_FORMS:
+		for form: int in int(data.atlas(name).get("decoded", 0)):
 			out.append(data.palette(Gen2Layout.UNOWN_SPECIES, shiny))
 		return out
 
 	for dex: int in range(1, data.species_count() + 1):
-		out.append(data.palette(dex, shiny))
+		var form: int = int(name.get_slice("_", 1)) if data.generation == RomRegistry.GEN3 and dex == 351 else 0
+		out.append(data.palette(dex, shiny, form))
 	return out
 
 
