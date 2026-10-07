@@ -429,3 +429,15 @@ static func _dex_number(rom: RomFile, table: int, species: int) -> int:
 
 static func is_special_type(type: int) -> bool:
 	return type > TYPE_MYSTERY
+
+
+static func read_pointer(rom: RomFile, at: int, length: int, alignment: int = 4) -> int:
+	if not rom.in_bounds(at, 4):
+		return -1
+	var offset: int = Gen3Layout.rom_offset(rom.u32le(at))
+	return offset if offset % alignment == 0 and rom.in_bounds(offset, length) else -1
+
+
+static func valid_map(layout: Dictionary, group: int, number: int) -> bool:
+	var sizes: Array = layout["map_group_sizes"]
+	return group >= 0 and group < sizes.size() and number >= 0 and number < int(sizes[group])

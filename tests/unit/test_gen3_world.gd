@@ -1,7 +1,7 @@
 extends GutTest
 
-## Protect GBA pointer bounds, three header formats and repeated encounter sets.
-## GB world tests cannot catch padding, rod slices or internal Hoenn species IDs.
+## Protect GBA bounds, header/event formats, script dispatch and encounter variants.
+## GB world tests miss packed unions, padding, rod slices and Hoenn species IDs.
 const LAYOUT: Dictionary = {"map_groups": 0, "map_group_sizes": [2],
 	"wild_headers": 0x400, "wild_header_count": 2, "species_to_national": 0x800}
 
@@ -133,3 +133,130 @@ func test_missing_method_does_not_shift_a_later_set_into_the_default() -> void:
 	var world: Dictionary = Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT)
 	assert_true(world["encounters"]["land"]["0:0"][0].is_empty())
 	assert_eq(world["encounters"]["land"]["0:0"][1]["rate"], 21)
+
+
+func _event_dump() -> PackedByteArray:
+	var bytes: PackedByteArray = _dump()
+	for kind: int in 4:
+		bytes[0x140 + kind] = 1
+		bytes.encode_u32(0x144 + kind * 4, 0x08000900 + kind * 0x40)
+	bytes[0x900] = 17
+	bytes[0x901] = 200
+	bytes.encode_u16(0x904, 0xFFFF)
+	bytes.encode_u16(0x906, 10)
+	bytes[0x908] = 3
+	bytes[0x909] = 7
+	bytes[0x90A] = 0xA2
+	bytes.encode_u16(0x90C, 2)
+	bytes.encode_u16(0x90E, 300)
+	bytes.encode_u32(0x910, 0x08000D01)
+	bytes.encode_u16(0x914, 1000)
+	bytes.encode_u16(0x940, 5)
+	bytes.encode_u16(0x942, 6)
+	bytes[0x944] = 4
+	bytes[0x945] = 0xFF
+	bytes[0x946] = 0x7F
+	bytes[0x947] = 0x7F
+	bytes.encode_u16(0x980, 0xFFFF)
+	bytes.encode_u16(0x986, 0x4001)
+	bytes.encode_u16(0x988, 2)
+	bytes[0x9C5] = 7
+	bytes.encode_u16(0x9C8, 200)
+	bytes.encode_u16(0x9CA, 0x8305)
+	bytes[0x180] = 2
+	bytes.encode_u32(0x181, 0x08000A01)
+	bytes[0x185] = 3
+	bytes.encode_u32(0x186, 0x08000D01)
+	bytes.encode_u16(0xA01, 0x4001)
+	bytes.encode_u16(0xA03, 0x4002)
+	bytes.encode_u32(0xA05, 0x08000D01)
+	return bytes
+
+
+func _event_data(bytes: PackedByteArray, id: StringName) -> GameData:
+	var world: Dictionary = Gen3World.read(RomFile.from_bytes(bytes, id), LAYOUT)
+	var data := GameData.new()
+	data.generation = RomRegistry.GEN3
+	data._sections = {"headers": true}
+	data._world_headers = JSON.parse_string(JSON.stringify(world.get("headers", {})))
+	return data
+
+
+func test_event_unions_and_script_entries_survive_the_cache_api() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD, RomRegistry.FIRERED]:
+		var data: GameData = _event_data(_event_dump(), id)
+		var events: Dictionary = data.world_map_events(0, 0)
+		assert_false(events.is_empty(), str(id))
+		var object: Dictionary = events["objects"][0]
+		assert_eq([object["local_id"], object["x"], object["movement_range_x"],
+			object["movement_range_y"], object["trainer_sight_or_berry_tree_id"],
+			object["script_offset"], object["flag"]], [17, -1, 2, 10, 300, 0xD01, 1000])
+		assert_typeof(object["script_offset"], TYPE_INT)
+		assert_eq(events["warps"][0]["group"], 0x7F)
+		assert_eq(events["warps"][0]["warp_id"], 255)
+		assert_eq(events["coords"][0]["script_offset"], 0)
+		assert_eq(events["coords"][0]["x"], 65535 if id == RomRegistry.FIRERED else -1)
+		var item: Dictionary = events["backgrounds"][0]
+		assert_eq(item["hidden_item_id"], 5 if id == RomRegistry.FIRERED else 0x8305)
+		if id == RomRegistry.FIRERED:
+			assert_eq(item["quantity"], 3)
+			assert_true(item["underfoot"])
+		else:
+			assert_false(item.has("quantity"))
+		var scripts: Array = data.world_map_script_entries(0, 0)
+		assert_eq(scripts, [{"type": 2, "table_offset": 0xA01,
+			"conditions": [{"variable": 0x4001, "value": 0x4002, "script_offset": 0xD01}]},
+			{"type": 3, "script_offset": 0xD01}])
+		object["flag"] = 0
+		scripts[0]["conditions"][0]["value"] = 0
+		assert_eq(data.world_map_events(0, 0)["objects"][0]["flag"], 1000)
+		assert_eq(data.world_map_script_entries(0, 0)[0]["conditions"][0]["value"], 0x4002)
+		assert_true(data.world_map_events(0, 2).is_empty())
+		assert_true(data.world_map_script_entries(0, 2).is_empty())
+
+
+func test_clone_objects_secret_bases_and_null_map_scripts_keep_their_union() -> void:
+	var bytes: PackedByteArray = _event_dump()
+	bytes[0x902] = 255
+	bytes[0x908] = 42
+	bytes.encode_u16(0x90C, 1)
+	bytes.encode_u16(0x90E, 0)
+	bytes.encode_u32(0x48, 0)
+	var data: GameData = _event_data(bytes, RomRegistry.FIRERED)
+	assert_eq(data.world_map_events(0, 0)["objects"][0], {"local_id": 17,
+		"graphics_id": 200, "kind": 255, "x": -1, "y": 10,
+		"target_local_id": 42, "target_group": 0, "target_number": 1})
+	assert_true(data.world_map_script_entries(0, 0).is_empty())
+	bytes[0x902] = 0
+	bytes[0x9C5] = 8
+	bytes.encode_u32(0x9C8, 123)
+	data = _event_data(bytes, RomRegistry.EMERALD)
+	assert_eq(data.world_map_events(0, 0)["backgrounds"][0]["secret_base_id"], 123)
+
+
+func test_event_and_dispatch_bounds_refuse_the_whole_world() -> void:
+	var changes: Array = [[0x144, 0, 4], [0x148, 0x08000FFC, 4],
+		[0x14C, 0x08000981, 4], [0x150, 0x08000FFC, 4], [0x902, 1, 1],
+		[0x910, 0x09000000, 4], [0x947, 42, 1], [0x98C, 0x08001000, 4],
+		[0x9C5, 0, 1], [0x180, 8, 1], [0x181, 0, 4],
+		[0x181, 0x08000FFF, 4], [0xA05, 0, 4], [0x186, 0x08001000, 4]]
+	for change: Array in changes:
+		var bytes: PackedByteArray = _event_dump()
+		if int(change[2]) == 1:
+			bytes[int(change[0])] = int(change[1])
+		else:
+			bytes.encode_u32(int(change[0]), int(change[1]))
+		assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty(), str(change))
+
+
+func test_dispatch_and_condition_terminators_fit_at_the_end_of_the_dump() -> void:
+	var bytes: PackedByteArray = _event_dump()
+	bytes.encode_u32(0x48, 0x08000FFF)
+	assert_true(_event_data(bytes, RomRegistry.EMERALD).world_map_script_entries(0, 0).is_empty())
+	bytes[0xFFF] = 3
+	assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty())
+	bytes = _event_dump()
+	bytes.encode_u32(0x181, 0x08000FFE)
+	assert_eq(_event_data(bytes, RomRegistry.EMERALD).world_map_script_entries(0, 0)[0]["conditions"], [])
+	bytes[0xFFE] = 1
+	assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty())

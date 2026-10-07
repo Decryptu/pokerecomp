@@ -77,6 +77,7 @@ func _one_game() -> void:
 	_pictures()
 	_trainers()
 	_world_headers()
+	_world_events()
 	_wild_encounters()
 	_undecoded_text()
 
@@ -414,3 +415,44 @@ func _wild_encounters() -> void:
 						slot["max_level"], slot["species"], slot["chance"]]
 				lines.append(line)
 	_r.digest_matches("gen3_encounters", lines, WORLD_DIGESTS[data.id][1])
+
+
+## pret map JSON/macros and script tables, with offsets from matching build symbols.
+const EVENT_DIGESTS: Dictionary = {
+	&"ruby": "9343b69feaec3595a851a17b99b4ab2cb1064a80",
+	&"sapphire": "ace648c4f23fad92c03ba990a560340f3cf18d0d",
+	&"firered": "b42f99c767235375dbc95743bfae12610b6534b5",
+	&"leafgreen": "2f12017118537da51c0fac4e27707cbc633efd0d",
+	&"emerald": "71476d93d1115db1f0b6ecbe88e165204590d5d0",
+}
+
+
+func _event_fields(record: Dictionary) -> String:
+	var fields: Array = record.keys()
+	fields.erase("conditions")
+	fields.sort()
+	var values := PackedStringArray()
+	for field: String in fields:
+		values.append("%s=%d" % [field, int(record[field])])
+	return ",".join(values)
+
+
+func _world_events() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["events"])
+	for header: Dictionary in data.world_map_headers():
+		var group: int = int(header["group"])
+		var number: int = int(header["number"])
+		var key: String = "%d:%d" % [group, number]
+		var events: Dictionary = data.world_map_events(group, number)
+		for kind: String in Gen3Events.KINDS:
+			var records: Array = events[kind]
+			for slot: int in records.size():
+				lines.append("%s,%s,%d;%s" % [key, kind, slot, _event_fields(records[slot])])
+		var scripts: Array = data.world_map_script_entries(group, number)
+		for slot: int in scripts.size():
+			lines.append("%s,scripts,%d;%s" % [key, slot, _event_fields(scripts[slot])])
+			var conditions: Array = scripts[slot].get("conditions", [])
+			for index: int in conditions.size():
+				lines.append("%s,conditions,%d,%d;%s" % [key, slot, index, _event_fields(conditions[index])])
+	_r.digest_matches("gen3_events", lines, EVENT_DIGESTS[data.id])
