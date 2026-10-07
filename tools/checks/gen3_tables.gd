@@ -1,6 +1,6 @@
 extends RefCounted
 
-## Generation 3's content, trainer and picture tables. Pins
+## Generation 3's content, trainer, picture and world tables. Pins
 ## come from pret's data files; the sweeps catch a stride that reads plausibly.
 
 const SPECIES_COUNT: int = 386
@@ -76,6 +76,8 @@ func _one_game() -> void:
 	_dex_entries()
 	_pictures()
 	_trainers()
+	_world_headers()
+	_wild_encounters()
 	_undecoded_text()
 
 
@@ -359,3 +361,56 @@ func _trainer_pictures(data: GameData, count: int) -> void:
 			{"slot": picture, "width": 64, "height": 64})
 		_r.check(cell.get("indices", PackedByteArray()).size() == 4096,
 			"Trainer picture %d has no complete canvas." % picture)
+
+
+## Digests from pret's JSON, mapjson header macros, dex constants and version guards.
+const WORLD_DIGESTS: Dictionary = {
+	&"ruby": ["7e225f0558ba3446ca4c02694455bdb977c4e928", "1e5eb99dfe014cbd5596d91619708b2b6f77bc7a"],
+	&"sapphire": ["7e225f0558ba3446ca4c02694455bdb977c4e928", "10f9050ad7971179f402a70f2cd221282e37f1c8"],
+	&"firered": ["07a7769914957f3ca8659058c77c4192beaf92f3", "a73aff3744fb9c50e3540a0b438bd9b021308cd7"],
+	&"leafgreen": ["07a7769914957f3ca8659058c77c4192beaf92f3", "60493acec2418434f26f133ea295a6428c1d3c69"],
+	&"emerald": ["600d1953ed36f8bce6e1a7f9fb36faef02577587", "21b81d874fe6e968fcae613b32da081acb9f5948"],
+}
+const HEADER_FIELDS: Array[String] = [
+	"group", "number", "width", "height", "border_width", "border_height", "music",
+	"layout_id", "region_map_section", "requires_flash", "weather", "map_type",
+	"battle_scene", "show_map_name", "flags", "escape_rope", "allow_cycling",
+	"allow_escaping", "allow_running", "floor_number",
+]
+
+
+func _world_headers() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["maps"])
+	for row: Dictionary in data.world_map_headers():
+		var values := PackedStringArray()
+		for field: String in HEADER_FIELDS:
+			values.append(str(int(row.get(field, 0 if field == "floor_number" else -1))))
+		var line: String = ",".join(values)
+		for connection: Dictionary in row["connections"]:
+			line += ";%d,%d,%d,%d" % [connection["direction"], connection["offset"],
+				connection["group"], connection["number"]]
+		lines.append(line)
+		_r.check(data.world_map_header(int(row["group"]), int(row["number"])) == row,
+			"Map header lookup loses its identity.")
+	_r.check(data.map_count() == lines.size() - 1, "Map count omits headers.")
+	_r.digest_matches("gen3_maps", lines, WORLD_DIGESTS[data.id][0])
+
+
+func _wild_encounters() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["encounters"])
+	for method: StringName in [&"land", &"water", &"rock_smash", &"old_rod", &"good_rod", &"super_rod"]:
+		var table: Dictionary = data._encounters()[String(method)]
+		_r.check(data.world_encounter_count(method) == table.size(), "Encounter count loses maps.")
+		for key: String in table:
+			var pair: PackedStringArray = key.split(":")
+			var count: int = data.world_encounter_variant_count(method, int(pair[0]), int(pair[1]))
+			for variant: int in count:
+				var row: Dictionary = data.world_encounter(method, int(pair[0]), int(pair[1]), variant)
+				var line: String = "%s,%s,%d,%d" % [method, key, variant, int(row.get("rate", -1))]
+				for slot: Dictionary in row.get("slots", []):
+					line += ";%d,%d,%d,%d,%d" % [slot["slot"], slot["min_level"],
+						slot["max_level"], slot["species"], slot["chance"]]
+				lines.append(line)
+	_r.digest_matches("gen3_encounters", lines, WORLD_DIGESTS[data.id][1])

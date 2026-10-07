@@ -112,6 +112,7 @@ var _prizes: Array = []
 var _battle_object_palettes: Dictionary = {}
 var _indices: Dictionary = {}
 var _world_maps: Array = []
+var _world_headers: Dictionary = {}
 ## Group and number to the map's position in [member _world_maps]. Warps,
 ## connections and every script warp validation ask for a map by its cartridge
 ## identity, and walking 388 records to answer costs more than the lookup it is
@@ -331,7 +332,16 @@ func species_count() -> int:
 
 
 func map_count() -> int:
-	return _maps().size()
+	return _headers().size() if generation == RomRegistry.GEN3 else _maps().size()
+
+
+## GBA header metadata, with dump offsets for sections awaiting decoding.
+func world_map_header(group: int, number: int) -> Dictionary:
+	return _coerce_service_dictionary(_headers().get("%d:%d" % [group, number], {}))
+
+
+func world_map_headers() -> Array:
+	return _coerce_service_value(_headers().values(), PackedByteArray())
 
 
 func world_map(group: int, number: int) -> Gen2WorldMap:
@@ -797,18 +807,29 @@ func world_tileset_count() -> int:
 ## One normal encounter record by method and map group/number. The runtime
 ## names the water method "surf" while the cache keeps the cartridge table's
 ## "water" name.
-func world_encounter(method: StringName, group: int, number: int) -> Dictionary:
+func world_encounter(method: StringName, group: int, number: int, variant: int = 0) -> Dictionary:
 	var table_name: String = "water" if method == &"surf" else String(method)
 	var table: Variant = _encounters().get(table_name, {})
 	if not table is Dictionary:
 		return {}
 	var value: Variant = (table as Dictionary).get("%d:%d" % [group, number], {})
+	if generation == RomRegistry.GEN3:
+		return _service_row(value, variant)
+	if variant != 0:
+		return {}
 	var row: Dictionary = value.duplicate(true) if value is Dictionary else {}
 	return _overlaid(
 		Gen2ContentOverlay.KIND_ENCOUNTER,
 		Gen2ContentOverlay.encounter_number(method, group, number),
 		row
 	)
+
+
+## GBA's Altering Cave holds nine sets under one map identity.
+func world_encounter_variant_count(method: StringName, group: int, number: int) -> int:
+	var table: Dictionary = _encounters().get("water" if method == &"surf" else String(method), {})
+	var value: Variant = table.get("%d:%d" % [group, number], {})
+	return _service_rows_count(value) if generation == RomRegistry.GEN3 else (0 if value.is_empty() else 1)
 
 
 ## One region's normal encounter table, in the cartridge's own row order, which
@@ -3786,7 +3807,17 @@ func _section_json_path(section: String) -> String:
 	return ""
 
 
+func _headers() -> Dictionary:
+	if generation != RomRegistry.GEN3:
+		return {}
+	if _claim_section("headers"):
+		_world_headers = _read_section(RomCache.world_maps_path(directory), false)
+	return _world_headers
+
+
 func _maps() -> Array:
+	if generation == RomRegistry.GEN3:
+		return []
 	if _claim_section("maps"):
 		for value: Dictionary in _read_section(RomCache.world_maps_path(directory), true):
 			var map: Gen2WorldMap = Gen2WorldMap.from_cache(value)

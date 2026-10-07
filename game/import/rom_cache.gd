@@ -69,7 +69,7 @@ const BYTES_KEY: String = "bytes"
 
 ## Bumped whenever the on-disk shape changes. An older cache is discarded rather
 ## than migrated, since re-importing the owner's dump costs seconds.
-const FORMAT_VERSION: int = 166
+const FORMAT_VERSION: int = 167
 
 ## What [method state] answers. Stale is told from missing because an older
 ## build's import needs the same dump again, not a first import.
@@ -337,7 +337,7 @@ static func write_json(path: String, value: Variant) -> bool:
 	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return false
-	file.store_string(JSON.stringify(value, "\t"))
+	file.store_string(JSON.stringify(value, "\t", false))
 	file.close()
 	return true
 

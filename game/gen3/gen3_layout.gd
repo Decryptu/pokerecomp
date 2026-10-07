@@ -1,8 +1,8 @@
 class_name Gen3Layout
 extends RefCounted
 
-## Dump offsets of each Generation 3 cartridge's tables, read off pret's
-## byte-exact builds: an offset is the symbol less [constant ROM_BASE].
+## Dump offsets of each Generation 3 cartridge's tables. An offset is a ROM
+## pointer less [constant ROM_BASE]; table evidence is recorded below.
 
 const ROM_BASE: int = 0x08000000
 const ROM_WINDOW: int = 0x02000000
@@ -126,8 +126,30 @@ const EVOLUTION_PARAMETER: int = 2
 const EVOLUTION_TARGET: int = 4
 const EVOLUTION_METHOD_LAST: int = 15  # EVO_BEAUTY
 
-## Keys name the table, not one cartridge's spelling; the last three are shapes.
+## Map and wild pointers are located from exact layout/slot bytes, then swept
+## against pret's map_groups and wild_encounters JSON, including version guards.
+const RS_MAP_GROUP_SIZES: Array[int] = [
+	54, 5, 5, 6, 7, 7, 8, 7, 7, 13, 8, 17, 10, 24, 13, 13,
+	14, 2, 2, 2, 3, 1, 1, 1, 86, 44, 12, 2, 1, 13, 1, 1,
+	3, 1,
+]
+const FRLG_MAP_GROUP_SIZES: Array[int] = [
+	5, 123, 60, 66, 4, 6, 8, 10, 6, 8, 20, 10, 8, 2, 10, 4,
+	2, 2, 2, 1, 1, 2, 2, 3, 2, 3, 2, 1, 1, 1, 1, 7,
+	5, 5, 8, 8, 5, 5, 1, 1, 1, 2, 1,
+]
+const EMERALD_MAP_GROUP_SIZES: Array[int] = [
+	57, 5, 5, 6, 7, 8, 9, 7, 7, 14, 8, 17, 10, 23, 13, 15,
+	15, 2, 2, 2, 3, 1, 1, 1, 108, 61, 89, 2, 1, 13, 1, 1,
+	3, 1,
+]
+
 const RUBY: Dictionary = {
+	"map_groups": 0x3085A0,
+	"map_group_sizes": RS_MAP_GROUP_SIZES,
+	"wild_headers": 0x39D46C,
+	"wild_header_count": 97,
+
 	"trainers": 0x1f0514,
 	"trainer_count": 694,
 	"trainer_class_names": 0x1f0220,
@@ -164,6 +186,11 @@ const RUBY: Dictionary = {
 }
 
 const SAPPHIRE: Dictionary = {
+	"map_groups": 0x308530,
+	"map_group_sizes": RS_MAP_GROUP_SIZES,
+	"wild_headers": 0x39D2B4,
+	"wild_header_count": 97,
+
 	"trainers": 0x1f04a4,
 	"trainer_count": 694,
 	"trainer_class_names": 0x1f01b0,
@@ -200,6 +227,11 @@ const SAPPHIRE: Dictionary = {
 }
 
 const FIRERED: Dictionary = {
+	"map_groups": 0x352718,
+	"map_group_sizes": FRLG_MAP_GROUP_SIZES,
+	"wild_headers": 0x3C9D28,
+	"wild_header_count": 132,
+
 	"trainers": 0x23eb38,
 	"trainer_count": 743,
 	"trainer_class_names": 0x23e5c8,
@@ -236,6 +268,11 @@ const FIRERED: Dictionary = {
 }
 
 const LEAFGREEN: Dictionary = {
+	"map_groups": 0x3526F8,
+	"map_group_sizes": FRLG_MAP_GROUP_SIZES,
+	"wild_headers": 0x3C9B64,
+	"wild_header_count": 132,
+
 	"trainers": 0x23eb14,
 	"trainer_count": 743,
 	"trainer_class_names": 0x23e5a4,
@@ -272,6 +309,11 @@ const LEAFGREEN: Dictionary = {
 }
 
 const EMERALD: Dictionary = {
+	"map_groups": 0x486578,
+	"map_group_sizes": EMERALD_MAP_GROUP_SIZES,
+	"wild_headers": 0x552D48,
+	"wild_header_count": 124,
+
 	"trainers": 0x310030,
 	"trainer_count": 855,
 	"trainer_class_names": 0x30fcd4,

@@ -2,7 +2,7 @@ class_name Gen3Importer
 extends RefCounted
 
 ## Generation 3's importer: species with dex entries, moves, types, matchups,
-## items, abilities, trainers and pictures; the registry keeps these cartridges unplayable.
+## items, abilities, trainers, pictures, map headers and wild encounters.
 
 ## The `GAME_CODE` and `GAME_REVISION` each pret Makefile hands `gbafix`.
 const HEADERS: Dictionary = {
@@ -49,6 +49,7 @@ static var LAYOUT_CHECKS: Array[Callable] = [
 	_verify_dex_entries,
 	Gen3Pics.verify,
 	Gen3Trainers.verify,
+	Gen3World.verify,
 ]
 
 
@@ -372,6 +373,7 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 	var matchups: Array = _read_matchups(rom, layout)
 	var items: Array = _import_items(rom, layout)
 	var abilities: Array = _import_abilities(rom, layout)
+	var world: Dictionary = Gen3World.read(rom, layout)
 	var sections: Dictionary = {
 		RomCache.species_path(directory): species,
 		RomCache.moves_path(directory): moves,
@@ -380,6 +382,8 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		RomCache.items_path(directory): items,
 		RomCache.abilities_path(directory): abilities,
 		RomCache.trainers_path(directory): trainers,
+		RomCache.world_maps_path(directory): world["headers"],
+		RomCache.world_encounters_path(directory): world["encounters"],
 	}
 	for path: String in sections:
 		if not RomCache.write_json(path, sections[path]):
@@ -397,6 +401,7 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"item_count": items.size(),
 		"ability_count": abilities.size(),
 		"trainer_count": trainers.size(),
+		"map_count": world["headers"].size(),
 		"trainer_palettes": Gen3Trainers.palettes(rom, layout),
 		"atlases": pics,
 		"complete": true,
@@ -416,14 +421,15 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"items": items.size(),
 		"abilities": abilities.size(),
 		"trainers": trainers.size(),
+		"maps": world["headers"].size(),
 		"evolutions": evolutions,
 		"learnset_moves": learnset_moves,
 		"elapsed_ms": Time.get_ticks_msec() - started,
 	}, true)
 	result["message"] = ("%d species, %d moves, %d type matchups, %d items, %d abilities, "
-		+ "%d trainers, %d evolutions and %d level-up moves in %d ms.") % [
+		+ "%d trainers, %d map headers, %d evolutions and %d level-up moves in %d ms.") % [
 		species.size(), moves.size(), matchups.size(), items.size(), abilities.size(),
-		trainers.size(), evolutions, learnset_moves, int(result["elapsed_ms"]),
+		trainers.size(), world["headers"].size(), evolutions, learnset_moves, int(result["elapsed_ms"]),
 	]
 	return result
 

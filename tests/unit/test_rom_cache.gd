@@ -58,9 +58,13 @@ func test_tile_sheets_and_pics_of_the_same_name_do_not_collide() -> void:
 
 func test_json_round_trips() -> void:
 	RomCache.prepare(_directory)
-	var value: Dictionary = {"name": "BULBASAUR", "types": ["GRASS", "POISON"]}
+	var value: Dictionary = {"types": ["GRASS", "POISON"], "name": "BULBASAUR",
+		"ordered_rows": {"24:3": {}, "3:2": {}, "3:10": {}}}
 	assert_true(RomCache.write_json(RomCache.species_path(_directory), value))
-	assert_eq(RomCache.read_json(RomCache.species_path(_directory)), value)
+	var read: Dictionary = RomCache.read_json(RomCache.species_path(_directory))
+	assert_eq(read, value)
+	assert_eq(read.keys(), value.keys())
+	assert_eq(read["ordered_rows"].keys(), value["ordered_rows"].keys())
 
 
 func test_reading_a_missing_file_returns_null() -> void:

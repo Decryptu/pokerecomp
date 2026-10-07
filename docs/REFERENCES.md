@@ -29,10 +29,10 @@ upstream branch the revision was pinned from, never a substitute for the hash.
 Each pret checkout builds a ROM that is byte for byte the retail cartridge:
 the hashes in a checkout's `roms.sha1` (Generation 3: one `<build>.sha1` per
 build) are the ones [`RomRegistry`](../game/rom/rom_registry.gd) matches a dump
-against. A `.sym` file from such a build (Generation 3: the `.map` file) is
-where every offset in `Gen1Layout`, `Gen2Layout` and `Gen3Layout` comes from,
-which is stronger evidence than searching a dump for known bytes. Building one
-needs `rgbds` (Generation 3: `agbcc` and an ARM binutils) and writes into the
+against. A `.sym` file from such a build (Generation 3: the `.map` file)
+gives symbol addresses for `Gen1Layout`, `Gen2Layout` and `Gen3Layout`, which
+is stronger evidence than searching a dump for independently known bytes.
+Building one needs `rgbds` (Generation 3: `agbcc` and an ARM binutils) and writes into the
 checkout, so build a copy outside `.references/` and leave the checkout clean.
 
 A Generation 3 `.map` omits `static` tables; `arm-none-eabi-nm -S` on the
