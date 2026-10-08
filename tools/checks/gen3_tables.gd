@@ -80,6 +80,7 @@ func _one_game() -> void:
 	_world_events()
 	_world_graphics()
 	_world_scripts()
+	_world_script_data()
 	_wild_encounters()
 	_undecoded_text()
 
@@ -234,6 +235,9 @@ func _undecoded_text() -> void:
 		texts.append(data.move(move)["name"])
 	for trainer: int in range(1, data.trainer_count() + 1):
 		texts.append_array([data.trainer(trainer)["name"], data.trainer(trainer)["class_name"]])
+	for offset: int in data.world_script_offsets("texts"):
+		var bytes: PackedByteArray = data.world_script_data("texts", offset)["bytes"]
+		texts.append(Gen3Text.decode_fixed(data.id, bytes, 0, bytes.size()))
 	var undecoded: Array = texts.filter(func(text: String) -> bool: return text.contains("<$"))
 	_r.check(undecoded.is_empty(), "%d texts hold codes with no glyph, first %s." % [
 		undecoded.size(), str(undecoded.slice(0, 1)),
@@ -543,4 +547,36 @@ func _world_scripts() -> void:
 		lines.append("%d,%d,%s,%d,%d;%s;%s;%s" % [offset, row["opcode"], row["command"],
 			row["next_offset"], int(row["fallthrough"]), _script_numbers(row["operands"]),
 			_script_numbers(row["script_offsets"]), bytes.hex_encode()])
+		_script_data_operands(data, offset, row)
 	_r.digest_matches("gen3_scripts", lines, SCRIPT_DIGESTS[data.id])
+
+
+func _script_data_operands(data: GameData, offset: int, row: Dictionary) -> void:
+	for pointer: Array in Gen3Script._data_pointers(row):
+		var value: int = int(pointer[1])
+		if value != 0 and (value < Gen3Script.RAM_START or value >= Gen3Script.RAM_END):
+			_r.check(not data.world_script_data(pointer[0], Gen3Layout.rom_offset(value)).is_empty(),
+				"script %d names an uncached %s record." % [offset, pointer[0]])
+
+
+## Every record starts on a label of the byte-matching pret build and ends where
+## its source list or string does; movements and marts reassembled from source.
+const SCRIPT_DATA_DIGESTS: Dictionary = {
+	&"ruby": "adf843177e3fc84a9e67199835af88391b0052eb",
+	&"sapphire": "cbf6d27dddc0ea9a396d63d1bafeeffc75d522ce",
+	&"firered": "2e0b76b0898635673fb7b72ba33036e9077a6b25",
+	&"leafgreen": "e313963370453f727d429f456889d46b7070d2d8",
+	&"emerald": "2dc9c549056906b3dffb7c1d921b817e915a5768",
+}
+
+
+func _world_script_data() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["script data"])
+	for table: String in Gen3Script.DATA_TABLES:
+		for offset: int in data.world_script_offsets(table):
+			var record: Dictionary = data.world_script_data(table, offset)
+			lines.append("%s,%d;%s;%s;%s" % [table, offset,
+				(record.get("bytes", PackedByteArray()) as PackedByteArray).hex_encode(),
+				_script_numbers(record.get("format", [])), _script_numbers(record.get("entries", []))])
+	_r.digest_matches("gen3_script_data", lines, SCRIPT_DATA_DIGESTS[data.id])

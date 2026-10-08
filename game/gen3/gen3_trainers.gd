@@ -8,7 +8,7 @@ static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return _fail("gTrainers leaves the dump.")
 	for number: int in int(layout["trainer_class_count"]):
 		var at: int = int(layout["trainer_class_names"]) + number * Gen3Layout.TRAINER_CLASS_NAME_SIZE
-		if not Gen3Text.ends_within(rom.bytes(), at, Gen3Layout.TRAINER_CLASS_NAME_SIZE):
+		if not Gen3Text.ends_within(rom.id, rom.bytes(), at, Gen3Layout.TRAINER_CLASS_NAME_SIZE):
 			return _fail("Trainer class %d has no name end." % number)
 	for number: int in range(1, int(layout["trainer_count"])):
 		if _trainer(rom, layout, number).is_empty():
@@ -41,7 +41,7 @@ static func _trainer(rom: RomFile, layout: Dictionary, number: int) -> Dictionar
 	var count: int = rom.u8(at + 32)
 	if flags >= Gen3Layout.PARTY_STRIDES.size() or trainer_class >= int(layout["trainer_class_count"]) \
 		or picture >= int(layout["trainer_pic_count"]) or count < 1 or count > Gen3Layout.TRAINER_PARTY_LIMIT \
-		or rom.u8(at + 24) > 1 or not Gen3Text.ends_within(rom.bytes(), at + 4, Gen3Layout.TRAINER_NAME_SIZE):
+		or rom.u8(at + 24) > 1 or not Gen3Text.ends_within(rom.id, rom.bytes(), at + 4, Gen3Layout.TRAINER_NAME_SIZE):
 		return {}
 	var party: Array = _party(rom, layout, Gen3Layout.rom_offset(rom.u32le(at + 36)), count, flags)
 	var items: Array[int] = []
@@ -54,9 +54,9 @@ static func _trainer(rom: RomFile, layout: Dictionary, number: int) -> Dictionar
 		return {}
 	return {
 		"number": number,
-		"name": Gen3Text.decode_fixed(rom.bytes(), at + 4, Gen3Layout.TRAINER_NAME_SIZE),
+		"name": Gen3Text.decode_fixed(rom.id, rom.bytes(), at + 4, Gen3Layout.TRAINER_NAME_SIZE),
 		"class": trainer_class,
-		"class_name": Gen3Text.decode_fixed(rom.bytes(), int(layout["trainer_class_names"])
+		"class_name": Gen3Text.decode_fixed(rom.id, rom.bytes(), int(layout["trainer_class_names"])
 			+ trainer_class * Gen3Layout.TRAINER_CLASS_NAME_SIZE, Gen3Layout.TRAINER_CLASS_NAME_SIZE),
 		"type": flags,
 		"female": (rom.u8(at + 2) & 0x80) != 0,

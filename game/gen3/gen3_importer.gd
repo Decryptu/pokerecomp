@@ -82,8 +82,7 @@ static func _verify_header(rom: RomFile, _layout: Dictionary) -> Dictionary:
 
 static func _species_name(rom: RomFile, layout: Dictionary, species: int) -> String:
 	return Gen3Text.decode_fixed(
-		rom.bytes(), Gen3Layout.species_name_offset(layout, species),
-		Gen3Layout.SPECIES_NAME_SIZE,
+		rom.id, rom.bytes(), Gen3Layout.species_name_offset(layout, species), Gen3Layout.SPECIES_NAME_SIZE
 	)
 
 
@@ -135,7 +134,7 @@ static func _species_by_national(rom: RomFile, layout: Dictionary) -> Dictionary
 
 static func _move_name(rom: RomFile, layout: Dictionary, move: int) -> String:
 	return Gen3Text.decode_fixed(
-		rom.bytes(), Gen3Layout.move_name_offset(layout, move), Gen3Layout.MOVE_NAME_SIZE
+		rom.id, rom.bytes(), Gen3Layout.move_name_offset(layout, move), Gen3Layout.MOVE_NAME_SIZE
 	)
 
 
@@ -160,7 +159,7 @@ static func _verify_moves(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 static func _type_name(rom: RomFile, layout: Dictionary, type: int) -> String:
 	return Gen3Text.decode_fixed(
-		rom.bytes(), Gen3Layout.type_name_offset(layout, type), Gen3Layout.TYPE_NAME_SIZE
+		rom.id, rom.bytes(), Gen3Layout.type_name_offset(layout, type), Gen3Layout.TYPE_NAME_SIZE
 	)
 
 
@@ -260,14 +259,15 @@ static func _verify_evolutions(rom: RomFile, layout: Dictionary) -> Dictionary:
 ## Null when the pointer at [param at] leaves the cartridge or its string has no end.
 static func _pointed_text(rom: RomFile, at: int) -> Variant:
 	var offset: int = Gen3Layout.rom_offset(rom.u32le(at))
-	if not Gen3Text.ends_within(rom.bytes(), offset, Gen3Layout.TEXT_LIMIT):
+	var length: int = Gen3Text.span(rom.id, rom.bytes(), offset, Gen3Layout.TEXT_LIMIT)
+	if length < 0:
 		return null
-	return Gen3Text.decode_fixed(rom.bytes(), offset, Gen3Layout.TEXT_LIMIT)
+	return Gen3Text.decode_fixed(rom.id, rom.bytes(), offset, length)
 
 
 static func _item_name(rom: RomFile, layout: Dictionary, item: int) -> String:
 	return Gen3Text.decode_fixed(
-		rom.bytes(), Gen3Layout.item_offset(layout, item), Gen3Layout.ITEM_NAME_SIZE
+		rom.id, rom.bytes(), Gen3Layout.item_offset(layout, item), Gen3Layout.ITEM_NAME_SIZE
 	)
 
 
@@ -288,8 +288,7 @@ static func _verify_items(rom: RomFile, layout: Dictionary) -> Dictionary:
 
 static func _ability_name(rom: RomFile, layout: Dictionary, ability: int) -> String:
 	return Gen3Text.decode_fixed(
-		rom.bytes(), Gen3Layout.ability_name_offset(layout, ability),
-		Gen3Layout.ABILITY_NAME_SIZE,
+		rom.id, rom.bytes(), Gen3Layout.ability_name_offset(layout, ability), Gen3Layout.ABILITY_NAME_SIZE
 	)
 
 
@@ -329,7 +328,7 @@ static func _read_dex_entry(rom: RomFile, layout: Dictionary, number: int) -> Di
 		pages.append(text)
 	var scales: int = at + int(layout["dex_entry_size"]) - Gen3Layout.DEX_ENTRY_SCALES_FROM_END
 	return {
-		"category": Gen3Text.decode_fixed(rom.bytes(), at, Gen3Layout.DEX_ENTRY_CATEGORY_SIZE),
+		"category": Gen3Text.decode_fixed(rom.id, rom.bytes(), at, Gen3Layout.DEX_ENTRY_CATEGORY_SIZE),
 		"height": rom.u16le(at + Gen3Layout.DEX_ENTRY_HEIGHT),
 		"weight": rom.u16le(at + Gen3Layout.DEX_ENTRY_WEIGHT),
 		"pages": pages,
@@ -408,6 +407,7 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"trainer_count": trainers.size(),
 		"map_count": world["headers"].size(),
 		"script_instruction_count": world["scripts"]["instructions"].size(),
+		"script_text_count": world["scripts"]["texts"].size(),
 		"trainer_palettes": Gen3Trainers.palettes(rom, layout),
 		"atlases": pics,
 		"complete": true,
@@ -429,14 +429,17 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"trainers": trainers.size(),
 		"maps": world["headers"].size(),
 		"script_instructions": world["scripts"]["instructions"].size(),
+		"script_texts": world["scripts"]["texts"].size(),
 		"evolutions": evolutions,
 		"learnset_moves": learnset_moves,
 		"elapsed_ms": Time.get_ticks_msec() - started,
 	}, true)
 	result["message"] = ("%d species, %d moves, %d type matchups, %d items, %d abilities, "
-		+ "%d trainers, %d map headers, %d script instructions, %d evolutions and %d level-up moves in %d ms.") % [
+		+ "%d trainers, %d map headers, %d script instructions, %d script texts, %d evolutions "
+		+ "and %d level-up moves in %d ms.") % [
 		species.size(), moves.size(), matchups.size(), items.size(), abilities.size(),
 		trainers.size(), world["headers"].size(), world["scripts"]["instructions"].size(),
+		world["scripts"]["texts"].size(),
 		evolutions, learnset_moves, int(result["elapsed_ms"]),
 	]
 	return result
