@@ -144,7 +144,12 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 	3, 1,
 ]
 
+## gStdScripts and BattleSetup_ConfigureTrainerBattle's five helper entry points
+## come from nm on the matching pret builds, including Sapphire's shifted scripts.
 const RUBY: Dictionary = {
+	"standard_scripts": 0x14B70C,
+	"standard_script_count": 8,
+	"trainer_battle_scripts": [0x19F838, 0x19F860, 0x19F898, 0x19F8A7, 0x19F8CE],
 	"map_groups": 0x3085A0,
 	"map_group_sizes": RS_MAP_GROUP_SIZES,
 	"wild_headers": 0x39D46C,
@@ -186,6 +191,9 @@ const RUBY: Dictionary = {
 }
 
 const SAPPHIRE: Dictionary = {
+	"standard_scripts": 0x14B70C,
+	"standard_script_count": 8,
+	"trainer_battle_scripts": [0x19F7C8, 0x19F7F0, 0x19F828, 0x19F837, 0x19F85E],
 	"map_groups": 0x308530,
 	"map_group_sizes": RS_MAP_GROUP_SIZES,
 	"wild_headers": 0x39D2B4,
@@ -227,6 +235,9 @@ const SAPPHIRE: Dictionary = {
 }
 
 const FIRERED: Dictionary = {
+	"standard_scripts": 0x1604C8,
+	"standard_script_count": 10,
+	"trainer_battle_scripts": [0x1A4F39, 0x1A4F61, 0x1A4F99, 0x1A4FB6, 0x1A4FEB],
 	"map_groups": 0x352718,
 	"map_group_sizes": FRLG_MAP_GROUP_SIZES,
 	"wild_headers": 0x3C9D28,
@@ -268,6 +279,9 @@ const FIRERED: Dictionary = {
 }
 
 const LEAFGREEN: Dictionary = {
+	"standard_scripts": 0x1604A4,
+	"standard_script_count": 10,
+	"trainer_battle_scripts": [0x1A4F15, 0x1A4F3D, 0x1A4F75, 0x1A4F92, 0x1A4FC7],
 	"map_groups": 0x3526F8,
 	"map_group_sizes": FRLG_MAP_GROUP_SIZES,
 	"wild_headers": 0x3C9B64,
@@ -309,6 +323,9 @@ const LEAFGREEN: Dictionary = {
 }
 
 const EMERALD: Dictionary = {
+	"standard_scripts": 0x1DC2A0,
+	"standard_script_count": 11,
+	"trainer_battle_scripts": [0x271362, 0x27138A, 0x2713C2, 0x2713D1, 0x2713F8],
 	"map_groups": 0x486578,
 	"map_group_sizes": EMERALD_MAP_GROUP_SIZES,
 	"wild_headers": 0x552D48,

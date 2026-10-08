@@ -3,7 +3,7 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3 dev cartridges import trainers, map headers and wild encounters, including every Altering Cave set and each fishing rod’s slots, alongside front/back pictures, normal and shiny palettes, every stored picture frame and all 28 Unown forms. They remain unplayable.
+- Generation 3 dev cartridges import trainers, map headers, layouts, tilesets, events and script bytecode, plus wild encounters including every Altering Cave set and each fishing rod’s slots, alongside front/back pictures, normal and shiny palettes, every stored picture frame and all 28 Unown forms. They remain unplayable.
 
 - Mods can give an item a field move such as FLASH. Using the item from the pack runs the move without a Pokémon that knows it, and the item counts as the move for trees, water and boulders too. Mod API version 60.
 

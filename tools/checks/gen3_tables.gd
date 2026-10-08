@@ -79,6 +79,7 @@ func _one_game() -> void:
 	_world_headers()
 	_world_events()
 	_world_graphics()
+	_world_scripts()
 	_wild_encounters()
 	_undecoded_text()
 
@@ -501,3 +502,45 @@ func _graphics_hash(record: Dictionary) -> String:
 	context.start(HashingContext.HASH_SHA1)
 	context.update(record["bytes"])
 	return context.finish().hex_encode()
+
+
+## Exact bytecode streams from pret handlers, with operand boundaries checked
+## by executing the matching ARM builds; all map, standard and trainer roots.
+const SCRIPT_DIGESTS: Dictionary = {
+	&"ruby": "35573e1d144659df9b18056080b7d67609816c34",
+	&"sapphire": "33448c15566cb87985d2e473344feb23aced588d",
+	&"firered": "287f4afe8f34b99285d0765f3a0fd84d0a470e80",
+	&"leafgreen": "8ca3097b0433a71e9c2ad0176fa4e64de3aeba15",
+	&"emerald": "2e99da5402e4c038628af9648991935b786d6c09",
+}
+
+
+func _script_numbers(values: Array) -> String:
+	var out := PackedStringArray()
+	for value: Variant in values:
+		out.append(str(int(value)))
+	return ",".join(out)
+
+
+func _world_scripts() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["scripts"])
+	var index: int = 0
+	while data.world_standard_script_offset(index) >= 0:
+		lines.append("standard,%d,%d" % [index, data.world_standard_script_offset(index)])
+		index += 1
+	for offset: int in data.world_script_offsets():
+		var row: Dictionary = data.world_script_instruction(offset)
+		var bytes: PackedByteArray = row["bytes"]
+		_r.check(bytes.size() == int(row["next_offset"]) - offset,
+			"script %d's bytes disagree with its boundary." % offset)
+		for target: int in row["script_offsets"]:
+			_r.check(not data.world_script_instruction(target).is_empty(),
+				"script %d has an uncached target %d." % [offset, target])
+		if bool(row["fallthrough"]):
+			_r.check(not data.world_script_instruction(int(row["next_offset"])).is_empty(),
+				"script %d has no cached successor." % offset)
+		lines.append("%d,%d,%s,%d,%d;%s;%s;%s" % [offset, row["opcode"], row["command"],
+			row["next_offset"], int(row["fallthrough"]), _script_numbers(row["operands"]),
+			_script_numbers(row["script_offsets"]), bytes.hex_encode()])
+	_r.digest_matches("gen3_scripts", lines, SCRIPT_DIGESTS[data.id])

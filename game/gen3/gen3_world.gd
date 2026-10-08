@@ -15,7 +15,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read(rom, layout).is_empty():
-		return {"ok": false, "message": "Map layouts, tilesets, events, script entry points or wild encounters did not decode."}
+		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode or wild encounters did not decode."}
 	return {"ok": true, "message": ""}
 
 
@@ -29,7 +29,10 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var graphics: Dictionary = _graphics(rom, headers)
 	if graphics.is_empty():
 		return {}
-	return {"headers": headers, "encounters": encounters, "graphics": graphics}
+	var scripts: Dictionary = Gen3Script.read(rom, layout, headers)
+	if scripts.is_empty():
+		return {}
+	return {"headers": headers, "encounters": encounters, "graphics": graphics, "scripts": scripts}
 
 
 static func _headers(rom: RomFile, layout: Dictionary) -> Dictionary:
