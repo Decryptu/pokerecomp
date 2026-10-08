@@ -351,6 +351,29 @@ func world_map_script_entries(group: int, number: int) -> Array:
 	return world_map_header(group, number).get("map_scripts", [])
 
 
+func world_script_offsets() -> Array[int]:
+	var out: Array[int] = []
+	if generation != RomRegistry.GEN3:
+		return out
+	for key: String in _scripts().get("instructions", {}):
+		out.append(int(key))
+	out.sort()
+	return out
+
+
+func world_script_instruction(offset: int) -> Dictionary:
+	if generation != RomRegistry.GEN3 or offset < 0:
+		return {}
+	return _coerce_service_dictionary(_scripts().get("instructions", {}).get(str(offset), {}), _blob("scripts"))
+
+
+func world_standard_script_offset(index: int) -> int:
+	if generation != RomRegistry.GEN3 or index < 0:
+		return -1
+	var offsets: Array = _scripts().get("standard", [])
+	return int(offsets[index]) if index < offsets.size() else -1
+
+
 func world_map_layout(group: int, number: int) -> Dictionary:
 	var header: Dictionary = world_map_header(group, number)
 	return _gba_graphics_record("layouts", int(header.get("layout_offset", -1)))
@@ -412,6 +435,8 @@ func gen1_toggle_on(index: int) -> bool:
 ## the scripts, but they are `db item, quantity` and the like rather than
 ## commands, and a corpus walk that decoded them read item counts as opcodes.
 func world_script_keys() -> Array:
+	if generation == RomRegistry.GEN3:
+		return []
 	var data_only: Dictionary = _script_data_pointers()
 	var out: Array = []
 	for key: Variant in _scripts():

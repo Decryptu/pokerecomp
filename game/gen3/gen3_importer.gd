@@ -390,6 +390,10 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 	if not RomCache.write_section(graphics_path, RomCache.blob_path(graphics_path), world["graphics"]):
 		result["message"] = "Could not write map graphics."
 		return result
+	var scripts_path: String = RomCache.world_scripts_path(directory)
+	if not RomCache.write_section(scripts_path, RomCache.blob_path(scripts_path), world["scripts"]):
+		result["message"] = "Could not write script bytecode."
+		return result
 	var manifest: Dictionary = {
 		"format_version": RomCache.FORMAT_VERSION,
 		"game_id": String(rom.id),
@@ -403,6 +407,7 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"ability_count": abilities.size(),
 		"trainer_count": trainers.size(),
 		"map_count": world["headers"].size(),
+		"script_instruction_count": world["scripts"]["instructions"].size(),
 		"trainer_palettes": Gen3Trainers.palettes(rom, layout),
 		"atlases": pics,
 		"complete": true,
@@ -423,14 +428,16 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		"abilities": abilities.size(),
 		"trainers": trainers.size(),
 		"maps": world["headers"].size(),
+		"script_instructions": world["scripts"]["instructions"].size(),
 		"evolutions": evolutions,
 		"learnset_moves": learnset_moves,
 		"elapsed_ms": Time.get_ticks_msec() - started,
 	}, true)
 	result["message"] = ("%d species, %d moves, %d type matchups, %d items, %d abilities, "
-		+ "%d trainers, %d map headers, %d evolutions and %d level-up moves in %d ms.") % [
+		+ "%d trainers, %d map headers, %d script instructions, %d evolutions and %d level-up moves in %d ms.") % [
 		species.size(), moves.size(), matchups.size(), items.size(), abilities.size(),
-		trainers.size(), world["headers"].size(), evolutions, learnset_moves, int(result["elapsed_ms"]),
+		trainers.size(), world["headers"].size(), world["scripts"]["instructions"].size(),
+		evolutions, learnset_moves, int(result["elapsed_ms"]),
 	]
 	return result
 

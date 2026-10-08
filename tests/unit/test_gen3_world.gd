@@ -3,12 +3,16 @@ extends GutTest
 ## Protect GBA bounds, header/event formats, script dispatch and encounter variants.
 ## GB world tests miss packed unions, padding, rod slices and Hoenn species IDs.
 const LAYOUT: Dictionary = {"map_groups": 0, "map_group_sizes": [2],
-	"wild_headers": 0x400, "wild_header_count": 2, "species_to_national": 0x800}
+	"wild_headers": 0x400, "wild_header_count": 2, "species_to_national": 0x800,
+	"standard_scripts": 0xC00, "standard_script_count": 1,
+	"trainer_battle_scripts": [0xD01, 0xD01, 0xD01, 0xD01, 0xD01]}
 
 
 func _dump(id: StringName = RomRegistry.EMERALD) -> PackedByteArray:
 	var bytes := PackedByteArray()
 	bytes.resize(4096)
+	bytes.encode_u32(0xC00, 0x08000D01)
+	bytes[0xD01] = 2
 	bytes.encode_u32(0, 0x08000020)
 	for number: int in 2:
 		bytes.encode_u32(0x20 + number * 4, 0x08000040 + number * 28)
@@ -328,3 +332,128 @@ func test_graphics_bounds_flags_and_lz_refuse_the_entire_world() -> void:
 		else:
 			bytes.encode_u32(int(change[0]), int(change[1]))
 		assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty(), str(change))
+
+
+## Late opcodes and disabled handlers consume different bytes on each engine.
+## The header checks cannot catch a command silently eating its successor.
+func test_script_operand_widths_follow_handlers_instead_of_assembler_macros() -> void:
+	var bytes := PackedByteArray([0xC7, 9, 2, 0x72, 2, 0x74, 1, 2, 3, 4, 2])
+	var frlg: RomFile = RomFile.from_bytes(bytes, RomRegistry.FIRERED)
+	var emerald: RomFile = RomFile.from_bytes(bytes, RomRegistry.EMERALD)
+	assert_eq(Gen3Script.instruction(frlg, 0)["operands"], [9])
+	assert_eq(Gen3Script.instruction(emerald, 0)["next_offset"], 1)
+	assert_eq(Gen3Script.instruction(frlg, 3)["next_offset"], 4)
+	assert_eq(Gen3Script.instruction(emerald, 3)["next_offset"], 4)
+	assert_eq(Gen3Script.instruction(frlg, 5)["next_offset"], 6)
+	assert_eq(Gen3Script.instruction(emerald, 5)["operands"], [1, 2, 3, 4])
+	assert_true(Gen3Script.instruction(RomFile.from_bytes(bytes, RomRegistry.RUBY), 0).is_empty())
+	bytes = PackedByteArray([0x79, 0x15, 1, 50, 200, 0, 0, 0, 0, 2, 0, 0, 0, 3, 1])
+	var row: Dictionary = Gen3Script.instruction(RomFile.from_bytes(bytes, RomRegistry.EMERALD), 0)
+	assert_eq(row["operands"], [277, 50, 200, 0x02000000, 0x03000000, 1])
+	assert_eq(row["next_offset"], 15)
+
+
+func test_script_graph_keeps_calls_cycles_dispatch_and_warp_boundaries_in_cache() -> void:
+	var bytes: PackedByteArray = _event_dump()
+	bytes[0xD01] = 4
+	bytes.encode_u32(0xD02, 0x08000D31)
+	bytes[0xD06] = 6
+	bytes[0xD07] = 1
+	bytes.encode_u32(0xD08, 0x08000D01)
+	bytes[0xD0C] = 9
+	bytes[0xD0D] = 0
+	bytes[0xD0E] = 0x39
+	bytes[0xD16] = 0xFF
+	bytes[0xD31] = 3
+	var world: Dictionary = Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT)
+	assert_false(world.is_empty())
+	var path: String = "user://test_gen3_scripts.json"
+	assert_true(RomCache.write_section(path, RomCache.blob_path(path), world["scripts"]))
+	var data := GameData.new()
+	data.generation = RomRegistry.GEN3
+	data._sections = {"scripts": true}
+	data._world_scripts = RomCache.read_json(path)
+	data._indices["blob/scripts"] = RomCache.read_blob(RomCache.blob_path(path))
+	assert_eq(data.world_script_offsets(), [0xD01, 0xD06, 0xD0C, 0xD0E, 0xD31])
+	var call_row: Dictionary = data.world_script_instruction(0xD01)
+	assert_eq(call_row["operands"], [0x08000D31])
+	assert_typeof(call_row["operands"][0], TYPE_INT)
+	assert_eq(call_row["script_offsets"], [0xD31])
+	assert_eq(call_row["bytes"], PackedByteArray([4, 0x31, 0x0D, 0, 8]))
+	assert_eq(data.world_script_instruction(0xD06)["script_offsets"], [0xD01])
+	assert_eq(data.world_script_instruction(0xD0C)["script_offsets"], [0xD01])
+	assert_false(data.world_script_instruction(0xD0E)["fallthrough"])
+	assert_true(data.world_script_instruction(0xD16).is_empty())
+	assert_true(data.world_script_instruction(-1).is_empty())
+	assert_eq(data.world_standard_script_offset(0), 0xD01)
+	assert_eq(data.world_standard_script_offset(1), -1)
+	assert_eq(data.world_standard_script_offset(-1), -1)
+	call_row["bytes"][0] = 0
+	call_row["operands"][0] = 0
+	assert_eq(data.world_script_instruction(0xD01)["bytes"][0], 4)
+	assert_eq(data.world_script_instruction(0xD01)["operands"][0], 0x08000D31)
+	DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(RomCache.blob_path(path))
+
+
+func test_trainer_script_formats_keep_continuations_and_frlg_rival_texts() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var modes: int = int({RomRegistry.EMERALD: 13, RomRegistry.FIRERED: 10, RomRegistry.RUBY: 9}[id])
+		for mode: int in modes:
+			var bytes: PackedByteArray = _dump(id)
+			bytes[0xD01] = 0x5C
+			bytes[0xD02] = mode
+			bytes.encode_u16(0xD03, 42)
+			bytes.encode_u16(0xD05, 5)
+			for pointer: int in 4:
+				bytes.encode_u32(0xD07 + pointer * 4, 0x08000D41)
+			bytes[0xD41] = 2
+			var size: int = 14
+			if mode == 3:
+				size = 10
+			elif mode in [6, 8]:
+				size = 22
+			elif mode in [1, 2, 4, 7]:
+				size = 18
+			bytes[0xD01 + size] = 2
+			var scripts: Dictionary = Gen3Script.read(RomFile.from_bytes(bytes, id), LAYOUT, {})
+			assert_false(scripts.is_empty(), "%s mode %d" % [id, mode])
+			var row: Dictionary = scripts["instructions"][str(0xD01)]
+			assert_eq(row["next_offset"], 0xD01 + size)
+			var targets: Array = row["script_offsets"]
+			if id == RomRegistry.EMERALD and mode in [10, 11]:
+				assert_true(targets.is_empty())
+			else:
+				assert_true(targets.has(0xD01 + size))
+				assert_eq(targets.has(0xD41), mode in [1, 2, 6, 8])
+
+
+func test_script_bounds_unknown_opcodes_and_targets_refuse_the_whole_world() -> void:
+	var changes: Array = [[0xC00, 0, 4], [0xD01, 0xFF, 1],
+		[0xD01, 5, 1], [0xD01, 0x5C, 1]]
+	for change: Array in changes:
+		var bytes: PackedByteArray = _dump()
+		if int(change[2]) == 4:
+			bytes.encode_u32(int(change[0]), int(change[1]))
+		else:
+			bytes[int(change[0])] = int(change[1])
+		bytes[0xD02] = 255
+		assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty(), str(change))
+	var overlapping: PackedByteArray = _dump()
+	overlapping[0xD01] = 4
+	overlapping.encode_u32(0xD02, 0x08000D03)
+	overlapping[0xD06] = 2
+	assert_true(Gen3World.read(RomFile.from_bytes(overlapping, RomRegistry.EMERALD), LAYOUT).is_empty())
+	for bytes: PackedByteArray in [PackedByteArray([4, 0, 0, 8]), PackedByteArray([0x5C]),
+		PackedByteArray([0x5C, 6, 1, 0, 0, 0]), PackedByteArray([0x79, 1, 0, 5])]:
+		assert_true(Gen3Script.instruction(RomFile.from_bytes(bytes, RomRegistry.EMERALD), 0).is_empty())
+
+
+func test_out_of_range_standard_script_calls_keep_their_fallthrough() -> void:
+	var bytes: PackedByteArray = _dump()
+	bytes[0xD01] = 8
+	bytes[0xD02] = 255
+	bytes[0xD03] = 2
+	var scripts: Dictionary = Gen3Script.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT, {})
+	assert_true(scripts["instructions"][str(0xD01)]["fallthrough"])
+	assert_eq(scripts["instructions"].size(), 2)
