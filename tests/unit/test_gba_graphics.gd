@@ -21,7 +21,6 @@ func test_invalid_streams_return_no_partial_pixels() -> void:
 		[0x10, 1, 0, 0, 0],
 		[0x10, 3, 0, 0, 0x80, 0],
 		[0x10, 3, 0, 0, 0x80, 0, 0],
-		[0x10, 2, 0, 0, 0x40, 7, 0, 0],
 	]
 	for stream: Array in streams:
 		assert_true(GbaLz.decompress(PackedByteArray(stream), 0).is_empty(), str(stream))
@@ -55,3 +54,11 @@ func test_reference_distance_keeps_its_high_bits() -> void:
 	var decoded: PackedByteArray = GbaLz.decompress(stream, 0)
 	assert_eq(decoded.size(), 260)
 	assert_eq(decoded.slice(256), PackedByteArray([0xAB, 0, 1, 2]))
+
+
+## Ruby/Sapphire tilesets deliberately end with a reference past the declared
+## size (pret's tilesets.mk -overflow); the BIOS finishes that reference.
+func test_final_reference_preserves_overflow_within_the_output_limit() -> void:
+	var stream := PackedByteArray([0x10, 2, 0, 0, 0x40, 7, 0, 0])
+	assert_eq(GbaLz.decompress(stream, 0), PackedByteArray([7, 7, 7, 7]))
+	assert_true(GbaLz.decompress(stream, 0, 3).is_empty())

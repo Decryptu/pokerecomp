@@ -6,7 +6,7 @@ const LAYOUT: Dictionary = {"map_groups": 0, "map_group_sizes": [2],
 	"wild_headers": 0x400, "wild_header_count": 2, "species_to_national": 0x800}
 
 
-func _dump() -> PackedByteArray:
+func _dump(id: StringName = RomRegistry.EMERALD) -> PackedByteArray:
 	var bytes := PackedByteArray()
 	bytes.resize(4096)
 	bytes.encode_u32(0, 0x08000020)
@@ -55,12 +55,29 @@ func _dump() -> PackedByteArray:
 		bytes.encode_u16(0x702 + slot * 4, 277)
 	bytes.encode_u16(0x800 + 276 * 2, 252)
 	bytes.encode_u16(0x800 + 277 * 2, 253)
+	var frlg: bool = id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	for secondary: int in 2:
+		var at: int = 0x340 + secondary * 32
+		bytes[at] = 1
+		bytes[at + 1] = secondary
+		bytes.encode_u32(at + 4, 0x08000E00)
+		bytes.encode_u32(at + 8, 0x08000B00)
+		bytes.encode_u32(at + 12, 0x08000E80 + secondary * 32)
+		bytes.encode_u32(at + (20 if frlg else 16), 0x08000E90 + secondary * 32)
+		bytes.encode_u16(0xE80 + secondary * 32, 0xFC00)
+		if frlg:
+			bytes.encode_u32(0xE90 + secondary * 32, 0xC7000123)
+		else:
+			bytes.encode_u16(0xE90 + secondary * 32, 0x2123)
+	bytes.encode_u32(0xE00, 0x00002010)
+	for tile_byte: int in 32:
+		bytes[0xE05 + tile_byte + tile_byte / 8] = tile_byte
 	return bytes
 
 
 func test_headers_decode_their_own_flags_and_signed_connections() -> void:
 	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
-		var world: Dictionary = Gen3World.read(RomFile.from_bytes(_dump(), id), LAYOUT)
+		var world: Dictionary = Gen3World.read(RomFile.from_bytes(_dump(id), id), LAYOUT)
 		assert_false(world.is_empty(), str(id))
 		var row: Dictionary = world["headers"]["0:0"]
 		assert_eq(row["connections"], [{"direction": 3, "offset": -50, "group": 0, "number": 1}])
@@ -135,8 +152,8 @@ func test_missing_method_does_not_shift_a_later_set_into_the_default() -> void:
 	assert_eq(world["encounters"]["land"]["0:0"][1]["rate"], 21)
 
 
-func _event_dump() -> PackedByteArray:
-	var bytes: PackedByteArray = _dump()
+func _event_dump(id: StringName = RomRegistry.EMERALD) -> PackedByteArray:
+	var bytes: PackedByteArray = _dump(id)
 	for kind: int in 4:
 		bytes[0x140 + kind] = 1
 		bytes.encode_u32(0x144 + kind * 4, 0x08000900 + kind * 0x40)
@@ -184,7 +201,7 @@ func _event_data(bytes: PackedByteArray, id: StringName) -> GameData:
 
 func test_event_unions_and_script_entries_survive_the_cache_api() -> void:
 	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD, RomRegistry.FIRERED]:
-		var data: GameData = _event_data(_event_dump(), id)
+		var data: GameData = _event_data(_event_dump(id), id)
 		var events: Dictionary = data.world_map_events(0, 0)
 		assert_false(events.is_empty(), str(id))
 		var object: Dictionary = events["objects"][0]
@@ -216,7 +233,7 @@ func test_event_unions_and_script_entries_survive_the_cache_api() -> void:
 
 
 func test_clone_objects_secret_bases_and_null_map_scripts_keep_their_union() -> void:
-	var bytes: PackedByteArray = _event_dump()
+	var bytes: PackedByteArray = _event_dump(RomRegistry.FIRERED)
 	bytes[0x902] = 255
 	bytes[0x908] = 42
 	bytes.encode_u16(0x90C, 1)
@@ -227,7 +244,7 @@ func test_clone_objects_secret_bases_and_null_map_scripts_keep_their_union() -> 
 		"graphics_id": 200, "kind": 255, "x": -1, "y": 10,
 		"target_local_id": 42, "target_group": 0, "target_number": 1})
 	assert_true(data.world_map_script_entries(0, 0).is_empty())
-	bytes[0x902] = 0
+	bytes = _event_dump()
 	bytes[0x9C5] = 8
 	bytes.encode_u32(0x9C8, 123)
 	data = _event_data(bytes, RomRegistry.EMERALD)
@@ -260,3 +277,54 @@ func test_dispatch_and_condition_terminators_fit_at_the_end_of_the_dump() -> voi
 	assert_eq(_event_data(bytes, RomRegistry.EMERALD).world_map_script_entries(0, 0)[0]["conditions"], [])
 	bytes[0xFFE] = 1
 	assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty())
+
+
+## Protect the independent Tileset formats and binary cache boundary. A shared
+## GB decoder or a swapped FRLG pointer passes header/event-only checks.
+func test_graphics_payloads_keep_bank_splits_attributes_and_detached_bytes() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var world: Dictionary = Gen3World.read(RomFile.from_bytes(_dump(id), id), LAYOUT)
+		assert_false(world.is_empty(), str(id))
+		var path: String = "user://test_gen3_graphics.json"
+		assert_true(RomCache.write_section(path, RomCache.blob_path(path), world["graphics"]))
+		var data := GameData.new()
+		data.id = id
+		data.generation = RomRegistry.GEN3
+		data._sections = {"headers": true, "gba_graphics": true}
+		data._world_headers = JSON.parse_string(JSON.stringify(world["headers"]))
+		data._world_tilesets = RomCache.read_json(path)
+		data._indices["blob/tilesets"] = RomCache.read_blob(RomCache.blob_path(path))
+		var primary: Dictionary = data.world_map_tileset(0, 0)
+		var secondary: Dictionary = data.world_map_tileset(0, 0, true)
+		assert_typeof(primary["tiles"]["bytes"], TYPE_PACKED_BYTE_ARRAY)
+		assert_eq(primary["tiles"]["bytes"].size(), 32)
+		assert_eq(primary["tiles"]["bytes"][31], 31)
+		assert_eq(secondary["tile_offset"], 640 if id == RomRegistry.FIRERED else 512)
+		assert_eq(secondary["palette_offset"], 7 if id == RomRegistry.FIRERED else 6)
+		assert_eq(secondary["palette_count"], 7 if id == RomRegistry.EMERALD else 6)
+		var metatile: Dictionary = data.world_metatile(0, 0, int(secondary["metatile_offset"]))
+		assert_eq(metatile["tiles"][0], {"tile": 0, "flip_x": true, "flip_y": true, "palette": 15})
+		assert_eq(metatile["behavior"], 0x123 if id == RomRegistry.FIRERED else 0x23)
+		assert_eq(metatile["layer_type"], 2)
+		assert_eq(data.world_map_layout(0, 0)["blocks"]["bytes"].size(), 12)
+		primary["tiles"]["bytes"][31] = 0
+		assert_eq(data.world_map_tileset(0, 0)["tiles"]["bytes"][31], 31)
+		assert_true(data.world_metatile(0, 0, 1024).is_empty())
+		assert_true(data.world_map_layout(0, 9).is_empty())
+		assert_true(data.world_map_tileset(0, 9).is_empty())
+		assert_null(data.world_tileset(0))
+		DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(RomCache.blob_path(path))
+
+
+func test_graphics_bounds_flags_and_lz_refuse_the_entire_world() -> void:
+	var changes: Array = [[0x114, 0x08000340, 4], [0x340, 2, 1], [0x341, 2, 1], [0x344, 0, 4],
+		[0x348, 0x08000FFC, 4], [0x34C, 0x08000E81, 4], [0x350, 0x08000E91, 4],
+		[0x354, 0x08001001, 4], [0x350, 0x08000E80, 4], [0xE00, 0, 1]]
+	for change: Array in changes:
+		var bytes: PackedByteArray = _dump()
+		if int(change[2]) == 1:
+			bytes[int(change[0])] = int(change[1])
+		else:
+			bytes.encode_u32(int(change[0]), int(change[1]))
+		assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty(), str(change))

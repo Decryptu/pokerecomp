@@ -15,7 +15,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read(rom, layout).is_empty():
-		return {"ok": false, "message": "Map metadata, events, script entry points or wild encounters did not decode."}
+		return {"ok": false, "message": "Map layouts, tilesets, events, script entry points or wild encounters did not decode."}
 	return {"ok": true, "message": ""}
 
 
@@ -26,7 +26,10 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var encounters: Dictionary = _encounters(rom, layout, headers)
 	if encounters.is_empty():
 		return {}
-	return {"headers": headers, "encounters": encounters}
+	var graphics: Dictionary = _graphics(rom, headers)
+	if graphics.is_empty():
+		return {}
+	return {"headers": headers, "encounters": encounters, "graphics": graphics}
 
 
 static func _headers(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -213,3 +216,104 @@ static func _wild_info(rom: RomFile, layout: Dictionary, pointer_at: int, method
 		slots.append({"slot": slot, "min_level": low, "max_level": high,
 			"species": species, "chance": int(chances[slot])})
 	return {"rate": rate, "slots": slots}
+
+
+## pret's metatiles.h/metatiles.inc places each attribute array immediately
+## after its eight-word metatile array. FRLG swaps callback/attributes in Tileset.
+static func _graphics(rom: RomFile, headers: Dictionary) -> Dictionary:
+	var layouts: Dictionary = {}
+	var tilesets: Dictionary = {}
+	for header: Dictionary in headers.values():
+		var key: String = str(header["layout_offset"])
+		if not layouts.has(key):
+			layouts[key] = {
+				"blocks": {"bytes": Array(rom.slice(header["blocks_offset"], header["width"] * header["height"] * 2))},
+				"border": {"bytes": Array(rom.slice(header["border_offset"], header["border_width"] * header["border_height"] * 2))},
+			}
+		for field: String in ["primary_tileset_offset", "secondary_tileset_offset"]:
+			key = str(header[field])
+			if not tilesets.has(key):
+				tilesets[key] = _tileset(rom, int(header[field]))
+			var record: Dictionary = tilesets[key]
+			if record.is_empty() or bool(record["secondary"]) != (field == "secondary_tileset_offset"):
+				return {}
+	return {"layouts": layouts, "tilesets": tilesets}
+
+
+static func _tileset(rom: RomFile, at: int) -> Dictionary:
+	var frlg: bool = rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	var attribute_size: int = 4 if frlg else 2
+	var secondary: int = rom.u8(at + 1)
+	if rom.u8(at) > 1 or secondary > 1:
+		return {}
+	var split: int = primary_tile_count(rom.id)
+	var capacity: int = 1024 - split if secondary == 1 else split
+	var tiles: int = Gen3Layout.read_pointer(rom, at + 4, 4)
+	var metatiles: int = Gen3Layout.read_pointer(rom, at + 12, 16, 2)
+	var attributes: int = Gen3Layout.read_pointer(rom, at + (20 if frlg else 16), attribute_size, attribute_size)
+	var count: int = (attributes - metatiles) / 16
+	if tiles < 0 or metatiles < 0 or attributes < 0 or count < 1 or count > capacity \
+		or (attributes - metatiles) % 16 != 0 \
+		or not rom.in_bounds(attributes, count * attribute_size):
+		return {}
+	var tile_bytes: PackedByteArray = _tile_bytes(rom, tiles, capacity, rom.u8(at) == 1)
+	if tile_bytes.is_empty():
+		return {}
+	var palette: Dictionary = _tileset_palette(rom, at, frlg, secondary)
+	if palette.is_empty():
+		return {}
+	var out: Dictionary = {"compressed": rom.u8(at) == 1, "secondary": secondary == 1,
+		"tile_offset": split if secondary == 1 else 0, "tile_count": tile_bytes.size() / 32,
+		"metatile_offset": split if secondary == 1 else 0, "metatile_count": count,
+		"attribute_size": attribute_size,
+		"tiles": {"bytes": Array(tile_bytes)},
+		"metatiles": {"bytes": Array(rom.slice(metatiles, count * 16))},
+		"attributes": {"bytes": Array(rom.slice(attributes, count * attribute_size))}}
+	out.merge(palette)
+	return out
+
+
+static func _tile_bytes(rom: RomFile, at: int, capacity: int, compressed: bool) -> PackedByteArray:
+	if compressed and (rom.u32le(at) >> 8) % GbaTiles.TILE_BYTES != 0:
+		return PackedByteArray()
+	var bytes: PackedByteArray = GbaLz.decompress(rom.bytes(), at) if compressed \
+		else rom.slice(at, capacity * GbaTiles.TILE_BYTES)
+	if bytes.size() < GbaTiles.TILE_BYTES or bytes.size() > capacity * GbaTiles.TILE_BYTES:
+		return PackedByteArray()
+	return bytes
+
+
+static func _tileset_palette(rom: RomFile, at: int, frlg: bool, secondary: int) -> Dictionary:
+	var primary_pals: int = 7 if frlg else 6
+	var total_pals: int = 12 if rom.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE] else 13
+	var first_pal: int = primary_pals if secondary == 1 else 0
+	var pal_count: int = total_pals - primary_pals if secondary == 1 else primary_pals
+	var palettes: int = Gen3Layout.read_pointer(rom, at + 8, total_pals * 32 if secondary == 1 else primary_pals * 32)
+	var callback: int = rom.u32le(at + (16 if frlg else 20))
+	var callback_offset: int = Gen3Layout.rom_offset(callback & ~1)
+	if palettes < 0 or (callback != 0 and ((callback & 1) == 0 or not rom.in_bounds(callback_offset, 2))):
+		return {}
+	return {"palette_offset": first_pal, "palette_count": pal_count,
+		"callback_offset": callback_offset if callback != 0 else 0,
+		"palettes": {"bytes": Array(rom.slice(palettes + first_pal * 32, pal_count * 32))}}
+
+
+static func primary_tile_count(id: StringName) -> int:
+	return 640 if id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 512
+
+
+static func metatile(tileset: Dictionary, number: int) -> Dictionary:
+	var index: int = number - int(tileset.get("metatile_offset", 0))
+	if index < 0 or index >= int(tileset.get("metatile_count", 0)):
+		return {}
+	var tiles: PackedByteArray = tileset["metatiles"]["bytes"]
+	var attributes: PackedByteArray = tileset["attributes"]["bytes"]
+	var wide: bool = int(tileset["attribute_size"]) == 4
+	var raw: int = attributes.decode_u32(index * 4) if wide else attributes.decode_u16(index * 2)
+	var entries: Array = []
+	for slot: int in 8:
+		var word: int = tiles.decode_u16(index * 16 + slot * 2)
+		entries.append({"tile": word & 0x3FF, "flip_x": (word & 0x400) != 0,
+			"flip_y": (word & 0x800) != 0, "palette": word >> 12})
+	return {"tiles": entries, "attributes": raw, "behavior": raw & (0x1FF if wide else 0xFF),
+		"layer_type": (raw >> (29 if wide else 12)) & (3 if wide else 15)}
