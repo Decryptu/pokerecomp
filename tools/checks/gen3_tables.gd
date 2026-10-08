@@ -78,6 +78,7 @@ func _one_game() -> void:
 	_trainers()
 	_world_headers()
 	_world_events()
+	_world_graphics()
 	_wild_encounters()
 	_undecoded_text()
 
@@ -456,3 +457,47 @@ func _world_events() -> void:
 			for index: int in conditions.size():
 				lines.append("%s,conditions,%d,%d;%s" % [key, slot, index, _event_fields(conditions[index])])
 	_r.digest_matches("gen3_events", lines, EVENT_DIGESTS[data.id])
+
+
+const GRAPHICS_DIGESTS: Dictionary = {
+	&"ruby": "2fbd7453413635737c8cbb08c6b8f8fbe75b98eb",
+	&"sapphire": "2fbd7453413635737c8cbb08c6b8f8fbe75b98eb",
+	&"firered": "c6de08c87281acd3bb6bb2d77f8c7b272df5e421",
+	&"leafgreen": "c6de08c87281acd3bb6bb2d77f8c7b272df5e421",
+	&"emerald": "b6190121fc3b7936c8d40e67dac86e7b4e7f52b3",
+}
+const GRAPHICS_FIELDS: Array[String] = ["secondary", "tile_offset", "tile_count",
+	"metatile_count", "attribute_size", "palette_offset", "palette_count"]
+
+
+func _world_graphics() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["graphics"])
+	var seen: Dictionary = {}
+	for header: Dictionary in data.world_map_headers():
+		var group: int = int(header["group"])
+		var number: int = int(header["number"])
+		var layout: Dictionary = data.world_map_layout(group, number)
+		lines.append("%d:%d|%s|%s" % [group, number,
+			_graphics_hash(layout["blocks"]), _graphics_hash(layout["border"])])
+		for secondary: bool in [false, true]:
+			var offset: int = int(header["secondary_tileset_offset" if secondary else "primary_tileset_offset"])
+			if seen.has(offset):
+				continue
+			seen[offset] = true
+			var tileset: Dictionary = data.world_map_tileset(group, number, secondary)
+			var fields := PackedStringArray()
+			for field: String in GRAPHICS_FIELDS:
+				fields.append(str(int(tileset[field])))
+			var hashes := PackedStringArray()
+			for field: String in ["tiles", "palettes", "metatiles", "attributes"]:
+				hashes.append(_graphics_hash(tileset[field]))
+			lines.append("tileset|%s|%s" % [",".join(fields), "|".join(hashes)])
+	_r.digest_matches("gen3_graphics", lines, GRAPHICS_DIGESTS[data.id])
+
+
+func _graphics_hash(record: Dictionary) -> String:
+	var context := HashingContext.new()
+	context.start(HashingContext.HASH_SHA1)
+	context.update(record["bytes"])
+	return context.finish().hex_encode()

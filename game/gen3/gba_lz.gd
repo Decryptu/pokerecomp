@@ -1,7 +1,8 @@
 class_name GbaLz
 extends RefCounted
 
-## GBA BIOS LZ77 (type 0x10): flag bits run high to low; references may overlap.
+## BIOS LZ77 (0x10): high flags first; final references finish past size, as
+## pokeruby's tilesets.mk -overflow reproduces.
 static func decompress(data: PackedByteArray, offset: int, limit: int = 0x8000) -> PackedByteArray:
 	if offset < 0 or offset + 4 > data.size() or data[offset] != 0x10:
 		return PackedByteArray()
@@ -16,7 +17,7 @@ static func decompress(data: PackedByteArray, offset: int, limit: int = 0x8000) 
 		var flags: int = data[at]
 		at += 1
 		for bit: int in range(7, -1, -1):
-			if out.size() == size:
+			if out.size() >= size:
 				return out
 			if at >= data.size():
 				return PackedByteArray()
@@ -29,7 +30,7 @@ static func decompress(data: PackedByteArray, offset: int, limit: int = 0x8000) 
 				var length: int = (data[at] >> 4) + 3
 				var distance: int = ((data[at] & 15) << 8 | data[at + 1]) + 1
 				at += 2
-				if distance > out.size() or out.size() + length > size:
+				if distance > out.size() or out.size() + length > limit:
 					return PackedByteArray()
 				for copied: int in length:
 					out.append(out[out.size() - distance])

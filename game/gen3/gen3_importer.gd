@@ -386,6 +386,10 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 		if not RomCache.write_json(path, sections[path]):
 			result["message"] = "Could not write %s." % path.get_file()
 			return result
+	var graphics_path: String = RomCache.world_tilesets_path(directory)
+	if not RomCache.write_section(graphics_path, RomCache.blob_path(graphics_path), world["graphics"]):
+		result["message"] = "Could not write map graphics."
+		return result
 	var manifest: Dictionary = {
 		"format_version": RomCache.FORMAT_VERSION,
 		"game_id": String(rom.id),

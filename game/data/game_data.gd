@@ -335,7 +335,6 @@ func map_count() -> int:
 	return _headers().size() if generation == RomRegistry.GEN3 else _maps().size()
 
 
-## GBA map metadata and event entry points, with offsets for graphics awaiting decoding.
 func world_map_header(group: int, number: int) -> Dictionary:
 	return _coerce_service_dictionary(_headers().get("%d:%d" % [group, number], {}))
 
@@ -350,6 +349,30 @@ func world_map_events(group: int, number: int) -> Dictionary:
 
 func world_map_script_entries(group: int, number: int) -> Array:
 	return world_map_header(group, number).get("map_scripts", [])
+
+
+func world_map_layout(group: int, number: int) -> Dictionary:
+	var header: Dictionary = world_map_header(group, number)
+	return _gba_graphics_record("layouts", int(header.get("layout_offset", -1)))
+
+
+func world_map_tileset(group: int, number: int, secondary: bool = false) -> Dictionary:
+	var header: Dictionary = world_map_header(group, number)
+	var field: String = "secondary_tileset_offset" if secondary else "primary_tileset_offset"
+	return _gba_graphics_record("tilesets", int(header.get(field, -1)))
+
+
+func world_metatile(group: int, number: int, metatile_id: int) -> Dictionary:
+	var split: int = Gen3World.primary_tile_count(id)
+	return Gen3World.metatile(world_map_tileset(group, number, metatile_id >= split), metatile_id)
+
+
+func _gba_graphics_record(table: String, offset: int) -> Dictionary:
+	if generation != RomRegistry.GEN3 or offset < 0:
+		return {}
+	if _claim_section("gba_graphics"):
+		_world_tilesets = _read_section(RomCache.world_tilesets_path(directory), false)
+	return _coerce_service_dictionary(_world_tilesets.get(table, {}).get(str(offset), {}), _blob("tilesets"))
 
 
 func world_map(group: int, number: int) -> Gen2WorldMap:
@@ -3792,6 +3815,8 @@ func _blob(section: String) -> PackedByteArray:
 
 func _section_json_path(section: String) -> String:
 	match section:
+		"tilesets":
+			return RomCache.world_tilesets_path(directory)
 		"scripts":
 			return RomCache.world_scripts_path(directory)
 		"standard_scripts":
@@ -3878,6 +3903,8 @@ func _command_queues() -> Dictionary:
 
 
 func _tilesets() -> Dictionary:
+	if generation == RomRegistry.GEN3:
+		return {}
 	if _claim_section("tilesets"):
 		for value: Dictionary in _read_section(RomCache.world_tilesets_path(directory), true):
 			var tileset: Gen2WorldTileset = Gen2WorldTileset.from_cache(value)

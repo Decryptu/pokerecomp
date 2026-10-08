@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Renders one imported map's expanded 4x4-tile blocks to a PNG, or photographs
+## Renders one imported map's blocks to a PNG, or photographs
 ## the real screen on that map. `live help` prints [constant KIND_HELP], which is
 ## every kind and what its two numbers mean.
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
@@ -286,6 +286,9 @@ func _initialize() -> void:
 			data, int(args[1]), int(args[2]),
 			Vector2i(int(args[6]), int(args[7])) if args.size() >= 8 else Vector2i(-1, -1),
 		)
+		return
+	if data != null and data.generation == RomRegistry.GEN3:
+		_preview_gba(data, int(args[1]), int(args[2]), args[3])
 		return
 	var map: Gen2WorldMap = data.world_map(int(args[1]), int(args[2])) if data != null else null
 	var tileset: Gen2WorldTileset = data.world_tileset(map.tileset) if map != null else null
@@ -1904,3 +1907,52 @@ func _draw_marker(image: Image, cell_x: int, cell_y: int, color: Color) -> void:
 		for x: int in 8:
 			if pixel_x + x < image.get_width() and pixel_y + y < image.get_height():
 				image.set_pixel(pixel_x + x, pixel_y + y, color)
+
+
+func _preview_gba(data: GameData, group: int, number: int, path: String) -> void:
+	var header: Dictionary = data.world_map_header(group, number)
+	var layout: Dictionary = data.world_map_layout(group, number)
+	if header.is_empty() or layout.is_empty():
+		push_error("The requested GBA map is not available.")
+		quit(1)
+		return
+	var tilesets: Array = [data.world_map_tileset(group, number), data.world_map_tileset(group, number, true)]
+	var image: Image = Image.create(int(header["width"]) * 16, int(header["height"]) * 16, false, Image.FORMAT_RGBA8)
+	image.fill(Color.BLACK)
+	var blocks: PackedByteArray = layout["blocks"]["bytes"]
+	for cell: int in int(header["width"]) * int(header["height"]):
+		var id: int = blocks.decode_u16(cell * 2) & 0x3FF
+		var tileset: Dictionary = tilesets[1] if id >= int(tilesets[1]["metatile_offset"]) else tilesets[0]
+		var metatile: Dictionary = Gen3World.metatile(tileset, id)
+		if metatile.is_empty():
+			continue
+		var origin := Vector2i(cell % int(header["width"]), cell / int(header["width"])) * 16
+		for slot: int in 8:
+			_draw_gba_tile(image, origin + Vector2i(slot % 2, (slot % 4) / 2) * 8, metatile["tiles"][slot], tilesets)
+	var error: int = image.save_png(path)
+	if error != OK:
+		push_error("Could not write %s (error %d)." % [path, error])
+	quit(0 if error == OK else 1)
+
+
+func _draw_gba_tile(image: Image, origin: Vector2i, entry: Dictionary, tilesets: Array) -> void:
+	var number: int = int(entry["tile"])
+	var palette: int = int(entry["palette"])
+	var graphics: Dictionary = tilesets[1] if number >= int(tilesets[1]["tile_offset"]) else tilesets[0]
+	var colors: Dictionary = tilesets[1] if palette >= int(tilesets[1]["palette_offset"]) else tilesets[0]
+	var tiles: PackedByteArray = graphics["tiles"]["bytes"]
+	var palettes: PackedByteArray = colors["palettes"]["bytes"]
+	var at: int = (number - int(graphics["tile_offset"])) * 32
+	var pal: int = (palette - int(colors["palette_offset"])) * 32
+	if at < 0 or at + 32 > tiles.size() or pal < 0 or pal + 32 > palettes.size():
+		return
+	for y: int in 8:
+		for x: int in 8:
+			var from_x: int = 7 - x if bool(entry["flip_x"]) else x
+			var from_y: int = 7 - y if bool(entry["flip_y"]) else y
+			var index: int = (tiles[at + from_y * 4 + from_x / 2] >> ((from_x % 2) * 4)) & 15
+			if index == 0:
+				continue
+			var rgb: int = palettes.decode_u16(pal + index * 2)
+			image.set_pixel(origin.x + x, origin.y + y, Color(
+				float(rgb & 31) / 31.0, float((rgb >> 5) & 31) / 31.0, float((rgb >> 10) & 31) / 31.0))
