@@ -15,7 +15,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read(rom, layout).is_empty():
-		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode or wild encounters did not decode."}
+		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data or wild encounters did not decode."}
 	return {"ok": true, "message": ""}
 
 

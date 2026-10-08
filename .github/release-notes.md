@@ -3,21 +3,11 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3 dev cartridges import trainers, map headers, layouts, tilesets, events and script bytecode, plus wild encounters including every Altering Cave set and each fishing rod’s slots, alongside front/back pictures, normal and shiny palettes, every stored picture frame and all 28 Unown forms. They remain unplayable.
-
-- Mods can give an item a field move such as FLASH. Using the item from the pack runs the move without a Pokémon that knows it, and the item counts as the move for trees, water and boulders too. Mod API version 60.
-
-## Fixed
-
-- Imported cache tables retain cartridge order, preserving encounter-table scans used by the Pokédex and radio.
-
-- Crystal: the game stopped responding after leaving the OPTION screen, while the music kept playing.
-- Gold, Silver and Crystal: the pack stopped responding after moving an item to a new position with SELECT.
+- Generation 3 dev cartridges import the texts, braille, movement lists and mart stock their scripts name. They remain unplayable.
 
 ## Updating this release
 
 - Reimport cartridges to rebuild their caches. Saves are preserved.
-- Mod API version is now 60. Existing supported mods remain compatible.
 
 ## Which file
 

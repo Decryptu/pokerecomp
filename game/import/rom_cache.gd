@@ -69,7 +69,7 @@ const BYTES_KEY: String = "bytes"
 
 ## Bumped whenever the on-disk shape changes. An older cache is discarded rather
 ## than migrated, since re-importing the owner's dump costs seconds.
-const FORMAT_VERSION: int = 170
+const FORMAT_VERSION: int = 171
 
 ## What [method state] answers. Stale is told from missing because an older
 ## build's import needs the same dump again, not a first import.

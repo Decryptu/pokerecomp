@@ -111,8 +111,8 @@ const DEX_ENTRY_DESCRIPTION: int = 0x10
 ## Padding follows the last word, so the four start ten bytes from the end.
 const DEX_ENTRY_SCALES_FROM_END: int = 10
 
-## The longest pointed-to text is a dex page of 170 bytes.
-const TEXT_LIMIT: int = 512
+## The longest pointed-to text is one of Ruby's script texts, 825 bytes.
+const TEXT_LIMIT: int = 1024
 
 const LEARNSET_END: int = 0xFFFF
 const LEARNSET_MOVE_MASK: int = 0x01FF

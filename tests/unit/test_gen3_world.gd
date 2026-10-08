@@ -2,7 +2,7 @@ extends GutTest
 
 ## Protect GBA bounds, header/event formats, script dispatch and encounter variants.
 ## GB world tests miss packed unions, padding, rod slices and Hoenn species IDs.
-const LAYOUT: Dictionary = {"map_groups": 0, "map_group_sizes": [2],
+const LAYOUT: Dictionary = {"map_groups": 0, "map_group_sizes": [2], "item_count": 10,
 	"wild_headers": 0x400, "wild_header_count": 2, "species_to_national": 0x800,
 	"standard_scripts": 0xC00, "standard_script_count": 1,
 	"trainer_battle_scripts": [0xD01, 0xD01, 0xD01, 0xD01, 0xD01]}
@@ -405,9 +405,8 @@ func test_trainer_script_formats_keep_continuations_and_frlg_rival_texts() -> vo
 			bytes[0xD02] = mode
 			bytes.encode_u16(0xD03, 42)
 			bytes.encode_u16(0xD05, 5)
-			for pointer: int in 4:
-				bytes.encode_u32(0xD07 + pointer * 4, 0x08000D41)
 			bytes[0xD41] = 2
+			bytes[0xD51] = 0xFF
 			var size: int = 14
 			if mode == 3:
 				size = 10
@@ -415,11 +414,15 @@ func test_trainer_script_formats_keep_continuations_and_frlg_rival_texts() -> vo
 				size = 22
 			elif mode in [1, 2, 4, 7]:
 				size = 18
+			for pointer: int in range(0xD07, 0xD01 + size, 4):
+				var continuation: bool = mode in [1, 2, 6, 8] and pointer + 4 == 0xD01 + size
+				bytes.encode_u32(pointer, 0x08000D41 if continuation else 0x08000D51)
 			bytes[0xD01 + size] = 2
 			var scripts: Dictionary = Gen3Script.read(RomFile.from_bytes(bytes, id), LAYOUT, {})
 			assert_false(scripts.is_empty(), "%s mode %d" % [id, mode])
 			var row: Dictionary = scripts["instructions"][str(0xD01)]
 			assert_eq(row["next_offset"], 0xD01 + size)
+			assert_eq(scripts["texts"].keys(), [str(0xD51)])
 			var targets: Array = row["script_offsets"]
 			if id == RomRegistry.EMERALD and mode in [10, 11]:
 				assert_true(targets.is_empty())
@@ -447,6 +450,76 @@ func test_script_bounds_unknown_opcodes_and_targets_refuse_the_whole_world() -> 
 	for bytes: PackedByteArray in [PackedByteArray([4, 0, 0, 8]), PackedByteArray([0x5C]),
 		PackedByteArray([0x5C, 6, 1, 0, 0, 0]), PackedByteArray([0x79, 1, 0, 5])]:
 		assert_true(Gen3Script.instruction(RomFile.from_bytes(bytes, RomRegistry.EMERALD), 0).is_empty())
+
+
+## No cartridge text carries $FF inside a control code's arguments, and none of
+## the refusals below occurs in a dump, so the real-cache sweeps cannot see them.
+func test_text_span_reads_control_code_arguments_per_engine() -> void:
+	var bgm := PackedByteArray([0xFC, 0x0B, 0xFF, 0x01, 0xBB, 0xFF])
+	assert_eq(Gen3Text.span(RomRegistry.RUBY, bgm, 0, 16), 6)
+	assert_eq(Gen3Text.decode_fixed(RomRegistry.RUBY, bgm, 0, 6), "<PLAY_BGM 511>A")
+	var resume := PackedByteArray([0xFC, 0x18, 0xFF])
+	assert_eq(Gen3Text.span(RomRegistry.EMERALD, resume, 0, 16), 3)
+	assert_eq(Gen3Text.span(RomRegistry.RUBY, resume, 0, 16), -1)
+	assert_eq(Gen3Text.span(RomRegistry.EMERALD, PackedByteArray([0xFC, 0x19, 0xFF]), 0, 16), -1)
+	var symbol := PackedByteArray([0xF9, 0xFF, 0xFF])
+	assert_eq(Gen3Text.span(RomRegistry.FIRERED, symbol, 0, 16), 3)
+	assert_eq(Gen3Text.span(RomRegistry.SAPPHIRE, symbol, 0, 16), 2)
+	assert_eq(Gen3Text.span(RomRegistry.EMERALD, bgm, 0, 3), -1)
+	assert_eq(Gen3Text.decode_fixed(RomRegistry.SAPPHIRE, PackedByteArray([0xFD, 0x08]), 0, 2), "<AQUA>")
+	assert_eq(Gen3Text.decode_fixed(RomRegistry.RUBY, PackedByteArray([0xFD, 0x08]), 0, 2), "<MAGMA>")
+
+
+func _data_dump(script: PackedByteArray) -> PackedByteArray:
+	var bytes: PackedByteArray = _dump()
+	for index: int in script.size():
+		bytes[0xD01 + index] = script[index]
+	for index: int in 6:
+		bytes[0xF00 + index] = [0xFC, 0x0B, 0xFF, 0x01, 0xBB, 0xFF][index]
+	bytes[0xF20] = 0x10
+	bytes[0xF21] = 0x11
+	bytes[0xF22] = 0xFE
+	bytes.encode_u16(0xF30, 5)
+	bytes.encode_u16(0xF32, 3)
+	return bytes
+
+
+## Protect which operands are data and how far each run reaches: msgbox's
+## `loadword 0` but no other slot, null and RAM texts, a movement label inside
+## another list, and a mart's ITEM_NONE. A wrong role or length moves a digest
+## only after a reimport, and the refusals never happen on a real dump.
+func test_script_data_follows_handler_operands_through_the_cache() -> void:
+	var script := PackedByteArray([0x0F, 0, 0, 0x0F, 0, 8, 0x0F, 1, 0xF0, 0x0F, 0, 0xFF,
+		0x67, 0, 0, 0, 0, 0x67, 0xC4, 0x1F, 0x02, 0x02, 0x4F, 1, 0, 0x20, 0x0F, 0, 8,
+		0x4F, 2, 0, 0x21, 0x0F, 0, 8, 0x86, 0x30, 0x0F, 0, 8, 2])
+	var world: Dictionary = Gen3World.read(RomFile.from_bytes(_data_dump(script), RomRegistry.EMERALD), LAYOUT)
+	assert_false(world.is_empty())
+	var path: String = "user://test_gen3_script_data.json"
+	assert_true(RomCache.write_section(path, RomCache.blob_path(path), world["scripts"]))
+	var data := GameData.new()
+	data.generation = RomRegistry.GEN3
+	data._sections = {"scripts": true}
+	data._world_scripts = RomCache.read_json(path)
+	data._indices["blob/scripts"] = RomCache.read_blob(RomCache.blob_path(path))
+	assert_eq(data.world_script_offsets("texts"), [0xF00])
+	assert_eq(data.world_script_data("texts", 0xF00)["bytes"], PackedByteArray([0xFC, 0x0B, 0xFF, 0x01, 0xBB, 0xFF]))
+	assert_eq(data.world_script_offsets("movements"), [0xF20, 0xF21])
+	assert_eq(data.world_script_data("movements", 0xF21)["bytes"], PackedByteArray([0x11, 0xFE]))
+	var mart: Dictionary = data.world_script_data("marts", 0xF30)
+	assert_eq(mart["entries"], [5, 3])
+	assert_typeof(mart["entries"][0], TYPE_INT)
+	mart["entries"][0] = 0
+	assert_eq(data.world_script_data("marts", 0xF30)["entries"][0], 5)
+	assert_true(data.world_script_data("braille", 0xF00).is_empty())
+	DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(RomCache.blob_path(path))
+	var refusals: Array = [{0xF32: 10}, {0xF20: 0x9E}, {0xF04: 0xFC, 0xF05: 0x19, 0xF06: 0xFF},
+		{0xD03: 0x0C, 0xD04: 0x0D}]
+	for change: Dictionary in refusals:
+		var bytes: PackedByteArray = _data_dump(script)
+		for at: int in change:
+			bytes[at] = change[at]
+		assert_true(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT).is_empty(), str(change))
 
 
 func test_out_of_range_standard_script_calls_keep_their_fallthrough() -> void:

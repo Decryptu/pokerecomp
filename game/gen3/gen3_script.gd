@@ -288,9 +288,37 @@ const TRAINER_WIDTHS: Array[String] = [
 	"12244", "122444", "122444", "1224", "122444", "12244",
 	"1224444", "122444", "1224444", "12244", "12244", "12244", "12244",
 ]
+const CONTINUATION_MODES: Array[int] = [1, 2, 6, 8]
 const TERMINATORS: Array[int] = [2, 3, 5, 12, 13, 0x5E, 0x5F, 0xB9]
 ## DoWarp's map load replaces the context; these scripts often have no end.
 const WARPS: Array[int] = [0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0xD1, 0xD7, 0xE0]
+
+## Operands naming data a handler reads: operand index and table. `loadword 0`
+## is msgbox's text, and every trainerbattle word but a continuation is a text.
+const DATA_OPERANDS: Dictionary = {
+	"message": [0, "texts"], "messageautoscroll": [0, "texts"],
+	"messageinstant": [0, "texts"], "pokenavcall": [0, "texts"],
+	"loadhelp": [0, "texts"], "bufferstring": [1, "texts"],
+	"braillemessage": [0, "braille"], "getbraillestringwidth": [0, "braille"],
+	"applymovement": [1, "movements"], "applymovementat": [1, "movements"],
+	"applymovement_at": [1, "movements"], "pokemart": [0, "marts"],
+	"pokemartdecoration": [0, "decoration_marts"], "pokemartdecoration2": [0, "decoration_marts"],
+}
+const DATA_TABLES: Array[String] = ["texts", "braille", "movements", "marts", "decoration_marts"]
+## A null operand reads ctx->data[0]; EWRAM and IWRAM pointers name run-time buffers.
+const RAM_START: int = 0x02000000
+const RAM_END: int = 0x04000000
+## gMovementActionFuncs' rows; MOVEMENT_ACTION_STEP_END ends a list.
+const MOVEMENT_ACTIONS: Dictionary = {
+	RomRegistry.RUBY: 138, RomRegistry.SAPPHIRE: 138,
+	RomRegistry.FIRERED: 170, RomRegistry.LEAFGREEN: 170, RomRegistry.EMERALD: 158,
+}
+const MOVEMENT_STEP_END: int = 0xFE
+## brailleformat's window bytes precede the six-dot cells except on FireRed and LeafGreen.
+const BRAILLE_FORMAT_SIZE: int = 6
+const BRAILLE_CELLS: int = 0x40
+## gDecorations runs from DECOR_NONE to DECOR_REGISTEEL_DOLL.
+const DECORATION_COUNT: int = 121
 
 
 static func instruction(rom: RomFile, at: int) -> Dictionary:
@@ -365,22 +393,130 @@ static func read(rom: RomFile, layout: Dictionary, headers: Dictionary) -> Dicti
 		pending.append_array(row["script_offsets"])
 		if bool(row["fallthrough"]):
 			pending.append(row["next_offset"])
-	if not _valid_boundaries(instructions):
+	var data: Dictionary = _data(rom, layout, instructions)
+	if data.is_empty() or not _valid_boundaries(instructions, data):
 		return {}
-	return {"instructions": instructions, "standard": standard, "trainer_battle": trainers}
+	var out: Dictionary = {"instructions": instructions, "standard": standard, "trainer_battle": trainers}
+	out.merge(data)
+	return out
 
 
-static func _valid_boundaries(instructions: Dictionary) -> bool:
-	var offsets: Array[int] = []
+## Instructions share no byte with each other or with data. A movement label
+## inside another list shares its tail, so overlapping data must end together.
+static func _valid_boundaries(instructions: Dictionary, data: Dictionary) -> bool:
+	var runs: Array[Vector3i] = []
 	for key: String in instructions:
-		offsets.append(int(key))
-	offsets.sort()
-	var end: int = -1
-	for offset: int in offsets:
-		if offset < end:
+		runs.append(Vector3i(int(key), int(instructions[key]["next_offset"]), 1))
+	for table: String in DATA_TABLES:
+		for key: String in data[table]:
+			runs.append(Vector3i(int(key), int(key) + data_size(data[table][key]), 0))
+	runs.sort()
+	var last := Vector3i(-1, -1, 0)
+	for run: Vector3i in runs:
+		if run.x < last.y and (run.y != last.y or run.z == 1 or last.z == 1):
 			return false
-		end = int(instructions[str(offset)]["next_offset"])
+		last = run
 	return true
+
+
+static func data_size(record: Dictionary) -> int:
+	if record.has("entries"):
+		return ((record["entries"] as Array).size() + 1) * 2
+	return (record["bytes"] as Array).size() + (record.get("format", []) as Array).size()
+
+
+static func _data(rom: RomFile, layout: Dictionary, instructions: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for table: String in DATA_TABLES:
+		out[table] = {}
+	for row: Dictionary in instructions.values():
+		for pointer: Array in _data_pointers(row):
+			var value: int = int(pointer[1])
+			if value == 0 or (value >= RAM_START and value < RAM_END):
+				continue
+			var at: int = Gen3Layout.rom_offset(value)
+			var records: Dictionary = out[pointer[0]]
+			if records.has(str(at)):
+				continue
+			var record: Dictionary = _data_record(rom, layout, pointer[0], at)
+			if record.is_empty():
+				return {}
+			records[str(at)] = record
+	return out
+
+
+static func _data_pointers(row: Dictionary) -> Array:
+	var operands: Array = row["operands"]
+	var command: String = row["command"]
+	if command == "loadword":
+		return [["texts", operands[1]]] if int(operands[0]) == 0 else []
+	if command == "trainerbattle":
+		var words: Array = operands.slice(3)
+		if int(operands[0]) in CONTINUATION_MODES:
+			words.pop_back()
+		return words.map(func(word: int) -> Array: return ["texts", word])
+	if not DATA_OPERANDS.has(command):
+		return []
+	var role: Array = DATA_OPERANDS[command]
+	return [[role[1], operands[int(role[0])]]]
+
+
+static func _data_record(rom: RomFile, layout: Dictionary, table: String, at: int) -> Dictionary:
+	if not rom.in_bounds(at, 1):
+		return {}
+	match table:
+		"texts":
+			var length: int = Gen3Text.span(rom.id, rom.bytes(), at, Gen3Layout.TEXT_LIMIT)
+			return {} if length < 0 else {"bytes": Array(rom.slice(at, length))}
+		"braille":
+			return _braille(rom, at)
+		"movements":
+			return _movement(rom, at)
+		"marts":
+			return _mart(rom, at, int(layout["item_count"]))
+		"decoration_marts":
+			return _mart(rom, at, DECORATION_COUNT)
+	return {}
+
+
+static func _braille(rom: RomFile, at: int) -> Dictionary:
+	var header: int = 0 if _frlg(rom.id) else BRAILLE_FORMAT_SIZE
+	var cells: int = at + header
+	while rom.in_bounds(cells, 1) and cells - at < Gen3Layout.TEXT_LIMIT:
+		var cell: int = rom.u8(cells)
+		cells += 1
+		if cell == Gen3Text.EOS:
+			var out: Dictionary = {"bytes": Array(rom.slice(at + header, cells - at - header))}
+			if header > 0:
+				out["format"] = Array(rom.slice(at, header))
+			return out
+		if cell >= BRAILLE_CELLS and cell != Gen3Text.NEWLINE:
+			return {}
+	return {}
+
+
+static func _movement(rom: RomFile, at: int) -> Dictionary:
+	var end: int = at
+	while rom.in_bounds(end, 1) and rom.u8(end) != MOVEMENT_STEP_END:
+		if rom.u8(end) >= int(MOVEMENT_ACTIONS[rom.id]):
+			return {}
+		end += 1
+	return {"bytes": Array(rom.slice(at, end + 1 - at))} if rom.in_bounds(end, 1) else {}
+
+
+## SetShopItemsForSale counts halfwords up to ITEM_NONE or DECOR_NONE.
+static func _mart(rom: RomFile, at: int, count: int) -> Dictionary:
+	var entries: Array[int] = []
+	var row: int = at
+	while at % 2 == 0 and rom.in_bounds(row, 2):
+		var entry: int = rom.u16le(row)
+		if entry == 0:
+			return {"entries": entries}
+		if entry >= count:
+			return {}
+		entries.append(entry)
+		row += 2
+	return {}
 
 
 static func _standard(rom: RomFile, layout: Dictionary) -> Array[int]:
@@ -447,7 +583,7 @@ static func _trainer_targets(rom: RomFile, row: Dictionary, trainers: Array) -> 
 	elif mode == 7:
 		helper = 4
 	var out: Array[int] = [int(trainers[helper]), int(row["next_offset"])]
-	if mode in [1, 2, 6, 8]:
+	if mode in CONTINUATION_MODES:
 		var continuation: int = Gen3Layout.rom_offset(int(operands.back()))
 		if not rom.in_bounds(continuation, 1):
 			return [-1]
