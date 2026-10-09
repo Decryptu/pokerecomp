@@ -324,7 +324,7 @@ func test_graphics_payloads_keep_bank_splits_attributes_and_detached_bytes() -> 
 func test_graphics_bounds_flags_and_lz_refuse_the_entire_world() -> void:
 	var changes: Array = [[0x114, 0x08000340, 4], [0x340, 2, 1], [0x341, 2, 1], [0x344, 0, 4],
 		[0x348, 0x08000FFC, 4], [0x34C, 0x08000E81, 4], [0x350, 0x08000E91, 4],
-		[0x354, 0x08001001, 4], [0x350, 0x08000E80, 4], [0xE00, 0, 1]]
+		[0x354, 0x08001001, 4], [0x354, 0x08000F01, 4], [0x350, 0x08000E80, 4], [0xE00, 0, 1]]
 	for change: Array in changes:
 		var bytes: PackedByteArray = _dump()
 		if int(change[2]) == 1:

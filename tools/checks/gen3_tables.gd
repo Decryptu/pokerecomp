@@ -79,6 +79,7 @@ func _one_game() -> void:
 	_world_headers()
 	_world_events()
 	_world_graphics()
+	_tileset_animations()
 	_world_scripts()
 	_world_script_data()
 	_wild_encounters()
@@ -499,6 +500,42 @@ func _world_graphics() -> void:
 				hashes.append(_graphics_hash(tileset[field]))
 			lines.append("tileset|%s|%s" % [",".join(fields), "|".join(hashes)])
 	_r.digest_matches("gen3_graphics", lines, GRAPHICS_DIGESTS[data.id])
+
+
+## Each map tileset pair's queued copies; Unicorn runs of the pret builds agree.
+const ANIMATION_FRAMES: int = 3840
+const ANIMATION_DIGESTS: Dictionary = {
+	&"ruby": "1118b45f88345dc03fa06f3a6a5dfac496d57d1b",
+	&"sapphire": "fee0acb9fb18121628a09f7c123e52034e6ae80e",
+	&"firered": "28c1178aff4a9d2c3f92261453b54a1e7555df87",
+	&"leafgreen": "2118a87db78e2704aecf8d7291fdf7d5f4f99213",
+	&"emerald": "1bc8ce0710c20ae0a70f8e79cd3b0c80b5b864ae",
+}
+
+
+func _tileset_animations() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["tileset animations"])
+	var seen: Dictionary = {}
+	for header: Dictionary in data.world_map_headers():
+		var group: int = int(header["group"])
+		var number: int = int(header["number"])
+		var key: String = "%d,%d" % [header["primary_tileset_offset"], header["secondary_tileset_offset"]]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		var animations: Array = [data.world_map_tileset(group, number)["animation"],
+			data.world_map_tileset(group, number, true)["animation"]]
+		lines.append("pair|%s|%s|%s" % [key, animations[0].get("name", ""), animations[1].get("name", "")])
+		for animation: Dictionary in animations:
+			for frame: String in animation.get("frames", {}):
+				lines.append("frame|%s|%s" % [frame, _graphics_hash(animation["frames"][frame])])
+		var state: Dictionary = Gen3TilesetAnims.start(animations[0], animations[1])
+		for frame: int in ANIMATION_FRAMES:
+			for copy: Dictionary in Gen3TilesetAnims.step(state):
+				lines.append("%d|%d|%d|%d|%d" % [frame, copy.get("tile", -1), copy.get("palette", -1),
+					copy["frame"], copy["bytes"]])
+	_r.digest_matches("gen3_tileset_animations", lines, ANIMATION_DIGESTS[data.id])
 
 
 func _graphics_hash(record: Dictionary) -> String:
