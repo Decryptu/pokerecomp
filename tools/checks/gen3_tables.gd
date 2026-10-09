@@ -81,6 +81,7 @@ func _one_game() -> void:
 	_world_graphics()
 	_tileset_animations()
 	_map_grids()
+	_field_camera()
 	_world_scripts()
 	_world_script_data()
 	_wild_encounters()
@@ -540,8 +541,9 @@ func _tileset_animations() -> void:
 
 
 ## Each map's backup buffer, `MapGridGet*` and `GetMapBorderIdAt` from one
-## cell outside it, the words `DrawMetatileAt` reads for each id met, and the palettes `LoadMapTilesetPalettes` leaves, loading
-## the maps in cache order; Unicorn runs of the pret builds agree.
+## cell outside it, the words `DrawMetatileAt` reads for each id met, and the
+## palettes `LoadMapTilesetPalettes` leaves, loading the maps in cache order;
+## Unicorn runs of the pret builds agree.
 const GRID_DIGESTS: Dictionary = {
 	&"ruby": "73999b15622028930ea28c3ea77cb32c933ad07c",
 	&"sapphire": "73999b15622028930ea28c3ea77cb32c933ad07c",
@@ -588,6 +590,88 @@ func _map_grids() -> void:
 		lines.append("%d:%d|%d|%d|%s" % [header["group"], header["number"], grid.width, grid.height,
 			"|".join(hashes)])
 	_r.digest_matches("gen3_map_grids", lines, GRID_DIGESTS[data.id])
+
+
+## Per map, `GetMapConnectionAtPos` from one cell outside the backup map and
+## `CanCameraMoveInDirection` from the layout's edge cells; then every step,
+## diagonals included, that `CameraMove` takes off that edge into another map,
+## from the map freshly loaded with its view rewritten through the `MapGridSet*`s
+## (Ruby and Sapphire lack the impassability one). Unicorn runs of the pret
+## builds agree, `LoadMapFromCameraTransition` reduced to `InitMapLayoutData`;
+## `null` is a step whose connection the cartridge reads from address 0.
+const CAMERA_DIGESTS: Dictionary = {
+	&"ruby": "ec5ee5d414055c5028ec98dd9b5012c7c6f13ce5",
+	&"sapphire": "ec5ee5d414055c5028ec98dd9b5012c7c6f13ce5",
+	&"firered": "d4663b8087cebfce8245ec7f8e39e7964437d5e8",
+	&"leafgreen": "d4663b8087cebfce8245ec7f8e39e7964437d5e8",
+	&"emerald": "5d7e7243855373cb52c471df9c584472827caa70",
+}
+
+
+func _field_camera() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["field camera"])
+	var camera: Gen3FieldCamera = null
+	for header: Dictionary in data.world_map_headers():
+		var group: int = int(header["group"])
+		var number: int = int(header["number"])
+		camera = _camera_at(camera, data, group, number, Vector2i.ZERO)
+		var connections := PackedByteArray()
+		for y: int in range(-1, camera.grid.height + 1):
+			for x: int in range(-1, camera.grid.width + 1):
+				connections.append(header["connections"].find(camera.connection_at(x, y)) & 0xFF)
+		var moves := PackedByteArray()
+		var crossings: Array = []
+		for at: Vector2i in _edge_cells(header):
+			camera.pos = at
+			for direction: int in range(1, Gen3FieldCamera.DIRECTIONS.size()):
+				moves.append(int(camera.can_move(direction)))
+				var target: Vector2i = at + Gen3FieldCamera.DIRECTIONS[direction] \
+					+ Vector2i.ONE * Gen3MapGrid.MAP_OFFSET
+				if camera.grid.border_id_at(target.x, target.y) > Gen3MapGrid.Connection.NONE:
+					crossings.append([at, direction])
+		lines.append("%d:%d|%s|%s" % [group, number, _graphics_hash({"bytes": connections}),
+			_graphics_hash({"bytes": moves})])
+		for crossing: Array in crossings:
+			camera = _camera_at(camera, data, group, number, crossing[0])
+			_mark_view(camera)
+			if not camera.move(Gen3FieldCamera.DIRECTIONS[crossing[1]]):
+				lines.append("%d,%d|%d|null" % [crossing[0].x, crossing[0].y, crossing[1]])
+				continue
+			lines.append("%d,%d|%d|%d:%d|%d,%d|%d,%d|%s" % [crossing[0].x, crossing[0].y, crossing[1],
+				camera.group, camera.number, camera.pos.x, camera.pos.y, camera.shift.x, camera.shift.y,
+				_graphics_hash({"bytes": camera.grid.blocks.to_byte_array()})])
+	_r.digest_matches("gen3_field_camera", lines, CAMERA_DIGESTS[data.id])
+
+
+func _camera_at(camera: Gen3FieldCamera, data: GameData, group: int, number: int,
+		at: Vector2i) -> Gen3FieldCamera:
+	if camera == null:
+		return Gen3FieldCamera.open(data, group, number, at)
+	camera.load_map(group, number)
+	camera.pos = at
+	return camera
+
+
+func _edge_cells(header: Dictionary) -> Array[Vector2i]:
+	var width: int = int(header["width"])
+	var height: int = int(header["height"])
+	var out: Array[Vector2i] = []
+	for y: int in height:
+		for x: int in width:
+			if x == 0 or y == 0 or x == width - 1 or y == height - 1:
+				out.append(Vector2i(x, y))
+	return out
+
+
+## Distinct ids with collision over the whole view, one whole word, and one
+## cell's collision cleared.
+func _mark_view(camera: Gen3FieldCamera) -> void:
+	for y: int in Gen3FieldCamera.VIEW_HEIGHT:
+		for x: int in Gen3FieldCamera.VIEW_WIDTH:
+			camera.grid.set_metatile_id(camera.pos.x + x, camera.pos.y + y, 0xFC00 | (x + y * 15) * 7)
+	camera.grid.set_metatile_entry(camera.pos.x, camera.pos.y, 0xABCD)
+	camera.grid.set_impassable(camera.pos.x + 7, camera.pos.y + 7, false)
 
 
 static func _u16(value: int) -> PackedByteArray:
