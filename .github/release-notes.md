@@ -5,6 +5,7 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 - Generation 3 dev cartridges import the texts, braille, movement lists and mart stock their scripts name. They remain unplayable.
 - Generation 3 dev cartridges import their tileset animations: the water, flowers, fountains, flags and lights each map cycles, with the same timing as the cartridge.
+- Generation 3 dev cartridges load their maps as the cartridge's field does: the neighbouring maps' edges, the border, collision, elevation and tile behavior around every map. Map previews show them.
 
 ## Updating this release
 

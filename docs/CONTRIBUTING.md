@@ -31,7 +31,7 @@ the same hooks path enables it.
 | `game/rom/` | SHA-1 allowlist, verification, bank addressing. Node-free statics |
 | `game/import/` | Decoders and the `user://` cache. Take bytes, return data |
 | `game/gen1/` | Generation 1's layout, decoders and importer, beside `game/import/`'s Generation 2 ones |
-| `game/gen3/` | Generation 3's layout, text codec and importer, which reads species, move, item, ability, Pokédex, trainer, picture, map layout/tileset/header/event, map script dispatch/bytecode, script texts/movements/marts and wild encounter tables |
+| `game/gen3/` | Generation 3's layout, text codec and importer, which reads species, move, item, ability, Pokédex, trainer, picture, map layout/tileset/tileset animation/header/event, map script dispatch/bytecode, script texts/movements/marts and wild encounter tables, and the field's map grid and background VRAM built from them |
 | `game/data/` | `game_data.gd`, the sole engine-facing cartridge-content API |
 | `game/save/` | Project saves, versioned and scene-free. See [SAVES.md](SAVES.md) |
 | `game/world/` | Request resolution, separate from the screens that draw it |

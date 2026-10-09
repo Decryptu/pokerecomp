@@ -4,7 +4,8 @@ extends SceneTree
 ## the real screen on that map. `live help` prints [constant KIND_HELP], which is
 ## every kind and what its two numbers mean.
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
-## A GBA map takes an optional frame count of tileset animation instead of `live`.
+## A GBA map draws its whole backup map, the connected maps' edges and the
+## border ring included, after an optional frame count of tileset animation.
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
 ##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]
 
@@ -1911,69 +1912,15 @@ func _draw_marker(image: Image, cell_x: int, cell_y: int, color: Color) -> void:
 
 
 func _preview_gba(data: GameData, group: int, number: int, path: String, frames: int) -> void:
-	var header: Dictionary = data.world_map_header(group, number)
-	var layout: Dictionary = data.world_map_layout(group, number)
-	if header.is_empty() or layout.is_empty():
+	var grid: Gen3MapGrid = Gen3MapGrid.open(data, group, number)
+	if grid == null:
 		push_error("The requested GBA map is not available.")
 		quit(1)
 		return
-	var tilesets: Array = [data.world_map_tileset(group, number), data.world_map_tileset(group, number, true)]
-	var vram := PackedByteArray()
-	vram.resize(1024 * 32)
-	var palettes := PackedByteArray()
-	palettes.resize(16 * 32)
-	for tileset: Dictionary in tilesets:
-		_copy_into(vram, int(tileset["tile_offset"]) * 32, tileset["tiles"]["bytes"])
-		_copy_into(palettes, int(tileset["palette_offset"]) * 32, tileset["palettes"]["bytes"])
-	var state: Dictionary = Gen3TilesetAnims.start(tilesets[0]["animation"], tilesets[1]["animation"])
+	var vram: Gen3FieldVram = Gen3FieldVram.load(grid.primary, grid.secondary)
 	for frame: int in frames:
-		for copy: Dictionary in Gen3TilesetAnims.step(state):
-			_apply_gba_copy(copy, tilesets, vram, palettes)
-	var image: Image = Image.create(int(header["width"]) * 16, int(header["height"]) * 16, false, Image.FORMAT_RGBA8)
-	image.fill(Color.BLACK)
-	var blocks: PackedByteArray = layout["blocks"]["bytes"]
-	for cell: int in int(header["width"]) * int(header["height"]):
-		var id: int = blocks.decode_u16(cell * 2) & 0x3FF
-		var tileset: Dictionary = tilesets[1] if id >= int(tilesets[1]["metatile_offset"]) else tilesets[0]
-		var metatile: Dictionary = Gen3World.metatile(tileset, id)
-		if metatile.is_empty():
-			continue
-		var origin := Vector2i(cell % int(header["width"]), cell / int(header["width"])) * 16
-		for slot: int in 8:
-			_draw_gba_tile(image, origin + Vector2i(slot % 2, (slot % 4) / 2) * 8, metatile["tiles"][slot], vram, palettes)
-	var error: int = image.save_png(path)
+		vram.step()
+	var error: int = vram.draw(grid, Rect2i(0, 0, grid.width, grid.height)).save_png(path)
 	if error != OK:
 		push_error("Could not write %s (error %d)." % [path, error])
 	quit(0 if error == OK else 1)
-
-
-func _apply_gba_copy(copy: Dictionary, tilesets: Array, vram: PackedByteArray, palettes: PackedByteArray) -> void:
-	var key: String = str(copy["frame"])
-	var frames: Dictionary = tilesets[0]["animation"].get("frames", {})
-	if not frames.has(key):
-		frames = tilesets[1]["animation"]["frames"]
-	var bytes: PackedByteArray = frames[key]["bytes"].slice(0, int(copy["bytes"]))
-	if copy.has("palette"):
-		_copy_into(palettes, int(copy["palette"]) * 32, bytes)
-	else:
-		_copy_into(vram, int(copy["tile"]) * 32, bytes)
-
-
-func _copy_into(target: PackedByteArray, at: int, bytes: PackedByteArray) -> void:
-	for index: int in mini(bytes.size(), target.size() - at):
-		target[at + index] = bytes[index]
-
-
-func _draw_gba_tile(image: Image, origin: Vector2i, entry: Dictionary, vram: PackedByteArray, palettes: PackedByteArray) -> void:
-	var at: int = int(entry["tile"]) * 32
-	var pal: int = int(entry["palette"]) * 32
-	for y: int in 8:
-		for x: int in 8:
-			var from_x: int = 7 - x if bool(entry["flip_x"]) else x
-			var from_y: int = 7 - y if bool(entry["flip_y"]) else y
-			var index: int = (vram[at + from_y * 4 + from_x / 2] >> ((from_x % 2) * 4)) & 15
-			if index == 0:
-				continue
-			var rgb: int = palettes.decode_u16(pal + index * 2)
-			image.set_pixel(origin.x + x, origin.y + y, Color(
-				float(rgb & 31) / 31.0, float((rgb >> 5) & 31) / 31.0, float((rgb >> 10) & 31) / 31.0))
