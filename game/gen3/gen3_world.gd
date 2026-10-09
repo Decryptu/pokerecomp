@@ -322,24 +322,54 @@ static func primary_tile_count(id: StringName) -> int:
 ## One metatile id's tiles and attributes. An id past the tileset's rows reads
 ## the ROM after the arrays, as the cartridge does; one past that is empty.
 static func metatile(tileset: Dictionary, number: int) -> Dictionary:
-	var index: int = number - int(tileset.get("metatile_offset", 0))
-	var count: int = int(tileset.get("metatile_count", 0))
-	if index < 0:
+	var row: Array = _metatile_row(tileset, number)
+	if row.is_empty():
 		return {}
-	var tiles: PackedByteArray = tileset["metatiles"]["bytes"]
-	var attributes: PackedByteArray = tileset["attributes"]["bytes"]
-	var wide: bool = int(tileset["attribute_size"]) == 4
-	if index >= count:
-		index -= count
-		tiles = tileset["metatile_tail"]["bytes"]
-		attributes = tileset["attribute_tail"]["bytes"]
-		if (index + 1) * 16 > tiles.size() or (index + 1) * (4 if wide else 2) > attributes.size():
-			return {}
-	var raw: int = attributes.decode_u32(index * 4) if wide else attributes.decode_u16(index * 2)
+	var tiles: PackedByteArray = row[0]
+	var index: int = row[2]
+	var raw: int = metatile_attributes(tileset, number)
 	var entries: Array = []
 	for slot: int in 8:
 		var word: int = tiles.decode_u16(index * 16 + slot * 2)
 		entries.append({"tile": word & 0x3FF, "flip_x": (word & 0x400) != 0,
 			"flip_y": (word & 0x800) != 0, "palette": word >> 12})
-	return {"tiles": entries, "attributes": raw, "behavior": raw & (0x1FF if wide else 0xFF),
-		"layer_type": (raw >> (29 if wide else 12)) & (3 if wide else 15)}
+	return {"tiles": entries, "attributes": raw, "behavior": behavior(tileset, raw),
+		"layer_type": layer_type(tileset, raw)}
+
+
+## The raw attribute word of the id [method metatile] reads, or -1 where it is
+## empty.
+static func metatile_attributes(tileset: Dictionary, number: int) -> int:
+	var row: Array = _metatile_row(tileset, number)
+	if row.is_empty():
+		return -1
+	var words: PackedByteArray = row[1]
+	return words.decode_u32(row[2] * 4) if _wide(tileset) else words.decode_u16(row[2] * 2)
+
+
+static func behavior(tileset: Dictionary, raw: int) -> int:
+	return raw & (0x1FF if _wide(tileset) else 0xFF)
+
+
+static func layer_type(tileset: Dictionary, raw: int) -> int:
+	return (raw >> 29) & 3 if _wide(tileset) else (raw >> 12) & 15
+
+
+static func _wide(tileset: Dictionary) -> bool:
+	return int(tileset["attribute_size"]) == 4
+
+
+## The metatile and attribute arrays an id reads and its index in them.
+static func _metatile_row(tileset: Dictionary, number: int) -> Array:
+	var index: int = number - int(tileset.get("metatile_offset", 0))
+	var count: int = int(tileset.get("metatile_count", 0))
+	if index < 0:
+		return []
+	if index < count:
+		return [tileset["metatiles"]["bytes"], tileset["attributes"]["bytes"], index]
+	index -= count
+	var tiles: PackedByteArray = tileset["metatile_tail"]["bytes"]
+	var words: PackedByteArray = tileset["attribute_tail"]["bytes"]
+	if (index + 1) * 16 > tiles.size() or (index + 1) * int(tileset["attribute_size"]) > words.size():
+		return []
+	return [tiles, words, index]

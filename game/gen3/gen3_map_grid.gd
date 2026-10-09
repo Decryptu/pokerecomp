@@ -13,6 +13,7 @@ const UNDEFINED: int = 0x3FF
 const METATILE_MASK: int = 0x3FF
 const COLLISION_MASK: int = 0xC00
 const ELEVATION_SHIFT: int = 12
+const ELEVATION_MASK: int = 0xF000
 const NUM_METATILES_TOTAL: int = 1024
 
 enum Connection { INVALID = -1, NONE, SOUTH, NORTH, WEST, EAST, DIVE, EMERGE }
@@ -123,7 +124,7 @@ func _fill(source: PackedByteArray, source_width: int, from_x: int, from_y: int,
 
 ## `GetMapGridBlockAt`: the buffer's word, or the border's with collision set.
 func block_at(x: int, y: int) -> int:
-	if x >= 0 and x < width and y >= 0 and y < height:
+	if in_bounds(x, y):
 		return blocks[x + width * y]
 	return border_block_at(x, y)
 
@@ -134,6 +135,30 @@ func border_block_at(x: int, y: int) -> int:
 		index = (x - MAP_OFFSET + 8 * _border_width) % _border_width \
 			+ (y - MAP_OFFSET + 8 * _border_height) % _border_height * _border_width
 	return _border.decode_u16(index * 2) | COLLISION_MASK
+
+
+func in_bounds(x: int, y: int) -> bool:
+	return x >= 0 and x < width and y >= 0 and y < height
+
+
+## `MapGridSetMetatileIdAt`: the id and collision bits, keeping the elevation.
+func set_metatile_id(x: int, y: int, word: int) -> void:
+	if in_bounds(x, y):
+		var at: int = x + width * y
+		blocks[at] = (blocks[at] & ELEVATION_MASK) | (word & ~ELEVATION_MASK & 0xFFFF)
+
+
+## `MapGridSetMetatileEntryAt`: the whole word.
+func set_metatile_entry(x: int, y: int, word: int) -> void:
+	if in_bounds(x, y):
+		blocks[x + width * y] = word & 0xFFFF
+
+
+## `MapGridSetMetatileImpassabilityAt`.
+func set_impassable(x: int, y: int, impassable: bool) -> void:
+	if in_bounds(x, y):
+		var at: int = x + width * y
+		blocks[at] = blocks[at] | COLLISION_MASK if impassable else blocks[at] & ~COLLISION_MASK
 
 
 func metatile_id_at(x: int, y: int) -> int:
@@ -171,9 +196,10 @@ func _read_attributes() -> void:
 	_behaviors.resize(NUM_METATILES_TOTAL)
 	_layer_types.resize(NUM_METATILES_TOTAL)
 	for id: int in NUM_METATILES_TOTAL:
-		var row: Dictionary = metatile(id)
-		_behaviors[id] = int(row.get("behavior", 0))
-		_layer_types[id] = int(row.get("layer_type", 0))
+		var tileset: Dictionary = secondary if id >= _split else primary
+		var raw: int = Gen3World.metatile_attributes(tileset, id)
+		_behaviors[id] = Gen3World.behavior(tileset, raw) if raw >= 0 else 0
+		_layer_types[id] = Gen3World.layer_type(tileset, raw) if raw >= 0 else 0
 
 
 ## `GetMapBorderIdAt`: which connection a backup-map cell belongs to.
