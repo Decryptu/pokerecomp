@@ -310,6 +310,9 @@ func test_graphics_payloads_keep_bank_splits_attributes_and_detached_bytes() -> 
 		assert_eq(metatile["tiles"][0], {"tile": 0, "flip_x": true, "flip_y": true, "palette": 15})
 		assert_eq(metatile["behavior"], 0x123 if id == RomRegistry.FIRERED else 0x23)
 		assert_eq(metatile["layer_type"], 2)
+		# One row past the array, DrawMetatileAt reads the attribute array as tiles.
+		var past: Dictionary = data.world_metatile(0, 0, int(secondary["metatile_offset"]) + 1)
+		assert_eq(past["tiles"][0]["tile"], 0x123)
 		assert_eq(data.world_map_layout(0, 0)["blocks"]["bytes"].size(), 12)
 		primary["tiles"]["bytes"][31] = 0
 		assert_eq(data.world_map_tileset(0, 0)["tiles"]["bytes"][31], 31)

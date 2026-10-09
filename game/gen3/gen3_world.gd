@@ -274,9 +274,20 @@ static func _tileset(rom: RomFile, at: int) -> Dictionary:
 		"tiles": {"bytes": Array(tile_bytes)},
 		"metatiles": {"bytes": Array(rom.slice(metatiles, count * 16))},
 		"attributes": {"bytes": Array(rom.slice(attributes, count * attribute_size))},
+		"metatile_tail": {"bytes": Array(_tail(rom, metatiles + count * 16, (capacity - count) * 16))},
+		"attribute_tail": {"bytes": Array(_tail(rom, attributes + count * attribute_size,
+			(capacity - count) * attribute_size))},
 		"animation": animation}
 	out.merge(palette)
 	return out
+
+
+## The ROM after a metatile or attribute array, up to the bank's id space:
+## `DrawMetatileAt` and `GetMetatileAttributesById` index past the array for an
+## id the tileset lacks, which a connection strip from a map on another
+## secondary tileset brings into the backup map.
+static func _tail(rom: RomFile, at: int, length: int) -> PackedByteArray:
+	return rom.slice(at, clampi(rom.size() - at, 0, length))
 
 
 static func _tile_bytes(rom: RomFile, at: int, capacity: int, compressed: bool) -> PackedByteArray:
@@ -308,13 +319,22 @@ static func primary_tile_count(id: StringName) -> int:
 	return 640 if id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 512
 
 
+## One metatile id's tiles and attributes. An id past the tileset's rows reads
+## the ROM after the arrays, as the cartridge does; one past that is empty.
 static func metatile(tileset: Dictionary, number: int) -> Dictionary:
 	var index: int = number - int(tileset.get("metatile_offset", 0))
-	if index < 0 or index >= int(tileset.get("metatile_count", 0)):
+	var count: int = int(tileset.get("metatile_count", 0))
+	if index < 0:
 		return {}
 	var tiles: PackedByteArray = tileset["metatiles"]["bytes"]
 	var attributes: PackedByteArray = tileset["attributes"]["bytes"]
 	var wide: bool = int(tileset["attribute_size"]) == 4
+	if index >= count:
+		index -= count
+		tiles = tileset["metatile_tail"]["bytes"]
+		attributes = tileset["attribute_tail"]["bytes"]
+		if (index + 1) * 16 > tiles.size() or (index + 1) * (4 if wide else 2) > attributes.size():
+			return {}
 	var raw: int = attributes.decode_u32(index * 4) if wide else attributes.decode_u16(index * 2)
 	var entries: Array = []
 	for slot: int in 8:

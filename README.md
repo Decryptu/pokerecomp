@@ -101,10 +101,11 @@ movement lists and marts it names, wild encounters and front/back pictures
 with normal and shiny palettes. Picture frames and all 28 Unown forms are
 retained; none of these cartridges is playable.
 `tools/import_rom.gd` skips them unless given `--dev`. Static map previews use
-`godot --headless --path . -s res://tools/preview_world.gd -- emerald 0 9 /tmp/littleroot.png`;
-a frame count after the path renders the map that many tileset animation
-frames in. Script bytecode and its data are decoded and cached; script
-execution awaits the GBA world model.
+`godot --headless --path . -s res://tools/preview_world.gd -- emerald 0 9 /tmp/littleroot.png`
+and draw the map as the field loads it, with the neighbouring maps' edges and
+the border around it; a frame count after the path renders the map that many
+tileset animation frames in. Script bytecode and its data are decoded and
+cached; script execution awaits the GBA world model.
 
 | Game | SHA-1 |
 |---|---|

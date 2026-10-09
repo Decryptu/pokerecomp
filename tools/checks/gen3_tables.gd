@@ -80,6 +80,7 @@ func _one_game() -> void:
 	_world_events()
 	_world_graphics()
 	_tileset_animations()
+	_map_grids()
 	_world_scripts()
 	_world_script_data()
 	_wild_encounters()
@@ -536,6 +537,61 @@ func _tileset_animations() -> void:
 				lines.append("%d|%d|%d|%d|%d" % [frame, copy.get("tile", -1), copy.get("palette", -1),
 					copy["frame"], copy["bytes"]])
 	_r.digest_matches("gen3_tileset_animations", lines, ANIMATION_DIGESTS[data.id])
+
+
+## Each map's backup buffer, `MapGridGet*` and `GetMapBorderIdAt` from one
+## cell outside it, the words `DrawMetatileAt` reads for each id met, and the palettes `LoadMapTilesetPalettes` leaves, loading
+## the maps in cache order; Unicorn runs of the pret builds agree.
+const GRID_DIGESTS: Dictionary = {
+	&"ruby": "73999b15622028930ea28c3ea77cb32c933ad07c",
+	&"sapphire": "73999b15622028930ea28c3ea77cb32c933ad07c",
+	&"firered": "5deba892bfe9c44296f89ea40eccc21d96092e9f",
+	&"leafgreen": "5deba892bfe9c44296f89ea40eccc21d96092e9f",
+	&"emerald": "91c9bea88f20ff61c8f0165b523ec28a9c71c4f1",
+}
+
+
+func _map_grids() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["map grids"])
+	var grid: Gen3MapGrid = null
+	for header: Dictionary in data.world_map_headers():
+		grid = Gen3MapGrid.open(data, int(header["group"]), int(header["number"]), grid)
+		var vram: Gen3FieldVram = Gen3FieldVram.load(grid.primary, grid.secondary)
+		var words := PackedByteArray()
+		for block: int in grid.blocks:
+			words.append_array(_u16(block))
+		var readers: Array = [PackedByteArray(), PackedByteArray(), PackedByteArray(),
+			PackedByteArray(), PackedByteArray(), PackedByteArray()]
+		var ids: Dictionary = {}
+		for y: int in range(-1, grid.height + 1):
+			for x: int in range(-1, grid.width + 1):
+				ids[grid.metatile_id_at(x, y)] = true
+				readers[0].append_array(_u16(grid.metatile_id_at(x, y)))
+				readers[1].append_array(_u16(grid.collision_at(x, y)))
+				readers[2].append_array(_u16(grid.elevation_at(x, y)))
+				readers[3].append_array(_u16(grid.behavior_at(x, y)))
+				readers[4].append_array(_u16(grid.layer_type_at(x, y)))
+				readers[5].append_array(_u16(grid.border_id_at(x, y)))
+		var drawn := PackedByteArray()
+		var sorted: Array = ids.keys()
+		sorted.sort()
+		for id: int in sorted:
+			drawn.append_array(_u16(id))
+			for tile: Dictionary in grid.metatile(id)["tiles"]:
+				drawn.append_array(_u16(Gen3FieldVram.entry(tile)))
+		var hashes := PackedStringArray([_graphics_hash({"bytes": words})])
+		for reader: PackedByteArray in readers + [drawn]:
+			hashes.append(_graphics_hash({"bytes": reader}))
+		var palettes: int = int(grid.secondary["palette_offset"]) + int(grid.secondary["palette_count"])
+		hashes.append(_graphics_hash({"bytes": vram.palettes.slice(0, palettes * 32)}))
+		lines.append("%d:%d|%d|%d|%s" % [header["group"], header["number"], grid.width, grid.height,
+			"|".join(hashes)])
+	_r.digest_matches("gen3_map_grids", lines, GRID_DIGESTS[data.id])
+
+
+static func _u16(value: int) -> PackedByteArray:
+	return PackedByteArray([value & 0xFF, (value >> 8) & 0xFF])
 
 
 func _graphics_hash(record: Dictionary) -> String:
