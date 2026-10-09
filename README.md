@@ -95,15 +95,16 @@ over a one-pocket bag.
 
 Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
 the shelf. An import reads their species with Pokédex entries, moves, types,
-matchup chart, items, abilities, trainers, map headers, layouts, tilesets and
-events, map script entry points, reachable bytecode and the texts, braille,
+matchup chart, items, abilities, trainers, map headers, layouts, tilesets with
+their animation frames and timing, events, map script entry points, reachable bytecode and the texts, braille,
 movement lists and marts it names, wild encounters and front/back pictures
 with normal and shiny palettes. Picture frames and all 28 Unown forms are
 retained; none of these cartridges is playable.
 `tools/import_rom.gd` skips them unless given `--dev`. Static map previews use
-`godot --headless --path . -s res://tools/preview_world.gd -- emerald 0 9 /tmp/littleroot.png`.
-Script bytecode and its data are decoded and cached; script execution and
-tileset animation await the GBA world model.
+`godot --headless --path . -s res://tools/preview_world.gd -- emerald 0 9 /tmp/littleroot.png`;
+a frame count after the path renders the map that many tileset animation
+frames in. Script bytecode and its data are decoded and cached; script
+execution awaits the GBA world model.
 
 | Game | SHA-1 |
 |---|---|

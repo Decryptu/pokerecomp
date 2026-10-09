@@ -263,7 +263,9 @@ static func _tileset(rom: RomFile, at: int) -> Dictionary:
 	if tile_bytes.is_empty():
 		return {}
 	var palette: Dictionary = _tileset_palette(rom, at, frlg, secondary)
-	if palette.is_empty():
+	var callback: int = int(palette.get("callback_offset", 0))
+	var animation: Dictionary = Gen3TilesetAnims.read(rom, callback) if callback != 0 else {}
+	if palette.is_empty() or (callback != 0 and animation.is_empty()):
 		return {}
 	var out: Dictionary = {"compressed": rom.u8(at) == 1, "secondary": secondary == 1,
 		"tile_offset": split if secondary == 1 else 0, "tile_count": tile_bytes.size() / 32,
@@ -271,7 +273,8 @@ static func _tileset(rom: RomFile, at: int) -> Dictionary:
 		"attribute_size": attribute_size,
 		"tiles": {"bytes": Array(tile_bytes)},
 		"metatiles": {"bytes": Array(rom.slice(metatiles, count * 16))},
-		"attributes": {"bytes": Array(rom.slice(attributes, count * attribute_size))}}
+		"attributes": {"bytes": Array(rom.slice(attributes, count * attribute_size))},
+		"animation": animation}
 	out.merge(palette)
 	return out
 
