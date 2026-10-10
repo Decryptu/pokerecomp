@@ -3,11 +3,12 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3 dev cartridges import the texts, braille, movement lists and mart stock their scripts name. They remain unplayable.
-- Generation 3 dev cartridges import their tileset animations: the water, flowers, fountains, flags and lights each map cycles, with the same timing as the cartridge.
-- Generation 3 dev cartridges load their maps as the cartridge's field does: the neighbouring maps' edges, the border, collision, elevation and tile behavior around every map. Map previews show them.
-- Generation 3 dev cartridges cross from one map into the next at a connection, carrying the tiles on screen over, as the cartridge does.
-- Generation 3 dev cartridges place each map's people and objects as they come into view and remove them as they leave, hide those whose event flag is set, and block a step exactly where the cartridge does: walls, one-way edges, height changes and other objects.
+- Generation 3 dev cartridges import the texts, braille, movement lists and mart stock their scripts name.
+- Generation 3 dev cartridges import their tileset animations (water, flowers, fountains, flags and lights) with the cartridge's timing.
+- Generation 3 maps load with the neighbouring maps' edges, the border, collision, elevation and tile behavior. Map previews show them.
+- Generation 3 maps cross into the next map at a connection, carrying the tiles on screen over.
+- Generation 3 maps place their people and objects as they come into view, remove them as they leave, hide those whose event flag is set, and block a step on walls, one-way edges, height changes and other objects.
+- Generation 3 cartridges remain unplayable.
 
 ## Updating this release
 
