@@ -82,6 +82,7 @@ func _one_game() -> void:
 	_tileset_animations()
 	_map_grids()
 	_field_camera()
+	_object_events()
 	_world_scripts()
 	_world_script_data()
 	_wild_encounters()
@@ -674,6 +675,137 @@ func _mark_view(camera: Gen3FieldCamera) -> void:
 	camera.grid.set_impassable(camera.pos.x + 7, camera.pos.y + 7, false)
 
 
+## Per map: a snake over every fourth layout position spawning and removing
+## objects; `GetCollisionAtCoords` and `ObjectEventUpdateElevation` for a probe
+## varied by cell over the whole backup map, and for each object left around it;
+## every fourth straight crossing from a fresh spawn. Flags divisible by three
+## below 0x900 are set; graphics var v holds 7v + 1. Unicorn runs of the pret
+## builds agree, spawning reduced to `InitObjectEventStateFromTemplate` and the
+## camera transition to the header, location, templates, temporary clear and grid.
+const OBJECT_DIGESTS: Dictionary = {
+	&"ruby": "28e50c92a767aba32f76a40356e08d6f29690f93",
+	&"sapphire": "28e50c92a767aba32f76a40356e08d6f29690f93",
+	&"firered": "e60c99f8a372d163804ef679f1a69aa8f9c06691",
+	&"leafgreen": "e60c99f8a372d163804ef679f1a69aa8f9c06691",
+	&"emerald": "9182c519b823d158a6b16870c7759709d7d36673",
+}
+const PROBE_BEHAVIORS: Array[int] = [0, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0xBE, 0xC0, 0xC1]
+const STRAIGHT: Array[int] = [Gen3ObjectEvents.Direction.SOUTH, Gen3ObjectEvents.Direction.NORTH,
+	Gen3ObjectEvents.Direction.WEST, Gen3ObjectEvents.Direction.EAST]
+
+
+func _object_events() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["object events"])
+	var camera: Gen3FieldCamera = null
+	for header: Dictionary in data.world_map_headers():
+		var group: int = int(header["group"])
+		var number: int = int(header["number"])
+		camera = _camera_at(camera, data, group, number, Vector2i.ZERO)
+		var objects: Gen3ObjectEvents = _fresh_objects(camera)
+		var walk := PackedStringArray()
+		for at: Vector2i in _snake(header):
+			camera.pos = at
+			objects.spawn_in_view()
+			objects.remove_outside_view()
+			walk.append(_objects_state(objects))
+		lines.append("%d:%d|%s|%s|%s" % [group, number, "\n".join(walk).sha1_text(),
+			_graphics_hash({"bytes": _probe_sweep(objects)}),
+			_graphics_hash({"bytes": _object_sweep(objects)})])
+		for at: Vector2i in _edge_cells(header):
+			if (at.x + at.y) % 4 != 0:
+				continue
+			for direction: int in STRAIGHT:
+				var step: Vector2i = Gen3FieldCamera.DIRECTIONS[direction]
+				var target: Vector2i = at + step + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET
+				camera = _camera_at(camera, data, group, number, at)
+				if camera.grid.border_id_at(target.x, target.y) <= Gen3MapGrid.Connection.NONE:
+					continue
+				objects = _fresh_objects(camera)
+				objects.spawn_in_view()
+				objects.remove_outside_view()
+				camera.move(step)
+				objects.follow_camera()
+				lines.append("%d,%d|%d|%d:%d|%s" % [at.x, at.y, direction, camera.group, camera.number,
+					_objects_state(objects).sha1_text()])
+	_r.digest_matches("gen3_object_events", lines, OBJECT_DIGESTS[data.id])
+
+
+func _fresh_objects(camera: Gen3FieldCamera) -> Gen3ObjectEvents:
+	var events := Gen3EventData.new(camera.data.id)
+	for flag: int in range(3, 0x900, 3):
+		events.flag_set(flag)
+	for slot: int in 16:
+		events.var_set(Gen3ObjectEvents.VAR_OBJ_GFX_ID_0 + slot, slot * 7 + 1)
+	return Gen3ObjectEvents.new(camera, events)
+
+
+func _snake(header: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var columns: Array = range(0, int(header["width"]), 4)
+	for y: int in range(0, int(header["height"]), 4):
+		for x: int in columns:
+			out.append(Vector2i(x, y))
+		columns.reverse()
+	return out
+
+
+func _objects_state(objects: Gen3ObjectEvents) -> String:
+	var out := PackedStringArray()
+	for object: Gen3ObjectEvents.ObjectEvent in objects.objects:
+		if not object.active:
+			out.append("-")
+			continue
+		out.append(",".join(Array([object.local_id, object.map_number, object.map_group,
+			object.graphics_id, object.movement_type, object.trainer_type, object.trainer_range,
+			object.initial.x, object.initial.y, object.current.x, object.current.y,
+			object.previous.x, object.previous.y, object.current_elevation, object.previous_elevation,
+			object.facing, object.movement_direction, object.movement_range.x, object.movement_range.y,
+			object.previous_movement_direction]).map(str)))
+	var temp: int = 0
+	for flag: int in 0x20:
+		temp |= int(objects.events.flag_get(flag)) << flag
+	out.append(str(temp))
+	return "/".join(out)
+
+
+## One probe step onto every cell from one outside the backup map: the
+## collision, then the elevations `ObjectEventUpdateElevation` leaves.
+func _probe_sweep(objects: Gen3ObjectEvents) -> PackedByteArray:
+	var grid: Gen3MapGrid = objects.camera.grid
+	var out := PackedByteArray()
+	for y: int in range(-1, grid.height + 1):
+		for x: int in range(-1, grid.width + 1):
+			var direction: int = 1 + posmod(x + y, 4)
+			var probe := Gen3ObjectEvents.ObjectEvent.new()
+			var from: Vector2i = Vector2i(x, y) - Gen3FieldCamera.DIRECTIONS[direction]
+			probe.initial = Vector2i(x + posmod(x, 5) - 2, y + posmod(y, 5) - 2)
+			probe.movement_range = Vector2i(posmod(x + y, 3), posmod(x * y, 3))
+			probe.current_elevation = posmod(x + 2 * y, 16)
+			probe.current_behavior = PROBE_BEHAVIORS[posmod(x * 5 + y * 3, PROBE_BEHAVIORS.size())]
+			probe.tracked_by_camera = posmod(x * y, 2) == 1
+			out.append(objects.collision_at(probe, x, y, direction))
+			probe.current = Vector2i(x, y)
+			probe.previous = from
+			objects.update_elevation(probe)
+			out.append(probe.current_elevation | probe.previous_elevation << 4)
+	return out
+
+
+## Each object left after the walk stepping onto the 5x5 cells around it.
+func _object_sweep(objects: Gen3ObjectEvents) -> PackedByteArray:
+	var out := PackedByteArray()
+	for object: Gen3ObjectEvents.ObjectEvent in objects.objects:
+		if not object.active:
+			continue
+		for dy: int in range(-2, 3):
+			for dx: int in range(-2, 3):
+				out.append(objects.collision_at(object, object.current.x + dx, object.current.y + dy,
+					STRAIGHT[posmod(dx * 3 + dy, 4)]))
+	return out
+
+
+
 static func _u16(value: int) -> PackedByteArray:
 	return PackedByteArray([value & 0xFF, (value >> 8) & 0xFF])
 
@@ -681,7 +813,8 @@ static func _u16(value: int) -> PackedByteArray:
 func _graphics_hash(record: Dictionary) -> String:
 	var context := HashingContext.new()
 	context.start(HashingContext.HASH_SHA1)
-	context.update(record["bytes"])
+	if not record["bytes"].is_empty():
+		context.update(record["bytes"])
 	return context.finish().hex_encode()
 
 

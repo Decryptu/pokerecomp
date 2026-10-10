@@ -5,6 +5,7 @@ extends GutTest
 const LAYOUT: Dictionary = {"map_groups": 0, "map_group_sizes": [2], "item_count": 10,
 	"wild_headers": 0x400, "wild_header_count": 2, "species_to_national": 0x800,
 	"standard_scripts": 0xC00, "standard_script_count": 1,
+	"movement_types": 0xF80, "movement_type_count": 2,
 	"trainer_battle_scripts": [0xD01, 0xD01, 0xD01, 0xD01, 0xD01]}
 
 
