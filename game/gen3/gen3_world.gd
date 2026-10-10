@@ -15,7 +15,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read(rom, layout).is_empty():
-		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data or wild encounters did not decode."}
+		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data, movement types or wild encounters did not decode."}
 	return {"ok": true, "message": ""}
 
 
@@ -30,9 +30,28 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if graphics.is_empty():
 		return {}
 	var scripts: Dictionary = Gen3Script.read(rom, layout, headers)
-	if scripts.is_empty():
+	var movement_types: Array = _movement_types(rom, layout)
+	if scripts.is_empty() or movement_types.is_empty():
 		return {}
+	scripts["movement_types"] = movement_types
 	return {"headers": headers, "encounters": encounters, "graphics": graphics, "scripts": scripts}
+
+
+## Per `MOVEMENT_TYPE_*`, whether `InitObjectEventStateFromTemplate` gives it a
+## range of at least one, and the direction an object of that type starts facing.
+static func _movement_types(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["movement_types"])
+	var count: int = int(layout["movement_type_count"])
+	if not rom.in_bounds(at, count * 2):
+		return []
+	var out: Array = []
+	for type: int in count:
+		var ranged: int = rom.u8(at + type)
+		var facing: int = rom.u8(at + count + type)
+		if ranged > 1 or facing > 4:
+			return []
+		out.append({"ranged": ranged == 1, "facing": facing})
+	return out
 
 
 static func _headers(rom: RomFile, layout: Dictionary) -> Dictionary:

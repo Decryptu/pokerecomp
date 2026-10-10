@@ -380,6 +380,14 @@ func world_standard_script_offset(index: int) -> int:
 	return int(offsets[index]) if index < offsets.size() else -1
 
 
+## `ranged` and `facing` for one `MOVEMENT_TYPE_*`; empty past the cartridge's.
+func world_movement_type(type: int) -> Dictionary:
+	if generation != RomRegistry.GEN3 or type < 0:
+		return {}
+	var types: Array = _scripts().get("movement_types", [])
+	return _coerce_service_dictionary(types[type]) if type < types.size() else {}
+
+
 func world_map_layout(group: int, number: int) -> Dictionary:
 	var header: Dictionary = world_map_header(group, number)
 	return _gba_graphics_record("layouts", int(header.get("layout_offset", -1)))
