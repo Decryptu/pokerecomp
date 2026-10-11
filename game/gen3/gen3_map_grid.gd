@@ -188,6 +188,11 @@ func behavior_at(x: int, y: int) -> int:
 	return _behaviors[metatile_id_at(x, y)]
 
 
+func attributes_at(x: int, y: int) -> int:
+	var id: int = metatile_id_at(x, y)
+	return Gen3World.metatile_attributes(secondary if id >= _split else primary, id)
+
+
 func layer_type_at(x: int, y: int) -> int:
 	return _layer_types[metatile_id_at(x, y)]
 

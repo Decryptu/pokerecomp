@@ -534,3 +534,190 @@ func test_out_of_range_standard_script_calls_keep_their_fallthrough() -> void:
 	var scripts: Dictionary = Gen3Script.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), LAYOUT, {})
 	assert_true(scripts["instructions"][str(0xD01)]["fallthrough"])
 	assert_eq(scripts["instructions"].size(), 2)
+
+
+func _field_objects(id: StringName) -> Gen3ObjectEvents:
+	var data := GameData.new()
+	data.id = id
+	data.generation = RomRegistry.GEN3
+	data._sections = {"headers": true, "scripts": true}
+	data._world_headers = {"0:0": {"events": {"objects": []}}}
+	var movement: Array = []
+	for type: int in 12:
+		movement.append({"ranged": false, "facing": 1})
+	data._world_scripts = {"movement_types": movement}
+	var camera := Gen3FieldCamera.new()
+	camera.data = data
+	camera.group = 0
+	camera.number = 0
+	camera.grid = Gen3MapGrid.new()
+	camera.grid.width = 32
+	camera.grid.height = 32
+	camera.grid.layout_width = 17
+	camera.grid.layout_height = 18
+	camera.grid.blocks.resize(32 * 32)
+	camera.grid.blocks.fill(0x3000)
+	camera.grid._behaviors.resize(1024)
+	for behavior: int in 512:
+		camera.grid._behaviors[behavior] = behavior
+	return Gen3ObjectEvents.new(camera, Gen3EventData.new(id))
+
+
+## Protect pool reservation, player persistence at map edges, locked turns and
+## state-mask priority. Reusing an NPC spawn or replacing all flag bits breaks
+## these; the importer and NPC corpus checks never create an avatar.
+func test_player_avatar_reserves_a_slot_and_preserves_control_state() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 1)
+		assert_eq(avatar.object_id, 0)
+		assert_true(avatar.object().is_player)
+		assert_eq(avatar.object().graphics_id, 7 if id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 89)
+		assert_eq(avatar.object().current, Vector2i(12, 12))
+		assert_eq(avatar.object().previous_movement_direction, 1)
+		assert_eq(avatar.object().current_elevation, 0)
+		assert_eq(avatar.flags, 0x21)
+		assert_null(Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 1, 0))
+		avatar.track_camera()
+		assert_true(avatar.object().tracked_by_camera)
+		objects.camera.pos = Vector2i(100, 100)
+		objects.remove_outside_view()
+		assert_true(avatar.object().active)
+		avatar.object().facing_locked = true
+		Gen3ObjectEvents.set_direction(avatar.object(), 2)
+		assert_eq(avatar.object().facing, 4)
+		assert_eq(avatar.object().previous_movement_direction, 4)
+		assert_eq(avatar.object().movement_direction, 2)
+		avatar.flags = 0xFF
+		avatar.set_state_mask(8)
+		assert_eq(avatar.flags, 0xE8)
+		assert_eq(avatar.graphics_by_current_state(), 9 if id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 92)
+		avatar.set_state_mask(3)
+		assert_eq(avatar.graphics_by_current_state(), avatar.graphics_for(0))
+	var full_pool: Gen3ObjectEvents = _field_objects(RomRegistry.EMERALD)
+	for object: Gen3ObjectEvents.ObjectEvent in full_pool.objects:
+		object.active = true
+	assert_null(Gen3PlayerAvatar.open(full_pool, Vector2i(12, 12), 1, 0))
+
+
+## Protect precedence and current-vs-previous lookup: a blocked ledge is still
+## jumped, surf dismount ignores a departing object, Strength does not. A flat
+## passability test or reuse of the generic occupancy reader changes them.
+func test_player_collision_precedence_and_effect_requests() -> void:
+	var objects: Gen3ObjectEvents = _field_objects(RomRegistry.EMERALD)
+	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 1, 0)
+	var grid: Gen3MapGrid = objects.camera.grid
+	grid.set_metatile_entry(12, 13, 0x3C3B)
+	assert_eq(avatar.check_collision(1), {"collision": 6, "requests": [{"kind": "jumped_ledge"}]})
+	assert_eq(avatar.collision_at(avatar.object(), Vector2i(12, 13), 1, true)["collision"], 2)
+	assert_eq(avatar.check_collision(2)["collision"], 0)
+	grid.set_metatile_entry(12, 13, 0x3000)
+	avatar.object().current_elevation = 1
+	avatar.flags = 8
+	assert_eq(avatar.check_collision(1), {"collision": 5, "requests": [{"kind": "stop_surfing", "direction": 1}]})
+	var other: Gen3ObjectEvents.ObjectEvent = objects.objects[1]
+	other.active = true
+	other.current = Vector2i(13, 13)
+	other.previous = Vector2i(12, 13)
+	other.current_elevation = 3
+	assert_eq(avatar.check_collision(1)["collision"], 5)
+	other.current = Vector2i(12, 13)
+	assert_eq(avatar.check_collision(1)["collision"], 3)
+	other.current_elevation = 0
+	assert_eq(avatar.check_collision(1)["collision"], 3)
+	avatar.object().current_elevation = 3
+	other.graphics_id = 87
+	objects.events.flag_set(0x829)
+	other.previous = other.current
+	assert_eq(avatar.check_collision(1)["collision"], 4)
+	objects.events.flag_set(0x889)
+	assert_eq(avatar.check_collision(1), {"collision": 7,
+		"requests": [{"kind": "push_boulder", "object_id": 1, "direction": 1}]})
+	grid.set_metatile_entry(12, 14, 0x3060)
+	assert_eq(avatar.check_collision(1)["collision"], 4)
+	other.current = Vector2i(13, 13)
+	assert_eq(avatar.check_collision(1)["collision"], 4)
+	other.active = false
+	grid.set_metatile_entry(12, 13, 0x30D1)
+	assert_eq(avatar.check_collision(1)["collision"], 9)
+
+
+## FRLG's stairs read the source cell and its fall warp bypasses boulder
+## blocking; ninth-bit behaviors narrow at u8 predicates. Hoenn checks and
+## real maps without such high-bit attributes cannot catch these differences.
+func test_frlg_stairs_fall_warps_and_behavior_narrowing() -> void:
+	var objects: Gen3ObjectEvents = _field_objects(RomRegistry.FIRERED)
+	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
+	var grid: Gen3MapGrid = objects.camera.grid
+	grid.set_metatile_entry(12, 12, 0x306C)
+	assert_eq(avatar.check_collision(4)["collision"], 8)
+	assert_eq(avatar.check_collision(3)["collision"], 0)
+	grid.set_metatile_entry(12, 12, 0x3000)
+	grid.set_metatile_entry(13, 12, 0x30D1)
+	assert_eq(avatar.check_collision(4)["collision"], 0)
+	var boulder: Gen3ObjectEvents.ObjectEvent = objects.objects[1]
+	boulder.active = true
+	boulder.current = Vector2i(13, 12)
+	boulder.previous = boulder.current
+	boulder.graphics_id = 97
+	objects.events.flag_set(0x805)
+	grid.set_metatile_entry(14, 12, 0x3C66)
+	assert_eq(avatar.check_collision(4)["collision"], 7)
+	grid.set_metatile_entry(14, 12, 0x3D66)
+	assert_eq(avatar.check_collision(4)["collision"], 4)
+	grid.set_metatile_entry(14, 12, 0x3C00)
+	assert_eq(avatar.check_collision(4)["collision"], 4)
+	boulder.active = false
+	grid.set_metatile_entry(13, 12, 0x3131)
+	assert_eq(avatar.check_collision(4)["collision"], 2)
+	grid.set_metatile_entry(13, 12, 0x3138)
+	assert_eq(avatar.check_collision(4)["collision"], 6)
+	grid.set_metatile_entry(12, 12, 0x316C)
+	assert_eq(avatar.check_collision(4)["collision"], 8)
+	var probe := Gen3ObjectEvents.ObjectEvent.new()
+	var collisions := PackedByteArray()
+	for behavior: int in 512:
+		grid.set_metatile_entry(13, 12, 0x3000 | behavior)
+		for direction: int in range(1, 5):
+			collisions.append(objects.collision_at(probe, 13, 12, direction))
+	# GetCollisionAtCoords on the byte-matching FireRed ARM build, all nine-bit
+	# behaviors and four directions; unrelated occupancy/bounds checks stubbed.
+	var context := HashingContext.new()
+	context.start(HashingContext.HASH_SHA1)
+	context.update(collisions)
+	assert_eq(context.finish().hex_encode(), "52b7918b9a77eab781cb5694d5d6fd3fe3d8dc60")
+	collisions.clear()
+	grid.set_metatile_entry(13, 12, 0x3000)
+	for behavior: int in 512:
+		probe.current_behavior = behavior
+		for direction: int in range(1, 5):
+			collisions.append(objects.collision_at(probe, 13, 12, direction))
+	context.start(HashingContext.HASH_SHA1)
+	context.update(collisions)
+	assert_eq(context.finish().hex_encode(), "a7a8366fd59a46b69c316cf1ba715119eb7e48b5")
+
+
+## Surf prompts use the last nonzero elevation and, on FRLG, terrain rather
+## than a water-looking behavior. Reusing the Hoenn predicate makes valid
+## FRLG water fail and waterfalls pass; collision tests do not ask this query.
+func test_player_water_query_reads_each_engines_source_of_water() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
+		avatar.object().current_elevation = 3
+		avatar.object().previous_elevation = 3
+		var grid: Gen3MapGrid = objects.camera.grid
+		grid.set_metatile_entry(13, 12, 0x1010)
+		if id == RomRegistry.FIRERED:
+			var words := PackedByteArray()
+			words.resize(256 * 4)
+			words.encode_u32(0x10 * 4, 2 << 9)
+			grid.primary = {"metatile_count": 256, "attribute_size": 4,
+				"attributes": {"bytes": words}, "metatiles": {"bytes": PackedByteArray()}}
+		assert_true(avatar.facing_fishable_water())
+		avatar.object().previous_elevation = 1
+		assert_false(avatar.facing_fishable_water())
+		avatar.object().previous_elevation = 3
+		grid.set_metatile_entry(13, 12, 0x1013)
+		assert_false(avatar.facing_fishable_water())

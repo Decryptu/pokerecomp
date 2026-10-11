@@ -8,13 +8,16 @@ extends RefCounted
 const VARS_START: int = 0x4000
 const TEMP_FLAGS_COUNT: int = 0x20
 const TEMP_VARS_COUNT: int = 0x10
+const STRENGTH_FLAG: Dictionary = {
+	&"ruby": 0x829, &"sapphire": 0x829, &"firered": 0x805, &"leafgreen": 0x805, &"emerald": 0x889,
+}
 ## The system flags `ClearTempFieldEventData` clears after the temporary ones.
 const CLEARED_SYSTEM_FLAGS: Dictionary = {
-	&"ruby": [0x84D, 0x84E, 0x829, 0x861],
-	&"sapphire": [0x84D, 0x84E, 0x829, 0x861],
-	&"firered": [0x803, 0x804, 0x805, 0x807, 0x842],
-	&"leafgreen": [0x803, 0x804, 0x805, 0x807, 0x842],
-	&"emerald": [0x8AD, 0x8AE, 0x889, 0x8C1, 0x880],
+	&"ruby": [0x84D, 0x84E, STRENGTH_FLAG[&"ruby"], 0x861],
+	&"sapphire": [0x84D, 0x84E, STRENGTH_FLAG[&"sapphire"], 0x861],
+	&"firered": [0x803, 0x804, STRENGTH_FLAG[&"firered"], 0x807, 0x842],
+	&"leafgreen": [0x803, 0x804, STRENGTH_FLAG[&"leafgreen"], 0x807, 0x842],
+	&"emerald": [0x8AD, 0x8AE, STRENGTH_FLAG[&"emerald"], 0x8C1, 0x880],
 }
 
 var game: StringName

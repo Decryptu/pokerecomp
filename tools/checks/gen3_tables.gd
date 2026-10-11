@@ -83,6 +83,7 @@ func _one_game() -> void:
 	_map_grids()
 	_field_camera()
 	_object_events()
+	_player_avatars()
 	_world_scripts()
 	_world_script_data()
 	_wild_encounters()
@@ -802,6 +803,84 @@ func _object_sweep(objects: Gen3ObjectEvents) -> PackedByteArray:
 			for dx: int in range(-2, 3):
 				out.append(objects.collision_at(object, object.current.x + dx, object.current.y + dy,
 					STRAIGHT[posmod(dx * 3 + dy, 4)]))
+	return out
+
+
+## `InitPlayerAvatar`, graphics/state queries and player collisions on every
+## backup-map cell. The cartridge oracle stubs sprite creation, movement tasks,
+## statistics and rotating gates; it records the collision and requested effect.
+const AVATAR_DIGESTS: Dictionary = {
+	&"ruby": "70c026c1da56b0013580db93ddbe0d392350c547",
+	&"sapphire": "70c026c1da56b0013580db93ddbe0d392350c547",
+	&"firered": "0db911d2e298eddf74855562006ff21bbcf9373b",
+	&"leafgreen": "0db911d2e298eddf74855562006ff21bbcf9373b",
+	&"emerald": "607af253e0924fac53aeb378b91761d822cdb1b5",
+}
+
+
+func _player_avatars() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["player avatars"])
+	var camera: Gen3FieldCamera = null
+	for header: Dictionary in data.world_map_headers():
+		var group: int = int(header["group"])
+		var number: int = int(header["number"])
+		var at := Vector2i(int(header["width"]) >> 1, int(header["height"]) >> 1)
+		camera = _camera_at(camera, data, group, number, at)
+		var initial := PackedStringArray()
+		var avatar: Gen3PlayerAvatar
+		for gender: int in 2:
+			for direction: int in STRAIGHT:
+				var objects: Gen3ObjectEvents = _fresh_objects(camera)
+				avatar = Gen3PlayerAvatar.open(objects, at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET, direction, gender)
+				if not _r.check(avatar != null, "player spawn at %d:%d" % [group, number]):
+					return
+				initial.append("%s|%d|%d|%d" % [_objects_state(objects), avatar.flags, avatar.gender,
+					int(avatar.object().is_player)])
+		if lines.size() == 1:
+			lines.append(_avatar_states(avatar))
+		avatar.objects.spawn_in_view()
+		avatar.objects.events.flag_set(Gen3EventData.STRENGTH_FLAG[data.id])
+		lines.append("%d:%d|%s|%s" % [group, number, "\n".join(initial).sha1_text(),
+			_graphics_hash({"bytes": _avatar_sweep(avatar)})])
+	_r.digest_matches("gen3_player_avatars", lines, AVATAR_DIGESTS[data.id])
+
+
+func _avatar_states(avatar: Gen3PlayerAvatar) -> String:
+	var out := PackedByteArray()
+	for gender: int in 2:
+		avatar.gender = gender
+		for flags: int in 256:
+			avatar.flags = flags
+			out.append(avatar.graphics_by_current_state())
+			out.append(avatar.state_flag_by_graphics(flags))
+			avatar.set_state_mask(flags ^ 0x55)
+			out.append(avatar.flags)
+	avatar.gender = 1
+	return _graphics_hash({"bytes": out})
+
+
+func _avatar_sweep(avatar: Gen3PlayerAvatar) -> PackedByteArray:
+	var grid: Gen3MapGrid = avatar.objects.camera.grid
+	var out := PackedByteArray()
+	avatar.flags = Gen3PlayerAvatar.Flag.SURFING
+	var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+	for y: int in range(-1, grid.height + 1):
+		for x: int in range(-1, grid.width + 1):
+			var direction: int = 1 + posmod(x + y, 4)
+			player.current = Vector2i(x, y) - Gen3FieldCamera.DIRECTIONS[direction]
+			player.previous = player.current
+			player.current_elevation = posmod(x + 2 * y, 16)
+			player.previous_elevation = posmod(x + y, 16)
+			player.current_behavior = grid.behavior_at(player.current.x, player.current.y)
+			Gen3ObjectEvents.set_direction(player, direction)
+			var result: Dictionary = avatar.check_collision(direction)
+			out.append(int(result["collision"]))
+			out.append(result["requests"].size())
+			out.append(int(result["requests"][0].get("object_id", 255)) if not result["requests"].is_empty() else 255)
+			out.append(int(avatar.facing_fishable_water()))
+			if avatar.objects.camera.data.id == RomRegistry.EMERALD:
+				out.append(int(avatar.collision_at(player, Vector2i(x, y), direction, true)["collision"]))
 	return out
 
 

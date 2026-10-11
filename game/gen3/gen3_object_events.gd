@@ -4,7 +4,7 @@ extends RefCounted
 ## `gObjectEvents` and the save block's object templates (`event_object_movement.c`):
 ## spawning the templates in view, removing objects that leave it, following the
 ## camera across a map connection, and `GetCollisionAtCoords`. Coordinates are
-## the backup map's. Sprites, movement and the player avatar are not modeled, nor
+## the backup map's. Sprites and movement are not modeled, nor
 ## are the templates the Battle Pyramid and Trainer Hill write over a floor's.
 
 const COUNT: int = 16
@@ -74,9 +74,14 @@ class ObjectEvent:
 	var movement_direction: int = 0
 	var movement_range := Vector2i.ZERO
 	var trainer_range: int = 0
-	var current_behavior: int = 0
-	var previous_behavior: int = 0
+	var current_behavior: int = 0:
+		set(value):
+			current_behavior = value & 0xFF
+	var previous_behavior: int = 0:
+		set(value):
+			previous_behavior = value & 0xFF
 	var previous_movement_direction: int = 0
+	var facing_locked: bool = false
 
 
 var camera: Gen3FieldCamera
@@ -209,9 +214,7 @@ func spawn(template: Dictionary, number: int, group: int) -> int:
 	object.movement_range = Vector2i(int(template["movement_range_x"]), int(template["movement_range_y"]))
 	object.trainer_type = int(template["trainer_type"]) & 0xFF
 	object.trainer_range = int(template["trainer_sight_or_berry_tree_id"]) & 0xFF
-	# SetObjectEventDirection keeps the cleared facing as the previous direction.
-	object.facing = _facing[object.movement_type]
-	object.movement_direction = object.facing
+	set_direction(object, _facing[object.movement_type])
 	if object.graphics_id >= OBJ_EVENT_GFX_VARS:
 		object.graphics_id = events.var_get(VAR_OBJ_GFX_ID_0 + object.graphics_id - OBJ_EVENT_GFX_VARS) & 0xFF
 	if _ranged[object.movement_type]:
@@ -231,6 +234,26 @@ func _available_slot(local_id: int, number: int, group: int) -> int:
 		elif object.local_id == local_id and object.map_number == number and object.map_group == group:
 			return -1
 	return free
+
+
+## `SetObjectEventDirection`: a locked facing still records its old direction
+## and changes the movement direction.
+static func set_direction(object: ObjectEvent, direction: int) -> void:
+	object.previous_movement_direction = object.facing
+	if not object.facing_locked:
+		object.facing = direction
+	object.movement_direction = direction
+
+
+## `GetObjectEventIdByXY` / `GetObjectEventIdByPosition` read current positions
+## only. Elevation zero matches any; -1 selects the XY reader.
+func at_position(at: Vector2i, elevation: int = -1) -> int:
+	for slot: int in COUNT:
+		var object: ObjectEvent = objects[slot]
+		if object.active and object.current == at and (elevation <= 0
+				or object.current_elevation == 0 or object.current_elevation == elevation):
+			return slot
+	return -1
 
 
 ## `ShouldInitObjectEventStateFromTemplate`. A clone is tested at its own
@@ -268,13 +291,14 @@ func _obstacle_in_view_ok(at: Vector2i) -> bool:
 
 ## `GetCollisionAtCoords` for [param object] stepping onto ([param x], [param y])
 ## in [param direction], a [enum Direction] other than NONE.
+## FRLG's nine-bit behavior narrows at the u8 side predicates.
 func collision_at(object: ObjectEvent, x: int, y: int, direction: int) -> int:
 	var grid: Gen3MapGrid = camera.grid
 	if _outside_range(object, x, y):
 		return Collision.OUTSIDE_RANGE
 	if grid.collision_at(x, y) != 0 or grid.border_id_at(x, y) == Gen3MapGrid.Connection.INVALID \
 			or object.current_behavior in _blocked[direction] \
-			or grid.behavior_at(x, y) in _blocked[OPPOSITE[direction]] \
+			or (grid.behavior_at(x, y) & 0xFF) in _blocked[OPPOSITE[direction]] \
 			or (object.tracked_by_camera and not camera.can_move(direction)):
 		return Collision.IMPASSABLE
 	if _elevation_mismatch(object.current_elevation, x, y):
