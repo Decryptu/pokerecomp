@@ -1143,7 +1143,7 @@ func test_autonomous_patrol_frames_match_each_cartridge_engine() -> void:
 		RomRegistry.EMERALD: "adb004e3736ee73894a1658beb8215a51cb45cd2",
 	}
 	for id: StringName in digests:
-		var objects: Gen3ObjectEvents = _patrol_objects(id)
+		var objects: Gen3ObjectEvents = _movement_objects(id)
 		var lines := PackedStringArray()
 		var types: Array = range(7, 11) + range(0x19, 0x35) + range(0x40, 0x4D)
 		if id == RomRegistry.EMERALD:
@@ -1155,7 +1155,7 @@ func test_autonomous_patrol_frames_match_each_cartridge_engine() -> void:
 		assert_eq(output.sha1_text(), digests[id], str(id))
 
 
-func _patrol_objects(id: StringName) -> Gen3ObjectEvents:
+func _movement_objects(id: StringName) -> Gen3ObjectEvents:
 	var field: Gen3ObjectEvents = _field_objects(id)
 	var types: Array = []
 	for type: int in 81:
@@ -1202,4 +1202,76 @@ func _patrol_trace(objects: Gen3ObjectEvents, type: int, scenario: int) -> Packe
 			object.movement_direction, object.previous_movement_direction, object.direction_sequence_index,
 			object.movement_state, object.movement_action, int(object.single_movement_active),
 			int(object.held_movement_active), int(object.held_movement_finished), int(object.frozen), int(object.invisible)]))
+	return lines
+
+
+## Original ARM callbacks protect random draw order, waits, weighted facings,
+## trainer running reactions and freeze/hold resumption, absent from patrols.
+func test_random_movement_frames_match_each_cartridge_engine() -> void:
+	var digests: Dictionary = {
+		RomRegistry.RUBY: "245271b5078f4456c2f52553262e3996241f6c2b",
+		RomRegistry.SAPPHIRE: "245271b5078f4456c2f52553262e3996241f6c2b",
+		RomRegistry.FIRERED: "f2e2f783da403b37d47183b08f0c6935d8a8e6b1",
+		RomRegistry.LEAFGREEN: "f2e2f783da403b37d47183b08f0c6935d8a8e6b1",
+		RomRegistry.EMERALD: "245271b5078f4456c2f52553262e3996241f6c2b",
+	}
+	for id: StringName in digests:
+		var objects: Gen3ObjectEvents = _movement_objects(id)
+		var lines := PackedStringArray()
+		for type: int in range(1, 7) + range(0xD, 0x19):
+			for scenario: int in 9:
+				lines.append_array(_random_trace(objects, type, scenario))
+		var output: String = "\n".join(lines) + "\n"
+		assert_eq(output.sha1_text(), digests[id], str(id))
+
+
+func _random_trace(objects: Gen3ObjectEvents, type: int, scenario: int) -> PackedStringArray:
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	object.active = true
+	object.local_id = 1
+	object.movement_type = type
+	object.initial = Vector2i(12, 12)
+	object.current = object.initial
+	object.previous = Vector2i(11, 12)
+	object.pixel_position = object.current * 16
+	object.facing = 4
+	object.movement_direction = 4
+	object.current_elevation = 3
+	object.previous_elevation = 3
+	object.movement_range = Vector2i(2, 3)
+	object.facing_locked = scenario == 2
+	object.trainer_type = 1 if scenario == 5 else 3 if scenario == 6 else 2 if scenario == 7 else 0
+	object.trainer_range = 4
+	objects.objects[0] = object
+	objects.random_seed = 0x1234 + scenario
+	objects.camera.grid.set_metatile_entry(13, 12, 0x3400 if scenario == 1 else 0x3000)
+	var player := Gen3ObjectEvents.ObjectEvent.new()
+	player.active = true
+	player.local_id = Gen3ObjectEvents.LOCALID_PLAYER
+	player.current_elevation = 15
+	player.previous_elevation = 15
+	player.current = Vector2i(25, 25)
+	player.previous = player.current
+	objects.objects[1] = player
+	var lines := PackedStringArray()
+	for frame: int in range(1, 1537 if scenario >= 5 else 513):
+		if scenario == 3 and frame in [9, 25]:
+			object.frozen = frame == 9
+		if scenario == 4:
+			if frame == 85:
+				objects.set_held_movement(object, 2)
+			if frame == 100:
+				Gen3ObjectEvents.clear_held_movement_if_finished(object)
+		if scenario >= 5:
+			player.current = Vector2i(12 + ((frame / 16) % 9) - 4, 12 + ((frame / 144) % 9) - 4)
+			player.previous = player.current
+		objects.step_movements(scenario >= 5 and frame % 13 != 0)
+		var pixels: Vector2i = object.pixel_position - Vector2i(192, 192)
+		var waiting: bool = object.movement_state == (2 if type >= 0x17 else 3)
+		lines.append(",".join([type, scenario, frame, object.current.x, object.current.y,
+			object.previous.x, object.previous.y, pixels.x, pixels.y, object.facing,
+			object.movement_direction, object.previous_movement_direction, object.movement_state,
+			object.movement_action, int(object.single_movement_active), int(object.held_movement_active),
+			int(object.held_movement_finished), int(object.frozen), object.movement_delay if waiting else 0,
+			objects.random_seed]))
 	return lines
