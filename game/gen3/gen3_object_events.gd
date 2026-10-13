@@ -1,8 +1,7 @@
 class_name Gen3ObjectEvents
 extends RefCounted
 
-## `event_object_movement.c`, in backup coordinates. Sprites, other movement
-## types and Battle Pyramid/Trainer Hill floor templates remain unmodeled.
+## `event_object_movement.c`, in backup coordinates; sprites and generated facility templates remain unmodeled.
 
 const COUNT: int = 16
 const TEMPLATES_COUNT: int = 64
@@ -79,6 +78,14 @@ const PATROL_ROUTES: Array = [
 	[3, 2, 4, 1],
 	[4, 1, 3, 2],
 ]
+## `movement_type_func_tables.h`: four-way tables preserve unequal probabilities.
+const RANDOM_DIRECTIONS: Dictionary = {
+	1: [1, 2, 3, 4], 2: [1, 2, 3, 4], 3: [1, 2], 4: [1, 2], 5: [3, 4], 6: [3, 4],
+	0xD: [1, 2], 0xE: [3, 4], 0xF: [2, 3], 0x10: [2, 4], 0x11: [1, 3], 0x12: [1, 4],
+	0x13: [2, 1, 3, 1], 0x14: [1, 2, 4, 1], 0x15: [2, 3, 4, 2], 0x16: [3, 4, 1, 1],
+}
+const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
+
 const INSTANT_MOTIONS: Array = [
 	[0x3E, 0x4A, Motion.CONTEXT_FACE, Facing.PLAYER],
 	[0x3F, 0x4B, Motion.CONTEXT_FACE, Facing.AWAY_PLAYER],
@@ -150,12 +157,16 @@ class ObjectEvent:
 	var movement_frame: int = 0
 	var movement_state: int = 0
 	var direction_sequence_index: int = 0
+	var movement_delay: int = 0
 	var pixel_position := Vector2i.ZERO
 	var jump_y: int = 0
 	var ground_on_spawn: bool = true
 	var player_copyable_movement: int = 0
 
 
+var random_seed: int = 0
+var random_word: Callable = _random
+var _player_dashing: bool = false
 var camera: Gen3FieldCamera
 var events: Gen3EventData
 var objects: Array[ObjectEvent] = []
@@ -476,8 +487,7 @@ static func movement_overridden(object: ObjectEvent) -> bool:
 	return object.single_movement_active or object.held_movement_active
 
 
-## `FreezeObjectEvents` skips the player and held actions; unfreezing visits
-## every active slot, including objects that were already frozen.
+## `FreezeObjectEvents` skips player/held actions; unfreezing visits every active slot.
 func freeze_except_player() -> void:
 	for object: ObjectEvent in objects:
 		if object.active and not object.is_player and not object.held_movement_active:
@@ -530,8 +540,9 @@ func boulder_landing(object: ObjectEvent) -> Array:
 	return requests
 
 
-## `UpdateObjectEventCurrentMovement`: held actions bypass freezing/collision.
-func step_movements() -> Array:
+## `UpdateObjectEventCurrentMovement`: holds bypass freezing/collision; running input gates trainer reactions.
+func step_movements(player_dashing: bool = false) -> Array:
+	_player_dashing = player_dashing
 	var requests: Array = []
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
@@ -615,16 +626,15 @@ func _start_instant_motion(object: ObjectEvent, row: Array, slot: int, requests:
 func _context_facing(object: ObjectEvent, mode: int) -> int:
 	if mode == Facing.ORIGINAL:
 		return _facing[object.movement_type]
-	for player: ObjectEvent in objects:
-		if not player.active or player.local_id != LOCALID_PLAYER:
-			continue
-		var direction: int = Direction.SOUTH
-		if object.current.x != player.current.x:
-			direction = Direction.WEST if object.current.x > player.current.x else Direction.EAST
-		elif object.current.y > player.current.y:
-			direction = Direction.NORTH
-		return OPPOSITE[direction] if mode == Facing.AWAY_PLAYER else direction
-	return -1
+	var player: ObjectEvent = _player_event()
+	if player == null:
+		return -1
+	var direction: int = Direction.SOUTH
+	if object.current.x != player.current.x:
+		direction = Direction.WEST if object.current.x > player.current.x else Direction.EAST
+	elif object.current.y > player.current.y:
+		direction = Direction.NORTH
+	return OPPOSITE[direction] if mode == Facing.AWAY_PLAYER else direction
 
 
 func _advance_jump(object: ObjectEvent, parameter: int, slot: int, requests: Array) -> bool:
@@ -666,7 +676,13 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array) -> v
 
 func _step_autonomous(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var type: int = object.movement_type
-	if type >= 0x19 and type <= 0x34:
+	if type >= 2 and type <= 6:
+		_step_wander(object, slot, requests)
+	elif type == 1 or (type >= 0xD and type <= 0x16):
+		_step_random_facing(object, slot, requests)
+	elif type in [0x17, 0x18]:
+		_step_rotation(object, slot, requests)
+	elif type >= 0x19 and type <= 0x34:
 		_step_patrol(object, slot, requests)
 	elif (type >= 7 and type <= 10) or type == 0x4C:
 		_step_stationary(object, slot, requests)
@@ -767,3 +783,140 @@ func _choose_sequence(object: ObjectEvent) -> void:
 		index += 1
 		set_direction(object, int(route[index]))
 	object.direction_sequence_index = index
+
+
+## `random.c`'s LCG; [member random_word] also accepts a shared host stream.
+func _random() -> int:
+	random_seed = (random_seed * 0x41C64E6D + 0x6073) & 0xFFFFFFFF
+	return random_seed >> 16
+
+
+func _start_facing(object: ObjectEvent) -> void:
+	_set_single_movement(object, maxi(object.facing - 1, 0))
+	object.movement_state = 2
+
+
+func _choose_delay(object: ObjectEvent) -> void:
+	var index: int = int(random_word.call()) & 3
+	object.movement_delay = 32 + index * (16 if object.movement_type >= 0xF else 32)
+	object.movement_state = 3
+
+
+func _wait_delay(object: ObjectEvent) -> bool:
+	object.movement_delay = wrapi(object.movement_delay - 1, -32768, 32768)
+	return object.movement_delay == 0
+
+
+func _step_wander(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if object.movement_state == 0:
+		clear_held_movement(object)
+		object.single_movement_active = false
+		object.movement_state = 1
+	if object.movement_state == 1:
+		_start_facing(object)
+	if object.movement_state == 2:
+		if not _exec_single_movement(object, slot, requests):
+			return
+		_choose_delay(object)
+	if object.movement_state == 3:
+		if not _wait_delay(object):
+			return
+		object.movement_state = 4
+	if object.movement_state == 4:
+		var directions: Array = RANDOM_DIRECTIONS[object.movement_type]
+		var direction: int = int(directions[int(random_word.call()) & (directions.size() - 1)])
+		set_direction(object, direction)
+		if _collision_in_direction(object) != Collision.NONE:
+			object.movement_state = 1
+			_step_wander(object, slot, requests)
+			return
+		_set_single_movement(object, 0x08 + (8 if _frlg else 0) + direction - 1)
+		object.single_movement_active = true
+		object.movement_state = 6
+	if _exec_single_movement(object, slot, requests):
+		object.single_movement_active = false
+		object.movement_state = 1
+
+
+func _step_random_facing(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if object.movement_state == 0:
+		clear_held_movement(object)
+		object.single_movement_active = false
+		object.movement_state = 1
+	if object.movement_state == 1:
+		_start_facing(object)
+	if object.movement_state == 2:
+		if _exec_single_movement(object, slot, requests):
+			_choose_delay(object)
+			object.single_movement_active = false
+		return
+	if object.movement_state == 3:
+		if not _wait_delay(object) and not _trainer_close(object):
+			return
+		object.movement_state = 4
+	var directions: Array = RANDOM_DIRECTIONS[object.movement_type]
+	var direction: int = _trainer_direction(object, directions)
+	if direction == Direction.NONE:
+		direction = int(directions[int(random_word.call()) & (directions.size() - 1)])
+	set_direction(object, direction)
+	object.movement_state = 1
+	_step_random_facing(object, slot, requests)
+
+
+func _step_rotation(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if object.movement_state == 3:
+		var direction: int = _trainer_direction(object, [1, 2, 3, 4])
+		if direction == Direction.NONE:
+			direction = int(ROTATION_DIRECTIONS[object.movement_type - 0x17][object.facing])
+		set_direction(object, direction)
+		object.movement_state = 0
+	if object.movement_state == 0:
+		clear_held_movement(object)
+		object.single_movement_active = false
+		_set_single_movement(object, maxi(object.facing - 1, 0))
+		object.movement_state = 1
+	if object.movement_state == 1:
+		if _exec_single_movement(object, slot, requests):
+			object.movement_delay = 48
+			object.movement_state = 2
+		return
+	if _wait_delay(object) or _trainer_close(object):
+		object.movement_state = 3
+
+
+func _player_event() -> ObjectEvent:
+	for object: ObjectEvent in objects:
+		if object.active and object.local_id == LOCALID_PLAYER:
+			return object
+	return null
+
+
+func _trainer_close(object: ObjectEvent) -> bool:
+	if not _player_dashing or object.trainer_type not in [1, 3]:
+		return false
+	var player_event: ObjectEvent = _player_event()
+	if player_event == null:
+		return false
+	var player: Vector2i = player_event.current
+	var minimum := Vector2i(wrapi(object.current.x - object.trainer_range, -32768, 32768),
+		wrapi(object.current.y - object.trainer_range, -32768, 32768))
+	var maximum := Vector2i(wrapi(object.current.x + object.trainer_range, -32768, 32768),
+		wrapi(object.current.y + object.trainer_range, -32768, 32768))
+	return minimum.x <= player.x and player.x <= maximum.x and minimum.y <= player.y and player.y <= maximum.y
+
+
+## `GetLimitedVectorDirection_*`: ties prefer y; blocked quadrants try the other axis, then north/south.
+func _trainer_direction(object: ObjectEvent, directions: Array) -> int:
+	if not _trainer_close(object):
+		return Direction.NONE
+	var delta: Vector2i = _player_event().current - object.current
+	delta = Vector2i(wrapi(delta.x, -32768, 32768), wrapi(delta.y, -32768, 32768))
+	var horizontal: int = Direction.WEST if delta.x < 0 else Direction.EAST
+	var vertical: int = Direction.NORTH if delta.y < 0 else Direction.SOUTH
+	var direction: int = horizontal if absi(delta.x) > absi(delta.y) else vertical
+	if direction in directions:
+		return direction
+	direction = vertical if direction == horizontal else horizontal
+	if direction in directions:
+		return direction
+	return Direction.NORTH if Direction.NORTH in directions else Direction.SOUTH

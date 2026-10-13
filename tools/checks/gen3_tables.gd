@@ -85,7 +85,8 @@ func _one_game() -> void:
 	_object_events()
 	_player_avatars()
 	_held_movements()
-	_object_patrols()
+	_object_movements(false)
+	_object_movements(true)
 	_boulder_landings()
 	_rotating_gates()
 	_world_scripts()
@@ -1162,6 +1163,13 @@ func _gate_probe(avatar: Gen3PlayerAvatar, count: int, prefix: Array) -> String:
 
 ## ARM callbacks over every supported map template on a uniform grid, 512
 ## frames each. The oracle reads template bytes and direction tables from ROM.
+const RANDOM_MOVEMENT_DIGESTS: Dictionary = {
+	&"ruby": "5a72f767d20ea9774a84e40b4c16358225ce8e1f",
+	&"sapphire": "5a72f767d20ea9774a84e40b4c16358225ce8e1f",
+	&"firered": "db2010a48f1de95decd92a1fd3d6737235ab4f93",
+	&"leafgreen": "db2010a48f1de95decd92a1fd3d6737235ab4f93",
+	&"emerald": "b65802b9a7ebbe8b39e3dd43ceb4df4eb60d9862",
+}
 const PATROL_DIGESTS: Dictionary = {
 	&"ruby": "2cbcf7f9a589f26fca38c6dde264312ab4585b1a",
 	&"sapphire": "2cbcf7f9a589f26fca38c6dde264312ab4585b1a",
@@ -1171,7 +1179,7 @@ const PATROL_DIGESTS: Dictionary = {
 }
 
 
-func _object_patrols() -> void:
+func _object_movements(random_movement: bool) -> void:
 	var data: GameData = _r.data
 	var camera := Gen3FieldCamera.new()
 	camera.data = data
@@ -1184,7 +1192,7 @@ func _object_patrols() -> void:
 	camera.grid.blocks.fill(0x3000)
 	camera.grid._behaviors.resize(1024)
 	var objects := Gen3ObjectEvents.new(camera, Gen3EventData.new(data.id))
-	var lines := PackedStringArray(["object patrols"])
+	var lines := PackedStringArray(["object random movements" if random_movement else "object patrols"])
 	for header: Dictionary in data.world_map_headers():
 		camera.group = int(header["group"])
 		camera.number = int(header["number"])
@@ -1196,12 +1204,14 @@ func _object_patrols() -> void:
 			template["x"] = 5
 			template["y"] = 5
 			var slot: int = objects.spawn(template, camera.number, camera.group)
-			if not _r.check(slot == 0, "patrol template did not spawn"):
+			if not _r.check(slot == 0, "movement template did not spawn"):
 				continue
 			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[slot]
 			var type: int = object.movement_type
-			if type not in range(7, 11) + range(0x19, 0x35) + range(0x40, 0x4D) \
-					and not (data.id == RomRegistry.EMERALD and type in range(0x4D, 0x51)):
+			var supported: bool = type in range(1, 7) + range(0xD, 0x19) if random_movement else \
+				type in range(7, 11) + range(0x19, 0x35) + range(0x40, 0x4D) \
+				or (data.id == RomRegistry.EMERALD and type in range(0x4D, 0x51))
+			if not supported:
 				continue
 			object.initial += MOVEMENT_ORIGIN
 			object.current += MOVEMENT_ORIGIN
@@ -1209,11 +1219,13 @@ func _object_patrols() -> void:
 			object.pixel_position = object.current * 16
 			object.current_elevation = 3
 			object.previous_elevation = 3
-			lines.append_array(_patrol_frames(objects, index))
-	_r.digest_matches("gen3_object_patrols", lines, PATROL_DIGESTS[data.id])
+			objects.random_seed = 0x1234 + index
+			lines.append_array(_autonomous_frames(objects, index, random_movement))
+	_r.digest_matches("gen3_object_random_movements" if random_movement else "gen3_object_patrols", lines,
+		RANDOM_MOVEMENT_DIGESTS[data.id] if random_movement else PATROL_DIGESTS[data.id])
 
 
-func _patrol_frames(objects: Gen3ObjectEvents, index: int) -> PackedStringArray:
+func _autonomous_frames(objects: Gen3ObjectEvents, index: int, random_movement: bool) -> PackedStringArray:
 	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
 	var lines := PackedStringArray()
 	for frame: int in range(1, 513):
@@ -1221,9 +1233,13 @@ func _patrol_frames(objects: Gen3ObjectEvents, index: int) -> PackedStringArray:
 		var pixels: Vector2i = object.pixel_position - (MOVEMENT_ORIGIN + Vector2i(12, 12)) * 16
 		var current: Vector2i = object.current - MOVEMENT_ORIGIN
 		var previous: Vector2i = object.previous - MOVEMENT_ORIGIN
-		lines.append(",".join([objects.camera.group, objects.camera.number, index, frame,
+		var values: Array = [objects.camera.group, objects.camera.number, index, frame,
 			current.x, current.y, previous.x, previous.y, pixels.x, pixels.y,
 			object.facing, object.movement_direction, object.previous_movement_direction, object.direction_sequence_index,
 			object.movement_state, object.movement_action, int(object.single_movement_active),
-			int(object.held_movement_active), int(object.held_movement_finished), int(object.frozen), int(object.invisible)]))
+			int(object.held_movement_active), int(object.held_movement_finished), int(object.frozen), int(object.invisible)]
+		if random_movement:
+			var waiting: bool = object.movement_state == (2 if object.movement_type >= 0x17 else 3)
+			values.append_array([object.movement_delay if waiting else 0, objects.random_seed])
+		lines.append(",".join(values))
 	return lines
