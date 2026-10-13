@@ -1275,3 +1275,169 @@ func _random_trace(objects: Gen3ObjectEvents, type: int, scenario: int) -> Packe
 			int(object.held_movement_finished), int(object.frozen), object.movement_delay if waiting else 0,
 			objects.random_seed]))
 	return lines
+
+
+## Copy callbacks must latch entry facing, gate tile centers and check landing
+## cells before grass-limited movement. Held-action and random traces miss this.
+func test_copy_player_frames_match_each_cartridge_engine() -> void:
+	var digests: Dictionary = {
+		RomRegistry.RUBY: "8df6e03ba616d1b74a732e16cd7155476d314ad4", RomRegistry.SAPPHIRE: "8df6e03ba616d1b74a732e16cd7155476d314ad4",
+		RomRegistry.FIRERED: "fb9e2094d414d336ff9c23bf254c9faf60dfb513", RomRegistry.LEAFGREEN: "fb9e2094d414d336ff9c23bf254c9faf60dfb513", RomRegistry.EMERALD: "8df6e03ba616d1b74a732e16cd7155476d314ad4",
+	}
+	for id: StringName in digests:
+		var objects: Gen3ObjectEvents = _copy_objects(id)
+		var lines := PackedStringArray()
+		for type: int in range(0x35, 0x39) + range(0x3B, 0x3F):
+			for initial: int in range(1, 5):
+				for direction: int in range(1, 5):
+					if initial != 2 or direction != 4:
+						lines.append_array(_copy_trace(objects, type, initial, direction, 1, 0))
+			for copy: int in 11:
+				for scenario: int in 9:
+					lines.append_array(_copy_trace(objects, type, 2, 4, copy, scenario))
+		var output: String = "\n".join(lines) + "\n"
+		assert_eq(output.sha1_text(), digests[id], str(id))
+
+
+func _copy_objects(id: StringName) -> Gen3ObjectEvents:
+	var field: Gen3ObjectEvents = _movement_objects(id)
+	for type: int in range(0x35, 0x39) + range(0x3B, 0x3F):
+		field.camera.data._world_scripts["movement_types"][type]["facing"] = [2, 1, 3, 4][(type - 0x35 if type < 0x3B else type - 0x3B)]
+	return Gen3ObjectEvents.new(field.camera, field.events)
+
+
+func _copy_trace(objects: Gen3ObjectEvents, type: int, initial: int, direction: int, copy: int, scenario: int) -> PackedStringArray:
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	object.active = true
+	object.local_id = 1
+	object.movement_type = type
+	object.initial = Vector2i(12, 12)
+	object.current = object.initial
+	object.previous = Vector2i(11, 12)
+	object.pixel_position = object.current * 16
+	object.facing = 4
+	object.movement_direction = 4
+	object.current_elevation = 3
+	object.previous_elevation = 3
+	object.movement_range = Vector2i(2, 3)
+	object.facing_locked = scenario == 5
+	object.current_behavior = [2, 2, 3, 0xD1, 0, 2, 2, 2, 2][scenario]
+	objects.objects[0] = object
+	objects.camera.grid.blocks.fill(0x3000 | object.current_behavior)
+	objects.camera.grid.set_metatile_entry(13, 12, (0x3400 if scenario == 1 else 0x3000) | object.current_behavior)
+	var player := Gen3ObjectEvents.ObjectEvent.new()
+	player.active = true
+	player.local_id = Gen3ObjectEvents.LOCALID_PLAYER
+	player.current_elevation = 15
+	player.previous_elevation = 15
+	player.facing = initial
+	player.movement_direction = direction
+	player.player_copyable_movement = copy
+	player.movement_action = -1 if scenario == 6 else 0
+	player.current = Vector2i(25, 25)
+	player.previous = player.current
+	objects.objects[1] = player
+	var lines := PackedStringArray()
+	for frame: int in range(1, 35):
+		if scenario == 8:
+			if frame == 2:
+				player.facing = initial % 4 + 1
+			if frame in [9, 13]:
+				object.frozen = frame == 9
+			if frame == 17:
+				objects.set_held_movement(object, 2)
+			if frame == 22:
+				Gen3ObjectEvents.clear_held_movement_if_finished(object)
+		objects.step_movements(false, scenario == 7)
+		var pixels: Vector2i = object.pixel_position - Vector2i(192, 192)
+		lines.append(",".join([type, initial, direction, copy, scenario, frame, object.current.x, object.current.y,
+			object.previous.x, object.previous.y, pixels.x, pixels.y, object.jump_y, object.facing,
+			object.movement_direction, object.previous_movement_direction, object.direction_sequence_index,
+			object.movement_state, object.movement_action, int(object.single_movement_active),
+			int(object.held_movement_active), int(object.held_movement_finished), int(object.frozen), int(object.invisible)]))
+	return lines
+
+
+## Mew's rock avoidance and step-counter choices cannot be inferred from the
+## normal direction-copy traces, which never enter Faraway Island.
+func test_mew_copy_callback_matches_original_escape_decisions() -> void:
+	var objects: Gen3ObjectEvents = _copy_objects(RomRegistry.EMERALD)
+	objects.camera.group = 26
+	objects.camera.number = 57
+	objects.camera.grid._flags = {1: true, 2: true, 3: true, 4: true}
+	var lines := PackedStringArray()
+	for at: Vector2i in [Vector2i(20, 15), Vector2i(22, 17), Vector2i(24, 15), Vector2i(26, 17),
+			Vector2i(15, 16), Vector2i(17, 18), Vector2i(19, 19), Vector2i(21, 21)]:
+		for dx: int in range(-2, 3):
+			for dy: int in range(-2, 3):
+				for direction: int in 5:
+					for mask: int in 16:
+						for steps: int in [0, 1, 8, 9, 65535]:
+							lines.append(_mew_trace(objects, at, Vector2i(dx, dy), direction, mask, steps))
+	var output: String = "\n".join(lines) + "\n"
+	assert_eq(output.sha1_text(), "0139e3695fc37632d1b5fdfef77423fc2f3c99a0")
+
+
+func _mew_trace(objects: Gen3ObjectEvents, at: Vector2i, delta: Vector2i, direction: int, mask: int, steps: int) -> String:
+	var mew := Gen3ObjectEvents.ObjectEvent.new()
+	mew.active = true
+	mew.local_id = 1
+	mew.map_number = 57
+	mew.map_group = 26
+	mew.graphics_id = 229
+	mew.movement_type = 0x3C
+	mew.current = at
+	mew.previous = at
+	mew.pixel_position = at * 16
+	mew.facing = 4
+	mew.movement_direction = 4
+	mew.current_elevation = 3
+	mew.previous_elevation = 3
+	mew.invisible = true
+	objects.objects[0] = mew
+	objects.camera.grid.blocks.fill(0x3000)
+	for side: int in range(1, 5):
+		var cell: Vector2i = at + Gen3FieldCamera.DIRECTIONS[side]
+		objects.camera.grid.set_metatile_entry(cell.x, cell.y, 0x3002 if mask & (1 << (side - 1)) else 0x3000)
+	var player := Gen3ObjectEvents.ObjectEvent.new()
+	player.active = true
+	player.local_id = Gen3ObjectEvents.LOCALID_PLAYER
+	player.facing = 2
+	player.movement_direction = maxi(direction, 1)
+	player.player_copyable_movement = 2
+	player.movement_action = 0
+	player.current_elevation = 15
+	player.previous_elevation = 15
+	player.previous = at + delta
+	player.current = player.previous + Gen3FieldCamera.DIRECTIONS[direction]
+	objects.objects[1] = player
+	objects.events.var_set(0x403A, steps)
+	objects.step_movements()
+	var pixels: Vector2i = mew.pixel_position - at * 16
+	return ",".join([at.x, at.y, delta.x, delta.y, direction, mask, steps, mew.current.x, mew.current.y,
+		mew.previous.x, mew.previous.y, pixels.x, pixels.y, mew.jump_y, mew.facing,
+		mew.movement_direction, mew.previous_movement_direction, mew.direction_sequence_index,
+		mew.movement_state, mew.movement_action, int(mew.single_movement_active),
+		int(mew.held_movement_active), int(mew.held_movement_finished), int(mew.frozen), int(mew.invisible)])
+
+
+## A missing entry facing yields DIR_NONE; native collision reads outside its
+## callback table. Rejecting it centrally keeps copy actions on the same tile.
+func test_copy_player_without_entry_direction_refuses_translation() -> void:
+	var objects: Gen3ObjectEvents = _copy_objects(RomRegistry.EMERALD)
+	_copy_trace(objects, 0x35, 0, 4, 2, 0)
+	assert_eq(objects.objects[0].current, Vector2i(12, 12))
+	assert_eq(objects.objects[0].previous, Vector2i(12, 12))
+
+
+## An action already selected finishes without reading the player again.
+## Returning early on a missing player stalls it; the frame sweeps retain one.
+func test_copy_player_selected_action_finishes_after_player_removal() -> void:
+	var objects: Gen3ObjectEvents = _copy_objects(RomRegistry.EMERALD)
+	_copy_trace(objects, 0x35, 2, 1, 2, 0)
+	objects.objects[1].active = false
+	for frame: int in 14:
+		objects.step_movements()
+	assert_eq(objects.objects[0].previous, objects.objects[0].current)
+	assert_eq(objects.objects[0].movement_state, 1)
+	assert_false(objects.objects[0].single_movement_active)

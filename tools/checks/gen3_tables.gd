@@ -87,6 +87,7 @@ func _one_game() -> void:
 	_held_movements()
 	_object_movements(false)
 	_object_movements(true)
+	_copy_player_movements()
 	_boulder_landings()
 	_rotating_gates()
 	_world_scripts()
@@ -1179,8 +1180,7 @@ const PATROL_DIGESTS: Dictionary = {
 }
 
 
-func _object_movements(random_movement: bool) -> void:
-	var data: GameData = _r.data
+func _movement_field(data: GameData) -> Gen3ObjectEvents:
 	var camera := Gen3FieldCamera.new()
 	camera.data = data
 	camera.pos = Vector2i(100, 100)
@@ -1191,7 +1191,13 @@ func _object_movements(random_movement: bool) -> void:
 	camera.grid.blocks.resize(512 * 512)
 	camera.grid.blocks.fill(0x3000)
 	camera.grid._behaviors.resize(1024)
-	var objects := Gen3ObjectEvents.new(camera, Gen3EventData.new(data.id))
+	return Gen3ObjectEvents.new(camera, Gen3EventData.new(data.id))
+
+
+func _object_movements(random_movement: bool) -> void:
+	var data: GameData = _r.data
+	var objects: Gen3ObjectEvents = _movement_field(data)
+	var camera: Gen3FieldCamera = objects.camera
 	var lines := PackedStringArray(["object random movements" if random_movement else "object patrols"])
 	for header: Dictionary in data.world_map_headers():
 		camera.group = int(header["group"])
@@ -1242,4 +1248,70 @@ func _autonomous_frames(objects: Gen3ObjectEvents, index: int, random_movement: 
 			var waiting: bool = object.movement_state == (2 if object.movement_type >= 0x17 else 3)
 			values.append_array([object.movement_delay if waiting else 0, objects.random_seed])
 		lines.append(",".join(values))
+	return lines
+
+
+const COPY_MOVEMENT_DIGESTS: Dictionary = {
+	&"ruby": "09408824553560b499a457f07488713c017d26a7", &"sapphire": "09408824553560b499a457f07488713c017d26a7",
+	&"firered": "2c98a93be58e257eb9e045c427a6892ede0bcb50",
+	&"leafgreen": "2c98a93be58e257eb9e045c427a6892ede0bcb50", &"emerald": "604fe3e775f8d66fcbbadbd4ce5e9217ffc832b9",
+}
+
+
+func _copy_player_movements() -> void:
+	var data: GameData = _r.data
+	var objects: Gen3ObjectEvents = _movement_field(data)
+	var camera: Gen3FieldCamera = objects.camera
+	camera.grid.blocks.fill(0x3002)
+	camera.grid._behaviors[2] = 2
+	var lines := PackedStringArray(["copy player movements"])
+	for header: Dictionary in data.world_map_headers():
+		camera.group = int(header["group"])
+		camera.number = int(header["number"])
+		var rows: Array = data.world_map_events(camera.group, camera.number)["objects"]
+		for index: int in rows.size():
+			for object: Gen3ObjectEvents.ObjectEvent in objects.objects:
+				object.active = false
+			var template: Dictionary = rows[index].duplicate()
+			template["x"] = MOVEMENT_ORIGIN.x + 5
+			template["y"] = MOVEMENT_ORIGIN.y + 5
+			if not _r.check(objects.spawn(template, camera.number, camera.group) == 0, "copy template did not spawn"):
+				continue
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			if object.movement_type not in range(0x35, 0x39) + range(0x3B, 0x3F):
+				continue
+			object.pixel_position = object.current * 16
+			object.current_elevation = 3
+			object.previous_elevation = 3
+			var player := Gen3ObjectEvents.ObjectEvent.new()
+			player.active = true
+			player.local_id = Gen3ObjectEvents.LOCALID_PLAYER
+			player.facing = index % 4 + 1
+			player.current = MOVEMENT_ORIGIN + Vector2i(40, 40)
+			player.previous = MOVEMENT_ORIGIN + Vector2i(39, 40)
+			player.current_elevation = 15
+			player.movement_action = 0
+			objects.objects[1] = player
+			lines.append_array(_copy_player_frames(objects, index))
+	_r.digest_matches("gen3_object_copy_movements", lines, COPY_MOVEMENT_DIGESTS[data.id])
+
+
+func _copy_player_frames(objects: Gen3ObjectEvents, index: int) -> PackedStringArray:
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+	var player: Gen3ObjectEvents.ObjectEvent = objects.objects[1]
+	var lines := PackedStringArray()
+	for frame: int in range(1, 513):
+		player.movement_direction = (frame / 32) % 4 + 1
+		player.player_copyable_movement = (frame / 32) % 9
+		objects.events.var_set(0x403A, frame / 32 + 1)
+		objects.step_movements(false, frame % 32 == 31)
+		var pixels: Vector2i = object.pixel_position - (MOVEMENT_ORIGIN + Vector2i(12, 12)) * 16
+		var current: Vector2i = object.current - MOVEMENT_ORIGIN
+		var previous: Vector2i = object.previous - MOVEMENT_ORIGIN
+		lines.append(",".join([objects.camera.group, objects.camera.number, index, frame,
+			current.x, current.y, previous.x, previous.y, pixels.x, pixels.y, object.jump_y,
+			object.facing, object.movement_direction, object.previous_movement_direction,
+			object.direction_sequence_index, object.movement_state, object.movement_action,
+			int(object.single_movement_active), int(object.held_movement_active),
+			int(object.held_movement_finished), int(object.frozen), int(object.invisible)]))
 	return lines

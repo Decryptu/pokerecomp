@@ -84,6 +84,10 @@ const RANDOM_DIRECTIONS: Dictionary = {
 	0xD: [1, 2], 0xE: [3, 4], 0xF: [2, 3], 0x10: [2, 4], 0x11: [1, 3], 0x12: [1, 4],
 	0x13: [2, 1, 3, 1], 0x14: [1, 2, 4, 1], 0x15: [2, 3, 4, 2], 0x16: [3, 4, 1, 1],
 }
+## `GetCopyDirection` composes the entry-facing and movement-type tables.
+const COPY_PLAYER_DIRECTIONS: Array = [[2, 1, 4, 3], [1, 2, 3, 4], [3, 4, 2, 1], [4, 3, 1, 2]]
+const COPY_OBJECT_DIRECTIONS: Array = [[2, 1, 4, 3], [1, 2, 3, 4], [4, 3, 1, 2], [3, 4, 2, 1]]
+const COPY_ACTIONS: Array[int] = [-1, 0, 0x08, 0x15, 0x2D, 0x31, 0x46, 0x42, 0x0C]
 const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
 
 const INSTANT_MOTIONS: Array = [
@@ -167,6 +171,7 @@ class ObjectEvent:
 var random_seed: int = 0
 var random_word: Callable = _random
 var _player_dashing: bool = false
+var _player_tile_center: bool = false
 var camera: Gen3FieldCamera
 var events: Gen3EventData
 var objects: Array[ObjectEvent] = []
@@ -371,9 +376,11 @@ func _obstacle_in_view_ok(at: Vector2i) -> bool:
 	return at.y < pos.y - (Gen3MapGrid.MAP_OFFSET - 1) or at.y > pos.y + Gen3MapGrid.MAP_OFFSET - 1
 
 
-## `GetCollisionAtCoords`; direction is not NONE. FRLG's nine-bit
+## `GetCollisionAtCoords`; invalid directions refuse. FRLG's nine-bit
 ## behavior narrows at the u8 side predicates.
 func collision_at(object: ObjectEvent, x: int, y: int, direction: int) -> int:
+	if direction < 1 or direction > 4:
+		return Collision.IMPASSABLE
 	var grid: Gen3MapGrid = camera.grid
 	if _outside_range(object, x, y):
 		return Collision.OUTSIDE_RANGE
@@ -541,8 +548,9 @@ func boulder_landing(object: ObjectEvent) -> Array:
 
 
 ## `UpdateObjectEventCurrentMovement`: holds bypass freezing/collision; running input gates trainer reactions.
-func step_movements(player_dashing: bool = false) -> Array:
+func step_movements(player_dashing: bool = false, player_tile_center: bool = false) -> Array:
 	_player_dashing = player_dashing
+	_player_tile_center = player_tile_center
 	var requests: Array = []
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
@@ -684,10 +692,155 @@ func _step_autonomous(object: ObjectEvent, slot: int, requests: Array) -> void:
 		_step_rotation(object, slot, requests)
 	elif type >= 0x19 and type <= 0x34:
 		_step_patrol(object, slot, requests)
+	elif type in [0x35, 0x36, 0x37, 0x38, 0x3B, 0x3C, 0x3D, 0x3E]:
+		_step_copy_player(object, slot, requests)
 	elif (type >= 7 and type <= 10) or type == 0x4C:
 		_step_stationary(object, slot, requests)
 	elif (type >= 0x40 and type <= 0x4B) or (not _frlg and type >= 0x4D and type <= 0x50):
 		_step_in_place(object, slot, requests)
+
+
+## `MovementType_CopyPlayer*`: latch the entry facing once, and resume holds
+## through the shared executor. The field input host supplies T_TILE_CENTER.
+func _step_copy_player(object: ObjectEvent, slot: int, requests: Array) -> void:
+	var player: ObjectEvent = _player_event()
+	if player == null and object.movement_state != 2:
+		return
+	if object.movement_state == 0:
+		clear_held_movement(object)
+		object.single_movement_active = false
+		if object.direction_sequence_index == 0:
+			object.direction_sequence_index = player.facing
+		object.movement_state = 1
+	if object.movement_state == 1:
+		var copy: int = player.player_copyable_movement
+		if player.movement_action < 0 or _player_tile_center or copy <= 0 or copy >= COPY_ACTIONS.size():
+			return
+		_choose_copy_movement(object, player, copy)
+		object.single_movement_active = true
+		object.movement_state = 2
+	if _exec_single_movement(object, slot, requests):
+		object.single_movement_active = false
+		object.movement_state = 1
+
+
+func _copy_direction(object: ObjectEvent, direction: int) -> int:
+	var initial: int = object.direction_sequence_index
+	if initial < 1 or initial > 4 or direction < 1 or direction > 4:
+		return 0
+	var relative: int = int(COPY_PLAYER_DIRECTIONS[initial - 1][direction - 1])
+	return int(COPY_OBJECT_DIRECTIONS[_facing[object.movement_type] - 1][relative - 1])
+
+
+func _choose_copy_movement(object: ObjectEvent, player: ObjectEvent, copy: int) -> void:
+	var direction: int = _copy_direction(object, player.movement_direction)
+	if copy == 2 and _is_faraway_mew(object):
+		direction = _mew_direction(player)
+		if direction == 0:
+			_set_single_movement(object, maxi(_copy_direction(object, player.movement_direction) - 1, 0))
+			return
+	var base: int = COPY_ACTIONS[copy]
+	if _frlg and base != 0:
+		base += 8 if base < 0x3A else 12
+	if copy not in [1, 6]:
+		var at: Vector2i = object.current + Gen3FieldCamera.DIRECTIONS[direction] * (2 if copy == 8 else 1)
+		at = Vector2i(wrapi(at.x, -32768, 32768), wrapi(at.y, -32768, 32768))
+		if collision_at(object, at.x, at.y, direction) != Collision.NONE \
+				or (object.movement_type >= 0x3B and not _is_poke_grass(at)):
+			base = 0
+	_set_single_movement(object, base + maxi(direction - 1, 0))
+
+
+func _is_poke_grass(at: Vector2i) -> bool:
+	return camera.grid.behavior_at(at.x, at.y) & 0xFF in [2, 0xD1 if _frlg else 3]
+
+
+func _is_faraway_mew(object: ObjectEvent) -> bool:
+	return events.game == RomRegistry.EMERALD and camera.group == 26 and camera.number == 57 \
+		and object.graphics_id == 229
+
+
+## `faraway_island.c`: rock escape precedes distance avoidance; the step
+## counter selects candidates without consuming the random stream.
+func _mew_direction(player: ObjectEvent) -> int:
+	var mew: ObjectEvent = null
+	for candidate: ObjectEvent in objects:
+		if candidate.active and candidate.local_id == 1 and candidate.map_group == camera.group \
+				and candidate.map_number == camera.number:
+			mew = candidate
+			break
+	if mew == null or player.previous == player.current:
+		return 0
+	var delta := Vector2i(wrapi(player.previous.x - mew.current.x, -32768, 32768),
+		wrapi(player.previous.y - mew.current.y, -32768, 32768))
+	var steps: int = events.var_get(0x403A)
+	mew.invisible = steps % 8 != 0
+	if steps % 9 == 0:
+		return 0
+	for rock: Vector2i in [Vector2i(21, 16), Vector2i(25, 16), Vector2i(16, 17), Vector2i(20, 20)]:
+		var direction: int = _mew_rock_escape(mew, player, rock, delta)
+		if direction != 0:
+			return direction
+	return _mew_avoid_player(mew, player, delta, steps)
+
+
+func _mew_avoid_player(mew: ObjectEvent, player: ObjectEvent, delta: Vector2i, steps: int) -> int:
+	var away: Array[int] = []
+	for direction: int in [2, 1, 4, 3]:
+		var displacement: Vector2i = Gen3FieldCamera.DIRECTIONS[direction]
+		if delta.x * displacement.x + delta.y * displacement.y < 0 and _mew_can_move(mew.current + displacement, player):
+			away.append(direction)
+	if not away.is_empty():
+		return away[steps % mini(away.size(), 2)]
+	var axes: Array[int] = _mew_axis_candidates(mew, player, delta)
+	for direction: int in axes:
+		if direction != 0 and _mew_can_move(mew.current + Gen3FieldCamera.DIRECTIONS[direction], player):
+			return direction
+	var candidates: Array[int] = []
+	for direction: int in [2, 4, 1, 3]:
+		if _mew_can_move(mew.current + Gen3FieldCamera.DIRECTIONS[direction], player):
+			candidates.append(direction)
+	return 0 if candidates.is_empty() else candidates[steps % candidates.size()]
+
+
+func _mew_axis_candidates(mew: ObjectEvent, player: ObjectEvent, delta: Vector2i) -> Array[int]:
+	var axes: Array[int] = []
+	if delta.y == 0:
+		if player.current.y > mew.current.y:
+			axes.append(2)
+		elif player.current.y < mew.current.y:
+			axes.append(1)
+		axes.append_array([2, 1])
+	if delta.x == 0:
+		if player.current.x > mew.current.x:
+			axes.append(3)
+		elif player.current.x < mew.current.x:
+			axes.append(4)
+		axes.append_array([4, 3])
+	return axes
+
+
+func _mew_rock_escape(mew: ObjectEvent, player: ObjectEvent, rock: Vector2i, delta: Vector2i) -> int:
+	for axis: int in 2:
+		var other: int = 1 - axis
+		if player.previous[axis] != rock[axis]:
+			continue
+		var safe: bool = mew.current[other] <= rock[other] if player.previous[other] < rock[other] else mew.current[other] >= rock[other]
+		if safe:
+			continue
+		var direction: int = 0
+		if absi(delta[axis]) == 1:
+			direction = [4, 1][axis] if delta[axis] > 0 else [3, 2][axis]
+		elif delta[axis] == 0:
+			direction = [2, 3][axis] if delta[other] > 0 else [1, 4][axis]
+		if direction != 0 and _mew_can_move(mew.current + Gen3FieldCamera.DIRECTIONS[direction], player):
+			return direction
+	return 0
+
+
+func _mew_can_move(at: Vector2i, player: ObjectEvent) -> bool:
+	at = Vector2i(wrapi(at.x, -32768, 32768), wrapi(at.y, -32768, 32768))
+	return at != player.current and _is_poke_grass(at)
 
 
 func _set_single_movement(object: ObjectEvent, action: int) -> void:
