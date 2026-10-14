@@ -728,11 +728,11 @@ func test_player_water_query_reads_each_engines_source_of_water() -> void:
 ## Substituting a generic tween or Hoenn action ids on FRLG changes this stream.
 func test_held_movement_frames_match_each_cartridge_engine() -> void:
 	var digests: Dictionary = {
-		RomRegistry.RUBY: "8f601df9948184cd1f4b9395a546e524f7194864",
-		RomRegistry.SAPPHIRE: "8f601df9948184cd1f4b9395a546e524f7194864",
-		RomRegistry.FIRERED: "556512c4f0d98afaab7d753f5e9b11ef6930373d",
-		RomRegistry.LEAFGREEN: "556512c4f0d98afaab7d753f5e9b11ef6930373d",
-		RomRegistry.EMERALD: "1f482a1870310797065be38c27f2a7d97262f427",
+		RomRegistry.RUBY: "a16c8b027612ee10665e8b1317ab99787e469c35",
+		RomRegistry.SAPPHIRE: "a16c8b027612ee10665e8b1317ab99787e469c35",
+		RomRegistry.FIRERED: "7f85d125b31f24b43046a3fda4bce3d9b769c8e1",
+		RomRegistry.LEAFGREEN: "7f85d125b31f24b43046a3fda4bce3d9b769c8e1",
+		RomRegistry.EMERALD: "917933e32eb5ac1a0c7d22ad3bf4c8dbf6c14c58",
 	}
 	for id: StringName in digests:
 		assert_eq(_held_movement_trace(id).sha1_text(), digests[id], str(id))
@@ -1441,3 +1441,102 @@ func test_copy_player_selected_action_finishes_after_player_removal() -> void:
 	assert_eq(objects.objects[0].previous, objects.objects[0].current)
 	assert_eq(objects.objects[0].movement_state, 1)
 	assert_false(objects.objects[0].single_movement_active)
+
+
+## Disguise callbacks spawn before the freeze/hold gate, once per object.
+## Moving initialization into autonomous dispatch hides frozen and scripted
+## trainers; existing patrol traces never use either disguise movement type.
+func test_disguises_spawn_once_even_when_frozen_or_held() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		for type: int in [0x39, 0x3A]:
+			for held: bool in [false, true]:
+				var objects: Gen3ObjectEvents = _movement_objects(id)
+				var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
+				template.merge({"local_id": 42, "movement_type": type, "x": 5, "y": 5}, true)
+				var object: Gen3ObjectEvents.ObjectEvent = objects.objects[objects.spawn(template, 7, 9)]
+				object.frozen = true
+				if held:
+					assert_false(objects.set_held_movement(object, 0))
+				var effects: Array = objects.step_movements().filter(
+					func(request: Dictionary) -> bool: return request["kind"] == "field_effect")
+				assert_eq(effects, [{"kind": "field_effect", "effect_id": type - 0x1D,
+					"object_id": 0, "local_id": 42, "map_number": 7, "map_group": 9}])
+				assert_eq(object.direction_sequence_index, 1)
+				assert_eq(objects.step_movements(), [])
+				assert_eq(object.current, Vector2i(12, 12))
+
+
+## Original ARM reveal/effect/animation callbacks across forty frames catch
+## early completion, reordered END handling and effects frozen by held actions.
+func test_disguise_reveal_frames_match_each_cartridge_engine() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var lines := PackedStringArray()
+		for type: int in [0x39, 0x3A]:
+			var objects: Gen3ObjectEvents = _movement_objects(id)
+			var object := Gen3ObjectEvents.ObjectEvent.new()
+			object.active = true
+			object.movement_type = type
+			objects.objects[0] = object
+			objects.step_movements()
+			assert_false(objects.set_held_movement(object, 0x67 if objects._frlg else 0x59))
+			for frame: int in range(1, 41):
+				objects.step_movements()
+				lines.append(",".join([type, frame, object.direction_sequence_index,
+					object.disguise_state, int(object.disguise_ready),
+					int(object.held_movement_finished), int(object.disguise_spawned)]))
+			Gen3ObjectEvents.clear_held_movement_if_finished(object)
+			assert_eq(objects.step_movements(), [])
+			assert_false(objects.set_held_movement(object, 0x67 if objects._frlg else 0x59))
+			assert_eq(objects.step_movements(), [])
+			assert_true(object.held_movement_finished)
+		assert_eq(("\n".join(lines) + "\n").sha1_text(), "848252bdb8c21ea508b4818c45b2def911583d3e", str(id))
+
+
+## A removed trainer's pool slot can be reused before the next sprite callback.
+## Dropping effects with the slot leaks the old disguise; frame-only traces
+## never remove or replace the linked object.
+func test_removed_disguise_stops_before_reused_slot_spawns_its_effect() -> void:
+	for outside: bool in [false, true]:
+		var objects: Gen3ObjectEvents = _movement_objects(RomRegistry.EMERALD)
+		var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
+		template.merge({"local_id": 42, "movement_type": 0x39}, true)
+		objects.spawn(template, 7, 9)
+		objects.step_movements()
+		if outside:
+			objects.camera.pos = Vector2i(100, 100)
+			objects.remove_outside_view()
+		else:
+			objects.remove(42, 7, 9)
+		template["local_id"] = 43
+		template["movement_type"] = 0x3A
+		assert_eq(objects.spawn(template, 7, 9), 0)
+		var effects: Array = objects.step_movements().filter(
+			func(request: Dictionary) -> bool: return request.has("effect_id"))
+		assert_eq(effects, [
+			{"kind": "stop_field_effect", "effect_id": 28, "object_id": 0, "local_id": 42, "map_number": 7, "map_group": 9},
+			{"kind": "field_effect", "effect_id": 29, "object_id": 0, "local_id": 43, "map_number": 7, "map_group": 9},
+		])
+		assert_eq(objects.step_movements(), [])
+
+
+## Reveal is an immediate no-op for ordinary trainers regardless of patrol
+## state. Buried trainers require a separate task and must not claim completion.
+func test_reveal_dispatch_does_not_read_patrol_state_as_disguise_state() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _movement_objects(id)
+		var object := Gen3ObjectEvents.ObjectEvent.new()
+		object.active = true
+		object.direction_sequence_index = 35
+		objects.objects[0] = object
+		var action: int = 0x67 if objects._frlg else 0x59
+		assert_false(objects.set_held_movement(object, action))
+		objects.step_movements()
+		assert_true(object.held_movement_finished)
+		Gen3ObjectEvents.clear_held_movement(object)
+		object.movement_type = 0x3F
+		object.frozen = true
+		assert_true(objects.set_held_movement(object, action))
+		assert_true(object.frozen)
+		assert_false(object.held_movement_active)

@@ -88,6 +88,7 @@ func _one_game() -> void:
 	_object_movements(false)
 	_object_movements(true)
 	_copy_player_movements()
+	_disguises()
 	_boulder_landings()
 	_rotating_gates()
 	_world_scripts()
@@ -856,11 +857,11 @@ func _player_avatars() -> void:
 ## Reset at unsupported actions; this checks supported runs, not execution.
 const MOVEMENT_ORIGIN := Vector2i(256, 256)
 const MOVEMENT_DIGESTS: Dictionary = {
-	&"ruby": "68dd375d03c7bd7575575fd937d713cea3455e05",
-	&"sapphire": "caaba9ce33644a9c24767eb82b9cf295322291f3",
-	&"firered": "6d6bfbc37414e2998bbd541f88e57b610db875ea",
-	&"leafgreen": "14ee35c5696c699e0581e08ad2955ba906f4eeb8",
-	&"emerald": "7611e5da2097fc9c7122c2085e91eae7a5c22c23",
+	&"ruby": "a8839e8a87ce4510556789871dc4eec714ff61fc",
+	&"sapphire": "0e2662533b908e0fa5ee3fdc4c75e8c7e359cb46",
+	&"firered": "fd7c7771dd96cce0fc2158812ce8d027afb91502",
+	&"leafgreen": "1573c5dd5f93bc7f277431e660e99c2adb9d1f7c",
+	&"emerald": "eee953c8504dcf0dc8f7b0c1b60d61a3d37db09b",
 }
 
 
@@ -1315,3 +1316,48 @@ func _copy_player_frames(objects: Gen3ObjectEvents, index: int) -> PackedStringA
 			int(object.single_movement_active), int(object.held_movement_active),
 			int(object.held_movement_finished), int(object.frozen), int(object.invisible)]))
 	return lines
+
+
+## Every tree/mountain template from pret's map JSON, including zero FRLG rows.
+const DISGUISE_COUNTS: Dictionary = {&"ruby": 5, &"sapphire": 5, &"firered": 0, &"leafgreen": 0, &"emerald": 7}
+
+
+func _disguises() -> void:
+	var data: GameData = _r.data
+	var objects: Gen3ObjectEvents = _movement_field(data)
+	var count: int = 0
+	for header: Dictionary in data.world_map_headers():
+		objects.camera.group = int(header["group"])
+		objects.camera.number = int(header["number"])
+		objects.load_templates()
+		for template: Dictionary in objects.templates:
+			if int(template["movement_type"]) not in [0x39, 0x3A]:
+				continue
+			count += 1
+			_disguise_frames(objects, header, template)
+	_r.check(count == int(DISGUISE_COUNTS[data.id]), "every source disguise template is exercised")
+	_r.note("%d disguise templates: frozen initialization and original ARM reveal frames" % count)
+
+
+func _disguise_frames(objects: Gen3ObjectEvents, header: Dictionary, template: Dictionary) -> void:
+	var slot: int = objects.spawn(template, int(header["number"]), int(header["group"]))
+	if not _r.check(slot >= 0, "disguised trainer spawns"):
+		return
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[slot]
+	object.frozen = true
+	var effects: Array = objects.step_movements().filter(
+		func(request: Dictionary) -> bool: return request["kind"] == "field_effect")
+	_r.check(effects.size() == 1 and int(effects[0]["local_id"]) == object.local_id,
+		"frozen disguise initializes with its template identity")
+	_r.check(not objects.set_held_movement(object, 0x67 if objects._frlg else 0x59), "reveal hold starts")
+	var lines := PackedStringArray()
+	for frame: int in range(1, 41):
+		objects.step_movements()
+		lines.append(",".join([frame, object.direction_sequence_index, object.disguise_state,
+			int(object.disguise_ready), int(object.held_movement_finished), int(object.disguise_spawned)]))
+	_r.check(("\n".join(lines) + "\n").sha1_text() == DISGUISE_REVEAL_DIGEST,
+		"disguise reveal matches the original ARM action, effect callback and sprite animation")
+	objects.remove(object.local_id, object.map_number, object.map_group)
+
+
+const DISGUISE_REVEAL_DIGEST: String = "6ea54dfb378843c69af71ca7d3857b72b9d5cae4"
