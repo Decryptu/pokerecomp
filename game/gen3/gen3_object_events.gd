@@ -10,13 +10,11 @@ const MAP_UNDEFINED: int = 0xFF
 const OBJ_KIND_CLONE: int = 255
 const OBJ_EVENT_GFX_VARS: int = 240
 const VAR_OBJ_GFX_ID_0: int = 0x4010
-## `TrySpawnObjectEvents`' margins around the view, in cells.
 const VIEW_LEFT: int = 2
 const VIEW_RIGHT: int = Gen3MapGrid.OFFSET_W + 2
 const VIEW_BOTTOM: int = Gen3MapGrid.OFFSET_H + 2
 const ELEVATION_MULTI_LEVEL: int = 15
-## Emerald's Battle Pyramid floor and top spawn the templates before the first
-## empty one, at most [constant COUNT]; Trainer Hill's four floors spawn two.
+## Emerald's Pyramid spawns up to COUNT templates before the first empty one; Trainer Hill spawns two.
 const PYRAMID_LAYOUTS: Array[int] = [361, 378]
 const TRAINER_HILL_LAYOUTS: Array[int] = [415, 416, 417, 418]
 const HILL_TRAINERS_PER_FLOOR: int = 2
@@ -28,7 +26,7 @@ const EMPTY_TEMPLATE: Dictionary = {
 
 enum Collision { NONE, OUTSIDE_RANGE, IMPASSABLE, ELEVATION_MISMATCH, OBJECT_EVENT }
 enum Direction { NONE, SOUTH, NORTH, WEST, EAST }
-enum Motion { FACE, WALK, IN_PLACE, JUMP, DELAY, LOCK, UNLOCK, CONTEXT_FACE, SET_FLAG, EMOTE }
+enum Motion { FACE, WALK, IN_PLACE, JUMP, DELAY, LOCK, UNLOCK, CONTEXT_FACE, SET_FLAG, EMOTE, REVEAL }
 enum Facing { PLAYER, AWAY_PLAYER, ORIGINAL }
 enum ObjectFlag { LANDING_EFFECT, INVISIBLE, FIXED_PRIORITY }
 enum Jump { FAR, SPECIAL, NORMAL, IN_PLACE, TURN }
@@ -90,7 +88,8 @@ const COPY_OBJECT_DIRECTIONS: Array = [[2, 1, 4, 3], [1, 2, 3, 4], [4, 3, 1, 2],
 const COPY_ACTIONS: Array[int] = [-1, 0, 0x08, 0x15, 0x2D, 0x31, 0x46, 0x42, 0x0C]
 const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
 
-const INSTANT_MOTIONS: Array = [
+const STATE_MOTIONS: Array = [
+	[0x59, 0x67, Motion.REVEAL, 0],
 	[0x3E, 0x4A, Motion.CONTEXT_FACE, Facing.PLAYER],
 	[0x3F, 0x4B, Motion.CONTEXT_FACE, Facing.AWAY_PLAYER],
 	[0x4E, 0x5A, Motion.CONTEXT_FACE, Facing.ORIGINAL],
@@ -113,9 +112,8 @@ const HOENN_BLOCKED_SIDES: Dictionary = {
 	Direction.WEST: [0xC1, 0xBE], Direction.EAST: [0xC1, 0xBE],
 }
 const OPPOSITE: Array[int] = [Direction.NONE, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
-## FireRed and LeafGreen's `OBJ_EVENT_GFX_CUT_TREE` and `ROCK_SMASH_ROCK`, which
-## `ShouldInitObjectEventStateFromTemplate` holds back near a connection, and the
-## temporary flags it may set to keep them hidden.
+## FRLG's `ShouldInitObjectEventStateFromTemplate` holds CUT_TREE/ROCK_SMASH_ROCK
+## back near connections, setting their temporary hide flags.
 const FRLG_OBSTACLES: Array[int] = [95, 96]
 const FRLG_HIDE_FLAGS: Vector2i = Vector2i(0x11, 0x1F)
 ## `IsMapTypeOutdoors`: route, town, underwater, city and ocean route.
@@ -166,6 +164,11 @@ class ObjectEvent:
 	var jump_y: int = 0
 	var ground_on_spawn: bool = true
 	var player_copyable_movement: int = 0
+	var disguise_spawned: bool = false
+	var disguise_effect_id: int = 0
+	var disguise_state: int = 0
+	var disguise_frame: int = 0
+	var disguise_ready: bool = false
 
 
 var random_seed: int = 0
@@ -182,6 +185,7 @@ var _ranged := PackedByteArray()
 var _facing := PackedByteArray()
 var _blocked: Dictionary = {}
 var _motions: Dictionary = {}
+var _effect_requests: Array = []
 
 
 func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
@@ -273,7 +277,7 @@ func remove_outside_view() -> void:
 	for object: ObjectEvent in objects:
 		if object.active and not object.is_player and not _in_view(object.current) \
 				and not _in_view(object.initial):
-			object.active = false
+			_deactivate(object)
 
 
 ## `InitObjectEventStateFromTemplate`: the slot it fills, or -1 when the object
@@ -444,7 +448,7 @@ func _build_motions() -> void:
 		_motions[(0x18 if _frlg else 0x10) + delay] = [Motion.DELAY, 0, 1 << delay]
 	_motions[0x4C if _frlg else 0x40] = [Motion.LOCK, 0, 0]
 	_motions[0x4D if _frlg else 0x41] = [Motion.UNLOCK, 0, 0]
-	for row: Array in INSTANT_MOTIONS:
+	for row: Array in STATE_MOTIONS:
 		_motions[int(row[1 if _frlg else 0])] = [int(row[2]), 0, int(row[3])] + row.slice(4)
 	var emotes: Array = [0, 33, 46, 66, 64] if _frlg else [0, 33, 46]
 	for index: int in emotes.size():
@@ -462,6 +466,8 @@ func _build_motions() -> void:
 ## `ObjectEventSetHeldMovement`: true refuses; completion does not clear the hold.
 func set_held_movement(object: ObjectEvent, action: int) -> bool:
 	if not object.active or movement_overridden(object) or not _motions.has(action):
+		return true
+	if int(_motions[action][0]) == Motion.REVEAL and object.movement_type == 0x3F:
 		return true
 	object.frozen = false
 	object.movement_action = action
@@ -513,8 +519,13 @@ func remove(local_id: int, number: int, group: int) -> void:
 	for object: ObjectEvent in objects:
 		if object.active and object.local_id == local_id and object.map_number == number and object.map_group == group:
 			events.flag_set(int(_template_by_id(local_id, number, group).get("flag", 0)))
-			object.active = false
+			_deactivate(object)
 			return
+
+
+func _deactivate(object: ObjectEvent) -> void:
+	object.active = false
+	_step_disguise_effect(object, objects.find(object), _effect_requests)
 
 
 func _template_by_id(local_id: int, number: int, group: int) -> Dictionary:
@@ -551,11 +562,13 @@ func boulder_landing(object: ObjectEvent) -> Array:
 func step_movements(player_dashing: bool = false, player_tile_center: bool = false) -> Array:
 	_player_dashing = player_dashing
 	_player_tile_center = player_tile_center
-	var requests: Array = []
+	var requests: Array = _effect_requests.duplicate()
+	_effect_requests.clear()
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
 		if not object.active:
 			continue
+		_init_disguise(object, slot, requests)
 		if object.ground_on_spawn:
 			_ground(object, slot, "spawn", requests)
 			object.ground_on_spawn = false
@@ -563,6 +576,8 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 			object.held_movement_finished = _advance_motion(object, slot, requests)
 		elif not object.held_movement_active and not object.frozen:
 			_step_autonomous(object, slot, requests)
+	for slot: int in COUNT:
+		_step_disguise_effect(objects[slot], slot, requests)
 	return requests
 
 
@@ -573,8 +588,11 @@ func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
 	var parameter: int = int(row[2])
 	if object.movement_frame == 0:
 		_start_motion(object, motion, direction, parameter, slot, requests)
-		_start_instant_motion(object, row, slot, requests)
+		_start_state_motion(object, row, slot, requests)
 	match motion:
+		Motion.REVEAL:
+			object.movement_frame += 1
+			return object.movement_type not in [0x39, 0x3A] or update_reveal_disguise(object)
 		Motion.WALK:
 			var pixels: Array = STEP_PIXELS[parameter]
 			object.pixel_position += Gen3FieldCamera.DIRECTIONS[direction] * int(pixels[object.movement_frame % pixels.size()])
@@ -610,7 +628,7 @@ func _start_motion(object: ObjectEvent, motion: int, direction: int, parameter: 
 			object.facing_locked = false
 
 
-func _start_instant_motion(object: ObjectEvent, row: Array, slot: int, requests: Array) -> void:
+func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: Array) -> void:
 	match int(row[0]):
 		Motion.CONTEXT_FACE:
 			var direction: int = _context_facing(object, int(row[2]))
@@ -626,8 +644,60 @@ func _start_instant_motion(object: ObjectEvent, row: Array, slot: int, requests:
 				ObjectFlag.FIXED_PRIORITY:
 					object.fixed_priority = bool(row[3])
 		Motion.EMOTE:
-			requests.append({"kind": "field_effect", "effect_id": int(row[2]), "object_id": slot,
-				"local_id": object.local_id, "map_number": object.map_number, "map_group": object.map_group})
+			requests.append(_effect_request(object, slot, int(row[2])))
+		Motion.REVEAL:
+			if object.movement_type in [0x39, 0x3A]:
+				start_reveal_disguise(object)
+
+
+static func _effect_request(object: ObjectEvent, slot: int, effect: int, kind: String = "field_effect") -> Dictionary:
+	return {"kind": kind, "effect_id": effect, "object_id": slot,
+		"local_id": object.local_id, "map_number": object.map_number, "map_group": object.map_group}
+
+
+func _init_disguise(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if object.movement_type not in [0x39, 0x3A]:
+		return
+	if object.direction_sequence_index == 0 or (object.direction_sequence_index == 1 and not object.disguise_spawned):
+		object.disguise_spawned = true
+		object.direction_sequence_index = 1
+		object.disguise_effect_id = object.movement_type - 0x1D
+		object.disguise_state = 0
+		object.disguise_frame = 0
+		object.disguise_ready = false
+		requests.append(_effect_request(object, slot, object.disguise_effect_id))
+
+
+## Trainer approach also calls `StartRevealDisguise`/`UpdateRevealDisguise`.
+static func start_reveal_disguise(object: ObjectEvent) -> void:
+	if object.direction_sequence_index == 1:
+		object.disguise_state += 1
+
+
+static func update_reveal_disguise(object: ObjectEvent) -> bool:
+	if object.direction_sequence_index in [0, 2]:
+		return true
+	if object.disguise_ready:
+		object.direction_sequence_index = 2
+		object.disguise_state += 1
+		return true
+	return false
+
+
+## Disguise callback precedes animation: seven four-frame images, END, then readiness on the next callback.
+func _step_disguise_effect(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if not object.disguise_spawned:
+		return
+	if not object.active or object.disguise_state == 3:
+		requests.append(_effect_request(object, slot, object.disguise_effect_id, "stop_field_effect"))
+		object.disguise_spawned = false
+		return
+	if object.disguise_state == 1:
+		object.disguise_state = 2
+		object.disguise_frame = 0
+	if object.disguise_state == 2:
+		object.disguise_ready = object.disguise_frame > 28
+		object.disguise_frame = mini(object.disguise_frame + 1, 30)
 
 
 ## `GetDirectionToFace` prefers x; an absent local-ID player leaves coords.
@@ -684,7 +754,10 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array) -> v
 
 func _step_autonomous(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var type: int = object.movement_type
-	if type >= 2 and type <= 6:
+	if type in [0x39, 0x3A]:
+		clear_held_movement(object)
+		object.single_movement_active = false
+	elif type >= 2 and type <= 6:
 		_step_wander(object, slot, requests)
 	elif type == 1 or (type >= 0xD and type <= 0x16):
 		_step_random_facing(object, slot, requests)
