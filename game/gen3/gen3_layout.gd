@@ -149,6 +149,8 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 ## `gInitialMovementTypeFacingDirections` follows `gRangedMovementTypes` directly.
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
+	"berries": 0x3CD2E8,
+	"berry_graphics": 0x374484, "berry_palettes": 0x3743D8,
 	"movement_type_count": 77,
 	"standard_scripts": 0x14B70C,
 	"standard_script_count": 8,
@@ -195,6 +197,8 @@ const RUBY: Dictionary = {
 
 const SAPPHIRE: Dictionary = {
 	"movement_types": 0x36DB64,
+	"berries": 0x3CD344,
+	"berry_graphics": 0x374414, "berry_palettes": 0x374368,
 	"movement_type_count": 77,
 	"standard_scripts": 0x14B70C,
 	"standard_script_count": 8,
@@ -241,6 +245,7 @@ const SAPPHIRE: Dictionary = {
 
 const FIRERED: Dictionary = {
 	"movement_types": 0x39FD7C,
+	"berries": 0x3DF858,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604C8,
 	"standard_script_count": 10,
@@ -287,6 +292,7 @@ const FIRERED: Dictionary = {
 
 const LEAFGREEN: Dictionary = {
 	"movement_types": 0x39FD5C,
+	"berries": 0x3DF694,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604A4,
 	"standard_script_count": 10,
@@ -333,6 +339,8 @@ const LEAFGREEN: Dictionary = {
 
 const EMERALD: Dictionary = {
 	"movement_types": 0x50557C,
+	"berries": 0x58A670,
+	"berry_graphics": 0x50C908, "berry_palettes": 0x50C85C,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1DC2A0,
 	"standard_script_count": 11,

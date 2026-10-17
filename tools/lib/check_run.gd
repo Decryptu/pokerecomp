@@ -84,8 +84,8 @@ func digest_matches(name: String, lines: PackedStringArray, digest: String) -> b
 		if file != null:
 			file.store_string(text)
 	var answered: String = text.sha1_text()
-	return check(answered == digest, "the %d-case %s sweep is %s, the cartridge %s." % [
-		lines.size() - 1, name, answered, digest,
+	return check(answered == digest, "the %d-line %s sweep is %s, the cartridge %s." % [
+		lines.size(), name, answered, digest,
 	])
 
 

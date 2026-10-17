@@ -15,7 +15,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read(rom, layout).is_empty():
-		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data, movement types or wild encounters did not decode."}
+		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data, movement types, berries or wild encounters did not decode."}
 	return {"ok": true, "message": ""}
 
 
@@ -31,9 +31,11 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var scripts: Dictionary = Gen3Script.read(rom, layout, headers)
 	var movement_types: Array = _movement_types(rom, layout)
-	if scripts.is_empty() or movement_types.is_empty():
+	var berries: Array = _berries(rom, layout)
+	if scripts.is_empty() or movement_types.is_empty() or berries.is_empty():
 		return {}
 	scripts["movement_types"] = movement_types
+	scripts["berries"] = berries
 	return {"headers": headers, "encounters": encounters, "graphics": graphics, "scripts": scripts}
 
 
@@ -51,6 +53,31 @@ static func _movement_types(rom: RomFile, layout: Dictionary) -> Array:
 		if ranged > 1 or facing > 4:
 			return []
 		out.append({"ranged": ranged == 1, "facing": facing})
+	return out
+
+
+## `gBerries` has 43 padded 28-byte records. Hoenn's graphics lookup also
+## accepts ID 44: its palette pointer runs into the following graphics table.
+static func _berries(rom: RomFile, layout: Dictionary) -> Array:
+	var at: int = int(layout["berries"])
+	if not rom.in_bounds(at, 43 * 28):
+		return []
+	var out: Array = []
+	for index: int in (44 if layout.has("berry_graphics") else 43):
+		var row: Dictionary = {}
+		if index < 43:
+			row = {"stage_minutes": rom.u8(at + index * 28 + 20) * 60,
+				"min_yield": rom.u8(at + index * 28 + 11), "max_yield": rom.u8(at + index * 28 + 10)}
+			if int(row["stage_minutes"]) == 0 or int(row["min_yield"]) > int(row["max_yield"]):
+				return []
+		for table: String in ["berry_graphics", "berry_palettes"]:
+			if not layout.has(table):
+				continue
+			var source: int = Gen3Layout.read_pointer(rom, int(layout[table]) + index * 4, 5, 1)
+			if source < 0:
+				return []
+			row[table] = Array(rom.slice(source, 5))
+		out.append(row)
 	return out
 
 
