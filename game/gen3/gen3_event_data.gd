@@ -20,6 +20,7 @@ const CLEARED_SYSTEM_FLAGS: Dictionary = {
 	&"emerald": [0x8AD, 0x8AE, STRENGTH_FLAG[&"emerald"], 0x8C1, 0x880],
 }
 
+var berries: Gen3BerryTrees
 var game: StringName
 var _flags: Dictionary = {}
 var _vars: Dictionary = {}

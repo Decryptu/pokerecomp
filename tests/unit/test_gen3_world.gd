@@ -5,7 +5,7 @@ extends GutTest
 const LAYOUT: Dictionary = {"map_groups": 0, "map_group_sizes": [2], "item_count": 10,
 	"wild_headers": 0x400, "wild_header_count": 2, "species_to_national": 0x800,
 	"standard_scripts": 0xC00, "standard_script_count": 1,
-	"movement_types": 0xF80, "movement_type_count": 2,
+	"berries": 0x820, "movement_types": 0xF80, "movement_type_count": 2,
 	"trainer_battle_scripts": [0xD01, 0xD01, 0xD01, 0xD01, 0xD01]}
 
 
@@ -14,6 +14,10 @@ func _dump(id: StringName = RomRegistry.EMERALD) -> PackedByteArray:
 	bytes.resize(4096)
 	bytes.encode_u32(0xC00, 0x08000D01)
 	bytes[0xD01] = 2
+	for berry: int in 43:
+		bytes[0x820 + berry * 28 + 20] = 3
+		bytes[0x820 + berry * 28 + 10] = 3
+		bytes[0x820 + berry * 28 + 11] = 2
 	bytes.encode_u32(0, 0x08000020)
 	for number: int in 2:
 		bytes.encode_u32(0x20 + number * 4, 0x08000040 + number * 28)
@@ -1540,3 +1544,167 @@ func test_reveal_dispatch_does_not_read_patrol_state_as_disguise_state() -> void
 		assert_true(objects.set_held_movement(object, action))
 		assert_true(object.frozen)
 		assert_false(object.held_movement_active)
+
+
+## ARM movement and sprite clocks pin stage polling, both sparkle halves,
+## natural withering versus picking, and initialization before a freeze gate.
+func test_berry_field_frames_match_the_original_callbacks() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.EMERALD]:
+		var lines := PackedStringArray()
+		for stage: int in 6:
+			for scenario: int in 6:
+				lines.append_array(_berry_field_trace(id, stage, scenario))
+		assert_eq(("\n".join(lines) + "\n").sha1_text(), "fcf2d33034088159c3ae0321528d786399d0aa7b", str(id))
+
+
+func _berry_field_trace(id: StringName, stage: int, scenario: int) -> PackedStringArray:
+	var objects: Gen3ObjectEvents = _movement_objects(id)
+	objects.camera.data._world_scripts["berries"] = [{"stage_minutes": 180, "min_yield": 2,
+		"max_yield": 3, "berry_graphics": [61, 61, 62, 62, 62], "berry_palettes": [3, 4, 4, 4, 4]}]
+	objects.events.berries.plant(0, 1, stage)
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	object.active = true
+	object.graphics_id = 61
+	object.movement_type = 12
+	object.current = Vector2i(12, 12)
+	object.previous = object.current
+	objects.objects[0] = object
+	var lines := PackedStringArray()
+	for frame: int in range(1, 401):
+		if frame == 81:
+			if scenario in [0, 3]:
+				objects.events.berries.plant(0, 1, stage % 5 + 1)
+			elif scenario in [1, 2]:
+				objects.events.berries.remove(0)
+				if scenario == 2:
+					objects.mark_berry_tree_picked(object.local_id, object.map_number, object.map_group)
+		if scenario == 3 and frame in [41, 91]:
+			if frame == 41:
+				objects.freeze_except_player()
+			else:
+				objects.unfreeze_all()
+		if scenario == 4 and frame == 41:
+			objects.set_held_movement(object, 0x14)
+		if scenario == 4 and frame == 61:
+			Gen3ObjectEvents.clear_held_movement_if_finished(object)
+		var effects: Array = objects.step_movements().filter(
+			func(request: Dictionary) -> bool: return request["kind"] == "field_effect")
+		lines.append(",".join([stage, scenario, frame, object.graphics_id, int(object.invisible),
+			int(object.single_movement_active), object.movement_action & 255, object.movement_state,
+			1 + int(object.berry_sparkling) * 2 + int(object.berry_just_picked) * 4,
+			object.berry_animation, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
+	return lines
+
+
+## Original ARM saves and RNG state cover every watering mask, the tenth
+## regrowth, batched expiry and unseen trees; the field trace never ticks time.
+func test_berry_growth_records_match_the_original_engine() -> void:
+	var objects: Gen3ObjectEvents = _movement_objects(RomRegistry.EMERALD)
+	var rows: Array = []
+	for berry: int in 43:
+		rows.append({"stage_minutes": 180, "min_yield": 2, "max_yield": 3})
+	rows[20] = {"stage_minutes": 180, "min_yield": 2, "max_yield": 6}
+	rows[30] = {"stage_minutes": 1080, "min_yield": 1, "max_yield": 2}
+	objects.camera.data._world_scripts["berries"] = rows
+	var lines := PackedStringArray()
+	for berry: int in [1, 21, 31]:
+		lines.append_array(_berry_growth_trace(objects.camera.data, berry))
+	assert_eq(("\n".join(lines) + "\n").sha1_text(), "6ccde374b62b2c6caf374d3000063a256fe1c8f2")
+
+
+func _berry_growth_trace(data: GameData, berry: int) -> PackedStringArray:
+	var lines := PackedStringArray()
+	for scenario: int in 18:
+		var trees := Gen3BerryTrees.new(data)
+		trees.plant(0, berry, 5 if scenario == 16 else 1, scenario != 17)
+		trees.random_seed = 0x12345678
+		var duration: int = int(trees.record(0)["minutes"]) / (4 if scenario == 16 else 1)
+		for turn: int in 101:
+			var stage: int = int(trees.record(0)["stage"])
+			if scenario < 16 and stage >= 1 and stage <= 4 and scenario & (1 << (stage - 1)):
+				trees.water(0)
+			var minutes: int = duration if scenario < 16 else int([0, 1, duration - 1, duration,
+				duration + 1, duration * 4, duration * 70, duration * 71, -1][turn % 9])
+			trees.advance_minutes(minutes)
+			var values: Array = [berry, scenario, turn]
+			values.append_array(Array(trees._records.slice(0, 6)))
+			values.append(trees.random_seed)
+			lines.append(",".join(values))
+	return lines
+
+
+## Byte stage tables need no word alignment. The world must refuse a bad
+## table before caching it; existing graphics cases cover metatiles instead.
+func test_berry_tables_keep_byte_aligned_rows_and_refuse_bad_spans() -> void:
+	var bytes: PackedByteArray = _dump()
+	bytes.resize(0x1400)
+	var layout: Dictionary = LAYOUT.duplicate()
+	layout.merge({"berry_graphics": 0x1000, "berry_palettes": 0x1100})
+	for berry: int in 44:
+		bytes.encode_u32(0x1000 + berry * 4, 0x08001201)
+		bytes.encode_u32(0x1100 + berry * 4, 0x08001206)
+	for value: int in 10:
+		bytes[0x1201 + value] = value
+	var world: Dictionary = Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), layout)
+	assert_false(world.is_empty())
+	var data := GameData.new()
+	data.generation = RomRegistry.GEN3
+	data._sections = {"scripts": true}
+	data._world_scripts = world["scripts"]
+	var row: Dictionary = data.world_berry(43)
+	assert_eq(row, {"stage_minutes": 180, "min_yield": 2, "max_yield": 3,
+		"berry_graphics": [0, 1, 2, 3, 4], "berry_palettes": [5, 6, 7, 8, 9]})
+	row["berry_graphics"][0] = 99
+	assert_eq(data.world_berry(43)["berry_graphics"][0], 0)
+	assert_eq(data.world_berry(0), {})
+	assert_eq(data.world_berry(44), {"berry_graphics": [0, 1, 2, 3, 4], "berry_palettes": [5, 6, 7, 8, 9]})
+	assert_eq(data.world_berry(45), {})
+	bytes.encode_u32(0x1100 + 42 * 4, 0x080013FC)
+	assert_eq(Gen3World.read(RomFile.from_bytes(bytes, RomRegistry.EMERALD), layout), {})
+
+
+func test_only_seen_berry_trees_resume_their_saved_growth() -> void:
+	var objects: Gen3ObjectEvents = _movement_objects(RomRegistry.EMERALD)
+	objects.camera.data._world_scripts["berries"] = [{"stage_minutes": 180, "min_yield": 2, "max_yield": 3}]
+	objects.camera.pos = Vector2i(10, 10)
+	var positions: Array[Vector2i] = [Vector2i(10, 13), Vector2i(24, 21), Vector2i(9, 13),
+		Vector2i(25, 21), Vector2i(10, 12), Vector2i(24, 22), Vector2i(10, 13)]
+	for index: int in positions.size():
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[index]
+		object.active = true
+		object.movement_type = 12 if index < 6 else 7
+		object.current = positions[index]
+		object.trainer_range = index
+		objects.events.berries.plant(index, 1, 1, false)
+	objects.allow_seen_berry_growth()
+	objects.events.berries.advance_minutes(180)
+	for index: int in positions.size():
+		assert_eq(objects.events.berries.record(index)["stage"], 2 if index < 2 else 1)
+	objects.events.clear_temp()
+	var next_map := Gen3ObjectEvents.new(objects.camera, objects.events)
+	assert_same(next_map.events.berries, objects.events.berries)
+	assert_eq(next_map.events.berries.record(0)["stage"], 2)
+
+
+## The original ARM lookup admits ID 44, but larger IDs and zero use CHERI.
+## Clamping to the growth-table count changes the reserved row's palette.
+func test_berry_graphics_keep_the_cartridge_overread_boundary() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _movement_objects(id)
+		var row: Dictionary = {"stage_minutes": 180, "min_yield": 2, "max_yield": 3,
+			"berry_graphics": [61, 61, 62, 62, 62], "berry_palettes": [3, 4, 4, 4, 4]}
+		var rows: Array = []
+		for berry: int in 43:
+			rows.append(row)
+		rows.append({"berry_graphics": [61, 61, 62, 62, 62], "berry_palettes": [61, 61, 62, 62, 62]})
+		objects.camera.data._world_scripts["berries"] = rows
+		for berry: int in [0, 43, 44, 45, 255]:
+			for stage: int in range(1, 6):
+				objects.events.berries.plant(0, berry, stage)
+				var object := Gen3ObjectEvents.ObjectEvent.new()
+				object.active = true
+				object.movement_type = 12
+				objects.objects[0] = object
+				objects.step_movements()
+				assert_eq(object.graphics_id, 61 if stage < 3 else 62)
+				assert_eq(object.berry_palette, int(([13, 13, 14, 14, 14] if berry == 44 else [3, 4, 4, 4, 4])[stage - 1]))

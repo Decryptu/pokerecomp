@@ -388,6 +388,13 @@ func world_movement_type(type: int) -> Dictionary:
 	return _coerce_service_dictionary(types[type]) if type < types.size() else {}
 
 
+func world_berry(berry: int) -> Dictionary:
+	if generation != RomRegistry.GEN3 or berry < 1:
+		return {}
+	var rows: Array = _scripts().get("berries", [])
+	return _coerce_service_dictionary(rows[berry - 1]) if berry <= rows.size() else {}
+
+
 func world_map_layout(group: int, number: int) -> Dictionary:
 	var header: Dictionary = world_map_header(group, number)
 	return _gba_graphics_record("layouts", int(header.get("layout_offset", -1)))

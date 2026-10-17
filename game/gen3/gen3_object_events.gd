@@ -164,6 +164,14 @@ class ObjectEvent:
 	var jump_y: int = 0
 	var ground_on_spawn: bool = true
 	var player_copyable_movement: int = 0
+	var berry_initialized: bool = false
+	var berry_sparkling: bool = false
+	var berry_just_picked: bool = false
+	var berry_animation: int = 0
+	var berry_animation_frame: int = 0
+	var berry_animation_paused: bool = false
+	var berry_animation_paused_backup: bool = false
+	var berry_palette: int = 0
 	var disguise_spawned: bool = false
 	var disguise_effect_id: int = 0
 	var disguise_state: int = 0
@@ -191,6 +199,8 @@ var _effect_requests: Array = []
 func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
 	camera = field_camera
 	events = event_data
+	if events.berries == null:
+		events.berries = Gen3BerryTrees.new(camera.data)
 	var id: StringName = camera.data.id
 	_frlg = id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
 	for type: int in 256:
@@ -469,7 +479,7 @@ func set_held_movement(object: ObjectEvent, action: int) -> bool:
 		return true
 	if int(_motions[action][0]) == Motion.REVEAL and object.movement_type == 0x3F:
 		return true
-	object.frozen = false
+	_unfreeze(object)
 	object.movement_action = action
 	object.held_movement_active = true
 	object.held_movement_finished = false
@@ -503,24 +513,61 @@ static func movement_overridden(object: ObjectEvent) -> bool:
 ## `FreezeObjectEvents` skips player/held actions; unfreezing visits every active slot.
 func freeze_except_player() -> void:
 	for object: ObjectEvent in objects:
-		if object.active and not object.is_player and not object.held_movement_active:
+		if object.active and not object.is_player and not object.held_movement_active and not object.frozen:
 			object.frozen = true
+			object.berry_animation_paused_backup = object.berry_animation_paused
+			object.berry_animation_paused = true
 
 
 func unfreeze_all() -> void:
 	for object: ObjectEvent in objects:
 		if object.active:
-			object.frozen = false
+			_unfreeze(object)
+
+
+static func _unfreeze(object: ObjectEvent) -> void:
+	if object.frozen:
+		object.frozen = false
+		object.berry_animation_paused = object.berry_animation_paused_backup
 
 
 ## `RemoveObjectEventByLocalIdAndMap` sets the template's hide flag. The
 ## current map's mutable templates precede another map's header templates.
 func remove(local_id: int, number: int, group: int) -> void:
+	var object: ObjectEvent = by_identity(local_id, number, group)
+	if object != null:
+		events.flag_set(int(_template_by_id(local_id, number, group).get("flag", 0)))
+		_deactivate(object)
+
+
+func by_identity(local_id: int, number: int, group: int) -> ObjectEvent:
 	for object: ObjectEvent in objects:
 		if object.active and object.local_id == local_id and object.map_number == number and object.map_group == group:
-			events.flag_set(int(_template_by_id(local_id, number, group).get("flag", 0)))
-			_deactivate(object)
-			return
+			return object
+	return null
+
+
+func berry_tree_sparkling(local_id: int, number: int, group: int) -> bool:
+	var object: ObjectEvent = by_identity(local_id, number, group)
+	return object != null and object.berry_sparkling
+
+
+func mark_berry_tree_picked(local_id: int, number: int, group: int) -> void:
+	var object: ObjectEvent = by_identity(local_id, number, group)
+	if object != null:
+		object.berry_just_picked = true
+
+
+## `SetBerryTreesSeen` uses the inner 15x9 rectangle, not the spawn window.
+func allow_seen_berry_growth() -> void:
+	if _frlg:
+		return
+	var top_left: Vector2i = camera.pos + Vector2i(0, 3)
+	for object: ObjectEvent in objects:
+		var delta: Vector2i = object.current - top_left
+		if object.active and object.movement_type == 0xC and delta.x >= 0 and delta.x <= 14 \
+				and delta.y >= 0 and delta.y <= 8:
+			events.berries.allow_growth(object.trainer_range)
 
 
 func _deactivate(object: ObjectEvent) -> void:
@@ -569,6 +616,9 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 		if not object.active:
 			continue
 		_init_disguise(object, slot, requests)
+		if not _frlg and object.movement_type == 0xC and not object.berry_initialized:
+			_set_berry_graphics(object)
+			object.berry_initialized = true
 		if object.ground_on_spawn:
 			_ground(object, slot, "spawn", requests)
 			object.ground_on_spawn = false
@@ -576,6 +626,8 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 			object.held_movement_finished = _advance_motion(object, slot, requests)
 		elif not object.held_movement_active and not object.frozen:
 			_step_autonomous(object, slot, requests)
+		if object.berry_initialized and not object.berry_animation_paused:
+			object.berry_animation_frame = mini(object.berry_animation_frame + 1, 193)
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
 	return requests
@@ -754,10 +806,12 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array) -> v
 
 func _step_autonomous(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var type: int = object.movement_type
-	if type in [0x39, 0x3A]:
+	if type == 0xC and not _frlg:
+		_step_berry(object, slot, requests)
+	elif type in [0x39, 0x3A]:
 		clear_held_movement(object)
 		object.single_movement_active = false
-	elif type >= 2 and type <= 6:
+	elif type in [2, 3, 4, 5, 6]:
 		_step_wander(object, slot, requests)
 	elif type == 1 or (type >= 0xD and type <= 0x16):
 		_step_random_facing(object, slot, requests)
@@ -771,6 +825,76 @@ func _step_autonomous(object: ObjectEvent, slot: int, requests: Array) -> void:
 		_step_stationary(object, slot, requests)
 	elif (type >= 0x40 and type <= 0x4B) or (not _frlg and type >= 0x4D and type <= 0x50):
 		_step_in_place(object, slot, requests)
+
+
+func _set_berry_graphics(object: ObjectEvent) -> void:
+	var tree: Dictionary = events.berries.record(object.trainer_range)
+	var stage: int = int(tree.get("stage", 0))
+	object.invisible = stage == 0
+	if stage == 0:
+		return
+	var berry: int = int(tree["berry"])
+	var info: Dictionary = camera.data.world_berry(berry if berry >= 1 and berry <= 44 else 1)
+	object.berry_animation = stage - 1
+	object.berry_animation_frame = 0
+	object.graphics_id = int(info["berry_graphics"][stage - 1])
+	object.berry_palette = int(info["berry_palettes"][stage - 1]) & 15
+
+
+func _berry_sparkle(object: ObjectEvent, slot: int, requests: Array) -> void:
+	var request: Dictionary = _effect_request(object, slot, 23)
+	request["x"] = object.current.x
+	request["y"] = object.current.y
+	requests.append(request)
+
+
+## `MovementType_BerryTreeGrowth`: each TRUE callback runs the next state in
+## the same frame; the two sparkle phases each spend timer values 1 through 65.
+func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
+	while true:
+		match object.movement_state:
+			0:
+				clear_held_movement(object)
+				object.single_movement_active = false
+				var stage: int = int(events.berries.record(object.trainer_range).get("stage", 0))
+				object.invisible = stage == 0
+				if stage == 0:
+					if not object.berry_just_picked and object.berry_animation == 4:
+						_berry_sparkle(object, slot, requests)
+						object.berry_animation = 0
+					return
+				if object.berry_animation == stage - 1:
+					_set_berry_graphics(object)
+					object.movement_state = 1
+					object.movement_action = 0x39
+					object.movement_delay = 1
+					object.berry_animation_paused = false
+				else:
+					object.movement_state = 2
+			1:
+				if object.berry_animation_frame < [33, 65, 97, 129, 193][object.berry_animation]:
+					return
+				object.movement_state = 0
+				object.movement_delay = 0
+			2:
+				object.single_movement_active = true
+				object.movement_state = 3
+				object.movement_delay = 0
+				object.berry_sparkling = true
+				_berry_sparkle(object, slot, requests)
+			3, 4:
+				object.movement_delay += 1
+				object.invisible = bool(object.movement_delay & 2)
+				object.berry_animation_paused = true
+				if object.movement_delay <= 64:
+					return
+				if object.movement_state == 3:
+					_set_berry_graphics(object)
+					object.movement_state = 4
+					object.movement_delay = 0
+				else:
+					object.movement_state = 0
+					object.berry_sparkling = false
 
 
 ## `MovementType_CopyPlayer*`: latch the entry facing once, and resume holds

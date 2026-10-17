@@ -89,6 +89,8 @@ func _one_game() -> void:
 	_object_movements(true)
 	_copy_player_movements()
 	_disguises()
+	_berries()
+	_berry_objects()
 	_boulder_landings()
 	_rotating_gates()
 	_world_scripts()
@@ -1361,3 +1363,91 @@ func _disguise_frames(objects: Gen3ObjectEvents, header: Dictionary, template: D
 
 
 const DISGUISE_REVEAL_DIGEST: String = "6ea54dfb378843c69af71ca7d3857b72b9d5cae4"
+
+
+## `gBerries` fields agree with berry.c; stage selections come from each
+## byte-matching build's graphics and palette pointer tables.
+func _berries() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray()
+	for berry: int in range(1, 44):
+		var row: Dictionary = data.world_berry(berry)
+		if not _r.check(not row.is_empty(), "berry %d has growth parameters" % berry):
+			return
+		var values: Array = [berry, row["stage_minutes"], row["min_yield"], row["max_yield"]]
+		values.append_array(row.get("berry_graphics", []))
+		values.append_array(row.get("berry_palettes", []))
+		lines.append(",".join(values))
+	var frlg: bool = data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	_r.digest_matches("gen3_berries", lines, "4becd74400492a852a8fa88faeea0e2dff4295e7" if frlg
+		else "d0c8182d600f64f5fcc3f523198fafed04691c8c")
+	if frlg:
+		return
+	_r.check(data.world_berry(44) == {"berry_graphics": [61, 61, 62, 62, 62],
+		"berry_palettes": [61, 61, 62, 62, 62]}, "reserved berry graphics preserve the palette overread")
+	lines.clear()
+	for berry: int in range(1, 44):
+		lines.append_array(_berry_growth_frames(data, berry))
+	_r.digest_matches("gen3_berry_growth", lines, "3c71d97347d67067d19dca6917c8a519e1e608c5")
+
+
+## Original ARM records and shared LCG over every berry and watering mask,
+## ten regrowths, long batches and trees frozen until seen.
+func _berry_growth_frames(data: GameData, berry: int) -> PackedStringArray:
+	var lines := PackedStringArray()
+	for scenario: int in 18:
+		var trees := Gen3BerryTrees.new(data)
+		trees.plant(0, berry, 5 if scenario == 16 else 1, scenario != 17)
+		trees.random_seed = 0x12345678
+		var duration: int = int(trees.record(0)["minutes"]) / (4 if scenario == 16 else 1)
+		for turn: int in 101:
+			var stage: int = int(trees.record(0)["stage"])
+			if scenario < 16 and stage >= 1 and stage <= 4 and scenario & (1 << (stage - 1)):
+				trees.water(0)
+			var minutes: int = duration if scenario < 16 else int([0, 1, duration - 1, duration,
+				duration + 1, duration * 4, duration * 70, duration * 71, -1][turn % 9])
+			trees.advance_minutes(minutes)
+			var values: Array = [berry, scenario, turn]
+			values.append_array(Array(trees._records.slice(0, 6)))
+			values.append(trees.random_seed)
+			lines.append(",".join(values))
+	return lines
+
+
+func _berry_objects() -> void:
+	var data: GameData = _r.data
+	var count: int = 0
+	var objects: Gen3ObjectEvents = _movement_field(data)
+	for header: Dictionary in data.world_map_headers():
+		objects.camera.group = int(header["group"])
+		objects.camera.number = int(header["number"])
+		objects.load_templates()
+		for template: Dictionary in objects.templates:
+			if int(template["movement_type"]) != 12:
+				continue
+			count += 1
+			_berry_object_frames(objects, template)
+	_r.check(count == (0 if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 88),
+		"every source berry-tree template is exercised")
+	_r.note("%d berry-tree templates: original ARM growth-transition frames" % count)
+
+
+func _berry_object_frames(objects: Gen3ObjectEvents, template: Dictionary) -> void:
+	var slot: int = objects.spawn(template, objects.camera.number, objects.camera.group)
+	if not _r.check(slot >= 0, "berry tree spawns"):
+		return
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[slot]
+	objects.events.berries.plant(object.trainer_range, 1, 1)
+	var lines := PackedStringArray()
+	for frame: int in range(1, 401):
+		if frame == 81:
+			objects.events.berries.plant(object.trainer_range, 1, 2)
+		var effects: Array = objects.step_movements().filter(
+			func(request: Dictionary) -> bool: return request["kind"] == "field_effect")
+		lines.append(",".join([frame, object.graphics_id, int(object.invisible),
+			int(object.single_movement_active), object.movement_action & 255, object.movement_state,
+			object.movement_delay, 1 + int(objects.berry_tree_sparkling(object.local_id, object.map_number, object.map_group)) * 2,
+			object.berry_animation, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
+	_r.check(("\n".join(lines) + "\n").sha1_text() == "6385b0a01e1037c39ebbf2f45ea8b41d9530498e",
+		"berry template %d matches original ARM callbacks and animation clocks" % object.local_id)
+	object.active = false
