@@ -3,14 +3,14 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3's field model now handles ledge jumps, surf dismounts, Strength pushes, boulder falls and switches, and Hoenn's rotating gates.
-- Generation 3 objects now support contextual facing, visibility changes, landing effects, drawing priority changes and emote requests.
-- Generation 3 NPCs now follow deterministic patrol routes and run supported stationary movements with cartridge timing and collision checks.
+- Generation 3 NPCs now support random wandering, weighted facing and rotation, trainer reactions, copy-player movement and Mew's grass movement.
+- Generation 3 objects now support tree and mountain disguises and their reveal animations.
+- Generation 3 berry trees now model planting, watering, growth, yields and regrowth, with Hoenn's stage graphics and field callbacks.
 - Generation 3 cartridges remain unplayable while field integration continues.
 
 ## Updating this release
 
-- No cartridge reimport is required. Saves are preserved.
+- Cartridges must be reimported for the updated cache format. Saves are preserved.
 
 ## Which file
 
