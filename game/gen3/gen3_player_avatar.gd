@@ -248,13 +248,13 @@ func begin_collision_movement(direction: int) -> Dictionary:
 			requests.append({"kind": "sound", "name": "ledge"})
 			if not Gen3ObjectEvents.movement_overridden(object()):
 				object().player_copyable_movement = 8
-				objects.set_held_movement(object(), (0x14 if _frlg else 0x0C) + direction - 1)
+				objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0x14 if _frlg else 0x0C, direction))
 	result["requests"] = requests
 	return result
 
 
-## `RunTasks` precedes `AnimateSprites`: call this once per field frame,
-## then [method Gen3ObjectEvents.step_movements]. Presentation requests leave
+## `RunTasks` precedes `AnimateSprites`: call this once per field frame, after
+## [method Gen3TrainerSee.run_tasks], then [method Gen3ObjectEvents.step_movements]. Presentation requests leave
 ## flags, occupancy and held actions owned by these models.
 func step_movement_tasks() -> Array:
 	var requests: Array = []
@@ -270,6 +270,14 @@ func step_movement_tasks() -> Array:
 	return requests
 
 
+## `ForcedMovement_None`, behind `CancelPlayerForcedMovement`.
+func cancel_forced_movement() -> void:
+	if flags & Flag.FORCED_MOVE:
+		object().facing_locked = false
+		Gen3ObjectEvents.set_direction(object(), object().facing)
+		flags &= ~Flag.FORCED_MOVE
+
+
 ## Emerald's `PushBoulder_Move` clears finished holds before testing overrides;
 ## `DoBoulderDust` on Ruby/Sapphire/FRLG does not, even for a finished hold.
 func _start_push(requests: Array) -> void:
@@ -282,8 +290,8 @@ func _start_push(requests: Array) -> void:
 		return
 	Gen3ObjectEvents.clear_held_movement_if_finished(player)
 	Gen3ObjectEvents.clear_held_movement_if_finished(boulder)
-	objects.set_held_movement(player, (0x25 if _frlg else 0x1D) + _task_direction - 1)
-	objects.set_held_movement(boulder, (0x08 if _frlg else 0x04) + _task_direction - 1)
+	objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x25 if _frlg else 0x1D, _task_direction))
+	objects.set_held_movement(boulder, Gen3ObjectEvents.direction_action(0x08 if _frlg else 0x04, _task_direction))
 	requests.append({"kind": "dust", "at": boulder.current, "elevation": boulder.previous_elevation})
 	requests.append({"kind": "sound", "name": "strength"})
 	task = Task.PUSH_MOVE
@@ -307,7 +315,7 @@ func _start_dismount(requests: Array) -> void:
 			and Gen3ObjectEvents.clear_held_movement_if_finished(object()) == 0:
 		return
 	requests.append({"kind": "surf_bob", "mode": "mon_only"})
-	objects.set_held_movement(object(), (0xA6 if _frlg else 0x3A) + _task_direction - 1)
+	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0xA6 if _frlg else 0x3A, _task_direction))
 	task = Task.SURF_JUMP
 
 
@@ -315,7 +323,7 @@ func _finish_dismount(requests: Array) -> void:
 	if Gen3ObjectEvents.clear_held_movement_if_finished(object()) == 0:
 		return
 	object().graphics_id = graphics_for(State.NORMAL)
-	objects.set_held_movement(object(), maxi(object().facing - 1, 0))
+	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0, object().facing))
 	prevent_step = false
 	controls_locked = false
 	if _frlg:
