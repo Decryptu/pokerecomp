@@ -88,11 +88,16 @@ const COPY_OBJECT_DIRECTIONS: Array = [[2, 1, 4, 3], [1, 2, 3, 4], [4, 3, 1, 2],
 const COPY_ACTIONS: Array[int] = [-1, 0, 0x08, 0x15, 0x2D, 0x31, 0x46, 0x42, 0x0C]
 const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
 const MOVEMENT_TYPE_BURIED: int = 0x3F
-const TRAINER_FACING_TYPES: Array[int] = [8, 8, 7, 9, 10, 8, 8]
-## FLDEFF_ASH_PUFF (Ruby/FRLG POP_OUT_OF_ASH): five six-frame cells, then END.
+## `gTrainerFacingDirectionMovementTypes`, by `DIR_*`, diagonals included.
+const TRAINER_FACING_TYPES: Array[int] = [8, 8, 7, 9, 10, 8, 8, 7, 7]
+## Field-effect sprites end on the pass after their last frame: FLDEFF_ASH_PUFF
+## (Ruby/FRLG POP_OUT_OF_ASH) has five six-frame cells, and `SpriteCB_TrainerIcons`'
+## emotes, FLDEFF_EXCLAMATION_MARK_ICON among them, show one 60-frame image.
 const ASH_PUFF: int = 49
 const ASH_PUFF_CELL: int = 6
 const ASH_PUFF_PASSES: int = 31
+const EXCLAMATION_MARK_ICON: int = 0
+const ICON_PASSES: int = 61
 
 const STATE_MOTIONS: Array = [
 	[0x59, 0x67, Motion.REVEAL, 0],
@@ -117,7 +122,8 @@ const HOENN_BLOCKED_SIDES: Dictionary = {
 	Direction.SOUTH: [0xC0], Direction.NORTH: [0xC0],
 	Direction.WEST: [0xC1, 0xBE], Direction.EAST: [0xC1, 0xBE],
 }
-const OPPOSITE: Array[int] = [Direction.NONE, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST]
+## `GetOppositeDirection`, diagonals included.
+const OPPOSITE: Array[int] = [Direction.NONE, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, 8, 7, 6, 5]
 ## FRLG's `ShouldInitObjectEventStateFromTemplate` holds CUT_TREE/ROCK_SMASH_ROCK
 ## back near connections, setting their temporary hide flags.
 const FRLG_OBSTACLES: Array[int] = [95, 96]
@@ -202,7 +208,10 @@ var _facing := PackedByteArray()
 var _blocked: Dictionary = {}
 var _motions: Dictionary = {}
 var _effect_requests: Array = []
-var _buried_reveals: Array[Dictionary] = []
+## Buried trainers whose reveal action created `trainer_see.c`'s task this frame,
+## by slot; [Gen3TrainerSee] takes them before its next run.
+var buried_reveals: Array[int] = []
+var _effect_sprites: Array[Dictionary] = []
 
 
 func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
@@ -396,24 +405,37 @@ func _obstacle_in_view_ok(at: Vector2i) -> bool:
 	return at.y < pos.y - (Gen3MapGrid.MAP_OFFSET - 1) or at.y > pos.y + Gen3MapGrid.MAP_OFFSET - 1
 
 
-## `GetCollisionAtCoords`; invalid directions refuse. FRLG's nine-bit
-## behavior narrows at the u8 side predicates.
+## `GetCollisionAtCoords`: the lowest of [method collision_flags_at]'s
+## collisions; invalid directions refuse.
 func collision_at(object: ObjectEvent, x: int, y: int, direction: int) -> int:
 	if direction < 1 or direction > 4:
 		return Collision.IMPASSABLE
-	var grid: Gen3MapGrid = camera.grid
 	if _outside_range(object, x, y):
 		return Collision.OUTSIDE_RANGE
-	if grid.collision_at(x, y) != 0 or grid.border_id_at(x, y) == Gen3MapGrid.Connection.INVALID \
-			or object.current_behavior in _blocked[direction] \
-			or (grid.behavior_at(x, y) & 0xFF) in _blocked[OPPOSITE[direction]] \
-			or (object.tracked_by_camera and not camera.can_move(direction)):
+	if _impassable(object, x, y, direction):
 		return Collision.IMPASSABLE
 	if _elevation_mismatch(object.current_elevation, x, y):
 		return Collision.ELEVATION_MISMATCH
 	if _object_at(object, x, y):
 		return Collision.OBJECT_EVENT
 	return Collision.NONE
+
+
+## `GetCollisionFlagsAtCoords`: bit `collision - 1` for each one present.
+func collision_flags_at(object: ObjectEvent, x: int, y: int, direction: int) -> int:
+	if direction < 1 or direction > 4:
+		return 1 << (Collision.IMPASSABLE - 1)
+	return int(_outside_range(object, x, y)) | int(_impassable(object, x, y, direction)) << 1 \
+		| int(_elevation_mismatch(object.current_elevation, x, y)) << 2 | int(_object_at(object, x, y)) << 3
+
+
+## FRLG's nine-bit behavior narrows at the u8 side predicates.
+func _impassable(object: ObjectEvent, x: int, y: int, direction: int) -> bool:
+	var grid: Gen3MapGrid = camera.grid
+	return grid.collision_at(x, y) != 0 or grid.border_id_at(x, y) == Gen3MapGrid.Connection.INVALID \
+		or object.current_behavior in _blocked[direction] \
+		or (grid.behavior_at(x, y) & 0xFF) in _blocked[OPPOSITE[direction]] \
+		or (object.tracked_by_camera and not camera.can_move(direction))
 
 
 ## `IsCoordOutsideObjectEventMovementRange`; a zero range is unbounded.
@@ -479,6 +501,11 @@ func _build_motions() -> void:
 			_motions[0x90 + index] = [Motion.WALK, [7, 8, 5, 6][index], 0]
 
 
+## `dirn_to_anim`: a family's action for one direction; past east, its south one.
+static func direction_action(base: int, direction: int) -> int:
+	return base + (direction - 1 if direction >= Direction.SOUTH and direction <= Direction.EAST else 0)
+
+
 ## `ObjectEventSetHeldMovement`: true refuses; completion does not clear the hold.
 func set_held_movement(object: ObjectEvent, action: int) -> bool:
 	if not object.active or movement_overridden(object) or not _motions.has(action):
@@ -516,10 +543,13 @@ static func movement_overridden(object: ObjectEvent) -> bool:
 	return object.single_movement_active or object.held_movement_active
 
 
-## `FreezeObjectEvents` skips player/held actions; unfreezing visits every active slot.
-func freeze_except_player() -> void:
-	for object: ObjectEvent in objects:
-		if object.active and not object.is_player and not object.held_movement_active and not object.frozen:
+## `FreezeObjectEvents` (`FreezeObjectEventsExceptOne` past [param except_slot]) skips
+## player/held actions; unfreezing visits every active slot.
+func freeze_except_player(except_slot: int = -1) -> void:
+	for slot: int in COUNT:
+		var object: ObjectEvent = objects[slot]
+		if slot != except_slot and object.active and not object.is_player \
+				and not object.held_movement_active and not object.frozen:
 			object.frozen = true
 			object.berry_animation_paused_backup = object.berry_animation_paused
 			object.berry_animation_paused = true
@@ -542,7 +572,7 @@ static func _unfreeze(object: ObjectEvent) -> void:
 func remove(local_id: int, number: int, group: int) -> void:
 	var object: ObjectEvent = by_identity(local_id, number, group)
 	if object != null:
-		events.flag_set(int(_template_by_id(local_id, number, group).get("flag", 0)))
+		events.flag_set(int(template_by_id(local_id, number, group).get("flag", 0)))
 		_deactivate(object)
 
 
@@ -581,7 +611,7 @@ func _deactivate(object: ObjectEvent) -> void:
 	_step_disguise_effect(object, objects.find(object), _effect_requests)
 
 
-func _template_by_id(local_id: int, number: int, group: int) -> Dictionary:
+func template_by_id(local_id: int, number: int, group: int) -> Dictionary:
 	var rows: Array = templates if number == camera.number and group == camera.group \
 		else camera.data.world_map_events(group, number).get("objects", [])
 	for row: Dictionary in rows:
@@ -599,7 +629,7 @@ func boulder_landing(object: ObjectEvent) -> Array:
 		return requests
 	var behavior: int = camera.grid.behavior_at(object.current.x, object.current.y)
 	if behavior == 0x66:
-		var template: Dictionary = _template_by_id(object.local_id, camera.number, camera.group)
+		var template: Dictionary = template_by_id(object.local_id, camera.number, camera.group)
 		remove(object.local_id, camera.number, camera.group)
 		events.flag_clear(int(template.get("trainer_type", 0)))
 		requests.append({"kind": "sound", "name": "fall"})
@@ -616,7 +646,6 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	_player_tile_center = player_tile_center
 	var requests: Array = _effect_requests.duplicate()
 	_effect_requests.clear()
-	_step_buried_reveals(requests)
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
 		if not object.active:
@@ -634,7 +663,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 			object.berry_animation_frame = mini(object.berry_animation_frame + 1, 193)
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
-	_step_ash_puffs(requests)
+	_step_effect_sprites(requests)
 	return requests
 
 
@@ -648,72 +677,65 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 		object.buried_initialized = true
 
 
-## `Task_SetBuriedTrainerMovement` in `RunTasks`; unfinished frames clear the finished flag.
-func _step_buried_reveals(requests: Array) -> void:
-	for task: Dictionary in _buried_reveals.duplicate():
-		var object: ObjectEvent = task["object"]
-		if not task["started"]:
-			clear_held_movement(object)
-			task["started"] = true
-		_buried_reveal_step(task, object, requests)
-		if int(task["step"]) == 3 and not _ash_puff_active():
-			var type: int = TRAINER_FACING_TYPES[object.facing]
-			object.movement_type = type
-			object.direction_sequence_index = 0
-			object.player_copyable_movement = 0
-			object.movement_state = 0
-			_override_template_movement_type(object, type)
-			_buried_reveals.erase(task)
+## `FieldEffectStart` for a sprite created after the objects, so it runs this
+## frame. A followed effect is an icon, stopped once its object is gone.
+func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
+		requests: Array) -> Dictionary:
+	var request: Dictionary = _effect_request(object, slot, effect)
+	requests.append(request)
+	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
+	_effect_sprites.append(sprite)
+	return sprite
+
+
+## `FieldEffectActiveListContains` for the effects [method start_effect_sprite] runs.
+func field_effect_active(effect: int) -> bool:
+	return _effect_sprites.any(func(sprite: Dictionary) -> bool: return sprite["request"]["effect_id"] == effect)
+
+
+func _step_effect_sprites(requests: Array) -> void:
+	for sprite: Dictionary in _effect_sprites.duplicate():
+		var request: Dictionary = sprite["request"]
+		if int(sprite["passes"]) >= int(sprite["end"]) or (sprite["follow"] and by_identity(
+				int(request["local_id"]), int(request["map_number"]), int(request["map_group"])) == null):
+			var stop: Dictionary = request.duplicate()
+			stop["kind"] = "stop_field_effect"
+			requests.append(stop)
+			_effect_sprites.remove_at(_effect_sprites.find(sprite))
 		else:
-			object.held_movement_finished = false
+			sprite["passes"] = int(sprite["passes"]) + 1
 
 
-## `sTrainerSeeFuncList2`; a refused hold still advances the step.
-func _buried_reveal_step(task: Dictionary, object: ObjectEvent, requests: Array) -> void:
-	match int(task["step"]):
-		0:
-			if not movement_overridden(object) or clear_held_movement_if_finished(object):
-				set_held_movement(object, 0x4A if _frlg else 0x3E)
-				task["step"] = 1
-		1:
-			if held_movement_status(object):
-				task["puff"] = 0
-				var request: Dictionary = _effect_request(object, objects.find(object), ASH_PUFF)
-				request["at"] = object.current
-				requests.append(request)
-				task["step"] = 2
-		2:
-			if (int(task["puff"]) - 1) / ASH_PUFF_CELL == 2:
-				object.fixed_priority = false
-				clear_held_movement_if_finished(object)
-				var facing: int = object.facing if object.facing <= Direction.EAST else Direction.SOUTH
-				set_held_movement(object, (0x52 if _frlg else 0x46) + maxi(facing - 1, 0))
-				task["step"] = 3
+## `SetTrainerMovementType` restarts the new type's callback.
+static func set_trainer_movement_type(object: ObjectEvent, type: int) -> void:
+	object.movement_type = type
+	object.direction_sequence_index = 0
+	object.player_copyable_movement = 0
+	object.movement_state = 0
 
 
-## Created after every object sprite; its callback stops it on the pass after END.
-func _step_ash_puffs(requests: Array) -> void:
-	for task: Dictionary in _buried_reveals:
-		var passes: int = int(task["puff"])
-		if passes >= ASH_PUFF_PASSES:
-			var object: ObjectEvent = task["object"]
-			requests.append(_effect_request(object, objects.find(object), ASH_PUFF, "stop_field_effect"))
-			task["puff"] = -1
-		elif passes >= 0:
-			task["puff"] = passes + 1
+## `OverrideMovementTypeForObjectEvent` (Emerald's `TryOverrideTemplateCoordsForObjectEvent`)
+## and `OverrideTemplateCoordsForObjectEvent` write the current map's saved template.
+func override_template_movement_type(object: ObjectEvent, type: int) -> void:
+	var template: Dictionary = _base_template(object)
+	if not template.is_empty():
+		template["movement_type"] = type
 
 
-func _ash_puff_active() -> bool:
-	return _buried_reveals.any(func(task: Dictionary) -> bool: return int(task["puff"]) >= 0)
+func override_template_coords(object: ObjectEvent) -> void:
+	var template: Dictionary = _base_template(object)
+	if not template.is_empty():
+		template["x"] = object.current.x - Gen3MapGrid.MAP_OFFSET
+		template["y"] = object.current.y - Gen3MapGrid.MAP_OFFSET
 
 
-func _override_template_movement_type(object: ObjectEvent, type: int) -> void:
+func _base_template(object: ObjectEvent) -> Dictionary:
 	if object.map_number != camera.number or object.map_group != camera.group:
-		return
+		return {}
 	for template: Dictionary in templates:
 		if int(template["local_id"]) == object.local_id:
-			template["movement_type"] = type
-			return
+			return template
+	return {}
 
 
 func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
@@ -781,12 +803,12 @@ func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: A
 				ObjectFlag.FIXED_PRIORITY:
 					object.fixed_priority = bool(row[3])
 		Motion.EMOTE:
-			requests.append(_effect_request(object, slot, int(row[2])))
+			start_effect_sprite(object, slot, int(row[2]), ICON_PASSES, true, requests)
 		Motion.REVEAL:
 			if object.movement_type in [0x39, 0x3A]:
 				start_reveal_disguise(object)
 			elif object.movement_type == MOVEMENT_TYPE_BURIED:
-				_buried_reveals.append({"object": object, "step": 0, "started": false, "puff": -1})
+				buried_reveals.append(slot)
 
 
 static func _effect_request(object: ObjectEvent, slot: int, effect: int, kind: String = "field_effect") -> Dictionary:
@@ -1021,7 +1043,7 @@ func _choose_copy_movement(object: ObjectEvent, player: ObjectEvent, copy: int) 
 	if copy == 2 and _is_faraway_mew(object):
 		direction = _mew_direction(player)
 		if direction == 0:
-			_set_single_movement(object, maxi(_copy_direction(object, player.movement_direction) - 1, 0))
+			_set_single_movement(object, direction_action(0, _copy_direction(object, player.movement_direction)))
 			return
 	var base: int = COPY_ACTIONS[copy]
 	if _frlg and base != 0:
@@ -1032,7 +1054,7 @@ func _choose_copy_movement(object: ObjectEvent, player: ObjectEvent, copy: int) 
 		if collision_at(object, at.x, at.y, direction) != Collision.NONE \
 				or (object.movement_type >= 0x3B and not _is_poke_grass(at)):
 			base = 0
-	_set_single_movement(object, base + maxi(direction - 1, 0))
+	_set_single_movement(object, direction_action(base, direction))
 
 
 func _is_poke_grass(at: Vector2i) -> bool:
@@ -1144,7 +1166,7 @@ func _step_stationary(object: ObjectEvent, slot: int, requests: Array) -> void:
 	if object.movement_state == 0:
 		clear_held_movement(object)
 		object.single_movement_active = false
-		_set_single_movement(object, maxi(object.facing - 1, 0))
+		_set_single_movement(object, direction_action(0, object.facing))
 		if object.movement_type == 0x4C:
 			object.invisible = true
 		object.movement_state = 1
@@ -1160,7 +1182,7 @@ func _step_in_place(object: ObjectEvent, slot: int, requests: Array) -> void:
 		object.single_movement_active = false
 		var pace: int = (object.movement_type - 0x40) >> 2
 		var base: int = 0x1D + pace * 4 if pace < 3 else 0x19
-		_set_single_movement(object, base + (8 if _frlg else 0) + maxi(object.facing - 1, 0))
+		_set_single_movement(object, direction_action(base + (8 if _frlg else 0), object.facing))
 		object.movement_state = 1
 	if _exec_single_movement(object, slot, requests):
 		object.movement_state = 0
@@ -1178,7 +1200,7 @@ func _step_patrol(object: ObjectEvent, slot: int, requests: Array) -> void:
 			_choose_sequence(object)
 		var blocked: bool = _collision_in_direction(object) != Collision.NONE
 		var base: int = (0x1D if blocked else 0x08) + (8 if _frlg else 0)
-		_set_single_movement(object, base + maxi((object.facing if blocked else object.movement_direction) - 1, 0))
+		_set_single_movement(object, direction_action(base, object.facing if blocked else object.movement_direction))
 		object.single_movement_active = true
 		object.movement_state = 3 if object.movement_type < 0x1D else 2
 	if _exec_single_movement(object, slot, requests):
@@ -1229,7 +1251,7 @@ func _random() -> int:
 
 
 func _start_facing(object: ObjectEvent) -> void:
-	_set_single_movement(object, maxi(object.facing - 1, 0))
+	_set_single_movement(object, direction_action(0, object.facing))
 	object.movement_state = 2
 
 
@@ -1267,7 +1289,7 @@ func _step_wander(object: ObjectEvent, slot: int, requests: Array) -> void:
 			object.movement_state = 1
 			_step_wander(object, slot, requests)
 			return
-		_set_single_movement(object, 0x08 + (8 if _frlg else 0) + direction - 1)
+		_set_single_movement(object, direction_action(0x08 + (8 if _frlg else 0), direction))
 		object.single_movement_active = true
 		object.movement_state = 6
 	if _exec_single_movement(object, slot, requests):
@@ -1310,7 +1332,7 @@ func _step_rotation(object: ObjectEvent, slot: int, requests: Array) -> void:
 	if object.movement_state == 0:
 		clear_held_movement(object)
 		object.single_movement_active = false
-		_set_single_movement(object, maxi(object.facing - 1, 0))
+		_set_single_movement(object, direction_action(0, object.facing))
 		object.movement_state = 1
 	if object.movement_state == 1:
 		if _exec_single_movement(object, slot, requests):

@@ -89,6 +89,7 @@ func _one_game() -> void:
 	_object_movements(true)
 	_copy_player_movements()
 	_disguises()
+	_trainer_sight()
 	_berries()
 	_berry_objects()
 	_boulder_landings()
@@ -1363,6 +1364,92 @@ func _disguise_frames(objects: Gen3ObjectEvents, header: Dictionary, template: D
 
 
 const DISGUISE_REVEAL_DIGEST: String = "6ea54dfb378843c69af71ca7d3857b72b9d5cae4"
+
+
+## Every seeing trainer template, FRLG clones resolved. One with sight opens
+## its script with `trainerbattle`, sees the player two cells (or one) ahead,
+## never one past its range, and not once beaten; its approach ends beside the
+## player with the script resumed. Sight 0 (Emerald's Space Center grunt runs
+## `lock` first) never sees. The uniform grid's elevation is the trainer's.
+func _trainer_sight() -> void:
+	var data: GameData = _r.data
+	var objects: Gen3ObjectEvents = _movement_field(data)
+	var see := Gen3TrainerSee.new(objects, Gen3PlayerAvatar.open(objects, SIGHT_ORIGIN, 1, 0))
+	var counts: Array[int] = [0, 0]
+	for header: Dictionary in data.world_map_headers():
+		objects.camera.group = int(header["group"])
+		objects.camera.number = int(header["number"])
+		objects.camera.header = {"map_type": 0, "layout_id": int(header["layout_id"])}
+		objects.load_templates()
+		for template: Dictionary in objects.templates.duplicate():
+			if int(template["trainer_type"]) & 0xFF in [Gen3TrainerSee.TrainerType.NORMAL, Gen3TrainerSee.TrainerType.BURIED]:
+				counts[int(_trainer_sight_case(see, template))] += 1
+	_r.check(counts[1] > 0, "seeing trainer templates exist")
+	_r.note("%d seeing trainers (script head, sight edge, beaten flag, approach), %d with no sight" % [counts[1], counts[0]])
+
+
+const SIGHT_ORIGIN := Vector2i(200, 200)
+
+
+func _trainer_sight_case(see: Gen3TrainerSee, template: Dictionary) -> bool:
+	var objects: Gen3ObjectEvents = see.objects
+	var slot: int = objects.spawn(template, objects.camera.number, objects.camera.group)
+	if not _r.check(slot >= 0, "seeing trainer spawns"):
+		return false
+	var trainer: Gen3ObjectEvents.ObjectEvent = objects.objects[slot]
+	var direction: int = trainer.facing
+	_r.check(direction >= Gen3ObjectEvents.Direction.SOUTH and direction <= Gen3ObjectEvents.Direction.EAST,
+		"trainer faces a cardinal direction")
+	var facility: Callable = func(_slot: int) -> bool: return false
+	_place_for_sight(see, trainer, direction, trainer.trainer_range + 1)
+	_r.check(not see.check_trainers(true, facility), "trainer does not see past its range")
+	var sighted: bool = trainer.trainer_range > 0
+	if sighted:
+		var head: Dictionary = objects.camera.data.world_script_instruction(int(template["script_offset"]))
+		if _r.check(int(head.get("opcode", -1)) == 0x5C, "a seeing trainer's script opens with trainerbattle"):
+			_trainer_approach(see, trainer, direction, Gen3TrainerSee.TRAINER_FLAGS_START + int(head["operands"][1]))
+	objects.remove(trainer.local_id, trainer.map_number, trainer.map_group)
+	return sighted
+
+
+func _trainer_approach(see: Gen3TrainerSee, trainer: Gen3ObjectEvents.ObjectEvent, direction: int, flag: int) -> void:
+	var facility: Callable = func(_slot: int) -> bool: return false
+	var distance: int = mini(trainer.trainer_range, 2)
+	_place_for_sight(see, trainer, direction, distance)
+	if not _r.check(see.check_trainers(true, facility) and int(see.approaching[0]["radius"]) == distance,
+			"trainer sees the player %d cells ahead" % distance):
+		return
+	_r.check(_approach_finishes(see), "trainer approach resumes the script")
+	_r.check(trainer.current == see.avatar.object().current - Gen3FieldCamera.DIRECTIONS[direction],
+		"trainer ends beside the player")
+	if int(see.objects.camera.header["layout_id"]) in Gen3ObjectEvents.PYRAMID_LAYOUTS \
+			+ Gen3ObjectEvents.TRAINER_HILL_LAYOUTS and see.objects.camera.data.id == RomRegistry.EMERALD:
+		return
+	see.objects.events.flag_set(flag)
+	_place_for_sight(see, trainer, direction, 1)
+	_r.check(not see.check_trainers(), "a beaten trainer does not see")
+	see.objects.events.flag_clear(flag)
+
+
+func _place_for_sight(see: Gen3TrainerSee, trainer: Gen3ObjectEvents.ObjectEvent, direction: int, distance: int) -> void:
+	for object: Gen3ObjectEvents.ObjectEvent in [trainer, see.avatar.object()]:
+		Gen3ObjectEvents.clear_held_movement(object)
+	trainer.initial = SIGHT_ORIGIN
+	trainer.current = SIGHT_ORIGIN
+	trainer.previous = SIGHT_ORIGIN
+	trainer.current_elevation = see.objects.camera.grid.elevation_at(SIGHT_ORIGIN.x, SIGHT_ORIGIN.y)
+	var player: Gen3ObjectEvents.ObjectEvent = see.avatar.object()
+	player.current = SIGHT_ORIGIN + Gen3FieldCamera.DIRECTIONS[direction] * distance
+	player.previous = player.current
+
+
+func _approach_finishes(see: Gen3TrainerSee) -> bool:
+	see.start_approach()
+	for frame: int in 400:
+		for request: Dictionary in see.run_tasks() + see.objects.step_movements():
+			if request["kind"] == "script_enable":
+				return true
+	return false
 
 
 ## `gBerries` fields agree with berry.c; stage selections come from each

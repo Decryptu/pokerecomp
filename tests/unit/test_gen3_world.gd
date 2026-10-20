@@ -1554,13 +1554,14 @@ func test_buried_trainer_reveal_follows_the_trainer_see_task_clock() -> void:
 		player.active = true
 		player.current = object.current + Vector2i(-3, 1)
 		objects.objects[1] = player
+		var see := Gen3TrainerSee.new(objects, null)
 		objects.step_movements()
 		assert_true(object.fixed_priority, str(id))
 		assert_false(object.held_movement_active)
 		assert_false(objects.set_held_movement(object, 0x67 if objects._frlg else 0x59))
 		var puffs: Array = []
 		for frame: int in range(1, 36):
-			for request: Dictionary in objects.step_movements():
+			for request: Dictionary in see.run_tasks() + objects.step_movements():
 				if request.get("effect_id", -1) == Gen3ObjectEvents.ASH_PUFF:
 					puffs.append([frame, request["kind"], request.get("at", object.current)])
 			if frame == 1:
@@ -1580,6 +1581,150 @@ func test_buried_trainer_reveal_follows_the_trainer_see_task_clock() -> void:
 		assert_eq(int(objects.templates[0]["movement_type"]), 9)
 		assert_true(object.held_movement_finished)
 		assert_eq(object.current, object.previous)
+
+
+## A seen trainer's approach follows `trainer_see.c`'s task clock: the icon's
+## 60 frames and the callback pass after its END, one normal-pace walk per
+## cell short of the player, then the saved template keeps the trainer's new
+## facing and cell. Hoenn turns the player to the trainer; FRLG's turn is
+## commented out. Script waits and battle setup never see these frames.
+func test_trainer_approach_follows_the_trainer_see_task_clock() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var see: Gen3TrainerSee = _trainer_see(id, [[1, 5, 0, 1]])
+		var trainer: Gen3ObjectEvents.ObjectEvent = see.objects.objects[1]
+		assert_true(see.check_trainers(), str(id))
+		assert_eq(see.approaching[0]["radius"], 4)
+		var marks: Array = _approach_marks(see, 120)
+		assert_eq(marks, [[1, "field_effect", 0], [62, "stop_field_effect", 0], [114, "script_enable", -1]], str(id))
+		assert_eq(trainer.current, Vector2i(11, 12))
+		assert_eq(trainer.movement_type, 10)
+		assert_eq([see.objects.templates[0]["x"], see.objects.templates[0]["y"],
+			see.objects.templates[0]["movement_type"]], [4, 5, 10])
+		assert_eq(see.avatar.object().facing, 4 if id == RomRegistry.FIRERED else 3, str(id))
+
+
+## Path checks differ by engine: Emerald starts past the trainer and ignores
+## only its out-of-range bit, FRLG also tests the trainer's own cell, and
+## Ruby's mask (pret's BUGFIX_TRAINERAPPROACH off) blocks on that bit alone.
+## A beaten trainer's flag comes from its `trainerbattle` id.
+func test_trainer_sight_keeps_each_engines_path_check() -> void:
+	var cases: Dictionary = {"wall": [false, false, true], "own cell": [true, false, true],
+		"out of range": [true, true, false], "beaten": [false, false, false]}
+	var ids: Array = [RomRegistry.EMERALD, RomRegistry.FIRERED, RomRegistry.RUBY]
+	for case: String in cases:
+		for index: int in ids.size():
+			var see: Gen3TrainerSee = _trainer_see(ids[index], [[1, 5, 0, 1]])
+			match case:
+				"wall":
+					see.objects.camera.grid.set_impassable(10, 12, true)
+				"own cell":
+					see.objects.camera.grid.set_impassable(8, 12, true)
+				"out of range":
+					see.objects.objects[1].movement_range = Vector2i(1, 0)
+				"beaten":
+					see.objects.events.flag_set(Gen3TrainerSee.TRAINER_FLAGS_START + 5)
+			assert_eq(see.check_trainers(), cases[case][index], "%s %s" % [case, ids[index]])
+
+
+## Emerald pairs two seeing trainers only while two Pokémon can battle, and
+## its double-battle modes need them; FRLG refuses only TRAINER_BATTLE_DOUBLE
+## and takes the first trainer. The second Emerald trainer moves alone.
+func test_trainer_check_pairs_emerald_trainers_and_gates_double_battles() -> void:
+	var cases: Array = [
+		[RomRegistry.EMERALD, 0, true, [1, 2]], [RomRegistry.EMERALD, 0, false, [1]],
+		[RomRegistry.EMERALD, 7, false, [2]], [RomRegistry.EMERALD, 7, true, [1]],
+		[RomRegistry.FIRERED, 4, false, [2]], [RomRegistry.FIRERED, 7, false, [1]],
+		[RomRegistry.RUBY, 4, false, [1]],
+	]
+	for row: Array in cases:
+		var see: Gen3TrainerSee = _trainer_see(row[0], [[1, 5, row[1], 1], [5, 1, 0, 3]])
+		assert_true(see.check_trainers(row[2]), str(row))
+		assert_eq(see.approaching.map(func(trainer: Dictionary) -> int: return trainer["slot"]), row[3], str(row))
+	var pair: Gen3TrainerSee = _trainer_see(RomRegistry.EMERALD, [[1, 5, 0, 1], [5, 1, 0, 3]])
+	pair.check_trainers()
+	assert_true(pair.prepare_second_trainer())
+	assert_eq(pair.approaching_id, 1)
+	assert_true(pair.objects.objects[1].frozen)
+	assert_false(pair.objects.objects[2].frozen)
+	assert_false(pair.prepare_second_trainer())
+	assert_eq(pair.approaching_id, 0)
+
+
+## FRLG scrolls the camera to a trainer more than three cells above: an
+## invisible object walks up the remaining cells at fast pace, the icon plays
+## there, it walks back and is removed, then the trainer walks without the
+## turn the other path gives it. A full object pool hides such a trainer.
+func test_firered_trainer_above_the_view_scrolls_the_camera_object() -> void:
+	var see: Gen3TrainerSee = _trainer_see(RomRegistry.FIRERED, [[5, 0, 0, 1]])
+	see.objects.camera.pos = Vector2i(5, 5)
+	var trainer: Gen3ObjectEvents.ObjectEvent = see.objects.objects[1]
+	trainer.facing = Gen3ObjectEvents.Direction.SOUTH
+	for slot: int in range(2, Gen3ObjectEvents.COUNT):
+		see.objects.objects[slot].active = true
+	assert_false(see.check_trainers())
+	for slot: int in range(2, Gen3ObjectEvents.COUNT):
+		see.objects.objects[slot].active = false
+	assert_true(see.check_trainers())
+	var marks: Array = _approach_marks(see, 185)
+	assert_eq(marks, [[1, "camera_follow", 2], [25, "field_effect", 0], [86, "stop_field_effect", 0],
+		[111, "camera_follow", 0], [179, "script_enable", -1]])
+	assert_null(see.objects.by_identity(Gen3TrainerSee.LOCALID_CAMERA, 0, 0))
+	assert_eq(trainer.current, Vector2i(12, 11))
+	assert_eq(see.avatar.object().facing, 4)
+
+
+## A stationary type re-faces from `dirn_to_anim`, which maps a diagonal to
+## its south action; offsetting by the facing walked Emerald NPCs west after a
+## scripted diagonal step. Corpus traces never reach a diagonal facing here.
+func test_stationary_type_after_a_diagonal_walk_faces_south() -> void:
+	var objects: Gen3ObjectEvents = _movement_objects(RomRegistry.EMERALD)
+	var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
+	template.merge({"local_id": 3, "movement_type": 8, "x": 5, "y": 5}, true)
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[objects.spawn(template, 0, 0)]
+	objects.step_movements()
+	assert_false(objects.set_held_movement(object, 0x8C))
+	for frame: int in 20:
+		objects.step_movements()
+	assert_eq(object.facing, 7)
+	var landed: Vector2i = object.current
+	Gen3ObjectEvents.clear_held_movement_if_finished(object)
+	for frame: int in 40:
+		objects.step_movements()
+	assert_eq(object.facing, Gen3ObjectEvents.Direction.SOUTH)
+	assert_eq(object.current, landed)
+
+
+## Trainers by [layout x, layout y, trainerbattle mode, trainer type]; the
+## player stands at backup (12, 12) facing east and each trainer faces east.
+func _trainer_see(id: StringName, trainers: Array) -> Gen3TrainerSee:
+	var objects: Gen3ObjectEvents = _movement_objects(id)
+	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
+	var instructions: Dictionary = {}
+	objects.camera.data._world_scripts["instructions"] = instructions
+	for index: int in trainers.size():
+		var row: Array = trainers[index]
+		var script: int = 0x1000 + index * 8
+		instructions[str(script)] = {"bytes": [0x5C, row[2], 5 + index, 0], "next_offset": script + 4}
+		var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
+		template.merge({"local_id": index + 1, "x": row[0], "y": row[1], "trainer_type": row[3],
+			"trainer_sight_or_berry_tree_id": 5, "script_offset": script}, true)
+		objects.templates.append(template)
+		objects.spawn(template, 0, 0)
+	return Gen3TrainerSee.new(objects, avatar)
+
+
+## `[frame, kind, object or effect id]` for each camera, icon and script request.
+func _approach_marks(see: Gen3TrainerSee, frames: int) -> Array:
+	var marks: Array = []
+	var requests: Array = see.start_approach()
+	for frame: int in range(1, frames):
+		requests.append_array(see.run_tasks())
+		requests.append_array(see.objects.step_movements())
+		for request: Dictionary in requests:
+			if request["kind"] in ["camera_follow", "field_effect", "stop_field_effect", "script_enable"]:
+				marks.append([frame, request["kind"], request.get("effect_id", request.get("object_id", -1))])
+		requests.clear()
+	return marks
 
 
 ## ARM movement and sprite clocks pin stage polling, both sparkle halves,
