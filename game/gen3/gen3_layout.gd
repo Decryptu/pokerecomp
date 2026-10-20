@@ -147,8 +147,11 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 ## gStdScripts and BattleSetup_ConfigureTrainerBattle's five helper entry points
 ## come from nm on the matching pret builds, including Sapphire's shifted scripts.
 ## `gInitialMovementTypeFacingDirections` follows `gRangedMovementTypes` directly.
+## `gObjectEventGraphicsInfoPointers` is the dump's pointer run of `NUM_OBJ_EVENT_GFX`
+## graphics infos; Emerald's `gMauvilleOldManGraphicsInfoPointers` follows it.
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
+	"object_graphics": 0x36DC70, "object_graphics_count": 218,
 	"berries": 0x3CD2E8,
 	"berry_graphics": 0x374484, "berry_palettes": 0x3743D8,
 	"movement_type_count": 77,
@@ -197,6 +200,7 @@ const RUBY: Dictionary = {
 
 const SAPPHIRE: Dictionary = {
 	"movement_types": 0x36DB64,
+	"object_graphics": 0x36DC00, "object_graphics_count": 218,
 	"berries": 0x3CD344,
 	"berry_graphics": 0x374414, "berry_palettes": 0x374368,
 	"movement_type_count": 77,
@@ -245,6 +249,7 @@ const SAPPHIRE: Dictionary = {
 
 const FIRERED: Dictionary = {
 	"movement_types": 0x39FD7C,
+	"object_graphics": 0x39FE20, "object_graphics_count": 152,
 	"berries": 0x3DF858,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604C8,
@@ -292,6 +297,7 @@ const FIRERED: Dictionary = {
 
 const LEAFGREEN: Dictionary = {
 	"movement_types": 0x39FD5C,
+	"object_graphics": 0x39FE00, "object_graphics_count": 152,
 	"berries": 0x3DF694,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604A4,
@@ -339,6 +345,8 @@ const LEAFGREEN: Dictionary = {
 
 const EMERALD: Dictionary = {
 	"movement_types": 0x50557C,
+	"object_graphics": 0x505620, "object_graphics_count": 239,
+	"mauville_graphics": 0x5059DC, "mauville_graphics_count": 7,
 	"berries": 0x58A670,
 	"berry_graphics": 0x50C908, "berry_palettes": 0x50C85C,
 	"movement_type_count": 81,

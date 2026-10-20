@@ -322,7 +322,7 @@ func _start_dismount(requests: Array) -> void:
 func _finish_dismount(requests: Array) -> void:
 	if Gen3ObjectEvents.clear_held_movement_if_finished(object()) == 0:
 		return
-	object().graphics_id = graphics_for(State.NORMAL)
+	objects.set_graphics_id(object(), graphics_for(State.NORMAL))
 	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0, object().facing))
 	prevent_step = false
 	controls_locked = false

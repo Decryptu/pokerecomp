@@ -727,6 +727,9 @@ func test_player_water_query_reads_each_engines_source_of_water() -> void:
 		assert_false(avatar.facing_fishable_water())
 
 
+const GEN3_TABLES = preload("res://tools/checks/gen3_tables.gd")
+
+
 ## ARM-handler traces protect destination reservation, slow-walk cadence,
 ## midpoint jumps, locked/contextual facings, persistent flags and emote requests.
 ## Substituting a generic tween or Hoenn action ids on FRLG changes this stream.
@@ -760,11 +763,10 @@ func _held_movement_trace(id: StringName) -> String:
 			object.facing_locked = locked != 0
 			object.frozen = true
 			objects.objects[0] = object
-			if objects.set_held_movement(object, action):
+			if not GEN3_TABLES.arm_traced(objects, action) or objects.set_held_movement(object, action):
 				continue
 			for frame: int in range(1, 41):
-				var effects: Array = objects.step_movements().filter(
-					func(request: Dictionary) -> bool: return request["kind"] == "field_effect")
+				var effects: Array = objects.step_movements().filter(GEN3_TABLES.arm_traced_effect)
 				var effect: Array = [-1, 0, 0, 0] if effects.is_empty() else [effects[0]["effect_id"],
 					effects[0]["local_id"], effects[0]["map_number"], effects[0]["map_group"]]
 				var pixels: Vector2i = object.pixel_position - Vector2i(192, 192)
@@ -1056,6 +1058,35 @@ func _context_frames(objects: Gen3ObjectEvents, action: int, setup: Array) -> Pa
 			object.previous_movement_direction, int(object.facing_locked), int(object.held_movement_finished),
 			0, 0, 0, -1, 0, 0, 0]))
 	return lines
+
+
+## `InitJumpRegular` starts FLDEFF_SHADOW once per jump for the drawing host and
+## clears `hasShadow` on landing; `InitJumpSpecial` starts none. The ARM-pinned
+## movement streams leave the shadow out, so only this asserts it.
+func test_regular_jumps_start_one_shadow_and_clear_it_on_landing() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var object := Gen3ObjectEvents.ObjectEvent.new()
+		object.active = true
+		object.local_id = 3
+		object.current = Vector2i(12, 12)
+		object.facing = Gen3ObjectEvents.Direction.EAST
+		objects.objects[0] = object
+		var frlg: bool = id == RomRegistry.FIRERED
+		for action: int in [0x0F + 8 * int(frlg), 0x46 + 12 * int(frlg), 0x3D + 12 * int(frlg)]:
+			Gen3ObjectEvents.clear_held_movement(object)
+			objects.set_held_movement(object, action)
+			var shadows: Array = []
+			var shadowed: bool = false
+			while not object.held_movement_finished:
+				shadows.append_array(objects.step_movements().filter(func(request: Dictionary) -> bool:
+					return request.get("effect_id", -1) == Gen3ObjectEvents.FLDEFF_SHADOW))
+				shadowed = shadowed or object.has_shadow
+			var special: bool = action == 0x3D + 12 * int(frlg)
+			assert_eq(shadows.size(), 0 if special else 1, "%s %02X" % [id, action])
+			assert_eq(shadowed, not special)
+			assert_false(object.has_shadow)
+		assert_eq(objects.step_movements().size(), 0)
 
 
 ## State actions must survive hold clearing without freeing an invisible NPC's
@@ -1742,6 +1773,7 @@ func _berry_field_trace(id: StringName, stage: int, scenario: int) -> PackedStri
 	var objects: Gen3ObjectEvents = _movement_objects(id)
 	objects.camera.data._world_scripts["berries"] = [{"stage_minutes": 180, "min_yield": 2,
 		"max_yield": 3, "berry_graphics": [61, 61, 62, 62, 62], "berry_palettes": [3, 4, 4, 4, 4]}]
+	_berry_tree_anims(objects.camera.data)
 	objects.events.berries.plant(0, 1, stage)
 	var object := Gen3ObjectEvents.ObjectEvent.new()
 	object.active = true
@@ -1773,8 +1805,22 @@ func _berry_field_trace(id: StringName, stage: int, scenario: int) -> PackedStri
 		lines.append(",".join([stage, scenario, frame, object.graphics_id, int(object.invisible),
 			int(object.single_movement_active), object.movement_action & 255, object.movement_state,
 			1 + int(object.berry_sparkling) * 2 + int(object.berry_just_picked) * 4,
-			object.berry_animation, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
+			object.anim.anim_num, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
 	return lines
+
+
+## pret's `sAnimTable_BerryTree` behind both tree graphics: one 32-frame cell, two
+## 32s, two 48s, four 32s and four 48s, each closed by `ANIMCMD_END`.
+static func _berry_tree_anims(data: GameData) -> void:
+	var stages: Array = []
+	for cells: Array in [[[0, 32]], [[1, 32], [2, 32]], [[3, 48], [4, 48]],
+			[[5, 32], [5, 32], [6, 32], [6, 32]], [[7, 48], [7, 48], [8, 48], [8, 48]]]:
+		stages.append(cells.map(func(cell: Array) -> int: return cell[0] | cell[1] << 16) + [Gen3SpriteAnim.END])
+	var rows: Array = []
+	for index: int in 63:
+		rows.append({"inanimate": false, "anims": 0 if index >= 61 else 1})
+	data._world_scripts["object_graphics"] = rows
+	data._world_scripts["sprite_anims"] = {"0": stages, "1": []}
 
 
 ## Original ARM saves and RNG state cover every watering mask, the tenth

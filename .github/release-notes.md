@@ -4,7 +4,12 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 ## Added
 
 - Generation 3 trainers buried in ash now pop out with the ash puff and jump when revealed, then keep facing the way they turned.
+- Generation 3 objects now run every scripted movement, including the Pokémon Center nurse's bow, Cut trees and Rock Smash rocks breaking, and the Acro Bike's wheelies, timed by each sprite's own animation.
 - Generation 3 cartridges remain unplayable while field integration continues.
+
+## Updating this release
+
+- Cartridges must be reimported for the updated cache format. Saves are preserved.
 
 ## Which file
 

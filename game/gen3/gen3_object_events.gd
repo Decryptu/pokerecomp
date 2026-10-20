@@ -26,17 +26,62 @@ const EMPTY_TEMPLATE: Dictionary = {
 
 enum Collision { NONE, OUTSIDE_RANGE, IMPASSABLE, ELEVATION_MISMATCH, OBJECT_EVENT }
 enum Direction { NONE, SOUTH, NORTH, WEST, EAST }
-enum Motion { FACE, WALK, IN_PLACE, JUMP, DELAY, LOCK, UNLOCK, CONTEXT_FACE, SET_FLAG, EMOTE, REVEAL }
+enum Motion {
+	FACE, WALK, IN_PLACE, JUMP, DELAY, LOCK, UNLOCK, CONTEXT_FACE, SET_FLAG, EMOTE, REVEAL,
+	ANIM, START_ANIM, OBSTACLE, AFFINE, FLY, LEVITATE, FIGURE_8, LOCK_ANIM,
+}
 enum Facing { PLAYER, AWAY_PLAYER, ORIGINAL }
-enum ObjectFlag { LANDING_EFFECT, INVISIBLE, FIXED_PRIORITY }
-enum Jump { FAR, SPECIAL, NORMAL, IN_PLACE, TURN }
-enum Pace { SLOW, NORMAL, FAST, CURRENT, FASTER, SLIDE, FRLG_SLOW }
-const STEP_PIXELS: Array = [[1, 0], [1], [2], [2, 3, 3, 2, 3, 3], [4], [8], [1, 1, 0]]
-const STEP_FRAMES: Array[int] = [31, 16, 8, 6, 4, 2, 23]
+enum ObjectFlag { LANDING_EFFECT, INVISIBLE, FIXED_PRIORITY, INANIMATE, HIDE_REFLECTION }
+enum Jump { FAR, SPECIAL, NORMAL, IN_PLACE, TURN, HOP_IN_PLACE, HOP, ACRO_FAR }
+enum Pace { SLOW, NORMAL, FAST, CURRENT, FASTER, SLIDE, FRLG_SLOW, SLOWEST, RUN_SLOW }
+const STEP_PIXELS: Array = [[1, 0], [1], [2], [2, 3, 3, 2, 3, 3], [4], [8], [1, 1, 0],
+	[0, 0, 0, 0, 0, 0, 0, 0, 0, 1], [1, 2]]
+const STEP_FRAMES: Array[int] = [31, 16, 8, 6, 4, 2, 23, 160, 11]
 const JUMP_Y: Array = [
 	[-4, -6, -8, -10, -11, -12, -12, -12, -11, -10, -9, -8, -6, -4, 0, 0],
+	[0, -2, -3, -4, -5, -6, -6, -6, -5, -5, -4, -3, -2, 0, 0, 0],
 	[-2, -4, -6, -8, -9, -10, -10, -10, -9, -8, -6, -5, -3, -2, 0, 0],
 ]
+## `InitJump`'s distance (in place, normal, far) and `sJumpYTable` arc, by jump.
+const JUMP_SHAPES: Dictionary = {
+	Jump.FAR: {"distance": 2, "arc": 0, "shadow": true},
+	Jump.SPECIAL: {"distance": 1, "arc": 0, "special": true},
+	Jump.NORMAL: {"distance": 1, "arc": 2, "shadow": true},
+	Jump.IN_PLACE: {"distance": 0, "arc": 0, "shadow": true},
+	Jump.TURN: {"distance": 0, "arc": 2, "shadow": true, "turn": true},
+	Jump.HOP_IN_PLACE: {"distance": 0, "arc": 1, "shadow": true, "wheelie": true},
+	Jump.HOP: {"distance": 1, "arc": 1, "shadow": true, "wheelie": true},
+	Jump.ACRO_FAR: {"distance": 2, "arc": 0, "shadow": true, "wheelie": true},
+}
+const FLDEFF_SHADOW: int = 3
+const DISPLAY_HEIGHT: int = 160
+## The first anim past the face/go rows: the bow, a raised hand, a wheelie, the mount.
+const ANIM_STD_COUNT: int = 20
+const ANIM_REMOVE_OBSTACLE: int = 1
+const ANIM_SHAKE_HEAD: int = 28
+## `Get*DirectionAnimNum` rows add these to their first anim; FRLG's spin row differs.
+const DIRECTION_ANIM_OFFSETS: Array[int] = [0, 0, 1, 2, 3, 0, 0, 1, 1]
+const OBSTACLE_BLINK_FRAMES: int = 32
+## Hoenn's `MOVEMENT_ACTION_START_ANIM_IN_DIRECTION`, which the berry-tree callback runs.
+const START_ANIM_IN_DIRECTION: int = 0x39
+const LOCALID_NONE: int = 0
+## `sFigure8XOffsets`/`sFigure8YOffsets` (`FIGURE_8_LENGTH` 72), walked forward then back.
+const FIGURE_8_X: Array[int] = [
+	1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 1, 1,
+	2, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+]
+const FIGURE_8_Y: Array[int] = [
+	0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1,
+	0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, -1, 0, 0, -1, 0, 0, -1, 0, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1, -1, -1, -1, -2,
+]
+## `GetObjectEventGraphicsInfo` reads these past the table: Ruby's LITTLE_BOY_1, FRLG's
+## LITTLE_BOY and Emerald's NINJA_BOY. Emerald's bard reads the current Mauville man.
+const GRAPHICS_FALLBACK: Dictionary = {&"ruby": 5, &"sapphire": 5, &"firered": 16, &"leafgreen": 16, &"emerald": 5}
+const OBJ_EVENT_GFX_BARD: int = 69
+## `gSineTable`: sin(i * pi / 128) in Q8.8, truncated toward zero, as pret's `trig.c` lists it.
+static var SINE: PackedInt32Array = _sine_table()
 ## `MOVEMENT_ACTION_*`: [Hoenn id, FRLG id, motion, parameter].
 const MOTION_FAMILIES: Array = [
 	[0x00, 0x00, Motion.FACE, 0], [0x04, 0x0C, Motion.WALK, Pace.SLOW],
@@ -110,7 +155,56 @@ const STATE_MOTIONS: Array = [
 	[0x55, 0x61, Motion.SET_FLAG, ObjectFlag.INVISIBLE, false],
 	[0x5C, 0x6A, Motion.SET_FLAG, ObjectFlag.FIXED_PRIORITY, true],
 	[0x5D, 0x6B, Motion.SET_FLAG, ObjectFlag.FIXED_PRIORITY, false],
+	[0x52, 0x5E, Motion.SET_FLAG, ObjectFlag.INANIMATE, true],
+	[0x53, 0x5F, Motion.SET_FLAG, ObjectFlag.INANIMATE, false],
+	[0x5A, 0x68, Motion.OBSTACLE, 0],
+	[0x5B, 0x69, Motion.OBSTACLE, 0],
+	[0x5E, 0x6C, Motion.AFFINE, 1],
+	[0x5F, 0x6D, Motion.AFFINE, 0],
 ]
+## Rows past [constant MOTION_FAMILIES] and [constant STATE_MOTIONS]: [Ruby id, Emerald id,
+## FRLG id (-1 absent), motion, parameter, options]. A `family` row is four actions, south
+## to east; an ANIM parameter is its anim number, the family's first, or -1 for the current one.
+const MORE_ACTIONS: Array = [
+	[0x39, 0x39, 0x45, Motion.ANIM, -1, {}],
+	[0x4F, 0x4F, 0x5B, Motion.ANIM, ANIM_STD_COUNT, {"direction": Direction.SOUTH}],
+	[0x60, 0x62, 0x6E, Motion.WALK, Pace.SLOW, {"direction": Direction.SOUTH, "affine": 0}],
+	[0x61, 0x63, 0x6F, Motion.WALK, Pace.SLOW, {"direction": Direction.SOUTH, "affine": 1}],
+	[0x62, 0x64, 0x70, Motion.FACE, 0, {"family": true}],
+	[0x66, 0x68, 0x74, Motion.ANIM, ANIM_STD_COUNT, {"family": true}],
+	[0x6A, 0x6C, 0x78, Motion.ANIM, ANIM_STD_COUNT + 8, {"family": true}],
+	[0x6E, 0x70, 0x7C, Motion.JUMP, Jump.HOP_IN_PLACE, {"family": true}],
+	[0x72, 0x74, 0x80, Motion.JUMP, Jump.HOP, {"family": true}],
+	[0x76, 0x78, 0x84, Motion.JUMP, Jump.ACRO_FAR, {"family": true}],
+	[0x7A, 0x7C, 0x88, Motion.IN_PLACE, 8, {"family": true}],
+	[0x7E, 0x80, 0x8C, Motion.WALK, Pace.FAST, {"family": true, "anim": ANIM_STD_COUNT}],
+	[0x82, 0x84, 0x90, Motion.WALK, Pace.FAST, {"family": true}],
+	[0x86, 0x88, -1, Motion.WALK, Pace.FAST, {"family": true, "anim": ANIM_STD_COUNT + 8}],
+	[-1, 0x60, -1, Motion.SET_FLAG, ObjectFlag.HIDE_REFLECTION, {"value": true}],
+	[-1, 0x61, -1, Motion.SET_FLAG, ObjectFlag.HIDE_REFLECTION, {"value": false}],
+	[-1, 0x94, -1, Motion.LOCK_ANIM, 1, {}],
+	[-1, 0x95, -1, Motion.LOCK_ANIM, 0, {}],
+	[-1, 0x96, -1, Motion.WALK, Pace.FAST, {"direction": Direction.WEST, "affine": 2}],
+	[-1, 0x97, -1, Motion.WALK, Pace.FAST, {"direction": Direction.EAST, "affine": 3}],
+	[-1, 0x98, -1, Motion.LEVITATE, 0, {}],
+	[-1, 0x99, -1, Motion.LEVITATE, 1, {}],
+	[-1, 0x9A, -1, Motion.LEVITATE, 2, {}],
+	[-1, 0x9B, -1, Motion.FIGURE_8, 0, {}],
+	[-1, 0x9C, 0xA4, Motion.FLY, 1, {}],
+	[-1, 0x9D, 0xA5, Motion.FLY, 0, {}],
+	[-1, -1, 0x04, Motion.FACE, 0, {"family": true, "fast": true}],
+	[-1, -1, 0x41, Motion.WALK, Pace.RUN_SLOW, {"family": true}],
+	[-1, -1, 0x94, Motion.WALK, Pace.FAST, {"family": true}],
+	[-1, -1, 0x98, Motion.START_ANIM, ANIM_STD_COUNT, {"mode": 0}],
+	[-1, -1, 0x99, Motion.START_ANIM, ANIM_STD_COUNT, {"mode": 1}],
+	[-1, -1, 0x9A, Motion.START_ANIM, ANIM_STD_COUNT, {"mode": 2}],
+	[-1, -1, 0x9B, Motion.WALK, Pace.SLOWEST, {"family": true}],
+	[-1, -1, 0x9F, Motion.START_ANIM, ANIM_SHAKE_HEAD, {"mode": 0}],
+	[-1, -1, 0xA0, Motion.WALK, Pace.FAST, {"family": true, "glide": true}],
+]
+## Held actions whose list ends in `MovementAction_PauseSpriteAnim`, run on every
+## frame the finished hold stays set.
+const PAUSE_AFTER: Array[int] = [Motion.FACE, Motion.WALK, Motion.IN_PLACE, Motion.JUMP, Motion.ANIM, Motion.FIGURE_8]
 
 ## `MetatileBehavior_Is*Blocked` by the side each blocks. Ruby, Sapphire and
 ## Emerald add the two-sided rows and the secret base's breakable door.
@@ -164,6 +258,19 @@ class ObjectEvent:
 	var disable_jump_landing_effect: bool = false
 	var fixed_priority: bool = false
 	var frozen: bool = false
+	var inanimate: bool = false
+	var disable_anim: bool = false
+	var enable_anim: bool = false
+	var hide_reflection: bool = false
+	var has_shadow: bool = false
+	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a
+	## walk started and the pause flags `FreezeObjectEvent` backs up.
+	var anim := Gen3SpriteAnim.new()
+	var x2: int = 0
+	var affine_anim: int = -1
+	var affine_anim_paused: bool = false
+	var anim_paused_backup: bool = false
+	var affine_anim_paused_backup: bool = false
 	var single_movement_active: bool = false
 	var held_movement_active: bool = false
 	var held_movement_finished: bool = false
@@ -171,6 +278,10 @@ class ObjectEvent:
 	var buried_initialized: bool = false
 	var movement_action: int = -1
 	var movement_frame: int = 0
+	## `sActionFuncId` and the sprite's `data` an action keeps past the frame count.
+	var action_step: int = 0
+	var sprite_data := PackedInt32Array([0, 0, 0, 0, 0, 0, 0, 0])
+	var levitate_task: Dictionary = {}
 	var movement_state: int = 0
 	var direction_sequence_index: int = 0
 	var movement_delay: int = 0
@@ -181,10 +292,6 @@ class ObjectEvent:
 	var berry_initialized: bool = false
 	var berry_sparkling: bool = false
 	var berry_just_picked: bool = false
-	var berry_animation: int = 0
-	var berry_animation_frame: int = 0
-	var berry_animation_paused: bool = false
-	var berry_animation_paused_backup: bool = false
 	var berry_palette: int = 0
 	var disguise_spawned: bool = false
 	var disguise_effect_id: int = 0
@@ -212,6 +319,13 @@ var _effect_requests: Array = []
 ## by slot; [Gen3TrainerSee] takes them before its next run.
 var buried_reveals: Array[int] = []
 var _effect_sprites: Array[Dictionary] = []
+## Emerald's `GetCurrentMauvilleOldMan`, which picks the bard's graphics.
+var mauville_man: int = 0
+## Emerald's `sLockedAnimObjectEvents`: `ids` and `count`, null when freed.
+var _locked_anims: Variant = null
+## `ApplyLevitateMovement` tasks: slot, `data[2]` timer and `data[3]` delta.
+var _levitating: Array[Dictionary] = []
+var _graphics: Dictionary = {}
 
 
 func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
@@ -306,6 +420,29 @@ func remove_outside_view() -> void:
 			_deactivate(object)
 
 
+## `GetObjectEventGraphicsInfo`: a var id reads its var, Emerald's bard the current
+## Mauville man, and an id past the table [constant GRAPHICS_FALLBACK].
+func graphics_info(graphics_id: int) -> Dictionary:
+	var id: int = graphics_id & 0xFF
+	if id >= OBJ_EVENT_GFX_VARS:
+		id = events.var_get(VAR_OBJ_GFX_ID_0 + id - OBJ_EVENT_GFX_VARS) & 0xFF
+	var key: int = -1 - mauville_man if camera.data.id == RomRegistry.EMERALD and id == OBJ_EVENT_GFX_BARD else id
+	if not _graphics.has(key):
+		var info: Dictionary = camera.data.world_object_graphics(mauville_man, true) if key < 0 \
+			else camera.data.world_object_graphics(id)
+		_graphics[key] = info if not info.is_empty() \
+			else camera.data.world_object_graphics(GRAPHICS_FALLBACK.get(camera.data.id, 0))
+	return _graphics[key]
+
+
+## `ObjectEventSetGraphicsId`: the sprite takes the new anims and `inanimate`; its anim runs on.
+func set_graphics_id(object: ObjectEvent, graphics_id: int) -> void:
+	var info: Dictionary = graphics_info(graphics_id)
+	object.anim.anims = info.get("anims", [])
+	object.inanimate = bool(info.get("inanimate", false))
+	object.graphics_id = graphics_id & 0xFF
+
+
 ## `InitObjectEventStateFromTemplate`: the slot, or -1 when out or full. A FireRed or
 ## LeafGreen clone spawns as its target, identity included, at the clone's position.
 func spawn(template: Dictionary, number: int, group: int) -> int:
@@ -339,6 +476,9 @@ func spawn(template: Dictionary, number: int, group: int) -> int:
 		object.graphics_id = events.var_get(VAR_OBJ_GFX_ID_0 + object.graphics_id - OBJ_EVENT_GFX_VARS) & 0xFF
 	if _ranged[object.movement_type]:
 		object.movement_range = object.movement_range.max(Vector2i.ONE)
+	set_graphics_id(object, object.graphics_id)
+	if not object.inanimate:
+		object.anim.start(DIRECTION_ANIM_OFFSETS[object.facing])
 	objects[slot] = object
 	return slot
 
@@ -499,6 +639,28 @@ func _build_motions() -> void:
 		for index: int in 4:
 			_motions[0x8C + index] = [Motion.WALK, [7, 8, 5, 6][index], 1]
 			_motions[0x90 + index] = [Motion.WALK, [7, 8, 5, 6][index], 0]
+	_build_more_motions()
+
+
+func _build_more_motions() -> void:
+	var column: int = 2 if _frlg else (1 if camera.data.id == RomRegistry.EMERALD else 0)
+	for row: Array in MORE_ACTIONS:
+		var options: Dictionary = row[5]
+		if int(row[column]) < 0:
+			continue
+		if int(row[3]) == Motion.SET_FLAG:
+			_motions[int(row[column])] = [Motion.SET_FLAG, 0, int(row[4]), options["value"]]
+			continue
+		var family: bool = options.get("family", false)
+		for direction: int in (range(1, 5) if family else [int(options.get("direction", 0))]):
+			_motions[int(row[column]) + (direction - 1 if family else 0)] = [int(row[3]), direction, int(row[4]), options]
+
+
+static func _sine_table() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for index: int in 256:
+		out.append(int(sin(index * PI / 128.0) * 256.0))
+	return out
 
 
 ## `dirn_to_anim`: a family's action for one direction; past east, its south one.
@@ -516,6 +678,7 @@ func set_held_movement(object: ObjectEvent, action: int) -> bool:
 	object.held_movement_finished = false
 	object.held_action_done = false
 	object.movement_frame = 0
+	object.action_step = 0
 	return false
 
 
@@ -529,6 +692,7 @@ static func clear_held_movement(object: ObjectEvent) -> void:
 	object.held_movement_finished = false
 	object.held_action_done = false
 	object.movement_frame = 0
+	object.action_step = 0
 	object.movement_state = 0
 
 
@@ -551,8 +715,10 @@ func freeze_except_player(except_slot: int = -1) -> void:
 		if slot != except_slot and object.active and not object.is_player \
 				and not object.held_movement_active and not object.frozen:
 			object.frozen = true
-			object.berry_animation_paused_backup = object.berry_animation_paused
-			object.berry_animation_paused = true
+			object.anim_paused_backup = object.anim.paused
+			object.affine_anim_paused_backup = object.affine_anim_paused
+			object.anim.paused = true
+			object.affine_anim_paused = true
 
 
 func unfreeze_all() -> void:
@@ -564,7 +730,8 @@ func unfreeze_all() -> void:
 static func _unfreeze(object: ObjectEvent) -> void:
 	if object.frozen:
 		object.frozen = false
-		object.berry_animation_paused = object.berry_animation_paused_backup
+		object.anim.paused = object.anim_paused_backup
+		object.affine_anim_paused = object.affine_anim_paused_backup
 
 
 ## `RemoveObjectEventByLocalIdAndMap` sets the template's hide flag. The
@@ -640,12 +807,14 @@ func boulder_landing(object: ObjectEvent) -> Array:
 	return requests
 
 
-## `UpdateObjectEventCurrentMovement`: holds bypass freezing/collision; running input gates trainer reactions.
+## `UpdateObjectEventCurrentMovement`: holds bypass freezing/collision; running input gates trainer
+## reactions. `RunTasks` precedes the objects; each `AnimateSprite` follows its callback.
 func step_movements(player_dashing: bool = false, player_tile_center: bool = false) -> Array:
 	_player_dashing = player_dashing
 	_player_tile_center = player_tile_center
 	var requests: Array = _effect_requests.duplicate()
 	_effect_requests.clear()
+	_run_levitate_tasks()
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
 		if not object.active:
@@ -654,17 +823,37 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 		if object.ground_on_spawn:
 			_ground(object, slot, "spawn", requests)
 			object.ground_on_spawn = false
-		if object.held_movement_active and not object.held_movement_finished:
-			object.held_movement_finished = object.held_action_done or _advance_motion(object, slot, requests)
-			object.held_action_done = object.held_movement_finished
-		elif not object.held_movement_active and not object.frozen:
+		if object.enable_anim:
+			object.anim.paused = false
+			object.disable_anim = false
+			object.enable_anim = false
+		if object.held_movement_active:
+			_step_held(object, slot, requests)
+		elif not object.frozen:
 			_step_autonomous(object, slot, requests)
-		if object.berry_initialized and not object.berry_animation_paused:
-			object.berry_animation_frame = mini(object.berry_animation_frame + 1, 193)
+		if object.disable_anim:
+			object.anim.paused = true
+		object.anim.animate()
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
 	_step_effect_sprites(requests)
 	return requests
+
+
+## `ObjectEventExecHeldMovementAction` only ever sets `heldMovementFinished`, and keeps
+## calling the step a finished hold stopped on.
+func _step_held(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if not object.held_action_done:
+		object.held_action_done = _advance_motion(object, slot, requests)
+		object.held_movement_finished = object.held_movement_finished or object.held_action_done
+		return
+	object.held_movement_finished = true
+	var row: Array = _motions[object.movement_action]
+	var options: Dictionary = row[3] if row.size() > 3 and row[3] is Dictionary else {}
+	if int(row[0]) == Motion.START_ANIM:
+		_advance_start_anim(object, int(options["mode"]))
+	elif int(row[0]) in PAUSE_AFTER and not options.get("fast", false) and not options.get("glide", false):
+		object.anim.paused = true
 
 
 func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> void:
@@ -741,10 +930,10 @@ func _base_template(object: ObjectEvent) -> Dictionary:
 func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
 	var row: Array = _motions[object.movement_action]
 	var motion: int = int(row[0])
-	var direction: int = int(row[1])
 	var parameter: int = int(row[2])
+	var options: Dictionary = row[3] if row.size() > 3 and row[3] is Dictionary else {}
 	if object.movement_frame == 0:
-		_start_motion(object, motion, direction, parameter, slot, requests)
+		_start_motion(object, row, options, slot, requests)
 		_start_state_motion(object, row, slot, requests)
 	match motion:
 		Motion.REVEAL:
@@ -753,38 +942,63 @@ func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
 			object.movement_frame += 1
 			return object.movement_type not in [0x39, 0x3A] or update_reveal_disguise(object)
 		Motion.WALK:
-			var pixels: Array = STEP_PIXELS[parameter]
-			object.pixel_position += Gen3FieldCamera.DIRECTIONS[direction] * int(pixels[object.movement_frame % pixels.size()])
-			object.movement_frame += 1
-			if object.movement_frame == STEP_FRAMES[parameter]:
-				_finish_motion(object, slot, requests)
-			return object.movement_frame == STEP_FRAMES[parameter]
+			return _advance_walk(object, int(row[1]), parameter, options, slot, requests)
 		Motion.JUMP:
 			return _advance_jump(object, parameter, slot, requests)
 		Motion.IN_PLACE, Motion.DELAY:
 			object.movement_frame += 1
+			if motion == Motion.IN_PLACE and object.movement_frame == parameter:
+				object.anim.paused = true
 			return object.movement_frame == parameter
+		Motion.ANIM:
+			object.movement_frame += 1
+			return object.movement_frame > 1 and object.anim.ended
+		Motion.START_ANIM:
+			object.movement_frame += 1
+			return object.movement_frame > 1 and _advance_start_anim(object, int(options["mode"]))
+		Motion.OBSTACLE, Motion.FLY:
+			object.movement_frame += 1
+			return _advance_obstacle(object) if motion == Motion.OBSTACLE else _advance_fly(object, parameter)
+		Motion.FIGURE_8:
+			object.movement_frame += 1
+			return _advance_figure_8(object, slot, requests)
+		Motion.LEVITATE:
+			return _levitate(object, slot, parameter)
 	return true
 
 
-func _start_motion(object: ObjectEvent, motion: int, direction: int, parameter: int,
-		slot: int, requests: Array) -> void:
-	if direction != 0:
+func _start_motion(object: ObjectEvent, row: Array, options: Dictionary, slot: int, requests: Array) -> void:
+	var motion: int = int(row[0])
+	var direction: int = int(row[1])
+	if motion == Motion.FACE and options.get("fast", false) or options.get("glide", false):
+		if object.facing != direction:
+			object.anim.start(DIRECTION_ANIM_OFFSETS[direction])
+		if options.get("fast", false):
+			object.anim.animate()
+	if direction != 0 and motion != Motion.ANIM:
 		set_direction(object, direction)
 	match motion:
 		Motion.FACE:
 			_shift_coords(object, object.current)
+			object.anim.paused = not options.get("fast", false)
 		Motion.WALK:
-			_shift_coords(object, object.current + Gen3FieldCamera.DIRECTIONS[direction])
-			_ground(object, slot, "begin_step", requests)
+			_start_walk(object, direction, int(row[2]), options, slot, requests)
 		Motion.JUMP:
-			var displacement: int = 1 if parameter in [Jump.FAR, Jump.SPECIAL, Jump.NORMAL] else 0
-			_shift_coords(object, object.current + Gen3FieldCamera.DIRECTIONS[direction] * displacement)
-			_ground(object, slot, "begin_step", requests)
+			_start_jump(object, direction, JUMP_SHAPES[int(row[2])], slot, requests)
+		Motion.IN_PLACE:
+			object.anim.paused = false
 		Motion.LOCK:
 			object.facing_locked = true
 		Motion.UNLOCK:
 			object.facing_locked = false
+		Motion.ANIM:
+			_start_anim_in_direction(object, direction, int(row[2]), options)
+		Motion.START_ANIM:
+			object.anim.start(int(row[2]))
+			object.anim.paused = false
+			object.disable_anim = false
+			for index: int in range(4, 8):
+				object.sprite_data[index] = 0
 
 
 func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: Array) -> void:
@@ -794,14 +1008,9 @@ func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: A
 			if direction >= 0:
 				set_direction(object, direction)
 				_shift_coords(object, object.current)
+				object.anim.paused = true
 		Motion.SET_FLAG:
-			match int(row[2]):
-				ObjectFlag.LANDING_EFFECT:
-					object.disable_jump_landing_effect = bool(row[3])
-				ObjectFlag.INVISIBLE:
-					object.invisible = bool(row[3])
-				ObjectFlag.FIXED_PRIORITY:
-					object.fixed_priority = bool(row[3])
+			_set_flag(object, int(row[2]), bool(row[3]))
 		Motion.EMOTE:
 			start_effect_sprite(object, slot, int(row[2]), ICON_PASSES, true, requests)
 		Motion.REVEAL:
@@ -809,6 +1018,239 @@ func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: A
 				start_reveal_disguise(object)
 			elif object.movement_type == MOVEMENT_TYPE_BURIED:
 				buried_reveals.append(slot)
+		Motion.AFFINE:
+			object.anim.affine = int(row[2]) == 1
+			object.affine_anim = 0 if object.anim.affine else -1
+			object.affine_anim_paused = object.anim.affine
+		Motion.LOCK_ANIM:
+			if int(row[2]) == 1:
+				_lock_anim(object)
+			else:
+				_unlock_anim(object)
+
+
+func _set_flag(object: ObjectEvent, flag: int, value: bool) -> void:
+	match flag:
+		ObjectFlag.LANDING_EFFECT:
+			object.disable_jump_landing_effect = value
+		ObjectFlag.INVISIBLE:
+			object.invisible = value
+		ObjectFlag.FIXED_PRIORITY:
+			object.fixed_priority = value
+		ObjectFlag.INANIMATE:
+			object.inanimate = value or bool(graphics_info(object.graphics_id).get("inanimate", false))
+		ObjectFlag.HIDE_REFLECTION:
+			object.hide_reflection = value
+
+
+## `InitNpcForMovement` and its slow siblings; Emerald pauses an anim-locked object's
+## anim. The Acro Bike's pop and end rows start their anim on the new facing.
+func _start_walk(object: ObjectEvent, direction: int, pace: int, options: Dictionary,
+		slot: int, requests: Array) -> void:
+	_shift_coords(object, object.current + Gen3FieldCamera.DIRECTIONS[direction])
+	object.anim.paused = pace != Pace.SLOW and _locked_anim_index(object) >= 0
+	if options.has("anim"):
+		object.anim.start(int(options["anim"]) + DIRECTION_ANIM_OFFSETS[object.facing])
+		object.anim.seek(0)
+	if options.has("affine"):
+		object.affine_anim_paused = false
+		object.affine_anim = int(options["affine"])
+	_ground(object, slot, "begin_step", requests)
+
+
+func _advance_walk(object: ObjectEvent, direction: int, pace: int, options: Dictionary,
+		slot: int, requests: Array) -> bool:
+	if options.get("glide", false):
+		object.anim.animate()
+	var pixels: Array = STEP_PIXELS[pace]
+	object.pixel_position += Gen3FieldCamera.DIRECTIONS[direction] * int(pixels[object.movement_frame % pixels.size()])
+	object.movement_frame += 1
+	if object.movement_frame != STEP_FRAMES[pace]:
+		return false
+	_finish_motion(object, slot, requests)
+	object.anim.paused = object.anim.paused or not options.get("glide", false)
+	if options.has("affine"):
+		object.affine_anim_paused = true
+	return true
+
+
+## `StartSpriteAnimInDirection`: a family reads its anim by direction, and
+## `MOVEMENT_ACTION_START_ANIM_IN_DIRECTION` restarts the current anim facing its movement.
+func _start_anim_in_direction(object: ObjectEvent, direction: int, anim: int, options: Dictionary) -> void:
+	if direction == 0:
+		direction = object.movement_direction
+	if anim < 0:
+		anim = object.anim.anim_num
+	elif options.get("family", false):
+		anim += DIRECTION_ANIM_OFFSETS[direction]
+	object.anim.set_and_start(anim, 0)
+	set_direction(object, direction)
+
+
+## FRLG's `MovementAction_RaiseHand*_Step1` and the head shake: stop on the anim's
+## end, hop twice and hold 81 frames, or sway one sine period.
+func _advance_start_anim(object: ObjectEvent, mode: int) -> bool:
+	var data: PackedInt32Array = object.sprite_data
+	if mode == 2:
+		data[7] = (data[7] + 4) & 0xFF
+		object.x2 = SINE[data[7]] >> 7
+		return data[7] == 0
+	if mode == 0:
+		return object.anim.ended
+	match data[7]:
+		0:
+			data[6] += 10
+			if data[6] > 127:
+				data[6] = 0
+				data[5] += 1
+				data[7] = data[5]
+				_restart_anim(object, 0)
+			object.jump_y = -(3 * SINE[data[6]] >> 7)
+			object.single_movement_active = object.jump_y != 0
+		1:
+			data[4] += 1
+			if data[4] > 16:
+				data[4] = 0
+				_restart_anim(object, ANIM_STD_COUNT)
+				data[7] = 0
+			else:
+				object.single_movement_active = false
+		2:
+			object.single_movement_active = false
+			data[4] += 1
+			if data[4] > 80:
+				data[4] = 0
+				return true
+	return false
+
+
+static func _restart_anim(object: ObjectEvent, anim: int) -> void:
+	object.anim.start(anim)
+	object.anim.paused = false
+	object.disable_anim = false
+
+
+## Rock Smash and Cut: the obstacle's anim, then 32 blinking frames, then invisible.
+func _advance_obstacle(object: ObjectEvent) -> bool:
+	match object.action_step:
+		0:
+			object.anim.set_and_start(ANIM_REMOVE_OBSTACLE, 0)
+			object.action_step = 1
+		1:
+			if object.anim.ended:
+				object.sprite_data[3] = OBSTACLE_BLINK_FRAMES
+				object.action_step = 2
+		2:
+			object.invisible = not object.invisible
+			object.sprite_data[3] -= 1
+			if object.sprite_data[3] == 0:
+				object.invisible = true
+				object.action_step = 3
+		3:
+			return true
+	return false
+
+
+## `MovementAction_FlyUp`/`FlyDown` move `y2` eight pixels a frame over the screen height.
+func _advance_fly(object: ObjectEvent, up: int) -> bool:
+	match object.action_step:
+		0:
+			object.jump_y = 0 if up == 1 else -DISPLAY_HEIGHT
+			object.action_step = 1
+		1:
+			object.jump_y += -8 if up == 1 else 8
+			if object.jump_y == (-DISPLAY_HEIGHT if up == 1 else 0):
+				object.action_step = 2
+		2:
+			return true
+	return false
+
+
+## `AnimateSpriteInFigure8`: four quarter loops over the offset tables.
+func _advance_figure_8(object: ObjectEvent, slot: int, requests: Array) -> bool:
+	var data: PackedInt32Array = object.sprite_data
+	if object.movement_frame == 1:
+		data[6] = 0
+		data[7] = 0
+		object.anim.paused = false
+	var index: int = data[6] if data[7] % 2 == 0 else FIGURE_8_X.size() - 1 - data[6]
+	object.x2 += FIGURE_8_X[index] * (1 if data[7] in [0, 3] else -1)
+	object.jump_y += FIGURE_8_Y[index]
+	data[6] += 1
+	if data[6] == FIGURE_8_X.size():
+		data[6] = 0
+		data[7] += 1
+	if data[7] != 4:
+		return false
+	object.x2 = 0
+	object.jump_y = 0
+	_finish_motion(object, slot, requests)
+	object.anim.paused = true
+	return true
+
+
+## Emerald's levitate task: start, stop, or stop once `y2` is back at 0.
+func _levitate(object: ObjectEvent, slot: int, mode: int) -> bool:
+	if mode == 0:
+		object.levitate_task = {"slot": slot, "timer": 0, "delta": -1}
+		_levitating.append(object.levitate_task)
+		return true
+	if mode == 2 and object.jump_y != 0:
+		return false
+	_levitating.erase(object.levitate_task)
+	if mode == 1:
+		object.jump_y = 0
+	return true
+
+
+## `ApplyLevitateMovement`: `y2` moves one pixel every fourth frame and turns every sixteenth.
+func _run_levitate_tasks() -> void:
+	for task: Dictionary in _levitating:
+		var object: ObjectEvent = objects[int(task["slot"])]
+		if int(task["timer"]) & 3 == 0:
+			object.jump_y += int(task["delta"])
+		if int(task["timer"]) & 15 == 0:
+			task["delta"] = -int(task["delta"])
+		task["timer"] = (int(task["timer"]) + 1) & 0xFFFF
+
+
+## `MovementAction_LockAnim_Step0`/`UnlockAnim_Step0` over 16 local ids and a count;
+## a new id takes the first free slot, and an id already held changes nothing.
+func _lock_anim(object: ObjectEvent) -> void:
+	if _locked_anims == null:
+		var ids := PackedInt32Array()
+		ids.resize(COUNT)
+		ids[0] = object.local_id
+		_locked_anims = {"ids": ids, "count": 1}
+	elif _locked_anim_index(object) < 0:
+		var free: int = (_locked_anims["ids"] as PackedInt32Array).find(LOCALID_NONE)
+		if free < 0:
+			return
+		_locked_anims["ids"][free] = object.local_id
+		_locked_anims["count"] += 1
+	else:
+		return
+	object.inanimate = true
+	object.facing_locked = true
+
+
+func _unlock_anim(object: ObjectEvent) -> void:
+	if _locked_anims == null:
+		return
+	var index: int = _locked_anim_index(object)
+	if index >= 0:
+		_locked_anims["ids"][index] = LOCALID_NONE
+		_locked_anims["count"] -= 1
+	if int(_locked_anims["count"]) == 0:
+		_locked_anims = null
+	if index >= 0:
+		object.inanimate = bool(graphics_info(object.graphics_id).get("inanimate", false))
+		object.facing_locked = false
+		object.anim.paused = false
+
+
+func _locked_anim_index(object: ObjectEvent) -> int:
+	return -1 if _locked_anims == null else (_locked_anims["ids"] as PackedInt32Array).find(object.local_id)
 
 
 static func _effect_request(object: ObjectEvent, slot: int, effect: int, kind: String = "field_effect") -> Dictionary:
@@ -876,24 +1318,43 @@ func _context_facing(object: ObjectEvent, mode: int) -> int:
 	return OPPOSITE[direction] if mode == Facing.AWAY_PLAYER else direction
 
 
+## `InitJump` and `DoShadowFieldEffect`; the special jump and wheelie hops start anims.
+func _start_jump(object: ObjectEvent, direction: int, shape: Dictionary, slot: int, requests: Array) -> void:
+	_shift_coords(object, object.current + Gen3FieldCamera.DIRECTIONS[direction] * mini(int(shape["distance"]), 1))
+	object.anim.paused = false
+	if shape.get("special", false):
+		object.anim.start(ANIM_STD_COUNT + DIRECTION_ANIM_OFFSETS[direction])
+	elif shape.get("wheelie", false):
+		object.anim.start_if_different(ANIM_STD_COUNT + DIRECTION_ANIM_OFFSETS[direction])
+	if shape.get("shadow", false) and not object.has_shadow:
+		object.has_shadow = true
+		requests.append(_effect_request(object, slot, FLDEFF_SHADOW))
+	_ground(object, slot, "begin_step", requests)
+
+
+## `DoJumpSpriteMovement`: the special jump runs at half speed; a far jump moves its cell at halfway.
 func _advance_jump(object: ObjectEvent, parameter: int, slot: int, requests: Array) -> bool:
-	var special: bool = parameter == Jump.SPECIAL
-	var duration: int = 32 if parameter == Jump.FAR or special else 16
-	var shift: int = 1 if parameter == Jump.FAR or special else 0
-	if parameter in [Jump.FAR, Jump.SPECIAL, Jump.NORMAL] and (not special or object.movement_frame % 2 == 0):
+	var shape: Dictionary = JUMP_SHAPES[parameter]
+	var distance: int = int(shape["distance"])
+	var special: bool = shape.get("special", false)
+	var duration: int = (32 if distance == 2 else 16) << int(special)
+	var shift: int = int(distance == 2) + int(special)
+	if distance != 0 and (not special or object.movement_frame % 2 == 0):
 		object.pixel_position += Gen3FieldCamera.DIRECTIONS[object.movement_direction]
-	object.jump_y = int(JUMP_Y[1 if parameter in [Jump.NORMAL, Jump.TURN] else 0][object.movement_frame >> shift])
+	object.jump_y = int(JUMP_Y[int(shape["arc"])][object.movement_frame >> shift])
 	object.movement_frame += 1
 	if object.movement_frame == duration / 2:
-		if parameter == Jump.FAR:
+		if distance == 2:
 			_shift_coords(object, object.current + Gen3FieldCamera.DIRECTIONS[object.movement_direction])
 			_ground(object, slot, "begin_step", requests)
-		elif parameter == Jump.TURN:
+		elif shape.get("turn", false):
 			set_direction(object, OPPOSITE[object.movement_direction])
-	if object.movement_frame == duration:
-		object.jump_y = 0
-		_finish_motion(object, slot, requests)
-	return object.movement_frame == duration
+	if object.movement_frame != duration:
+		return false
+	object.jump_y = 0
+	_finish_motion(object, slot, requests)
+	object.has_shadow = object.has_shadow and special
+	return true
 
 
 func _finish_motion(object: ObjectEvent, slot: int, requests: Array) -> void:
@@ -944,10 +1405,9 @@ func _set_berry_graphics(object: ObjectEvent) -> void:
 		return
 	var berry: int = int(tree["berry"])
 	var info: Dictionary = camera.data.world_berry(berry if berry >= 1 and berry <= 44 else 1)
-	object.berry_animation = stage - 1
-	object.berry_animation_frame = 0
-	object.graphics_id = int(info["berry_graphics"][stage - 1])
+	set_graphics_id(object, int(info["berry_graphics"][stage - 1]))
 	object.berry_palette = int(info["berry_palettes"][stage - 1]) & 15
+	object.anim.start(stage - 1)
 
 
 func _berry_sparkle(object: ObjectEvent, slot: int, requests: Array) -> void:
@@ -968,20 +1428,19 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 				var stage: int = int(events.berries.record(object.trainer_range).get("stage", 0))
 				object.invisible = stage == 0
 				if stage == 0:
-					if not object.berry_just_picked and object.berry_animation == 4:
+					if not object.berry_just_picked and object.anim.anim_num == 4:
 						_berry_sparkle(object, slot, requests)
-						object.berry_animation = 0
+						object.anim.anim_num = 0
 					return
-				if object.berry_animation == stage - 1:
+				if object.anim.anim_num == stage - 1:
 					_set_berry_graphics(object)
+					_set_single_movement(object, START_ANIM_IN_DIRECTION)
 					object.movement_state = 1
-					object.movement_action = 0x39
 					object.movement_delay = 1
-					object.berry_animation_paused = false
 				else:
 					object.movement_state = 2
 			1:
-				if object.berry_animation_frame < [33, 65, 97, 129, 193][object.berry_animation]:
+				if not _exec_single_movement(object, slot, requests):
 					return
 				object.movement_state = 0
 				object.movement_delay = 0
@@ -994,7 +1453,7 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 			3, 4:
 				object.movement_delay += 1
 				object.invisible = bool(object.movement_delay & 2)
-				object.berry_animation_paused = true
+				object.anim.paused = true
 				if object.movement_delay <= 64:
 					return
 				if object.movement_state == 3:
@@ -1152,6 +1611,7 @@ func _mew_can_move(at: Vector2i, player: ObjectEvent) -> bool:
 func _set_single_movement(object: ObjectEvent, action: int) -> void:
 	object.movement_action = action
 	object.movement_frame = 0
+	object.action_step = 0
 
 
 func _exec_single_movement(object: ObjectEvent, slot: int, requests: Array) -> bool:
@@ -1159,6 +1619,7 @@ func _exec_single_movement(object: ObjectEvent, slot: int, requests: Array) -> b
 		return false
 	object.movement_action = -1
 	object.movement_frame = 0
+	object.action_step = 0
 	return true
 
 
