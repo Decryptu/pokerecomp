@@ -87,6 +87,12 @@ const COPY_PLAYER_DIRECTIONS: Array = [[2, 1, 4, 3], [1, 2, 3, 4], [3, 4, 2, 1],
 const COPY_OBJECT_DIRECTIONS: Array = [[2, 1, 4, 3], [1, 2, 3, 4], [4, 3, 1, 2], [3, 4, 2, 1]]
 const COPY_ACTIONS: Array[int] = [-1, 0, 0x08, 0x15, 0x2D, 0x31, 0x46, 0x42, 0x0C]
 const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
+const MOVEMENT_TYPE_BURIED: int = 0x3F
+const TRAINER_FACING_TYPES: Array[int] = [8, 8, 7, 9, 10, 8, 8]
+## FLDEFF_ASH_PUFF (Ruby/FRLG POP_OUT_OF_ASH): five six-frame cells, then END.
+const ASH_PUFF: int = 49
+const ASH_PUFF_CELL: int = 6
+const ASH_PUFF_PASSES: int = 31
 
 const STATE_MOTIONS: Array = [
 	[0x59, 0x67, Motion.REVEAL, 0],
@@ -155,6 +161,8 @@ class ObjectEvent:
 	var single_movement_active: bool = false
 	var held_movement_active: bool = false
 	var held_movement_finished: bool = false
+	var held_action_done: bool = false
+	var buried_initialized: bool = false
 	var movement_action: int = -1
 	var movement_frame: int = 0
 	var movement_state: int = 0
@@ -194,6 +202,7 @@ var _facing := PackedByteArray()
 var _blocked: Dictionary = {}
 var _motions: Dictionary = {}
 var _effect_requests: Array = []
+var _buried_reveals: Array[Dictionary] = []
 
 
 func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
@@ -236,10 +245,8 @@ func _clone_target(clone: Dictionary) -> Dictionary:
 	return rows[int(clone["target_local_id"]) - 1]
 
 
-## `UpdateObjectEventsForCameraUpdate` after [method Gen3FieldCamera.move]. A
-## crossing first does what `LoadMapFromCameraTransition` does to objects: the
-## new map's templates, `ClearTempFieldEventData`, then every object shifted by
-## `gCamera`.
+## `UpdateObjectEventsForCameraUpdate` after [method Gen3FieldCamera.move]; a crossing first loads
+## the new templates, runs `ClearTempFieldEventData` and shifts every object by `gCamera`.
 func follow_camera() -> void:
 	if camera.crossed:
 		load_templates()
@@ -290,9 +297,8 @@ func remove_outside_view() -> void:
 			_deactivate(object)
 
 
-## `InitObjectEventStateFromTemplate`: the slot it fills, or -1 when the object
-## is already out or no slot is free. A FireRed or LeafGreen clone spawns as its
-## target, identity included, at the clone's position.
+## `InitObjectEventStateFromTemplate`: the slot, or -1 when out or full. A FireRed or
+## LeafGreen clone spawns as its target, identity included, at the clone's position.
 func spawn(template: Dictionary, number: int, group: int) -> int:
 	var at := Vector2i(int(template["x"]), int(template["y"]))
 	var clone: bool = _frlg and int(template["kind"]) == OBJ_KIND_CLONE
@@ -477,12 +483,11 @@ func _build_motions() -> void:
 func set_held_movement(object: ObjectEvent, action: int) -> bool:
 	if not object.active or movement_overridden(object) or not _motions.has(action):
 		return true
-	if int(_motions[action][0]) == Motion.REVEAL and object.movement_type == 0x3F:
-		return true
 	_unfreeze(object)
 	object.movement_action = action
 	object.held_movement_active = true
 	object.held_movement_finished = false
+	object.held_action_done = false
 	object.movement_frame = 0
 	return false
 
@@ -495,6 +500,7 @@ static func clear_held_movement(object: ObjectEvent) -> void:
 	object.movement_action = -1
 	object.held_movement_active = false
 	object.held_movement_finished = false
+	object.held_action_done = false
 	object.movement_frame = 0
 	object.movement_state = 0
 
@@ -584,9 +590,8 @@ func _template_by_id(local_id: int, number: int, group: int) -> Dictionary:
 	return {}
 
 
-## FRLG's `HandleBoulderFallThroughHole` and
-## `HandleBoulderActivateVictoryRoadSwitch`. Reveal flags use the template's
-## u16 trainer field, not the object's truncated trainer type. Switches ignore
+## FRLG's `HandleBoulderFallThroughHole` and `HandleBoulderActivateVictoryRoadSwitch`. Reveal flags
+## use the template's u16 trainer field, not the object's truncated trainer type. Switches ignore
 ## elevation and variable gates and visit all coordinate rows in order.
 func boulder_landing(object: ObjectEvent) -> Array:
 	var requests: Array = []
@@ -611,26 +616,104 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	_player_tile_center = player_tile_center
 	var requests: Array = _effect_requests.duplicate()
 	_effect_requests.clear()
+	_step_buried_reveals(requests)
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
 		if not object.active:
 			continue
-		_init_disguise(object, slot, requests)
-		if not _frlg and object.movement_type == 0xC and not object.berry_initialized:
-			_set_berry_graphics(object)
-			object.berry_initialized = true
+		_init_movement_type(object, slot, requests)
 		if object.ground_on_spawn:
 			_ground(object, slot, "spawn", requests)
 			object.ground_on_spawn = false
 		if object.held_movement_active and not object.held_movement_finished:
-			object.held_movement_finished = _advance_motion(object, slot, requests)
+			object.held_movement_finished = object.held_action_done or _advance_motion(object, slot, requests)
+			object.held_action_done = object.held_movement_finished
 		elif not object.held_movement_active and not object.frozen:
 			_step_autonomous(object, slot, requests)
 		if object.berry_initialized and not object.berry_animation_paused:
 			object.berry_animation_frame = mini(object.berry_animation_frame + 1, 193)
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
+	_step_ash_puffs(requests)
 	return requests
+
+
+func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> void:
+	_init_disguise(object, slot, requests)
+	if not _frlg and object.movement_type == 0xC and not object.berry_initialized:
+		_set_berry_graphics(object)
+		object.berry_initialized = true
+	if object.movement_type == MOVEMENT_TYPE_BURIED and not object.buried_initialized:
+		object.fixed_priority = true
+		object.buried_initialized = true
+
+
+## `Task_SetBuriedTrainerMovement` in `RunTasks`; unfinished frames clear the finished flag.
+func _step_buried_reveals(requests: Array) -> void:
+	for task: Dictionary in _buried_reveals.duplicate():
+		var object: ObjectEvent = task["object"]
+		if not task["started"]:
+			clear_held_movement(object)
+			task["started"] = true
+		_buried_reveal_step(task, object, requests)
+		if int(task["step"]) == 3 and not _ash_puff_active():
+			var type: int = TRAINER_FACING_TYPES[object.facing]
+			object.movement_type = type
+			object.direction_sequence_index = 0
+			object.player_copyable_movement = 0
+			object.movement_state = 0
+			_override_template_movement_type(object, type)
+			_buried_reveals.erase(task)
+		else:
+			object.held_movement_finished = false
+
+
+## `sTrainerSeeFuncList2`; a refused hold still advances the step.
+func _buried_reveal_step(task: Dictionary, object: ObjectEvent, requests: Array) -> void:
+	match int(task["step"]):
+		0:
+			if not movement_overridden(object) or clear_held_movement_if_finished(object):
+				set_held_movement(object, 0x4A if _frlg else 0x3E)
+				task["step"] = 1
+		1:
+			if held_movement_status(object):
+				task["puff"] = 0
+				var request: Dictionary = _effect_request(object, objects.find(object), ASH_PUFF)
+				request["at"] = object.current
+				requests.append(request)
+				task["step"] = 2
+		2:
+			if (int(task["puff"]) - 1) / ASH_PUFF_CELL == 2:
+				object.fixed_priority = false
+				clear_held_movement_if_finished(object)
+				var facing: int = object.facing if object.facing <= Direction.EAST else Direction.SOUTH
+				set_held_movement(object, (0x52 if _frlg else 0x46) + maxi(facing - 1, 0))
+				task["step"] = 3
+
+
+## Created after every object sprite; its callback stops it on the pass after END.
+func _step_ash_puffs(requests: Array) -> void:
+	for task: Dictionary in _buried_reveals:
+		var passes: int = int(task["puff"])
+		if passes >= ASH_PUFF_PASSES:
+			var object: ObjectEvent = task["object"]
+			requests.append(_effect_request(object, objects.find(object), ASH_PUFF, "stop_field_effect"))
+			task["puff"] = -1
+		elif passes >= 0:
+			task["puff"] = passes + 1
+
+
+func _ash_puff_active() -> bool:
+	return _buried_reveals.any(func(task: Dictionary) -> bool: return int(task["puff"]) >= 0)
+
+
+func _override_template_movement_type(object: ObjectEvent, type: int) -> void:
+	if object.map_number != camera.number or object.map_group != camera.group:
+		return
+	for template: Dictionary in templates:
+		if int(template["local_id"]) == object.local_id:
+			template["movement_type"] = type
+			return
 
 
 func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
@@ -643,6 +726,8 @@ func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
 		_start_state_motion(object, row, slot, requests)
 	match motion:
 		Motion.REVEAL:
+			if object.movement_type == MOVEMENT_TYPE_BURIED:
+				return false
 			object.movement_frame += 1
 			return object.movement_type not in [0x39, 0x3A] or update_reveal_disguise(object)
 		Motion.WALK:
@@ -700,6 +785,8 @@ func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: A
 		Motion.REVEAL:
 			if object.movement_type in [0x39, 0x3A]:
 				start_reveal_disguise(object)
+			elif object.movement_type == MOVEMENT_TYPE_BURIED:
+				_buried_reveals.append({"object": object, "step": 0, "started": false, "puff": -1})
 
 
 static func _effect_request(object: ObjectEvent, slot: int, effect: int, kind: String = "field_effect") -> Dictionary:
@@ -808,7 +895,7 @@ func _step_autonomous(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var type: int = object.movement_type
 	if type == 0xC and not _frlg:
 		_step_berry(object, slot, requests)
-	elif type in [0x39, 0x3A]:
+	elif type in [0x39, 0x3A, MOVEMENT_TYPE_BURIED]:
 		clear_held_movement(object)
 		object.single_movement_active = false
 	elif type in [2, 3, 4, 5, 6]:

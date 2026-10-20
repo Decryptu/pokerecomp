@@ -1525,8 +1525,7 @@ func test_removed_disguise_stops_before_reused_slot_spawns_its_effect() -> void:
 		assert_eq(objects.step_movements(), [])
 
 
-## Reveal is an immediate no-op for ordinary trainers regardless of patrol
-## state. Buried trainers require a separate task and must not claim completion.
+## Reveal is an immediate no-op for ordinary trainers regardless of patrol state.
 func test_reveal_dispatch_does_not_read_patrol_state_as_disguise_state() -> void:
 	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
 		var objects: Gen3ObjectEvents = _movement_objects(id)
@@ -1534,16 +1533,53 @@ func test_reveal_dispatch_does_not_read_patrol_state_as_disguise_state() -> void
 		object.active = true
 		object.direction_sequence_index = 35
 		objects.objects[0] = object
-		var action: int = 0x67 if objects._frlg else 0x59
-		assert_false(objects.set_held_movement(object, action))
+		assert_false(objects.set_held_movement(object, 0x67 if objects._frlg else 0x59))
 		objects.step_movements()
 		assert_true(object.held_movement_finished)
-		Gen3ObjectEvents.clear_held_movement(object)
-		object.movement_type = 0x3F
-		object.frozen = true
-		assert_true(objects.set_held_movement(object, action))
-		assert_true(object.frozen)
+
+
+## A buried trainer's reveal hands off to `trainer_see.c`'s task: the task's
+## first run on the next frame, the puff's animCmdIndex 2 on its 13th pass, the
+## callback stop after END, and the facing type written to the saved template.
+## The task clears the finished flag every frame, so a jump that reran past its
+## sixteen frames would index outside the jump table.
+func test_buried_trainer_reveal_follows_the_trainer_see_task_clock() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _movement_objects(id)
+		var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
+		template.merge({"local_id": 42, "movement_type": 0x3F, "x": 5, "y": 5}, true)
+		objects.templates = [template.duplicate()]
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[objects.spawn(template, objects.camera.number, objects.camera.group)]
+		var player := Gen3ObjectEvents.ObjectEvent.new()
+		player.active = true
+		player.current = object.current + Vector2i(-3, 1)
+		objects.objects[1] = player
+		objects.step_movements()
+		assert_true(object.fixed_priority, str(id))
 		assert_false(object.held_movement_active)
+		assert_false(objects.set_held_movement(object, 0x67 if objects._frlg else 0x59))
+		var puffs: Array = []
+		for frame: int in range(1, 36):
+			for request: Dictionary in objects.step_movements():
+				if request.get("effect_id", -1) == Gen3ObjectEvents.ASH_PUFF:
+					puffs.append([frame, request["kind"], request.get("at", object.current)])
+			if frame == 1:
+				assert_false(object.held_movement_finished, str(id))
+			if frame == 2:
+				assert_eq(object.facing, Gen3ObjectEvents.Direction.WEST)
+			if frame in [15, 16]:
+				assert_eq(object.fixed_priority, frame == 15, "%s frame %d" % [id, frame])
+				assert_eq(object.jump_y, 0 if frame == 15 else -4)
+			if frame == 31:
+				assert_true(object.held_movement_finished)
+				assert_eq(object.jump_y, 0)
+			if frame == 34:
+				assert_eq(object.movement_type, 0x3F)
+		assert_eq(puffs, [[3, "field_effect", object.current], [34, "stop_field_effect", object.current]], str(id))
+		assert_eq(object.movement_type, 9, str(id))
+		assert_eq(int(objects.templates[0]["movement_type"]), 9)
+		assert_true(object.held_movement_finished)
+		assert_eq(object.current, object.previous)
 
 
 ## ARM movement and sprite clocks pin stage polling, both sparkle halves,

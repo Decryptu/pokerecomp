@@ -3,14 +3,8 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3 NPCs now support random wandering, weighted facing and rotation, trainer reactions, copy-player movement and Mew's grass movement.
-- Generation 3 objects now support tree and mountain disguises and their reveal animations.
-- Generation 3 berry trees now model planting, watering, growth, yields and regrowth, with Hoenn's stage graphics and field callbacks.
+- Generation 3 trainers buried in ash now pop out with the ash puff and jump when revealed, then keep facing the way they turned.
 - Generation 3 cartridges remain unplayable while field integration continues.
-
-## Updating this release
-
-- Cartridges must be reimported for the updated cache format. Saves are preserved.
 
 ## Which file
 
