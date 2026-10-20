@@ -95,7 +95,8 @@ over a one-pocket bag.
 
 Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
 the shelf. An import reads their species with Pokédex entries, moves, types,
-matchup chart, items, abilities, berry growth parameters, trainers, map headers,
+matchup chart, items, abilities, berry growth parameters, object graphics with
+their sprite animations, trainers, map headers,
 layouts, tilesets with their animation frames and timing, events, map script
 entry points, reachable
 bytecode and the texts, braille, movement lists and marts it names, wild
@@ -108,11 +109,13 @@ and draw the map as the field loads it, with the neighbouring maps' edges and
 the border around it; a frame count after the path renders the map that many
 tileset animation frames in. The field's camera steps across map connections
 as the cartridge's does, spawning and removing the map's objects as they enter
-and leave the view, and its collision test answers as the cartridge's. Basic
-held object movements run frame by frame through
+and leave the view, and its collision test answers as the cartridge's. Every
+held object movement runs frame by frame through
 [Gen3ObjectEvents](game/gen3/gen3_object_events.gd),
 retaining each engine's action numbers, walk cadence, jump arcs and collision
-occupancy until arrival. [Gen3PlayerAvatar](game/gen3/gen3_player_avatar.gd)
+occupancy until arrival; the nurse's bow, Cut, Rock Smash, the Acro Bike's
+wheelies and FireRed/LeafGreen's raised hand wait on the sprite's own
+[animation clock](game/gen3/gen3_sprite_anim.gd). [Gen3PlayerAvatar](game/gen3/gen3_player_avatar.gd)
 consumes ledge, surf dismount and Strength collision requests through per-frame
 movement tasks, including FireRed/LeafGreen boulder falls and switch dispatch.
 [Rotating-gate puzzles](game/gen3/gen3_player_avatar.gd) keep their orientations in
@@ -420,7 +423,7 @@ or a group, or `all`; with no argument it lists them.
 | `art` | Both intro movies, the credits of all six cartridges, the region map, all 278 battle animations, the map name sign |
 | `tables` | TM/HM, naming, world scripts, the opening lane |
 | `trainers` | The Route 30 trainer on each profile |
-| `gen3` | Ruby, Sapphire, FireRed, LeafGreen and Emerald's content tables, individual trainer parties, map headers, layouts, tilesets, tileset animations and events, the field's map grids, camera crossings, object spawns, autonomous patrols, random wandering, weighted facings, rotations and trainer reactions to a running player, fixed facings and in-place paces, [copy-player movement](game/gen3/gen3_object_events.gd), held movements with contextual facing, visibility and priority flags and emote requests, tree/mountain disguises and buried trainers with their reveal lifecycles, [trainer sight and approach](game/gen3/gen3_trainer_see.gd) over every seeing trainer template, [berry growth and watering](game/gen3/gen3_berry_trees.gd), growth sparkles, and collisions, player avatar initialization, collision requests and movement tasks, boulder falls and switches, Hoenn rotating-gate puzzles, script entry points, bytecode, texts, movements and marts, wild encounters and all imported Pokémon and trainer pictures |
+| `gen3` | Ruby, Sapphire, FireRed, LeafGreen and Emerald's content tables, individual trainer parties, map headers, layouts, tilesets, tileset animations and events, the field's map grids, camera crossings, object spawns, autonomous patrols, random wandering, weighted facings, rotations and trainer reactions to a running player, fixed facings and in-place paces, [copy-player movement](game/gen3/gen3_object_events.gd), every held movement with contextual facing, visibility and priority flags, emote and shadow requests and the anim-timed bow, Cut and Rock Smash, tree/mountain disguises and buried trainers with their reveal lifecycles, [trainer sight and approach](game/gen3/gen3_trainer_see.gd) over every seeing trainer template, [berry growth and watering](game/gen3/gen3_berry_trees.gd), growth sparkles, and collisions, player avatar initialization, collision requests and movement tasks, boulder falls and switches, Hoenn rotating-gate puzzles, script entry points, bytecode, texts, movements and marts, wild encounters and all imported Pokémon and trainer pictures |
 | `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, the Hall of Fame's own pages, the opening from the copyright screen to the title on all three, the Cable Club from its receptionist through a trade and a Colosseum fight against another save of the same cartridge, every sound a script row plays and the rival's own theme, Yellow's follower: its emotion table, its faces, its 42 voice clips and the spawn every warp leaves it, and a new game played on the real screens from the copyright screen to the first badge on all three, every button through `press_button` and the sound driver clocked a frame a frame |
 
 The rest are previews and dumps, each driving a real screen or table:

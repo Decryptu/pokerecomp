@@ -395,6 +395,20 @@ func world_berry(berry: int) -> Dictionary:
 	return _coerce_service_dictionary(rows[berry - 1]) if berry <= rows.size() else {}
 
 
+## Row [param index] of `gObjectEventGraphicsInfoPointers` (Emerald's
+## `gMauvilleOldManGraphicsInfoPointers` when [param mauville]): its `inanimate`
+## bit and `anims`, one array of `union AnimCmd` words per anim number.
+func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
+	if generation != RomRegistry.GEN3 or index < 0:
+		return {}
+	var rows: Array = _scripts().get("mauville_graphics" if mauville else "object_graphics", [])
+	if index >= rows.size():
+		return {}
+	var row: Dictionary = rows[index]
+	return _coerce_service_dictionary({"inanimate": bool(row["inanimate"]),
+		"anims": _scripts()["sprite_anims"].get(str(int(row["anims"])), [])})
+
+
 func world_map_layout(group: int, number: int) -> Dictionary:
 	var header: Dictionary = world_map_header(group, number)
 	return _gba_graphics_record("layouts", int(header.get("layout_offset", -1)))

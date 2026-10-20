@@ -15,7 +15,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read(rom, layout).is_empty():
-		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data, movement types, berries or wild encounters did not decode."}
+		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data, movement types, berries, object graphics or wild encounters did not decode."}
 	return {"ok": true, "message": ""}
 
 
@@ -32,10 +32,12 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var scripts: Dictionary = Gen3Script.read(rom, layout, headers)
 	var movement_types: Array = _movement_types(rom, layout)
 	var berries: Array = _berries(rom, layout)
-	if scripts.is_empty() or movement_types.is_empty() or berries.is_empty():
+	var object_graphics: Dictionary = _object_graphics(rom, layout)
+	if scripts.is_empty() or movement_types.is_empty() or berries.is_empty() or object_graphics.is_empty():
 		return {}
 	scripts["movement_types"] = movement_types
 	scripts["berries"] = berries
+	scripts.merge(object_graphics)
 	return {"headers": headers, "encounters": encounters, "graphics": graphics, "scripts": scripts}
 
 
@@ -79,6 +81,57 @@ static func _berries(rom: RomFile, layout: Dictionary) -> Array:
 			row[table] = Array(rom.slice(source, 5))
 		out.append(row)
 	return out
+
+
+## Each `ObjectEventGraphicsInfo`'s `inanimate` bit and its `anims` table, keyed
+## by dump offset. A table runs over every following pointer to an anim
+## sequence, so an index past its own entries reads on as the cartridge does.
+static func _object_graphics(rom: RomFile, layout: Dictionary) -> Dictionary:
+	var tables: Dictionary = {}
+	var out: Dictionary = {"sprite_anims": tables}
+	for key: String in ["object_graphics", "mauville_graphics"]:
+		if not layout.has(key):
+			continue
+		var rows: Array = []
+		for index: int in int(layout[key + "_count"]):
+			var info: int = Gen3Layout.read_pointer(rom, int(layout[key]) + index * 4, 0x24)
+			var anims: int = -1 if info < 0 else Gen3Layout.read_pointer(rom, info + 0x18, 4)
+			if anims < 0:
+				return {}
+			if not tables.has(str(anims)):
+				tables[str(anims)] = _anim_table(rom, anims)
+			if tables[str(anims)].is_empty():
+				return {}
+			rows.append({"inanimate": bool(rom.u8(info + 0x0C) & 0x40), "anims": anims})
+		out[key] = rows
+	return out
+
+
+static func _anim_table(rom: RomFile, at: int) -> Array:
+	var out: Array = []
+	while true:
+		var sequence: int = Gen3Layout.read_pointer(rom, at + out.size() * 4, 4)
+		var words: Array = [] if sequence < 0 else _anim_sequence(rom, sequence)
+		if words.is_empty():
+			return out
+		out.append(words)
+	return out
+
+
+## `union AnimCmd` words through `ANIMCMD_END` or `ANIMCMD_JUMP`; a frame keeps
+## its top byte clear, so a run of other data is not taken for one.
+static func _anim_sequence(rom: RomFile, at: int) -> Array:
+	var out: Array = []
+	while out.size() < Gen3SpriteAnim.SEQUENCE_LIMIT and rom.in_bounds(at + out.size() * 4, 4):
+		var word: int = rom.u32le(at + out.size() * 4)
+		if word >> 24 != 0:
+			return []
+		out.append(word)
+		if word & 0xFFFF == Gen3SpriteAnim.JUMP:
+			return out if (word >> 16) & 0x3F < out.size() else []
+		if word & 0xFFFF == Gen3SpriteAnim.END:
+			return out
+	return []
 
 
 static func _headers(rom: RomFile, layout: Dictionary) -> Dictionary:

@@ -857,7 +857,7 @@ func _player_avatars() -> void:
 
 
 ## ARM held-dispatcher traces over cached lists on a uniform synthetic grid.
-## Reset at unsupported actions; this checks supported runs, not execution.
+## Reset at actions [method arm_traced] leaves out; this checks supported runs, not execution.
 const MOVEMENT_ORIGIN := Vector2i(256, 256)
 const MOVEMENT_DIGESTS: Dictionary = {
 	&"ruby": "a8839e8a87ce4510556789871dc4eec714ff61fc",
@@ -880,23 +880,78 @@ func _held_movements() -> void:
 	camera.grid._behaviors.resize(1024)
 	var objects := Gen3ObjectEvents.new(camera, Gen3EventData.new(data.id))
 	var lines := PackedStringArray(["object movements"])
+	var refused: Array[int] = []
 	for offset: int in data.world_script_offsets("movements"):
 		_reset_mover(objects)
 		var bytes: PackedByteArray = data.world_script_data("movements", offset)["bytes"]
 		for index: int in bytes.size():
 			lines.append_array(_held_action_trace(objects, bytes[index], offset, index))
+			if bytes[index] != STEP_END and not objects._motions.has(bytes[index]):
+				refused.append(bytes[index])
 	_r.digest_matches("gen3_object_movements", lines, MOVEMENT_DIGESTS[data.id])
+	_r.check(refused.is_empty(), "every cached movement action has a handler (refused %s)" % [refused])
+	_held_anim_finishes(objects)
+
+
+const STEP_END: int = 0xFE
+## Frame a hold finishes on, worked out from pret's anims, `sprite.c` and the action's
+## steps: the bow's 8+32+8 cells end on 50, Rock Smash and Cut blink 32 frames after their
+## cells, the head shake loops its 80 frames once, a raised hand hops twice and holds 81.
+## [action, graphics, frame, invisible at the end].
+const HOENN_HELD_FINISHES: Array = [[0x4F, 58, 50, false], [0x5A, 86, 67, true],
+	[0x5B, 82, 59, true], [0x39, 3, 26, false]]
+const FRLG_HELD_FINISHES: Array = [[0x5B, 64, 50, false], [0x68, 96, 67, true],
+	[0x69, 95, 59, true], [0x45, 3, 26, false], [0x9F, 0, 162, false], [0x98, 16, 3, false],
+	[0x99, 16, 125, false], [0x9A, 16, 65, false], [0x6E, 0, 31, false], [0xA4, 0, 22, false]]
+const HELD_ANIM_FINISHES: Dictionary = {
+	&"ruby": HOENN_HELD_FINISHES + [[0x60, 0, 31, false]],
+	&"sapphire": HOENN_HELD_FINISHES + [[0x60, 0, 31, false]],
+	&"emerald": HOENN_HELD_FINISHES + [[0x62, 0, 31, false], [0x96, 0, 8, false],
+		[0x9C, 0, 22, false], [0x9D, 0, 22, false], [0x9B, 0, 288, false]],
+	&"firered": FRLG_HELD_FINISHES,
+	&"leafgreen": FRLG_HELD_FINISHES,
+}
+
+
+func _held_anim_finishes(objects: Gen3ObjectEvents) -> void:
+	for row: Array in HELD_ANIM_FINISHES[_r.data.id]:
+		_reset_mover(objects)
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.set_graphics_id(object, int(row[1]))
+		objects.set_held_movement(object, int(row[0]))
+		var frame: int = 0
+		while not object.held_movement_finished and frame < 400:
+			objects.step_movements()
+			frame += 1
+		_r.check(frame == int(row[2]) and object.invisible == bool(row[3]),
+			"held action %02X on graphics %d finishes on frame %d (got %d)" % [int(row[0]), int(row[1]), int(row[2]), frame])
+
+
+## The actions the ARM held traces ran. Rows added after them (those with options,
+## the obstacle and affine kinds, the inanimate and reflection flags) and
+## FLDEFF_SHADOW, whose routines those builds stubbed, stay out of their streams.
+static func arm_traced(objects: Gen3ObjectEvents, action: int) -> bool:
+	var row: Array = objects._motions.get(action, [])
+	if row.is_empty() or (row.size() > 3 and row[3] is Dictionary):
+		return false
+	if int(row[0]) in [Gen3ObjectEvents.Motion.OBSTACLE, Gen3ObjectEvents.Motion.AFFINE]:
+		return false
+	return int(row[0]) != Gen3ObjectEvents.Motion.SET_FLAG or int(row[2]) not in [
+		Gen3ObjectEvents.ObjectFlag.INANIMATE, Gen3ObjectEvents.ObjectFlag.HIDE_REFLECTION]
+
+
+static func arm_traced_effect(request: Dictionary) -> bool:
+	return request["kind"] == "field_effect" and request["effect_id"] != Gen3ObjectEvents.FLDEFF_SHADOW
 
 
 func _held_action_trace(objects: Gen3ObjectEvents, action: int, offset: int, index: int) -> PackedStringArray:
 	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
 	var lines := PackedStringArray()
-	if objects.set_held_movement(object, action):
+	if not arm_traced(objects, action) or objects.set_held_movement(object, action):
 		_reset_mover(objects)
 		return lines
 	for frame: int in range(1, 41):
-		var effects: Array = objects.step_movements().filter(
-			func(request: Dictionary) -> bool: return request["kind"] == "field_effect")
+		var effects: Array = objects.step_movements().filter(arm_traced_effect)
 		var effect: Array = [-1, 0, 0, 0] if effects.is_empty() else [effects[0]["effect_id"],
 			effects[0]["local_id"], effects[0]["map_number"], effects[0]["map_group"]]
 		var pixels: Vector2i = object.pixel_position - (MOVEMENT_ORIGIN + Vector2i(12, 12)) * 16
@@ -1534,7 +1589,7 @@ func _berry_object_frames(objects: Gen3ObjectEvents, template: Dictionary) -> vo
 		lines.append(",".join([frame, object.graphics_id, int(object.invisible),
 			int(object.single_movement_active), object.movement_action & 255, object.movement_state,
 			object.movement_delay, 1 + int(objects.berry_tree_sparkling(object.local_id, object.map_number, object.map_group)) * 2,
-			object.berry_animation, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
+			object.anim.anim_num, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
 	_r.check(("\n".join(lines) + "\n").sha1_text() == "6385b0a01e1037c39ebbf2f45ea8b41d9530498e",
 		"berry template %d matches original ARM callbacks and animation clocks" % object.local_id)
 	object.active = false
