@@ -33,10 +33,10 @@ enum Motion {
 enum Facing { PLAYER, AWAY_PLAYER, ORIGINAL }
 enum ObjectFlag { LANDING_EFFECT, INVISIBLE, FIXED_PRIORITY, INANIMATE, HIDE_REFLECTION }
 enum Jump { FAR, SPECIAL, NORMAL, IN_PLACE, TURN, HOP_IN_PLACE, HOP, ACRO_FAR }
-enum Pace { SLOW, NORMAL, FAST, CURRENT, FASTER, SLIDE, FRLG_SLOW, SLOWEST, RUN_SLOW }
+enum Pace { SLOW, NORMAL, FAST, CURRENT, FASTER, SLIDE, FRLG_SLOW, SLOWEST, RUN_SLOW, RUN }
 const STEP_PIXELS: Array = [[1, 0], [1], [2], [2, 3, 3, 2, 3, 3], [4], [8], [1, 1, 0],
-	[0, 0, 0, 0, 0, 0, 0, 0, 0, 1], [1, 2]]
-const STEP_FRAMES: Array[int] = [31, 16, 8, 6, 4, 2, 23, 160, 11]
+	[0, 0, 0, 0, 0, 0, 0, 0, 0, 1], [1, 2], [2]]
+const STEP_FRAMES: Array[int] = [31, 16, 8, 6, 4, 2, 23, 160, 11, 8]
 const JUMP_Y: Array = [
 	[-4, -6, -8, -10, -11, -12, -12, -12, -11, -10, -9, -8, -6, -4, 0, 0],
 	[0, -2, -3, -4, -5, -6, -6, -6, -5, -5, -4, -3, -2, 0, 0, 0],
@@ -61,6 +61,16 @@ const ANIM_REMOVE_OBSTACLE: int = 1
 const ANIM_SHAKE_HEAD: int = 28
 ## `Get*DirectionAnimNum` rows add these to their first anim; FRLG's spin row differs.
 const DIRECTION_ANIM_OFFSETS: Array[int] = [0, 0, 1, 2, 3, 0, 0, 1, 1]
+const SPIN_ANIM_OFFSETS: Array[int] = [0, 0, 1, 2, 3, 0, 1, 2, 3]
+## South rows of `ANIM_STD_GO_*`, `ANIM_RUN_*`, FRLG's `ANIM_SPIN_*` and `ANIM_MOVING_WHEELIE_*`.
+const ANIM_GO: int = 4
+const ANIM_RUN: int = ANIM_STD_COUNT
+const ANIM_SPIN: int = ANIM_STD_COUNT + 4
+const ANIM_PEDAL: int = ANIM_STD_COUNT + 16
+## `sDirectionAnimFuncsBySpeed` and the slow walks' `GetMoveDirectionAnimNum`, by [enum Pace].
+const PACE_STEP_ANIMS: Array[int] = [ANIM_GO, ANIM_GO, ANIM_GO + 4, ANIM_GO + 4, ANIM_GO + 8,
+	ANIM_GO + 12, ANIM_GO, ANIM_GO, ANIM_RUN, ANIM_RUN]
+const IN_PLACE_STEP_ANIMS: Dictionary = {32: ANIM_GO, 16: ANIM_GO, 8: ANIM_GO + 4, 4: ANIM_GO + 8}
 const OBSTACLE_BLINK_FRAMES: int = 32
 ## Hoenn's `MOVEMENT_ACTION_START_ANIM_IN_DIRECTION`, which the berry-tree callback runs.
 const START_ANIM_IN_DIRECTION: int = 0x39
@@ -90,7 +100,7 @@ const MOTION_FAMILIES: Array = [
 	[0x1D, 0x25, Motion.IN_PLACE, 16], [0x21, 0x29, Motion.IN_PLACE, 8],
 	[0x25, 0x2D, Motion.IN_PLACE, 4], [0x29, 0x31, Motion.WALK, Pace.CURRENT],
 	[0x2D, 0x35, Motion.WALK, Pace.FASTER], [0x31, 0x39, Motion.WALK, Pace.SLIDE],
-	[0x35, 0x3D, Motion.WALK, Pace.FAST], [0x3A, 0x46, Motion.JUMP, Jump.SPECIAL],
+	[0x35, 0x3D, Motion.WALK, Pace.RUN], [0x3A, 0x46, Motion.JUMP, Jump.SPECIAL],
 	[0x42, 0x4E, Motion.JUMP, Jump.NORMAL], [0x46, 0x52, Motion.JUMP, Jump.IN_PLACE],
 	[0x4A, 0x56, Motion.JUMP, Jump.TURN],
 ]
@@ -165,20 +175,21 @@ const STATE_MOTIONS: Array = [
 ## Rows past [constant MOTION_FAMILIES] and [constant STATE_MOTIONS]: [Ruby id, Emerald id,
 ## FRLG id (-1 absent), motion, parameter, options]. A `family` row is four actions, south
 ## to east; an ANIM parameter is its anim number, the family's first, or -1 for the current one.
+## `step` is the first anim of a row's step anim when not its pace's or duration's.
 const MORE_ACTIONS: Array = [
 	[0x39, 0x39, 0x45, Motion.ANIM, -1, {}],
 	[0x4F, 0x4F, 0x5B, Motion.ANIM, ANIM_STD_COUNT, {"direction": Direction.SOUTH}],
 	[0x60, 0x62, 0x6E, Motion.WALK, Pace.SLOW, {"direction": Direction.SOUTH, "affine": 0}],
 	[0x61, 0x63, 0x6F, Motion.WALK, Pace.SLOW, {"direction": Direction.SOUTH, "affine": 1}],
-	[0x62, 0x64, 0x70, Motion.FACE, 0, {"family": true}],
+	[0x62, 0x64, 0x70, Motion.FACE, 0, {"family": true, "step": ANIM_PEDAL}],
 	[0x66, 0x68, 0x74, Motion.ANIM, ANIM_STD_COUNT, {"family": true}],
 	[0x6A, 0x6C, 0x78, Motion.ANIM, ANIM_STD_COUNT + 8, {"family": true}],
 	[0x6E, 0x70, 0x7C, Motion.JUMP, Jump.HOP_IN_PLACE, {"family": true}],
 	[0x72, 0x74, 0x80, Motion.JUMP, Jump.HOP, {"family": true}],
 	[0x76, 0x78, 0x84, Motion.JUMP, Jump.ACRO_FAR, {"family": true}],
-	[0x7A, 0x7C, 0x88, Motion.IN_PLACE, 8, {"family": true}],
+	[0x7A, 0x7C, 0x88, Motion.IN_PLACE, 8, {"family": true, "step": ANIM_PEDAL}],
 	[0x7E, 0x80, 0x8C, Motion.WALK, Pace.FAST, {"family": true, "anim": ANIM_STD_COUNT}],
-	[0x82, 0x84, 0x90, Motion.WALK, Pace.FAST, {"family": true}],
+	[0x82, 0x84, 0x90, Motion.WALK, Pace.FAST, {"family": true, "step": ANIM_PEDAL}],
 	[0x86, 0x88, -1, Motion.WALK, Pace.FAST, {"family": true, "anim": ANIM_STD_COUNT + 8}],
 	[-1, 0x60, -1, Motion.SET_FLAG, ObjectFlag.HIDE_REFLECTION, {"value": true}],
 	[-1, 0x61, -1, Motion.SET_FLAG, ObjectFlag.HIDE_REFLECTION, {"value": false}],
@@ -194,7 +205,7 @@ const MORE_ACTIONS: Array = [
 	[-1, 0x9D, 0xA5, Motion.FLY, 0, {}],
 	[-1, -1, 0x04, Motion.FACE, 0, {"family": true, "fast": true}],
 	[-1, -1, 0x41, Motion.WALK, Pace.RUN_SLOW, {"family": true}],
-	[-1, -1, 0x94, Motion.WALK, Pace.FAST, {"family": true}],
+	[-1, -1, 0x94, Motion.WALK, Pace.FAST, {"family": true, "step": ANIM_SPIN}],
 	[-1, -1, 0x98, Motion.START_ANIM, ANIM_STD_COUNT, {"mode": 0}],
 	[-1, -1, 0x99, Motion.START_ANIM, ANIM_STD_COUNT, {"mode": 1}],
 	[-1, -1, 0x9A, Motion.START_ANIM, ANIM_STD_COUNT, {"mode": 2}],
@@ -439,6 +450,7 @@ func graphics_info(graphics_id: int) -> Dictionary:
 func set_graphics_id(object: ObjectEvent, graphics_id: int) -> void:
 	var info: Dictionary = graphics_info(graphics_id)
 	object.anim.anims = info.get("anims", [])
+	object.anim.step_positions = info.get("step_positions", [])
 	object.inanimate = bool(info.get("inanimate", false))
 	object.graphics_id = graphics_id & 0xFF
 
@@ -945,10 +957,10 @@ func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
 			return _advance_walk(object, int(row[1]), parameter, options, slot, requests)
 		Motion.JUMP:
 			return _advance_jump(object, parameter, slot, requests)
-		Motion.IN_PLACE, Motion.DELAY:
+		Motion.IN_PLACE:
+			return _advance_in_place(object, parameter)
+		Motion.DELAY:
 			object.movement_frame += 1
-			if motion == Motion.IN_PLACE and object.movement_frame == parameter:
-				object.anim.paused = true
 			return object.movement_frame == parameter
 		Motion.ANIM:
 			object.movement_frame += 1
@@ -964,6 +976,17 @@ func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:
 			return _advance_figure_8(object, slot, requests)
 		Motion.LEVITATE:
 			return _levitate(object, slot, parameter)
+	return true
+
+
+## `MovementAction_WalkInPlaceSlow_Step1` adds a delay frame while its count is odd.
+func _advance_in_place(object: ObjectEvent, duration: int) -> bool:
+	if duration == 32 and (duration - object.movement_frame) & 1:
+		object.anim.delay = (object.anim.delay + 1) & 0x3F
+	object.movement_frame += 1
+	if object.movement_frame != duration:
+		return false
+	object.anim.paused = true
 	return true
 
 
@@ -999,6 +1022,60 @@ func _start_motion(object: ObjectEvent, row: Array, options: Dictionary, slot: i
 			object.disable_anim = false
 			for index: int in range(4, 8):
 				object.sprite_data[index] = 0
+	_start_step_anim(object, motion, direction, int(row[2]), options)
+
+
+## In place and the wheelie face step on the action's direction, the rest on the facing.
+func _start_step_anim(object: ObjectEvent, motion: int, direction: int, parameter: int, options: Dictionary) -> void:
+	var anim: int = -1
+	var facing: int = object.facing
+	match motion:
+		Motion.FACE:
+			if not options.get("fast", false):
+				anim = int(options.get("step", ANIM_GO))
+				_set_step_anim(object, anim + DIRECTION_ANIM_OFFSETS[direction if anim == ANIM_PEDAL else facing])
+			return
+		Motion.WALK:
+			if not options.has("anim") and not options.get("glide", false):
+				anim = int(options.get("step", PACE_STEP_ANIMS[parameter]))
+		Motion.JUMP:
+			if not JUMP_SHAPES[parameter].has("special") and not JUMP_SHAPES[parameter].has("wheelie"):
+				anim = ANIM_GO
+		Motion.IN_PLACE:
+			anim = int(options.get("step", IN_PLACE_STEP_ANIMS[parameter]))
+			facing = direction
+	if anim < 0:
+		return
+	_set_step_anim_alternating(object, anim + (SPIN_ANIM_OFFSETS if anim == ANIM_SPIN else DIRECTION_ANIM_OFFSETS)[facing])
+	if anim == ANIM_SPIN:
+		object.anim.seek(0)
+
+
+## Without a step table only the anim number changes.
+static func _set_step_anim(object: ObjectEvent, number: int) -> void:
+	if object.inanimate:
+		return
+	var sprite: Gen3SpriteAnim = object.anim
+	sprite.anim_num = number & 0xFF
+	var positions: Array = sprite.step_positions
+	if not positions.is_empty():
+		sprite.seek(int(positions[0]) if sprite.cmd_index <= int(positions[0]) else int(positions[1]))
+
+
+## A step resumes from the paired position, leading with the other foot.
+static func _set_step_anim_alternating(object: ObjectEvent, number: int) -> void:
+	if object.inanimate:
+		return
+	var sprite: Gen3SpriteAnim = object.anim
+	sprite.anim_num = number & 0xFF
+	var index: int = sprite.cmd_index
+	var positions: Array = sprite.step_positions
+	if not positions.is_empty():
+		if index == int(positions[0]):
+			index = int(positions[3])
+		elif index == int(positions[1]):
+			index = int(positions[2])
+	sprite.seek(index)
 
 
 func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: Array) -> void:
@@ -1008,6 +1085,7 @@ func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: A
 			if direction >= 0:
 				set_direction(object, direction)
 				_shift_coords(object, object.current)
+				_set_step_anim(object, ANIM_GO + DIRECTION_ANIM_OFFSETS[object.facing])
 				object.anim.paused = true
 		Motion.SET_FLAG:
 			_set_flag(object, int(row[2]), bool(row[3]))
@@ -1349,6 +1427,7 @@ func _advance_jump(object: ObjectEvent, parameter: int, slot: int, requests: Arr
 			_ground(object, slot, "begin_step", requests)
 		elif shape.get("turn", false):
 			set_direction(object, OPPOSITE[object.movement_direction])
+			_set_step_anim(object, ANIM_GO + DIRECTION_ANIM_OFFSETS[object.facing])
 	if object.movement_frame != duration:
 		return false
 	object.jump_y = 0

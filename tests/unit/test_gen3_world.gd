@@ -1725,6 +1725,53 @@ func test_stationary_type_after_a_diagonal_walk_faces_south() -> void:
 	assert_eq(object.current, landed)
 
 
+## Emerald's `sAnim_GoSouth` cells are images 3, 0, 4, 0. Graphics 0's anims are in
+## `sStepAnimTables`, so each step leads with the other foot and a face seeks the
+## standing cell; graphics 1's are not, so a step resumes the running cell. A slow
+## in-place walk adds a delay frame on odd counts and ends one cell on, not three.
+func test_walk_step_anims_alternate_feet_only_on_listed_tables() -> void:
+	var objects: Gen3ObjectEvents = _movement_objects(RomRegistry.EMERALD)
+	_standard_anims(objects.camera.data)
+	var movers: Array[Gen3ObjectEvents.ObjectEvent] = []
+	for graphics: int in 2:
+		var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
+		template.merge({"local_id": graphics + 1, "graphics_id": graphics, "x": 5 + graphics * 4, "y": 5}, true)
+		movers.append(objects.objects[objects.spawn(template, 0, 0)])
+	var images: Array = [[], []]
+	for step: int in 3:
+		_hold_until_finished(objects, movers, 0x08, images)
+	assert_eq(images, [[3, 4, 3], [3, 0, 4]])
+	_hold_until_finished(objects, movers, 0x02, [[], []])
+	assert_eq([movers[0].anim.anim_num, movers[0].anim.image, movers[1].anim.anim_num], [6, 2, 6])
+	_hold_until_finished(objects, movers, 0x19, [[], []])
+	assert_eq(movers[0].anim.cmd_index, 3)
+
+
+func _hold_until_finished(objects: Gen3ObjectEvents, movers: Array[Gen3ObjectEvents.ObjectEvent],
+		action: int, first_images: Array) -> void:
+	for mover: Gen3ObjectEvents.ObjectEvent in movers:
+		Gen3ObjectEvents.clear_held_movement(mover)
+		objects.set_held_movement(mover, action)
+	objects.step_movements()
+	for index: int in movers.size():
+		first_images[index].append(movers[index].anim.image)
+	while not movers.all(func(mover: Gen3ObjectEvents.ObjectEvent) -> bool: return mover.held_movement_finished):
+		objects.step_movements()
+
+
+## pret's `sAnimTable_Standard` face and go rows; only the first table is listed.
+static func _standard_anims(data: GameData) -> void:
+	var anims: Array = []
+	for cells: Array in [[0], [1], [2], [2 | 1 << 6], [3, 0, 4, 0], [5, 1, 6, 1], [7, 2, 8, 2],
+			[7 | 1 << 6, 2 | 1 << 6, 8 | 1 << 6, 2 | 1 << 6]]:
+		var duration: int = 16 if cells.size() == 1 else 8
+		anims.append(cells.map(func(cell: int) -> int:
+			return (cell & 0x3F) | duration << 16 | (cell >> 6) << 22) + [Gen3SpriteAnim.JUMP])
+	data._world_scripts["object_graphics"] = [{"inanimate": false, "anims": 0}, {"inanimate": false, "anims": 1}]
+	data._world_scripts["sprite_anims"] = {"0": anims, "1": anims}
+	data._world_scripts["step_anims"] = {"0": [1, 3, 0, 2]}
+
+
 ## Trainers by [layout x, layout y, trainerbattle mode, trainer type]; the
 ## player stands at backup (12, 12) facing east and each trainer faces east.
 func _trainer_see(id: StringName, trainers: Array) -> Gen3TrainerSee:

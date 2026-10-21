@@ -11,6 +11,8 @@ const SLOT_CHANCES: Array = [
 	[70, 30, 60, 20, 20, 40, 40, 15, 4, 1],
 ]
 const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5, 10]}
+const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
+const STEP_ANIMS_LIMIT: int = 16
 
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -104,7 +106,25 @@ static func _object_graphics(rom: RomFile, layout: Dictionary) -> Dictionary:
 				return {}
 			rows.append({"inanimate": bool(rom.u8(info + 0x0C) & 0x40), "anims": anims})
 		out[key] = rows
-	return out
+	var steps: Dictionary = {}
+	out["step_anims"] = steps
+	return out if _step_anims(rom, layout, tables, steps) else {}
+
+
+## `GetStepAnimTable`'s `animPos` by anims table; Ruby's `sub_805FE28` steps every table.
+static func _step_anims(rom: RomFile, layout: Dictionary, tables: Dictionary, out: Dictionary) -> bool:
+	if not layout.has("step_anims"):
+		for anims: String in tables:
+			out[anims] = RUBY_STEP_POSITIONS
+		return true
+	var at: int = int(layout["step_anims"])
+	while rom.in_bounds(at, 8) and rom.u32le(at) != 0:
+		var anims: int = Gen3Layout.read_pointer(rom, at, 4)
+		if anims < 0 or _anim_table(rom, anims).is_empty() or out.size() == STEP_ANIMS_LIMIT:
+			return false
+		out[str(anims)] = Array(rom.slice(at + 4, 4))
+		at += 8
+	return rom.in_bounds(at, 8)
 
 
 static func _anim_table(rom: RomFile, at: int) -> Array:
@@ -381,10 +401,9 @@ static func _tileset(rom: RomFile, at: int) -> Dictionary:
 	return out
 
 
-## The ROM after a metatile or attribute array, up to the bank's id space:
-## `DrawMetatileAt` and `GetMetatileAttributesById` index past the array for an
-## id the tileset lacks, which a connection strip from a map on another
-## secondary tileset brings into the backup map.
+## The ROM after a metatile or attribute array, up to the bank's id space: `DrawMetatileAt`
+## and `GetMetatileAttributesById` index past the array for an id the tileset lacks, which
+## a connection strip from a map on another secondary tileset brings into the backup map.
 static func _tail(rom: RomFile, at: int, length: int) -> PackedByteArray:
 	return rom.slice(at, clampi(rom.size() - at, 0, length))
 
@@ -436,8 +455,7 @@ static func metatile(tileset: Dictionary, number: int) -> Dictionary:
 		"layer_type": layer_type(tileset, raw)}
 
 
-## The raw attribute word of the id [method metatile] reads, or -1 where it is
-## empty.
+## The raw attribute word of the id [method metatile] reads, or -1 where it is empty.
 static func metatile_attributes(tileset: Dictionary, number: int) -> int:
 	var row: Array = _metatile_row(tileset, number)
 	if row.is_empty():

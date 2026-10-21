@@ -114,11 +114,10 @@ func save_view() -> void:
 			view[x + y * VIEW_WIDTH] = grid.blocks[grid.width * (pos.y + y) + pos.x + x]
 
 
-## `MoveMapViewToBackup`: the saved view less the row or column the step
-## left behind, written over the new grid where it now lies, then cleared.
-## Rows run on through the flat buffer. A diagonal step can carry them past
-## its end, into `sBackupMapData`'s unused tail, or one word before its
-## start; neither word is part of the map, so neither is kept.
+## `MoveMapViewToBackup`: the saved view less the row or column the step left behind,
+## written over the new grid where it now lies, then cleared. Rows run on through the
+## flat buffer. A diagonal step can carry them past its end, into `sBackupMapData`'s
+## unused tail, or one word before its start; neither word is part of the map, so neither is kept.
 func _view_to_backup(direction: int) -> void:
 	var to: Vector2i = pos
 	var from := Vector2i.ZERO
@@ -150,9 +149,8 @@ func can_move(direction: int) -> bool:
 	return grid.border_id_at(at.x, at.y) != Gen3MapGrid.Connection.INVALID
 
 
-## `GetMapConnectionAtPos` for a backup-map cell: the connection whose map
-## holds it, empty for one inside the layout, a dive or emerge connection or
-## no map.
+## `GetMapConnectionAtPos` for a backup-map cell: the connection whose map holds it,
+## empty for one inside the layout, a dive or emerge connection or no map.
 func connection_at(x: int, y: int) -> Dictionary:
 	var layout_width: int = int(header["width"])
 	var layout_height: int = int(header["height"])

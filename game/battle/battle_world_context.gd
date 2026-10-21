@@ -1,10 +1,9 @@
 class_name Gen2BattleWorldContext
 extends RefCounted
 
-## Where a battle is fought, as the world was when it started: map, tileset,
-## the player's cell and facing, the time of day. A copy, not a handle on the
-## world; map and tileset are numbers, which is what [method GameData.world_map]
-## takes.
+## Where a battle is fought, as the world was when it started: map, tileset, the
+## player's cell and facing, the time of day. A copy, not a handle on the world;
+## map and tileset are numbers, which is what [method GameData.world_map] takes.
 
 ## Group and number, the pair every map is addressed by, as
 ## [member Gen2WorldSnapshot.map_id] holds it.

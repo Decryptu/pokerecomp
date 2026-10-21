@@ -23,8 +23,7 @@ const EXPECTED_TEXT_OPENINGS: Dictionary = {
 }
 
 ## How many `text_ram wStringBuffer1` each of his boxes carries. `_NameRaterPerfectNameText`
-## is the one with two, which is why the screen fills every marker rather than
-## the first.
+## is the one with two, which is why the screen fills every marker rather than the first.
 const EXPECTED_MARKERS: Dictionary = {
 	"hello": 0,
 	"which_mon": 0,

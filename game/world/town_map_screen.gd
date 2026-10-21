@@ -112,9 +112,8 @@ func _ready() -> void:
 ## `STATUSFLAGS_HALL_OF_FAME_F`, and [param screen] which frame is drawn over the
 ## region map: `_TownMap`'s own corner box or the Pokegear card's icon row.
 ## [param cards] is the owned `wPokegearFlags` cards, which only the card frame
-## reads.
-## Optional the way the other overlays are: a cache with no region map answers
-## false and the caller keeps its menu open.
+## reads. Optional the way the other overlays are: a cache with no region map
+## answers false and the caller keeps its menu open.
 func open(
 	data: GameData,
 	landmark: int,

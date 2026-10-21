@@ -12,6 +12,7 @@ const JUMP: int = 0xFFFE
 const END: int = 0xFFFF
 
 var anims: Array = []
+var step_positions: Array = []
 var anim_num: int = 0
 var cmd_index: int = 0
 var delay: int = 0

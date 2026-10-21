@@ -463,11 +463,10 @@ func reward_for(pack: Dictionary) -> int:
 
 ## `BattleTowerAction`'s jumptable, as the value it leaves in `wScriptVar`.
 ## An action that writes nothing there answers -1, which the runner leaves the
-## variable alone for.
-## The mobile rows are no-ops with a reason: each writes a byte in SRAM bank 5
-## that only the mobile adapter's own routines read, and none of them reaches a
-## script the player can talk to.
-## The four actions whose whole body is the challenge state they write.
+## variable alone for. The mobile rows are no-ops with a reason: each writes a
+## byte in SRAM bank 5 that only the mobile adapter's own routines read, and
+## none of them reaches a script the player can talk to. The four actions whose
+## whole body is the challenge state they write.
 const CHALLENGE_STATE_ACTIONS: Dictionary = {
 	ACTION_SAVE_AND_QUIT: SAVED_AND_LEFT,
 	ACTION_CHALLENGE_CANCELED: NO_CHALLENGE,

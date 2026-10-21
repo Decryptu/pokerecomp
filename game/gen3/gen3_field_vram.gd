@@ -62,9 +62,8 @@ func draw(grid: Gen3MapGrid, cells: Rect2i) -> Image:
 	return image
 
 
-## `DrawMetatile`'s BG3, BG2 and BG1 words, bottom first. The covered and split
-## types put a zero word, which is tile 0 rather than nothing, on the layer
-## they leave empty.
+## `DrawMetatile`'s BG3, BG2 and BG1 words, bottom first. The covered and split types put a
+## zero word, which is tile 0 rather than nothing, on the layer they leave empty.
 func _draw_metatile(image: Image, origin: Vector2i, metatile: Dictionary, layer_type: int) -> void:
 	if metatile.is_empty() or layer_type >= LAYER_TYPES:
 		return

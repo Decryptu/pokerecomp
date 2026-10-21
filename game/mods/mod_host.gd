@@ -97,12 +97,11 @@ const RENDERER_TEXT_BOX_METHOD: String = "set_text_box_rect"
 ## for: the wedge closing over a filled window is a shape only that view draws.
 const RENDERER_INTERFACE_MASK_METHOD: String = "set_interface_masked"
 ## Optional, both renderer kinds, and only meaningful on the native layer. Called
-## beside [constant RENDERER_RESIZE_METHOD] with the cartridge's own 160x144
-## screen expressed in that layer's pixels.
-## Every hardware-pixel number a renderer is handed (the text box's rectangle,
-## first) has to land inside the surface it draws on. Framed, that mapping was the
-## surface itself, a whole multiple of 160x144; a surface filling the window is not,
-## so this is where the screen is.
+## beside [constant RENDERER_RESIZE_METHOD] with the cartridge's own 160x144 screen
+## expressed in that layer's pixels. Every hardware-pixel number a renderer is
+## handed (the text box's rectangle, first) has to land inside the surface it draws
+## on. Framed, that mapping was the surface itself, a whole multiple of 160x144; a
+## surface filling the window is not, so this is where the screen is.
 const RENDERER_SCREEN_RECT_METHOD: String = "set_screen_rect"
 ## The id of the built-in 2D renderer, which is always registered for both
 ## renderer kinds.

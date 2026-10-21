@@ -154,11 +154,10 @@ func _render(
 	return image
 
 
-## One palette per cell of an atlas, in slot order.
-## The kinds of atlas are indexed differently: a species atlas by species, the
-## trainer atlas by class (Generation 3 by picture ID), and Unown's by letter form, all of which
-## share the one species' colours. A Generation 1 cartridge names
-## no colours for a trainer or a back pic, so those come out in Game Boy greys.
+## One palette per cell of an atlas, in slot order. The kinds of atlas are indexed differently:
+## a species atlas by species, the trainer atlas by class (Generation 3 by picture ID), and
+## Unown's by letter form, all of which share the one species' colours. A Generation 1 cartridge
+## names no colours for a trainer or a back pic, so those come out in Game Boy greys.
 func _palettes(directory: String, name: String, shiny: bool) -> Array:
 	var out: Array = []
 

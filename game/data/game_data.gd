@@ -396,8 +396,8 @@ func world_berry(berry: int) -> Dictionary:
 
 
 ## Row [param index] of `gObjectEventGraphicsInfoPointers` (Emerald's
-## `gMauvilleOldManGraphicsInfoPointers` when [param mauville]): its `inanimate`
-## bit and `anims`, one array of `union AnimCmd` words per anim number.
+## `gMauvilleOldManGraphicsInfoPointers` when [param mauville]): `inanimate`, `anims` (`union
+## AnimCmd` words per anim number) and the `step_positions` `GetStepAnimTable` finds, or none.
 func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
 	if generation != RomRegistry.GEN3 or index < 0:
 		return {}
@@ -405,8 +405,10 @@ func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
 	if index >= rows.size():
 		return {}
 	var row: Dictionary = rows[index]
+	var anims: String = str(int(row["anims"]))
 	return _coerce_service_dictionary({"inanimate": bool(row["inanimate"]),
-		"anims": _scripts()["sprite_anims"].get(str(int(row["anims"])), [])})
+		"anims": _scripts()["sprite_anims"].get(anims, []),
+		"step_positions": _scripts().get("step_anims", {}).get(anims, [])})
 
 
 func world_map_layout(group: int, number: int) -> Dictionary:
@@ -1637,11 +1639,10 @@ func evolutions(number: int) -> Array:
 
 ## The moves a species can inherit from its father, in `EggMovePointers`' own
 ## order. Empty for the 145 or 146 species that inherit none, and for a mod
-## species that named none.
-## Move numbers alone: an egg move has no level, unlike a [method learnset] row.
-## Which of them a hatched Pokémon actually knows is the breeding rule rather
-## than this table: [method Gen2WorldDayCare.inherits_move] is that rule, and this
-## is one of the three ways in it reads.
+## species that named none. Move numbers alone: an egg move has no level, unlike a
+## [method learnset] row. Which of them a hatched Pokémon actually knows is the
+## breeding rule rather than this table: [method Gen2WorldDayCare.inherits_move]
+## is that rule, and this is one of the three ways in it reads.
 func egg_moves(number: int) -> Array[int]:
 	var out: Array[int] = []
 	for move_id: Variant in species(number).get("egg_moves", []):

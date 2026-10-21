@@ -143,9 +143,8 @@ func check_collision(direction: int) -> Dictionary:
 	return collision_at(object(), at, direction)
 
 
-## `CheckForObjectEventCollision`. Emerald's static query skips dismounts,
-## ledges and boulders. The input host consumes effects once to start tasks
-## and update game statistics.
+## `CheckForObjectEventCollision`. Emerald's static query skips dismounts, ledges and
+## boulders. The input host consumes effects once to start tasks and update game statistics.
 func collision_at(probe: Gen3ObjectEvents.ObjectEvent, at: Vector2i, direction: int,
 		static_only: bool = false) -> Dictionary:
 	if direction < 1 or direction > 4:
