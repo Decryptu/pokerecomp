@@ -619,9 +619,8 @@ static func _verify_battle_anims(rom: RomFile, layout: Dictionary) -> Dictionary
 
 ## Every map and tileset decodes, which is the world layout's own check: a wrong
 ## table reaches a tileset number, a map size or a block index the cartridge
-## cannot hold.
-## Each run is one contiguous block of `text_far` stubs, so a base offset that
-## has slipped shows up as a slot that does not decode at all.
+## cannot hold. Each run is one contiguous block of `text_far` stubs, so a base
+## offset that has slipped shows up as a slot that does not decode at all.
 static func _verify_facility_text(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var runs: Dictionary = {
 		"mart": ["mart_text", Gen1Layout.MART_TEXT_AT],

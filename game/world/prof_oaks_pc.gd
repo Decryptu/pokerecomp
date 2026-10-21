@@ -2,11 +2,10 @@ class_name Gen2ProfOaksPC
 extends RefCounted
 
 ## `ProfOaksPCBoot`, `ProfOaksPCRating` and `Rate` (engine/events/prof_oaks_pc.asm),
-## as the pages a screen shows and the effect it plays.
-## Presentation only: the routine counts `wPokedexSeen` and `wPokedexCaught` and
-## writes nothing back. The pages are the source's own order, and each waits for
-## A or B, which is why the sound is on the last of them rather than on the whole
-## run.
+## as the pages a screen shows and the effect it plays. Presentation only: the
+## routine counts `wPokedexSeen` and `wPokedexCaught` and writes nothing back.
+## The pages are the source's own order, and each waits for A or B, which is why
+## the sound is on the last of them rather than on the whole run.
 
 ## `PrintNum` with `PRINTNUM_LEFTALIGN | 1, 3`. Left aligned without leading
 ## zeros means `.AdvancePointer` does not step past a suppressed digit, so the

@@ -84,6 +84,7 @@ func _one_game() -> void:
 	_field_camera()
 	_object_events()
 	_player_avatars()
+	_step_anim_rows()
 	_held_movements()
 	_object_movements(false)
 	_object_movements(true)
@@ -866,6 +867,30 @@ const MOVEMENT_DIGESTS: Dictionary = {
 	&"leafgreen": "1573c5dd5f93bc7f277431e660e99c2adb9d1f7c",
 	&"emerald": "eee953c8504dcf0dc8f7b0c1b60d61a3d37db09b",
 }
+
+
+## Rows (and Mauville rows) `GetStepAnimTable` finds, counted from pret's graphics infos.
+const STEP_ANIM_ROWS: Dictionary = {
+	&"ruby": [218, 0], &"sapphire": [218, 0], &"firered": [129, 0], &"leafgreen": [129, 0],
+	&"emerald": [165, 7],
+}
+const STEP_POSITIONS: Array = [1, 3, 0, 2]
+
+
+func _step_anim_rows() -> void:
+	var data: GameData = _r.data
+	var counts: Array = []
+	for mauville: bool in [false, true]:
+		var count: int = 0
+		var index: int = 0
+		while not data.world_object_graphics(index, mauville).is_empty():
+			var positions: Array = data.world_object_graphics(index, mauville)["step_positions"]
+			_r.check(positions.is_empty() or positions == STEP_POSITIONS,
+				"graphics %d steps at %s" % [index, positions])
+			count += int(not positions.is_empty())
+			index += 1
+		counts.append(count)
+	_r.check(counts == STEP_ANIM_ROWS[data.id], "step anim rows %s (want %s)" % [counts, STEP_ANIM_ROWS[data.id]])
 
 
 func _held_movements() -> void:

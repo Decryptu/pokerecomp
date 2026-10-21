@@ -167,9 +167,8 @@ static func create(
 ## Decodes one command at [param at_address]. Returns
 ## [code]{ ok, name, byte, operands, size, target }[/code]; `target` is the
 ## start_address a branch would take, or -1. A delay byte answers [constant WAIT] with
-## its own value as its single operand.
-## Shared with [Gen2BattleAnimImporter], which walks every body with it, so the
-## vocabulary is stated once.
+## its own value as its single operand. Shared with [Gen2BattleAnimImporter], which
+## walks every body with it, so the vocabulary is stated once.
 static func decode_command(
 	region: PackedByteArray, base_address: int, at_address: int
 ) -> Dictionary:

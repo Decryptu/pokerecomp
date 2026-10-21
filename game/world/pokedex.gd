@@ -533,9 +533,8 @@ static func mode_rows(with_unown: bool = false) -> Array:
 
 ## `.ChangeMode`: choosing the mode already in use changes nothing, and choosing
 ## another reorders the listing and puts the cursor back at the top before
-## seeking `wPrevDexEntry` again.
-## Answers whether the mode changed, which is what decides whether the screen
-## shows [constant CHANGING_MODES_TEXT].
+## seeking `wPrevDexEntry` again. Answers whether the mode changed, which is
+## what decides whether the screen shows [constant CHANGING_MODES_TEXT].
 func change_mode(next_mode: int) -> bool:
 	if next_mode == mode:
 		return false

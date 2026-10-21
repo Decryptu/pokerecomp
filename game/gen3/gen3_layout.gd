@@ -249,7 +249,7 @@ const SAPPHIRE: Dictionary = {
 
 const FIRERED: Dictionary = {
 	"movement_types": 0x39FD7C,
-	"object_graphics": 0x39FE20, "object_graphics_count": 152,
+	"object_graphics": 0x39FE20, "object_graphics_count": 152, "step_anims": 0x3A3708,
 	"berries": 0x3DF858,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604C8,
@@ -297,7 +297,7 @@ const FIRERED: Dictionary = {
 
 const LEAFGREEN: Dictionary = {
 	"movement_types": 0x39FD5C,
-	"object_graphics": 0x39FE00, "object_graphics_count": 152,
+	"object_graphics": 0x39FE00, "object_graphics_count": 152, "step_anims": 0x3A36E8,
 	"berries": 0x3DF694,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604A4,
@@ -345,7 +345,7 @@ const LEAFGREEN: Dictionary = {
 
 const EMERALD: Dictionary = {
 	"movement_types": 0x50557C,
-	"object_graphics": 0x505620, "object_graphics_count": 239,
+	"object_graphics": 0x505620, "object_graphics_count": 239, "step_anims": 0x5094AC,
 	"mauville_graphics": 0x5059DC, "mauville_graphics_count": 7,
 	"berries": 0x58A670,
 	"berry_graphics": 0x50C908, "berry_palettes": 0x50C85C,

@@ -76,12 +76,11 @@ static func resolve_source(input: String) -> Dictionary:
 	return {"ok": true, "feed": "%sindex.json" % base, "label": _label_for(base)}
 
 
-## Reads a fetched feed into rows the launcher can list.
-## Returns { ok, name, entries } where each entry has id, name, version,
-## description, download, games, and the optional icon and thumbnail URLs. An
-## entry missing an id or a usable download is dropped rather than failing the whole
-## feed, because one bad row in someone else's file should not cost the player
-## the rest of the list.
+## Reads a fetched feed into rows the launcher can list. Returns
+## { ok, name, entries } where each entry has id, name, version, description,
+## download, games, and the optional icon and thumbnail URLs. An entry missing an
+## id or a usable download is dropped rather than failing the whole feed, because
+## one bad row in someone else's file should not cost the player the rest of the list.
 static func parse_feed(text: String) -> Dictionary:
 	if text.length() > MAX_FEED_BYTES:
 		return {"ok": false, "reason": &"index_too_large"}

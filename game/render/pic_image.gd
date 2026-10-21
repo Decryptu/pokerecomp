@@ -479,10 +479,9 @@ static func blit_tile(
 			pixels[to_row + x] = table[mini(index, colors - 1)]
 
 
-## Puts [param image] on [param target].
-## The one way a screen in this project hands a redrawn picture to the node that
-## shows it, so the reuse below happens everywhere rather than at whichever
-## screen was measured.
+## Puts [param image] on [param target]. The one way a screen in this project
+## hands a redrawn picture to the node that shows it, so the reuse below happens
+## everywhere rather than at whichever screen was measured.
 static func show(target: TextureRect, image: Image) -> void:
 	if target == null:
 		return

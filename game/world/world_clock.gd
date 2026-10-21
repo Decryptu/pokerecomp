@@ -51,11 +51,10 @@ static func host_seconds() -> float:
 
 
 ## The clock [param day_value], [param hour_value] and [param minute_value] a snapshot carries,
-## moved on by the real seconds between the host second it was written at
-## ([param stamp]) and now. The same time back when there is no stamp, which is a
-## save written before one was kept, or when the stamp is ahead of now, which is
-## a host clock that has been put back: neither is a reason to run the world's
-## own clock backwards.
+## moved on by the real seconds between the host second it was written at ([param stamp]) and
+## now. The same time back when there is no stamp, which is a save written before one was kept,
+## or when the stamp is ahead of now, which is a host clock that has been put back: neither is
+## a reason to run the world's own clock backwards.
 static func catch_up(
 	day_value: int, hour_value: int, minute_value: int, stamp: float, now: float = -1.0,
 	cur_day_value: int = 0,
