@@ -1,7 +1,7 @@
 class_name Gen3ObjectEvents
 extends RefCounted
 
-## `event_object_movement.c`, in backup coordinates; sprites and generated facility templates remain unmodeled.
+## `event_object_movement.c` in backup coordinates, drawn by [Gen3ObjectSprites]; facility templates remain unmodeled.
 
 const COUNT: int = 16
 const TEMPLATES_COUNT: int = 64
@@ -54,7 +54,10 @@ const JUMP_SHAPES: Dictionary = {
 	Jump.ACRO_FAR: {"distance": 2, "arc": 0, "shadow": true, "wheelie": true},
 }
 const FLDEFF_SHADOW: int = 3
+const DISPLAY_WIDTH: int = 240
 const DISPLAY_HEIGHT: int = 160
+const MOVEMENT_TYPE_INVISIBLE: int = 0x4C
+const MB_LONG_GRASS: int = 0x03
 ## The first anim past the face/go rows: the bow, a raised hand, a wheelie, the mount.
 const ANIM_STD_COUNT: int = 20
 const ANIM_REMOVE_OBSTACLE: int = 1
@@ -86,8 +89,8 @@ const FIGURE_8_Y: Array[int] = [
 	0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, -1, 0, 0, -1, 0, 0, -1, 0, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1, -1, -1, -1, -2,
 ]
-## `GetObjectEventGraphicsInfo` reads these past the table: Ruby's LITTLE_BOY_1, FRLG's
-## LITTLE_BOY and Emerald's NINJA_BOY. Emerald's bard reads the current Mauville man.
+## `GetObjectEventGraphicsInfo` reads these past the table: Ruby's LITTLE_BOY_1, FRLG's LITTLE_BOY and
+## Emerald's NINJA_BOY. Emerald's bard reads the current Mauville man.
 const GRAPHICS_FALLBACK: Dictionary = {&"ruby": 5, &"sapphire": 5, &"firered": 16, &"leafgreen": 16, &"emerald": 5}
 const OBJ_EVENT_GFX_BARD: int = 69
 ## `gSineTable`: sin(i * pi / 128) in Q8.8, truncated toward zero, as pret's `trig.c` lists it.
@@ -145,9 +148,9 @@ const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
 const MOVEMENT_TYPE_BURIED: int = 0x3F
 ## `gTrainerFacingDirectionMovementTypes`, by `DIR_*`, diagonals included.
 const TRAINER_FACING_TYPES: Array[int] = [8, 8, 7, 9, 10, 8, 8, 7, 7]
-## Field-effect sprites end on the pass after their last frame: FLDEFF_ASH_PUFF
-## (Ruby/FRLG POP_OUT_OF_ASH) has five six-frame cells, and `SpriteCB_TrainerIcons`'
-## emotes, FLDEFF_EXCLAMATION_MARK_ICON among them, show one 60-frame image.
+## Field-effect sprites end on the pass after their last frame: FLDEFF_ASH_PUFF (Ruby/FRLG POP_OUT_OF_ASH) has
+## five six-frame cells, and `SpriteCB_TrainerIcons`' emotes, FLDEFF_EXCLAMATION_MARK_ICON among them, show
+## one 60-frame image.
 const ASH_PUFF: int = 49
 const ASH_PUFF_CELL: int = 6
 const ASH_PUFF_PASSES: int = 31
@@ -172,10 +175,10 @@ const STATE_MOTIONS: Array = [
 	[0x5E, 0x6C, Motion.AFFINE, 1],
 	[0x5F, 0x6D, Motion.AFFINE, 0],
 ]
-## Rows past [constant MOTION_FAMILIES] and [constant STATE_MOTIONS]: [Ruby id, Emerald id,
-## FRLG id (-1 absent), motion, parameter, options]. A `family` row is four actions, south
-## to east; an ANIM parameter is its anim number, the family's first, or -1 for the current one.
-## `step` is the first anim of a row's step anim when not its pace's or duration's.
+## Rows past [constant MOTION_FAMILIES] and [constant STATE_MOTIONS]: [Ruby id, Emerald id, FRLG id (-1
+## absent), motion, parameter, options]. A `family` row is four actions, south to east; an ANIM parameter is
+## its anim number, the family's first, or -1 for the current one. `step` is the first anim of a row's step
+## anim when not its pace's or duration's.
 const MORE_ACTIONS: Array = [
 	[0x39, 0x39, 0x45, Motion.ANIM, -1, {}],
 	[0x4F, 0x4F, 0x5B, Motion.ANIM, ANIM_STD_COUNT, {"direction": Direction.SOUTH}],
@@ -213,12 +216,12 @@ const MORE_ACTIONS: Array = [
 	[-1, -1, 0x9F, Motion.START_ANIM, ANIM_SHAKE_HEAD, {"mode": 0}],
 	[-1, -1, 0xA0, Motion.WALK, Pace.FAST, {"family": true, "glide": true}],
 ]
-## Held actions whose list ends in `MovementAction_PauseSpriteAnim`, run on every
-## frame the finished hold stays set.
+## Held actions whose list ends in `MovementAction_PauseSpriteAnim`, run on every frame the finished hold
+## stays set.
 const PAUSE_AFTER: Array[int] = [Motion.FACE, Motion.WALK, Motion.IN_PLACE, Motion.JUMP, Motion.ANIM, Motion.FIGURE_8]
 
-## `MetatileBehavior_Is*Blocked` by the side each blocks. Ruby, Sapphire and
-## Emerald add the two-sided rows and the secret base's breakable door.
+## `MetatileBehavior_Is*Blocked` by the side each blocks. Ruby, Sapphire and Emerald add the two-sided rows
+## and the secret base's breakable door.
 const BLOCKED_SIDES: Dictionary = {
 	Direction.SOUTH: [0x33, 0x36, 0x37], Direction.NORTH: [0x32, 0x34, 0x35],
 	Direction.WEST: [0x31, 0x35, 0x37], Direction.EAST: [0x30, 0x34, 0x36],
@@ -229,8 +232,8 @@ const HOENN_BLOCKED_SIDES: Dictionary = {
 }
 ## `GetOppositeDirection`, diagonals included.
 const OPPOSITE: Array[int] = [Direction.NONE, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, 8, 7, 6, 5]
-## FRLG's `ShouldInitObjectEventStateFromTemplate` holds CUT_TREE/ROCK_SMASH_ROCK
-## back near connections, setting their temporary hide flags.
+## FRLG's `ShouldInitObjectEventStateFromTemplate` holds CUT_TREE/ROCK_SMASH_ROCK back near connections,
+## setting their temporary hide flags.
 const FRLG_OBSTACLES: Array[int] = [95, 96]
 const FRLG_HIDE_FLAGS: Vector2i = Vector2i(0x11, 0x1F)
 ## `IsMapTypeOutdoors`: route, town, underwater, city and ocean route.
@@ -274,8 +277,8 @@ class ObjectEvent:
 	var enable_anim: bool = false
 	var hide_reflection: bool = false
 	var has_shadow: bool = false
-	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a
-	## walk started and the pause flags `FreezeObjectEvent` backs up.
+	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a walk started and the pause
+	## flags `FreezeObjectEvent` backs up.
 	var anim := Gen3SpriteAnim.new()
 	var x2: int = 0
 	var affine_anim: int = -1
@@ -298,12 +301,18 @@ class ObjectEvent:
 	var movement_delay: int = 0
 	var pixel_position := Vector2i.ZERO
 	var jump_y: int = 0
+	var priority: int = 2
+	var subpriority: int = 0
+	var subsprite_table: int = 0
+	var subsprite_mode: int = Gen3ObjectSprites.Subsprites.OFF
+	var palette_num: int = 0
+	var off_screen: bool = false
+	var sprite_invisible: bool = false
 	var ground_on_spawn: bool = true
 	var player_copyable_movement: int = 0
 	var berry_initialized: bool = false
 	var berry_sparkling: bool = false
 	var berry_just_picked: bool = false
-	var berry_palette: int = 0
 	var disguise_spawned: bool = false
 	var disguise_effect_id: int = 0
 	var disguise_state: int = 0
@@ -317,6 +326,7 @@ var _player_dashing: bool = false
 var _player_tile_center: bool = false
 var camera: Gen3FieldCamera
 var events: Gen3EventData
+var sprites: Gen3ObjectSprites
 var objects: Array[ObjectEvent] = []
 ## `gSaveBlock1Ptr->objectEventTemplates` for the camera's map.
 var templates: Array = []
@@ -326,8 +336,8 @@ var _facing := PackedByteArray()
 var _blocked: Dictionary = {}
 var _motions: Dictionary = {}
 var _effect_requests: Array = []
-## Buried trainers whose reveal action created `trainer_see.c`'s task this frame,
-## by slot; [Gen3TrainerSee] takes them before its next run.
+## Buried trainers whose reveal action created `trainer_see.c`'s task this frame, by slot; [Gen3TrainerSee]
+## takes them before its next run.
 var buried_reveals: Array[int] = []
 var _effect_sprites: Array[Dictionary] = []
 ## Emerald's `GetCurrentMauvilleOldMan`, which picks the bard's graphics.
@@ -357,11 +367,13 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
 	_build_motions()
 	for slot: int in COUNT:
 		objects.append(ObjectEvent.new())
+	sprites = Gen3ObjectSprites.new(camera.data)
+	sprites.init_palettes(0)
 	load_templates()
 
 
-## `LoadObjEventTemplatesFromHeader`. FireRed and LeafGreen copy a clone's
-## target in its place, keeping the clone's id, position and kind.
+## `LoadObjEventTemplatesFromHeader`. FireRed and LeafGreen copy a clone's target in its place, keeping the
+## clone's id, position and kind.
 func load_templates() -> void:
 	templates.clear()
 	for row: Dictionary in camera.data.world_map_events(camera.group, camera.number).get("objects", []):
@@ -379,8 +391,8 @@ func _clone_target(clone: Dictionary) -> Dictionary:
 	return rows[int(clone["target_local_id"]) - 1]
 
 
-## `UpdateObjectEventsForCameraUpdate` after [method Gen3FieldCamera.move]; a crossing first loads
-## the new templates, runs `ClearTempFieldEventData` and shifts every object by `gCamera`.
+## `UpdateObjectEventsForCameraUpdate` after [method Gen3FieldCamera.move]; a crossing first loads the new
+## templates, runs `ClearTempFieldEventData` and shifts every object by `gCamera`.
 func follow_camera() -> void:
 	if camera.crossed:
 		load_templates()
@@ -431,8 +443,8 @@ func remove_outside_view() -> void:
 			_deactivate(object)
 
 
-## `GetObjectEventGraphicsInfo`: a var id reads its var, Emerald's bard the current
-## Mauville man, and an id past the table [constant GRAPHICS_FALLBACK].
+## `GetObjectEventGraphicsInfo`: a var id reads its var, Emerald's bard the current Mauville man, and an id
+## past the table [constant GRAPHICS_FALLBACK].
 func graphics_info(graphics_id: int) -> Dictionary:
 	var id: int = graphics_id & 0xFF
 	if id >= OBJ_EVENT_GFX_VARS:
@@ -446,17 +458,49 @@ func graphics_info(graphics_id: int) -> Dictionary:
 	return _graphics[key]
 
 
-## `ObjectEventSetGraphicsId`: the sprite takes the new anims and `inanimate`; its anim runs on.
+## `ObjectEventSetGraphicsId`; the anim and its copied tiles run on, FRLG's same-size reallocation included.
 func set_graphics_id(object: ObjectEvent, graphics_id: int) -> void:
+	sprites.load_palette(graphics_info(graphics_id), false)
+	_take_graphics(object, graphics_id)
+	object.pixel_position = object.current * 16
+
+
+func _take_graphics(object: ObjectEvent, graphics_id: int) -> void:
 	var info: Dictionary = graphics_info(graphics_id)
 	object.anim.anims = info.get("anims", [])
 	object.anim.step_positions = info.get("step_positions", [])
+	object.anim.images = info.get("images", [])
 	object.inanimate = bool(info.get("inanimate", false))
+	object.palette_num = int(info.get("palette_slot", 0))
 	object.graphics_id = graphics_id & 0xFF
 
 
-## `InitObjectEventStateFromTemplate`: the slot, or -1 when out or full. A FireRed or
-## LeafGreen clone spawns as its target, identity included, at the clone's position.
+## `TrySetupObjectEventSprite` after `InitObjectEventStateFromTemplate`.
+func _setup_sprite(object: ObjectEvent) -> void:
+	var info: Dictionary = graphics_info(object.graphics_id)
+	sprites.load_palette(info, true)
+	if object.movement_type == MOVEMENT_TYPE_INVISIBLE:
+		object.invisible = true
+	object.priority = int(info.get("oam", {}).get("priority", 0))
+	object.subsprite_mode = Gen3ObjectSprites.Subsprites.OFF if info.get("subsprite_tables", []).is_empty() \
+		else Gen3ObjectSprites.Subsprites.ON
+	object.subpriority = Gen3ObjectSprites.subpriority(object, object.previous_elevation, camera.screen_origin(), 1)
+	_update_visibility(object)
+
+
+## `UpdateObjectEventVisibility`.
+func _update_visibility(object: ObjectEvent) -> void:
+	var info: Dictionary = graphics_info(object.graphics_id)
+	var corner: Vector2i = Gen3ObjectSprites.corner(object, info, camera.screen_origin())
+	var right: int = wrapi(corner.x + int(info.get("width", 0)), -32768, 32768)
+	var bottom: int = wrapi(corner.y + int(info.get("height", 0)), -32768, 32768)
+	object.off_screen = corner.x >= DISPLAY_WIDTH + 16 or right < -16 \
+		or corner.y >= DISPLAY_HEIGHT + 16 or bottom < -16
+	object.sprite_invisible = object.invisible or object.off_screen
+
+
+## `InitObjectEventStateFromTemplate`: the slot, or -1 when out or full. A FireRed or LeafGreen clone spawns
+## as its target, identity included, at the clone's position.
 func spawn(template: Dictionary, number: int, group: int) -> int:
 	var at := Vector2i(int(template["x"]), int(template["y"]))
 	var clone: bool = _frlg and int(template["kind"]) == OBJ_KIND_CLONE
@@ -488,9 +532,10 @@ func spawn(template: Dictionary, number: int, group: int) -> int:
 		object.graphics_id = events.var_get(VAR_OBJ_GFX_ID_0 + object.graphics_id - OBJ_EVENT_GFX_VARS) & 0xFF
 	if _ranged[object.movement_type]:
 		object.movement_range = object.movement_range.max(Vector2i.ONE)
-	set_graphics_id(object, object.graphics_id)
+	_take_graphics(object, object.graphics_id)
 	if not object.inanimate:
 		object.anim.start(DIRECTION_ANIM_OFFSETS[object.facing])
+	_setup_sprite(object)
 	objects[slot] = object
 	return slot
 
@@ -524,8 +569,8 @@ func at_position(at: Vector2i, elevation: int = -1) -> int:
 	return -1
 
 
-## `ShouldInitObjectEventStateFromTemplate`. A clone is tested at its own
-## layout position; the obstacle test reads the target's.
+## `ShouldInitObjectEventStateFromTemplate`. A clone is tested at its own layout position; the obstacle test
+## reads the target's.
 func _frlg_should_init(template: Dictionary, clone: bool, at: Vector2i) -> bool:
 	if int(template["graphics_id"]) not in FRLG_OBSTACLES:
 		return true
@@ -547,8 +592,8 @@ func _frlg_should_init(template: Dictionary, clone: bool, at: Vector2i) -> bool:
 	return true
 
 
-## `TemplateIsObstacleAndWithinView`: false for a clone obstacle less than
-## nine columns and seven rows from the focus.
+## `TemplateIsObstacleAndWithinView`: false for a clone obstacle less than nine columns and seven rows from
+## the focus.
 func _obstacle_in_view_ok(at: Vector2i) -> bool:
 	var pos: Vector2i = camera.pos
 	if (pos.x < at.x and pos.x + Gen3MapGrid.MAP_OFFSET + 1 < at.x) \
@@ -557,8 +602,7 @@ func _obstacle_in_view_ok(at: Vector2i) -> bool:
 	return at.y < pos.y - (Gen3MapGrid.MAP_OFFSET - 1) or at.y > pos.y + Gen3MapGrid.MAP_OFFSET - 1
 
 
-## `GetCollisionAtCoords`: the lowest of [method collision_flags_at]'s
-## collisions; invalid directions refuse.
+## `GetCollisionAtCoords`: the lowest of [method collision_flags_at]'s collisions; invalid directions refuse.
 func collision_at(object: ObjectEvent, x: int, y: int, direction: int) -> int:
 	if direction < 1 or direction > 4:
 		return Collision.IMPASSABLE
@@ -603,8 +647,7 @@ func _elevation_mismatch(elevation: int, x: int, y: int) -> bool:
 		and map_elevation != elevation
 
 
-## `DoesObjectCollideWithObjectAt`: another active object on or leaving the
-## cell, at a compatible elevation.
+## `DoesObjectCollideWithObjectAt`: another active object on or leaving the cell, at a compatible elevation.
 func _object_at(object: ObjectEvent, x: int, y: int) -> bool:
 	var at := Vector2i(x, y)
 	for other: ObjectEvent in objects:
@@ -719,8 +762,8 @@ static func movement_overridden(object: ObjectEvent) -> bool:
 	return object.single_movement_active or object.held_movement_active
 
 
-## `FreezeObjectEvents` (`FreezeObjectEventsExceptOne` past [param except_slot]) skips
-## player/held actions; unfreezing visits every active slot.
+## `FreezeObjectEvents` (`FreezeObjectEventsExceptOne` past [param except_slot]) skips player/held actions;
+## unfreezing visits every active slot.
 func freeze_except_player(except_slot: int = -1) -> void:
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
@@ -746,8 +789,8 @@ static func _unfreeze(object: ObjectEvent) -> void:
 		object.affine_anim_paused = object.affine_anim_paused_backup
 
 
-## `RemoveObjectEventByLocalIdAndMap` sets the template's hide flag. The
-## current map's mutable templates precede another map's header templates.
+## `RemoveObjectEventByLocalIdAndMap` sets the template's hide flag. The current map's mutable templates
+## precede another map's header templates.
 func remove(local_id: int, number: int, group: int) -> void:
 	var object: ObjectEvent = by_identity(local_id, number, group)
 	if object != null:
@@ -799,9 +842,9 @@ func template_by_id(local_id: int, number: int, group: int) -> Dictionary:
 	return {}
 
 
-## FRLG's `HandleBoulderFallThroughHole` and `HandleBoulderActivateVictoryRoadSwitch`. Reveal flags
-## use the template's u16 trainer field, not the object's truncated trainer type. Switches ignore
-## elevation and variable gates and visit all coordinate rows in order.
+## FRLG's `HandleBoulderFallThroughHole` and `HandleBoulderActivateVictoryRoadSwitch`. Reveal flags use the
+## template's u16 trainer field, not the object's truncated trainer type. Switches ignore elevation and
+## variable gates and visit all coordinate rows in order.
 func boulder_landing(object: ObjectEvent) -> Array:
 	var requests: Array = []
 	if not _frlg:
@@ -819,8 +862,8 @@ func boulder_landing(object: ObjectEvent) -> Array:
 	return requests
 
 
-## `UpdateObjectEventCurrentMovement`: holds bypass freezing/collision; running input gates trainer
-## reactions. `RunTasks` precedes the objects; each `AnimateSprite` follows its callback.
+## `UpdateObjectEventCurrentMovement`: holds bypass freezing/collision; running input gates trainer reactions.
+## `RunTasks` precedes the objects; each `AnimateSprite` follows its callback.
 func step_movements(player_dashing: bool = false, player_tile_center: bool = false) -> Array:
 	_player_dashing = player_dashing
 	_player_tile_center = player_tile_center
@@ -845,6 +888,9 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 			_step_autonomous(object, slot, requests)
 		if object.disable_anim:
 			object.anim.paused = true
+		_update_visibility(object)
+		if not object.fixed_priority:
+			object.subpriority = Gen3ObjectSprites.subpriority(object, object.previous_elevation, camera.screen_origin(), 1)
 		object.anim.animate()
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
@@ -852,8 +898,8 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	return requests
 
 
-## `ObjectEventExecHeldMovementAction` only ever sets `heldMovementFinished`, and keeps
-## calling the step a finished hold stopped on.
+## `ObjectEventExecHeldMovementAction` only ever sets `heldMovementFinished`, and keeps calling the step a
+## finished hold stopped on.
 func _step_held(object: ObjectEvent, slot: int, requests: Array) -> void:
 	if not object.held_action_done:
 		object.held_action_done = _advance_motion(object, slot, requests)
@@ -878,8 +924,8 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 		object.buried_initialized = true
 
 
-## `FieldEffectStart` for a sprite created after the objects, so it runs this
-## frame. A followed effect is an icon, stopped once its object is gone.
+## `FieldEffectStart` for a sprite created after the objects, so it runs this frame. A followed effect is an
+## icon, stopped once its object is gone.
 func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
 		requests: Array) -> Dictionary:
 	var request: Dictionary = _effect_request(object, slot, effect)
@@ -915,8 +961,8 @@ static func set_trainer_movement_type(object: ObjectEvent, type: int) -> void:
 	object.movement_state = 0
 
 
-## `OverrideMovementTypeForObjectEvent` (Emerald's `TryOverrideTemplateCoordsForObjectEvent`)
-## and `OverrideTemplateCoordsForObjectEvent` write the current map's saved template.
+## `OverrideMovementTypeForObjectEvent` (Emerald's `TryOverrideTemplateCoordsForObjectEvent`) and
+## `OverrideTemplateCoordsForObjectEvent` write the current map's saved template.
 func override_template_movement_type(object: ObjectEvent, type: int) -> void:
 	var template: Dictionary = _base_template(object)
 	if not template.is_empty():
@@ -1121,8 +1167,8 @@ func _set_flag(object: ObjectEvent, flag: int, value: bool) -> void:
 			object.hide_reflection = value
 
 
-## `InitNpcForMovement` and its slow siblings; Emerald pauses an anim-locked object's
-## anim. The Acro Bike's pop and end rows start their anim on the new facing.
+## `InitNpcForMovement` and its slow siblings; Emerald pauses an anim-locked object's anim. The Acro Bike's
+## pop and end rows start their anim on the new facing.
 func _start_walk(object: ObjectEvent, direction: int, pace: int, options: Dictionary,
 		slot: int, requests: Array) -> void:
 	_shift_coords(object, object.current + Gen3FieldCamera.DIRECTIONS[direction])
@@ -1165,8 +1211,8 @@ func _start_anim_in_direction(object: ObjectEvent, direction: int, anim: int, op
 	set_direction(object, direction)
 
 
-## FRLG's `MovementAction_RaiseHand*_Step1` and the head shake: stop on the anim's
-## end, hop twice and hold 81 frames, or sway one sine period.
+## FRLG's `MovementAction_RaiseHand*_Step1` and the head shake: stop on the anim's end, hop twice and hold 81
+## frames, or sway one sine period.
 func _advance_start_anim(object: ObjectEvent, mode: int) -> bool:
 	var data: PackedInt32Array = object.sprite_data
 	if mode == 2:
@@ -1292,8 +1338,8 @@ func _run_levitate_tasks() -> void:
 		task["timer"] = (int(task["timer"]) + 1) & 0xFFFF
 
 
-## `MovementAction_LockAnim_Step0`/`UnlockAnim_Step0` over 16 local ids and a count;
-## a new id takes the first free slot, and an id already held changes nothing.
+## `MovementAction_LockAnim_Step0`/`UnlockAnim_Step0` over 16 local ids and a count; a new id takes the first
+## free slot, and an id already held changes nothing.
 func _lock_anim(object: ObjectEvent) -> void:
 	if _locked_anims == null:
 		var ids := PackedInt32Array()
@@ -1407,7 +1453,7 @@ func _start_jump(object: ObjectEvent, direction: int, shape: Dictionary, slot: i
 	if shape.get("shadow", false) and not object.has_shadow:
 		object.has_shadow = true
 		requests.append(_effect_request(object, slot, FLDEFF_SHADOW))
-	_ground(object, slot, "begin_step", requests)
+	_ground(object, slot, "begin_step", requests, false)
 
 
 ## `DoJumpSpriteMovement`: the special jump runs at half speed; a far jump moves its cell at halfway.
@@ -1424,7 +1470,7 @@ func _advance_jump(object: ObjectEvent, parameter: int, slot: int, requests: Arr
 	if object.movement_frame == duration / 2:
 		if distance == 2:
 			_shift_coords(object, object.current + Gen3FieldCamera.DIRECTIONS[object.movement_direction])
-			_ground(object, slot, "begin_step", requests)
+			_ground(object, slot, "begin_step", requests, false)
 		elif shape.get("turn", false):
 			set_direction(object, OPPOSITE[object.movement_direction])
 			_set_step_anim(object, ANIM_GO + DIRECTION_ANIM_OFFSETS[object.facing])
@@ -1446,10 +1492,17 @@ static func _shift_coords(object: ObjectEvent, at: Vector2i) -> void:
 	object.current = Vector2i(wrapi(at.x, -32768, 32768), wrapi(at.y, -32768, 32768))
 
 
-func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array) -> void:
-	update_elevation(object)
+## `DoGroundEffects_*`; a jump's start and halfway shift set `disableCoveringGroundEffects` ([param covering]).
+func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, covering: bool = true) -> void:
+	if not object.fixed_priority:
+		update_elevation(object)
+		object.subsprite_table = Gen3ObjectSprites.ELEVATION_SUBSPRITE_TABLE[object.previous_elevation]
+		object.priority = Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation]
 	object.current_behavior = camera.grid.behavior_at(object.current.x, object.current.y)
 	object.previous_behavior = camera.grid.behavior_at(object.previous.x, object.previous.y)
+	if covering and not _frlg and object.current_behavior == MB_LONG_GRASS and object.previous_behavior == MB_LONG_GRASS:
+		object.subsprite_table = Gen3ObjectSprites.LONG_GRASS_TABLE_HIGH \
+			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
 	requests.append({"kind": kind, "object_id": slot})
 
 
@@ -1485,7 +1538,8 @@ func _set_berry_graphics(object: ObjectEvent) -> void:
 	var berry: int = int(tree["berry"])
 	var info: Dictionary = camera.data.world_berry(berry if berry >= 1 and berry <= 44 else 1)
 	set_graphics_id(object, int(info["berry_graphics"][stage - 1]))
-	object.berry_palette = int(info["berry_palettes"][stage - 1]) & 15
+	object.anim.images = camera.data.world_sprite_images(int(info.get("berry_images", -1)))
+	object.palette_num = int(info["berry_palettes"][stage - 1]) & 15
 	object.anim.start(stage - 1)
 
 
@@ -1496,8 +1550,8 @@ func _berry_sparkle(object: ObjectEvent, slot: int, requests: Array) -> void:
 	requests.append(request)
 
 
-## `MovementType_BerryTreeGrowth`: each TRUE callback runs the next state in
-## the same frame; the two sparkle phases each spend timer values 1 through 65.
+## `MovementType_BerryTreeGrowth`: each TRUE callback runs the next state in the same frame; the two sparkle
+## phases each spend timer values 1 through 65.
 func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 	while true:
 		match object.movement_state:
@@ -1544,8 +1598,8 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 					object.berry_sparkling = false
 
 
-## `MovementType_CopyPlayer*`: latch the entry facing once, and resume holds
-## through the shared executor. The field input host supplies T_TILE_CENTER.
+## `MovementType_CopyPlayer*`: latch the entry facing once, and resume holds through the shared executor. The
+## field input host supplies T_TILE_CENTER.
 func _step_copy_player(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var player: ObjectEvent = _player_event()
 	if player == null and object.movement_state != 2:
@@ -1604,8 +1658,8 @@ func _is_faraway_mew(object: ObjectEvent) -> bool:
 		and object.graphics_id == 229
 
 
-## `faraway_island.c`: rock escape precedes distance avoidance; the step
-## counter selects candidates without consuming the random stream.
+## `faraway_island.c`: rock escape precedes distance avoidance; the step counter selects candidates without
+## consuming the random stream.
 func _mew_direction(player: ObjectEvent) -> int:
 	var mew: ObjectEvent = null
 	for candidate: ObjectEvent in objects:
@@ -1707,7 +1761,7 @@ func _step_stationary(object: ObjectEvent, slot: int, requests: Array) -> void:
 		clear_held_movement(object)
 		object.single_movement_active = false
 		_set_single_movement(object, direction_action(0, object.facing))
-		if object.movement_type == 0x4C:
+		if object.movement_type == MOVEMENT_TYPE_INVISIBLE:
 			object.invisible = true
 		object.movement_state = 1
 	if object.movement_state == 1 and _exec_single_movement(object, slot, requests):

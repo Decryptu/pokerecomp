@@ -1,9 +1,8 @@
 class_name Gen3EventData
 extends RefCounted
 
-## `event_data.c`: the event flags and vars. Flag 0 has no storage, so it reads
-## clear and ignores writes; a var below `VARS_START` has none either, and
-## `VarGet` answers it with the id itself.
+## `event_data.c`: the event flags and vars. Flag 0 has no storage, so it reads clear and ignores writes; a
+## var below `VARS_START` has none either, and `VarGet` answers it with the id itself.
 
 const VARS_START: int = 0x4000
 const TEMP_FLAGS_COUNT: int = 0x20

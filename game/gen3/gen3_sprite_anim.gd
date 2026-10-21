@@ -1,9 +1,9 @@
 class_name Gen3SpriteAnim
 extends RefCounted
 
-## One sprite's image animation in `sprite.c`: `StartSpriteAnim`, `SeekSpriteAnim`
-## and `AnimateSprite`'s `sAnimFuncs` over an imported `anims` table. Indices and
-## the loop counter are u8 and the delay counter six bits, as in `struct Sprite`.
+## One sprite's image animation in `sprite.c`: `StartSpriteAnim`, `SeekSpriteAnim` and `AnimateSprite`'s
+## `sAnimFuncs` over an imported `anims` table. Indices and the loop counter are u8 and the delay counter six
+## bits, as in `struct Sprite`.
 
 const SEQUENCE_LIMIT: int = 64
 ## `union AnimCmd` types in the low halfword; any other value is a frame's image.
@@ -13,16 +13,20 @@ const END: int = 0xFFFF
 
 var anims: Array = []
 var step_positions: Array = []
+var images: Array = []
 var anim_num: int = 0
 var cmd_index: int = 0
 var delay: int = 0
 var loop_counter: int = 0
 var paused: bool = false
 var ended: bool = false
-var beginning: bool = false
+## `CreateSprite` starts anim 0.
+var beginning: bool = true
 ## `oam.affineMode` on: frames then leave the flip bits alone.
 var affine: bool = false
 var image: int = 0
+## The image row `RequestSpriteFrameImageCopy` last copied; empty before one or past the table.
+var tiles: Array = []
 var h_flip: bool = false
 var v_flip: bool = false
 
@@ -66,8 +70,8 @@ func animate() -> void:
 		_continue()
 
 
-## An anim number past the imported table reads `ANIMCMD_END`; the cartridge
-## reads whatever words follow the table.
+## An anim number past the imported table reads `ANIMCMD_END`; the cartridge reads whatever words follow the
+## table.
 func _cmd(index: int) -> int:
 	var sequence: Array = anims[anim_num] if anim_num < anims.size() else []
 	return int(sequence[index]) if index >= 0 and index < sequence.size() else END
@@ -114,6 +118,7 @@ func _frame(word: int) -> void:
 	image = word & 0xFFFF
 	if image >= 0x8000:
 		image -= 0x10000
+	tiles = images[image] if image >= 0 and image < images.size() else []
 
 
 func _flip(word: int) -> void:
@@ -122,8 +127,8 @@ func _flip(word: int) -> void:
 		v_flip = bool(word >> 23 & 1)
 
 
-## `JumpToTopOfAnimLoop`: back to the command after the previous `ANIMCMD_LOOP`,
-## or the first, reading index -1 as the cartridge does before it stops at 0.
+## `JumpToTopOfAnimLoop`: back to the command after the previous `ANIMCMD_LOOP`, or the first, reading index
+## -1 as the cartridge does before it stops at 0.
 func _jump_to_loop_top() -> void:
 	if loop_counter == 0:
 		return

@@ -1,11 +1,11 @@
 class_name Gen3Text
 extends RefCounted
 
-## pret's English `charmap.txt`, the same on all five. A code with no glyph
-## stays bracketed as hex rather than decoding to a wrong character.
+## pret's English `charmap.txt`, the same on all five. A code with no glyph stays bracketed as hex rather than
+## decoding to a wrong character.
 
-## Tile runs that draw one word, spelled like Generation 2's `<PKMN>`: `PKMN` is
-## $53 $54 and `POKEBLOCK`, in the berry descriptions, $55 to $59.
+## Tile runs that draw one word, spelled like Generation 2's `<PKMN>`: `PKMN` is $53 $54 and `POKEBLOCK`, in
+## the berry descriptions, $55 to $59.
 const WORD_TILES: Dictionary = {
 	"<PKMN>": [0x53, 0x54],
 	"<POKEBLOCK>": [0x55, 0x56, 0x57, 0x58, 0x59],
@@ -21,8 +21,8 @@ const DIGIT_0: int = 0xA1
 const LETTERS: int = 26
 const DIGITS: int = 10
 
-## GetExtCtrlCodeLength: the code byte and its arguments after `FC`. Ruby and
-## Sapphire's table ends at EXT_CTRL_CODE_ENG; a code past either end is refused.
+## GetExtCtrlCodeLength: the code byte and its arguments after `FC`. Ruby and Sapphire's table ends at
+## EXT_CTRL_CODE_ENG; a code past either end is refused.
 const EXT_CTRL_CODES: Array = [
 	["NAME_END", 1], ["COLOR", 2], ["HIGHLIGHT", 2], ["SHADOW", 2],
 	["COLOR_HIGHLIGHT_SHADOW", 4], ["PALETTE", 2], ["FONT", 2], ["RESET_FONT", 1],
@@ -41,8 +41,8 @@ const PLACEHOLDERS: Array[String] = [
 ]
 const HOENN_PLACEHOLDERS: Array[String] = ["MAGMA", "AQUA", "MAXIE", "ARCHIE", "GROUDON", "KYOGRE"]
 const SWAPPED_PLACEHOLDERS: Array[String] = ["AQUA", "MAGMA", "ARCHIE", "MAXIE", "KYOGRE", "GROUDON"]
-## FireRed, LeafGreen and Emerald's RenderText reads one argument after each of
-## these; Ruby and Sapphire's PrintNextChar draws them as glyphs.
+## FireRed, LeafGreen and Emerald's RenderText reads one argument after each of these; Ruby and Sapphire's
+## PrintNextChar draws them as glyphs.
 const ARGUMENT_CHARACTERS: Dictionary = {0xF7: "DYNAMIC", 0xF8: "KEYPAD_ICON", 0xF9: "EXTRA_SYMBOL"}
 
 const CHARACTERS: Dictionary = {
@@ -91,8 +91,8 @@ static func unit_width(id: StringName, data: PackedByteArray, at: int) -> int:
 	return 1 + int(EXT_CTRL_CODES[ext][1]) if ext < count else 0
 
 
-## Bytes from [param offset] through EOS, or -1 when no EOS ends a string of
-## readable units within [param limit]. An argument byte of $FF is not an end.
+## Bytes from [param offset] through EOS, or -1 when no EOS ends a string of readable units within [param
+## limit]. An argument byte of $FF is not an end.
 static func span(id: StringName, data: PackedByteArray, offset: int, limit: int) -> int:
 	if offset < 0:
 		return -1

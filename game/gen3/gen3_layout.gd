@@ -1,8 +1,8 @@
 class_name Gen3Layout
 extends RefCounted
 
-## Dump offsets of each Generation 3 cartridge's tables. An offset is a ROM
-## pointer less [constant ROM_BASE]; table evidence is recorded below.
+## Dump offsets of each Generation 3 cartridge's tables. An offset is a ROM pointer less [constant ROM_BASE];
+## table evidence is recorded below.
 
 const ROM_BASE: int = 0x08000000
 const ROM_WINDOW: int = 0x02000000
@@ -26,8 +26,8 @@ const SPECIES_NAME_SIZE: int = 11
 const MOVE_NAME_SIZE: int = 13
 const TYPE_NAME_SIZE: int = 7
 
-## agbcc pads every struct to four bytes: `SpeciesInfo` is 26 bytes in 28,
-## `BattleMove` 9 in 12 and `Evolution` 6 in 8.
+## agbcc pads every struct to four bytes: `SpeciesInfo` is 26 bytes in 28, `BattleMove` 9 in 12 and
+## `Evolution` 6 in 8.
 const SPECIES_INFO_SIZE: int = 28
 const INFO_HP: int = 0x00
 const INFO_ATTACK: int = 0x01
@@ -102,8 +102,8 @@ const TRAINER_PARTY_LIMIT: int = 6
 const ABILITY_COUNT: int = 78
 const ABILITY_NAME_SIZE: int = 13
 
-## `gPokedexEntries` from `NATIONAL_DEX_NONE`. Emerald drops Ruby's second page
-## pointer, which FireRed and LeafGreen keep for an empty `unusedDescription`.
+## `gPokedexEntries` from `NATIONAL_DEX_NONE`. Emerald drops Ruby's second page pointer, which FireRed and
+## LeafGreen keep for an empty `unusedDescription`.
 const DEX_ENTRY_CATEGORY_SIZE: int = 12
 const DEX_ENTRY_HEIGHT: int = 0x0C
 const DEX_ENTRY_WEIGHT: int = 0x0E
@@ -126,8 +126,8 @@ const EVOLUTION_PARAMETER: int = 2
 const EVOLUTION_TARGET: int = 4
 const EVOLUTION_METHOD_LAST: int = 15  # EVO_BEAUTY
 
-## Map and wild pointers are located from exact layout/slot bytes, then swept
-## against pret's map_groups and wild_encounters JSON, including version guards.
+## Map and wild pointers are located from exact layout/slot bytes, then swept against pret's map_groups and
+## wild_encounters JSON, including version guards.
 const RS_MAP_GROUP_SIZES: Array[int] = [
 	54, 5, 5, 6, 7, 7, 8, 7, 7, 13, 8, 17, 10, 24, 13, 13,
 	14, 2, 2, 2, 3, 1, 1, 1, 86, 44, 12, 2, 1, 13, 1, 1,
@@ -144,16 +144,17 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 	3, 1,
 ]
 
-## gStdScripts and BattleSetup_ConfigureTrainerBattle's five helper entry points
-## come from nm on the matching pret builds, including Sapphire's shifted scripts.
-## `gInitialMovementTypeFacingDirections` follows `gRangedMovementTypes` directly.
-## `gObjectEventGraphicsInfoPointers` is the dump's pointer run of `NUM_OBJ_EVENT_GFX`
-## graphics infos; Emerald's `gMauvilleOldManGraphicsInfoPointers` follows it.
+## gStdScripts and BattleSetup_ConfigureTrainerBattle's five helper entry points come from nm on the matching
+## pret builds, including Sapphire's shifted scripts. `gInitialMovementTypeFacingDirections` follows
+## `gRangedMovementTypes` directly. `gObjectEventGraphicsInfoPointers` is the dump's pointer run of
+## `NUM_OBJ_EVENT_GFX` graphics infos; Emerald's `gMauvilleOldManGraphicsInfoPointers` follows it.
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
+	"object_palettes": 0x373794, "object_palette_tags": 0x3739B4,
+	"player_reflection_palettes": 0x37388C, "special_reflection_palettes": 0x3738FC,
 	"object_graphics": 0x36DC70, "object_graphics_count": 218,
 	"berries": 0x3CD2E8,
-	"berry_graphics": 0x374484, "berry_palettes": 0x3743D8,
+	"berry_graphics": 0x374484, "berry_palettes": 0x3743D8, "berry_pics": 0x37432C,
 	"movement_type_count": 77,
 	"standard_scripts": 0x14B70C,
 	"standard_script_count": 8,
@@ -200,9 +201,11 @@ const RUBY: Dictionary = {
 
 const SAPPHIRE: Dictionary = {
 	"movement_types": 0x36DB64,
+	"object_palettes": 0x373724, "object_palette_tags": 0x373944,
+	"player_reflection_palettes": 0x37381C, "special_reflection_palettes": 0x37388C,
 	"object_graphics": 0x36DC00, "object_graphics_count": 218,
 	"berries": 0x3CD344,
-	"berry_graphics": 0x374414, "berry_palettes": 0x374368,
+	"berry_graphics": 0x374414, "berry_palettes": 0x374368, "berry_pics": 0x3742BC,
 	"movement_type_count": 77,
 	"standard_scripts": 0x14B70C,
 	"standard_script_count": 8,
@@ -249,6 +252,8 @@ const SAPPHIRE: Dictionary = {
 
 const FIRERED: Dictionary = {
 	"movement_types": 0x39FD7C,
+	"object_palettes": 0x3A51C8, "object_palette_tags": 0x3A53A0,
+	"player_reflection_palettes": 0x3A5278, "special_reflection_palettes": 0x3A52E8,
 	"object_graphics": 0x39FE20, "object_graphics_count": 152, "step_anims": 0x3A3708,
 	"berries": 0x3DF858,
 	"movement_type_count": 81,
@@ -297,6 +302,8 @@ const FIRERED: Dictionary = {
 
 const LEAFGREEN: Dictionary = {
 	"movement_types": 0x39FD5C,
+	"object_palettes": 0x3A51A8, "object_palette_tags": 0x3A5380,
+	"player_reflection_palettes": 0x3A5258, "special_reflection_palettes": 0x3A52C8,
 	"object_graphics": 0x39FE00, "object_graphics_count": 152, "step_anims": 0x3A36E8,
 	"berries": 0x3DF694,
 	"movement_type_count": 81,
@@ -345,10 +352,12 @@ const LEAFGREEN: Dictionary = {
 
 const EMERALD: Dictionary = {
 	"movement_types": 0x50557C,
+	"object_palettes": 0x50BBC8, "object_palette_tags": 0x50BE38,
+	"player_reflection_palettes": 0x50BD00, "special_reflection_palettes": 0x50BD78,
 	"object_graphics": 0x505620, "object_graphics_count": 239, "step_anims": 0x5094AC,
 	"mauville_graphics": 0x5059DC, "mauville_graphics_count": 7,
 	"berries": 0x58A670,
-	"berry_graphics": 0x50C908, "berry_palettes": 0x50C85C,
+	"berry_graphics": 0x50C908, "berry_palettes": 0x50C85C, "berry_pics": 0x50C7B0,
 	"movement_type_count": 81,
 	"standard_scripts": 0x1DC2A0,
 	"standard_script_count": 11,

@@ -395,20 +395,48 @@ func world_berry(berry: int) -> Dictionary:
 	return _coerce_service_dictionary(rows[berry - 1]) if berry <= rows.size() else {}
 
 
-## Row [param index] of `gObjectEventGraphicsInfoPointers` (Emerald's
-## `gMauvilleOldManGraphicsInfoPointers` when [param mauville]): `inanimate`, `anims` (`union
-## AnimCmd` words per anim number) and the `step_positions` `GetStepAnimTable` finds, or none.
+## Row [param index] of `gObjectEventGraphicsInfoPointers` (Emerald's Mauville table when [param mauville]),
+## with its `anims`, `GetStepAnimTable` positions, `images` rows and six `subsprite_tables` resolved.
 func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
 	if generation != RomRegistry.GEN3 or index < 0:
 		return {}
 	var rows: Array = _scripts().get("mauville_graphics" if mauville else "object_graphics", [])
 	if index >= rows.size():
 		return {}
-	var row: Dictionary = rows[index]
+	var row: Dictionary = (rows[index] as Dictionary).duplicate()
 	var anims: String = str(int(row["anims"]))
-	return _coerce_service_dictionary({"inanimate": bool(row["inanimate"]),
-		"anims": _scripts()["sprite_anims"].get(anims, []),
-		"step_positions": _scripts().get("step_anims", {}).get(anims, [])})
+	row["anims"] = _scripts()["sprite_anims"].get(anims, [])
+	row["step_positions"] = _scripts().get("step_anims", {}).get(anims, [])
+	row["images"] = world_sprite_images(int(row.get("images", -1)))
+	row["subsprite_tables"] = _scripts().get("subsprite_tables", {}).get(str(int(row.get("subsprite_tables", 0))), [])
+	return _coerce_service_dictionary(row)
+
+
+## A `SpriteFrameImage` table by dump offset, as [data offset, size] rows.
+func world_sprite_images(offset: int) -> Array:
+	if generation != RomRegistry.GEN3:
+		return []
+	var rows: Variant = _coerce_service_value(_scripts().get("sprite_images", {}).get(str(offset), []), PackedByteArray())
+	return rows if rows is Array else []
+
+
+func world_sprite_image(offset: int, size: int) -> PackedByteArray:
+	var record: Dictionary = _gba_graphics_record("sprite_images", offset)
+	return (record.get("bytes", PackedByteArray()) as PackedByteArray).slice(0, size)
+
+
+## The colours of the first `sObjectEventSpritePalettes` row with [param tag], as `FindObjectEventPaletteIndexByTag` finds it.
+func world_object_palette(tag: int) -> PackedByteArray:
+	for row: Array in world_object_palette_sets().get("rows", []):
+		if int(row[0]) == tag:
+			return _gba_graphics_record("object_palettes", int(row[1])).get("bytes", PackedByteArray())
+	return PackedByteArray()
+
+
+func world_object_palette_sets() -> Dictionary:
+	if generation != RomRegistry.GEN3:
+		return {}
+	return _coerce_service_dictionary(_scripts().get("object_palettes", {}))
 
 
 func world_map_layout(group: int, number: int) -> Dictionary:

@@ -1,13 +1,13 @@
 class_name Gen3FieldCamera
 extends RefCounted
 
-## `fieldmap.c`'s camera: the player's map and grid, `gSaveBlock1Ptr->pos` (the
-## focus in layout coordinates, which is the view's top-left in backup ones),
-## `CameraMove`'s walk across a connection and the saved map view it carries
-## over. The focus is [member pos] plus [constant Gen3MapGrid.MAP_OFFSET].
+## `fieldmap.c`'s camera: the player's map and grid, `gSaveBlock1Ptr->pos` (the focus in layout coordinates,
+## which is the view's top-left in backup ones), `CameraMove`'s walk across a connection and the saved map
+## view it carries over. The focus is [member pos] plus [constant Gen3MapGrid.MAP_OFFSET].
 
 const VIEW_WIDTH: int = Gen3MapGrid.OFFSET_W
 const VIEW_HEIGHT: int = Gen3MapGrid.OFFSET_H
+const PAN_Y: int = 32
 ## `gDirectionToVectors`, by `DIR_*`.
 const DIRECTIONS: Array[Vector2i] = [
 	Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(1, 0),
@@ -20,12 +20,19 @@ var number: int = -1
 var header: Dictionary = {}
 var grid: Gen3MapGrid
 var pos := Vector2i.ZERO
-## `gCamera`: whether the last [method move] crossed into another map, and the
-## old [member pos] less the one the new map gave before the step was added.
+## `gCamera`: whether the last [method move] crossed into another map, and the old [member pos] less the one
+## the new map gave before the step was added.
 var crossed: bool = false
 var shift := Vector2i.ZERO
 ## `mapView`: the 15x14 words [method save_view] copied, empty once cleared.
 var view := PackedInt32Array()
+## The screen's offset from its resting place mid-step, which the field host keeps.
+var scroll := Vector2i.ZERO
+
+
+## The backup-map pixel at the screen's top-left: the BG and sprite offsets add 8 to [constant PAN_Y], `InstallCameraPanAheadCallback`'s pan.
+func screen_origin() -> Vector2i:
+	return pos * 16 + scroll + Vector2i(0, PAN_Y + 8)
 
 
 static func open(game: GameData, map_group: int, map_number: int, at: Vector2i) -> Gen3FieldCamera:
@@ -35,8 +42,7 @@ static func open(game: GameData, map_group: int, map_number: int, at: Vector2i) 
 	return camera if camera.load_map(map_group, map_number) else null
 
 
-## `InitMap`'s grid. The grid before it stays the previous one, which Emerald
-## reads connection flags from.
+## `InitMap`'s grid. The grid before it stays the previous one, which Emerald reads connection flags from.
 func load_map(map_group: int, map_number: int) -> bool:
 	var next: Gen3MapGrid = Gen3MapGrid.open(data, map_group, map_number, grid)
 	if next == null:
@@ -48,9 +54,8 @@ func load_map(map_group: int, map_number: int) -> bool:
 	return true
 
 
-## `CameraMove`. Stepping onto a connected map's cells loads that map, puts
-## [member pos] where the step lands in it and lays the saved view over the new
-## grid. False when the step stays on this map, or is refused.
+## `CameraMove`. Stepping onto a connected map's cells loads that map, puts [member pos] where the step lands
+## in it and lays the saved view over the new grid. False when the step stays on this map, or is refused.
 func move(step: Vector2i) -> bool:
 	crossed = false
 	var direction: int = grid.border_id_at(pos.x + Gen3MapGrid.MAP_OFFSET + step.x,
@@ -72,10 +77,9 @@ func move(step: Vector2i) -> bool:
 	return true
 
 
-## `GetIncomingConnection`. Every straight step off the layout finds one; a
-## diagonal step off a corner can name a side whose connection does not span
-## the old position, and the cartridge then reads a connection from address 0,
-## the BIOS. [method move] refuses that step, keeping [member pos].
+## `GetIncomingConnection`. Every straight step off the layout finds one; a diagonal step off a corner can
+## name a side whose connection does not span the old position, and the cartridge then reads a connection from
+## address 0, the BIOS. [method move] refuses that step, keeping [member pos].
 func _incoming(direction: int) -> Dictionary:
 	var vertical: bool = direction == Gen3MapGrid.Connection.SOUTH or direction == Gen3MapGrid.Connection.NORTH
 	var coord: int = pos.x if vertical else pos.y
@@ -114,10 +118,10 @@ func save_view() -> void:
 			view[x + y * VIEW_WIDTH] = grid.blocks[grid.width * (pos.y + y) + pos.x + x]
 
 
-## `MoveMapViewToBackup`: the saved view less the row or column the step left behind,
-## written over the new grid where it now lies, then cleared. Rows run on through the
-## flat buffer. A diagonal step can carry them past its end, into `sBackupMapData`'s
-## unused tail, or one word before its start; neither word is part of the map, so neither is kept.
+## `MoveMapViewToBackup`: the saved view less the row or column the step left behind, written over the new
+## grid where it now lies, then cleared. Rows run on through the flat buffer. A diagonal step can carry them
+## past its end, into `sBackupMapData`'s unused tail, or one word before its start; neither word is part of
+## the map, so neither is kept.
 func _view_to_backup(direction: int) -> void:
 	var to: Vector2i = pos
 	var from := Vector2i.ZERO
@@ -149,8 +153,8 @@ func can_move(direction: int) -> bool:
 	return grid.border_id_at(at.x, at.y) != Gen3MapGrid.Connection.INVALID
 
 
-## `GetMapConnectionAtPos` for a backup-map cell: the connection whose map holds it,
-## empty for one inside the layout, a dive or emerge connection or no map.
+## `GetMapConnectionAtPos` for a backup-map cell: the connection whose map holds it, empty for one inside the
+## layout, a dive or emerge connection or no map.
 func connection_at(x: int, y: int) -> Dictionary:
 	var layout_width: int = int(header["width"])
 	var layout_height: int = int(header["height"])
