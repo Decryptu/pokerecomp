@@ -148,10 +148,13 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 ## pret builds, including Sapphire's shifted scripts. `gInitialMovementTypeFacingDirections` follows
 ## `gRangedMovementTypes` directly. `gObjectEventGraphicsInfoPointers` is the dump's pointer run of
 ## `NUM_OBJ_EVENT_GFX` graphics infos; Emerald's `gMauvilleOldManGraphicsInfoPointers` follows it.
+## `shadow_templates`: `gFieldEffectObjectTemplatePointers`, found by matching pret's four tiled shadow PNGs
+## to their dump bytes and pointer runs; surfability matches pret's 240-byte table, retaining its ROM tail.
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
 	"object_palettes": 0x373794, "object_palette_tags": 0x3739B4,
 	"player_reflection_palettes": 0x37388C, "special_reflection_palettes": 0x3738FC,
+	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8,
 	"object_graphics": 0x36DC70, "object_graphics_count": 218,
 	"berries": 0x3CD2E8,
 	"berry_graphics": 0x374484, "berry_palettes": 0x3743D8, "berry_pics": 0x37432C,
@@ -203,6 +206,7 @@ const SAPPHIRE: Dictionary = {
 	"movement_types": 0x36DB64,
 	"object_palettes": 0x373724, "object_palette_tags": 0x373944,
 	"player_reflection_palettes": 0x37381C, "special_reflection_palettes": 0x37388C,
+	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68,
 	"object_graphics": 0x36DC00, "object_graphics_count": 218,
 	"berries": 0x3CD344,
 	"berry_graphics": 0x374414, "berry_palettes": 0x374368, "berry_pics": 0x3742BC,
@@ -254,6 +258,7 @@ const FIRERED: Dictionary = {
 	"movement_types": 0x39FD7C,
 	"object_palettes": 0x3A51C8, "object_palette_tags": 0x3A53A0,
 	"player_reflection_palettes": 0x3A5278, "special_reflection_palettes": 0x3A52E8,
+	"surfable_behaviors": 0x352FE8, "shadow_templates": 0x3A0080,
 	"object_graphics": 0x39FE20, "object_graphics_count": 152, "step_anims": 0x3A3708,
 	"berries": 0x3DF858,
 	"movement_type_count": 81,
@@ -304,6 +309,7 @@ const LEAFGREEN: Dictionary = {
 	"movement_types": 0x39FD5C,
 	"object_palettes": 0x3A51A8, "object_palette_tags": 0x3A5380,
 	"player_reflection_palettes": 0x3A5258, "special_reflection_palettes": 0x3A52C8,
+	"surfable_behaviors": 0x352FC8, "shadow_templates": 0x3A0060,
 	"object_graphics": 0x39FE00, "object_graphics_count": 152, "step_anims": 0x3A36E8,
 	"berries": 0x3DF694,
 	"movement_type_count": 81,
@@ -354,6 +360,7 @@ const EMERALD: Dictionary = {
 	"movement_types": 0x50557C,
 	"object_palettes": 0x50BBC8, "object_palette_tags": 0x50BE38,
 	"player_reflection_palettes": 0x50BD00, "special_reflection_palettes": 0x50BD78,
+	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8,
 	"object_graphics": 0x505620, "object_graphics_count": 239, "step_anims": 0x5094AC,
 	"mauville_graphics": 0x5059DC, "mauville_graphics_count": 7,
 	"berries": 0x58A670,

@@ -412,6 +412,24 @@ func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
 	return _coerce_service_dictionary(row)
 
 
+func world_surfable(behavior: int) -> bool:
+	if generation != RomRegistry.GEN3:
+		return false
+	for value: int in _scripts().get("surfable_behaviors", []):
+		if value == behavior:
+			return true
+	return false
+
+
+func world_shadow_graphics(size: int) -> Dictionary:
+	var rows: Array = _scripts().get("shadow_templates", []) if generation == RomRegistry.GEN3 else []
+	if size < 0 or size >= rows.size():
+		return {}
+	var row: Dictionary = _coerce_service_dictionary(rows[size])
+	row["images"] = world_sprite_images(int(row["images"]))
+	return row
+
+
 ## A `SpriteFrameImage` table by dump offset, as [data offset, size] rows.
 func world_sprite_images(offset: int) -> Array:
 	if generation != RomRegistry.GEN3:
