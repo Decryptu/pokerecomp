@@ -1,25 +1,22 @@
 class_name GameData
 extends RefCounted
 
-## A decoded cartridge, read back out of the cache: the importer's counterpart
-## and the only way the engine sees cartridge content. [RefCounted] and
-## scene-free, so a battle or menu can run in a test.
-## JSON has one number type, so every cached number returns as a float and every
-## comparison against an int quietly fails; coercion happens here, once. Index
-## buffers and world sections load on first use, because reading them at open()
-## made listing three games cost more than entering one.
+## A decoded cartridge, read back out of the cache: the importer's counterpart and the only way the engine
+## sees cartridge content. [RefCounted] and scene-free, so a battle or menu can run in a test. JSON has one
+## number type, so every cached number returns as a float and every comparison against an int quietly fails;
+## coercion happens here, once. Index buffers and world sections load on first use, because reading them at
+## open() made listing three games cost more than entering one.
 
 var gs_ball_event_enabled: bool = false
 var id: StringName = &""
 var sha1: String = ""
 var directory: String = ""
-## Which generation wrote this cache. Read from the manifest rather than from
-## [RomRegistry], so a cache opened by path alone still knows what it holds and
-## a stale one cannot claim a shape it was not written in.
+## Which generation wrote this cache. Read from the manifest rather than from [RomRegistry], so a cache opened
+## by path alone still knows what it holds and a stale one cannot claim a shape it was not written in.
 var generation: int = RomRegistry.GEN2
 
-## Mod content, consulted ahead of the cached tables by [method _content]. Null
-## for a [GameData] built by hand, which is what a fixture does.
+## Mod content, consulted ahead of the cached tables by [method _content]. Null for a [GameData] built by
+## hand, which is what a fixture does.
 var _overlay: Gen2ContentOverlay = null
 ## Mod wording, consulted ahead of the cached boxes by [method text].
 var _text_overlay: Gen2TextOverlay = null
@@ -27,8 +24,7 @@ var _text_stores: Dictionary = {}
 
 var _species: Array = []
 var _moves: Array = []
-## TMHMMoves in TMNUM order, restored to integers because JSON reads them back
-## as floats.
+## TMHMMoves in TMNUM order, restored to integers because JSON reads them back as floats.
 var _tmhm_moves: Array[int] = []
 ## HappinessChanges, one row of three signed changes per HAPPINESS_* constant.
 var _happiness_changes: Array = []
@@ -36,17 +32,17 @@ var _name_input_chars: Array = []
 ## StringBufferPointers as WRAM addresses, in `text_buffer` argument order.
 var _string_buffer_pointers: Array[int] = []
 var _intro_text: Dictionary = {}
-## The two cached dex orderings, by the key each mode reads, restored to
-## integers because JSON reads them back as floats.
+## The two cached dex orderings, by the key each mode reads, restored to integers because JSON reads them back
+## as floats.
 var _dex_orders: Dictionary = {}
 var _items: Array = []
 var _world_trades: Array = []
 var _types: Array = []
 var _abilities: Array = []
 var _trainers: Array = []
-## The matchup chart, folded into a lookup on load: attacker * TYPE_COUNT +
-## defender to the multiplier in tenths. The chart is 110 rows of exceptions, so
-## a linear search would be a hundred comparisons per hit, twice a turn.
+## The matchup chart, folded into a lookup on load: attacker * TYPE_COUNT + defender to the multiplier in
+## tenths. The chart is 110 rows of exceptions, so a linear search would be a hundred comparisons per hit,
+## twice a turn.
 var _matchups: Dictionary = {}
 var _foresight_matchups: Dictionary = {}
 var _atlases: Dictionary = {}
@@ -113,10 +109,9 @@ var _battle_object_palettes: Dictionary = {}
 var _indices: Dictionary = {}
 var _world_maps: Array = []
 var _world_headers: Dictionary = {}
-## Group and number to the map's position in [member _world_maps]. Warps,
-## connections and every script warp validation ask for a map by its cartridge
-## identity, and walking 388 records to answer costs more than the lookup it is
-## part of.
+## Group and number to the map's position in [member _world_maps]. Warps, connections and every script warp
+## validation ask for a map by its cartridge identity, and walking 388 records to answer costs more than the
+## lookup it is part of.
 var _world_map_index: Dictionary = {}
 var _world_map_names: Dictionary = {}
 var _world_scripts: Dictionary = {}
@@ -138,8 +133,7 @@ var _party_menu_icon_palette_rows: Array = []
 var _areas: Dictionary = {}
 var _world_menus: Dictionary = {}
 var _world_marts: Dictionary = {}
-## Built on first ask and kept, since the walk behind it is the whole script
-## corpus. See [method catalog].
+## Built on first ask and kept, since the walk behind it is the whole script corpus. See [method catalog].
 var _catalog: Gen2WorldCatalog = null
 ## See [method gen1_toggle_on]. Empty outside Generation 1 and until first read.
 var _gen1_toggle_on: Dictionary = {}
@@ -150,9 +144,8 @@ var _world_audio: Dictionary = {}
 var _battle_anims_section: Dictionary = {}
 var _pic_anims_section: Dictionary = {}
 var _battle_tower_section: Dictionary = {}
-## Which of the sections above have been read. A section that is genuinely empty
-## is indistinguishable from one that has not been read yet, so the answer is
-## recorded rather than inferred from the value.
+## Which of the sections above have been read. A section that is genuinely empty is indistinguishable from one
+## that has not been read yet, so the answer is recorded rather than inferred from the value.
 var _sections: Dictionary = {}
 
 
@@ -163,13 +156,11 @@ static func open(game_id: StringName) -> GameData:
 	return open_directory(RomCache.directory_for(game_id, rom_hash))
 
 
-## Opens whichever of the two [param argument] names: a directory
-## [method RomCache.is_usable] accepts is a cache path, and anything else is a
-## [RomRegistry] id. Null when neither resolves. For a tool whose command line
-## carries one string and cannot say which form it is; answered here rather than
-## sniffed by every tool that would go stale when the cache naming moves. Named
-## for its argument rather than `open_any`, which already means the first
-## cartridge that has a cache at all.
+## Opens whichever of the two [param argument] names: a directory [method RomCache.is_usable] accepts is a
+## cache path, and anything else is a [RomRegistry] id. Null when neither resolves. For a tool whose command
+## line carries one string and cannot say which form it is; answered here rather than sniffed by every tool
+## that would go stale when the cache naming moves. Named for its argument rather than `open_any`, which
+## already means the first cartridge that has a cache at all.
 static func open_argument(argument: String) -> GameData:
 	if RomCache.is_usable(argument):
 		return open_directory(argument)
@@ -181,9 +172,8 @@ const TEXT_RUNS: Array[StringName] = [
 	&"intro", &"menu", &"mart", &"name_rater", &"move_deleter", &"day_care", &"battle",
 ]
 
-## Manifest sections copied into a member as they stand, key to member. A section
-## that is missing or the wrong type leaves the member's own default, which is
-## what lets a cache written by an older import still open.
+## Manifest sections copied into a member as they stand, key to member. A section that is missing or the wrong
+## type leaves the member's own default, which is what lets a cache written by an older import still open.
 const MANIFEST_DICTIONARIES: Dictionary = {
 	"atlases": "_atlases",
 	"egg_pic": "_egg_pic",
@@ -249,8 +239,8 @@ const MANIFEST_ARRAYS: Dictionary = {
 }
 
 
-## Opens a cache directory, or null if it is missing, incomplete, or was written
-## by an importer whose format this build does not read.
+## Opens a cache directory, or null if it is missing, incomplete, or was written by an importer whose format
+## this build does not read.
 static func open_directory(path: String) -> GameData:
 	if not RomCache.is_usable(path):
 		return null
@@ -306,9 +296,9 @@ func _read_cache(path: String) -> void:
 	_build_matchups(_read_array(RomCache.matchups_path(path)))
 
 
-## The first playable registry game with a usable cache, or null if none has
-## been imported. For development views that just want something to draw, so a
-## cartridge whose world is not built is skipped: those views draw one.
+## The first playable registry game with a usable cache, or null if none has been imported. For development
+## views that just want something to draw, so a cartridge whose world is not built is skipped: those views
+## draw one.
 static func open_any() -> GameData:
 	for game_id: StringName in RomRegistry.ORDER:
 		if not RomRegistry.is_playable(game_id):
@@ -323,10 +313,9 @@ func title() -> String:
 	return RomRegistry.title_for(id)
 
 
-## How many species the cartridge carried, which is not how many exist: mod
-## content is numbered above the cartridge's range and enumerated through
-## [method Gen2ContentOverlay.defined_numbers]. Callers here wrap and iterate
-## over the cartridge's own run, and a mod number is not part of it.
+## How many species the cartridge carried, which is not how many exist: mod content is numbered above the
+## cartridge's range and enumerated through [method Gen2ContentOverlay.defined_numbers]. Callers here wrap and
+## iterate over the cartridge's own run, and a mod number is not part of it.
 func species_count() -> int:
 	return _species.size()
 
@@ -451,6 +440,20 @@ func world_object_palette(tag: int) -> PackedByteArray:
 	return PackedByteArray()
 
 
+## StartWeather's sprite palette and the six drought tables, [code]summed[/code] on Emerald, where they are
+## the colours themselves, and not on Ruby and Sapphire, whose deltas the field sums as it loads them. FireRed
+## and LeafGreen have no tables.
+func world_weather() -> Dictionary:
+	var row: Dictionary = _scripts().get("weather", {}) if generation == RomRegistry.GEN3 else {}
+	if row.is_empty():
+		return {}
+	var drought: Array = []
+	for offset: Variant in row.get("drought", []):
+		drought.append(_gba_graphics_record("weather", int(offset)).get("bytes", PackedByteArray()))
+	return {"palette": _gba_graphics_record("weather", int(row["palette"])).get("bytes", PackedByteArray()),
+		"drought": drought, "summed": bool(row.get("summed", false))}
+
+
 func world_object_palette_sets() -> Dictionary:
 	if generation != RomRegistry.GEN3:
 		return {}
@@ -498,9 +501,8 @@ func world_maps() -> Array:
 	return _maps().duplicate()
 
 
-## `ToggleableObjectStates`' ON column by global index, derived once from the
-## objects carrying one. The three rows reaching no object read as ON, which is
-## what a flag nothing draws from is worth.
+## `ToggleableObjectStates`' ON column by global index, derived once from the objects carrying one. The three
+## rows reaching no object read as ON, which is what a flag nothing draws from is worth.
 func gen1_toggle_on(index: int) -> bool:
 	if _gen1_toggle_on.is_empty():
 		for map: Gen2WorldMap in _maps():
@@ -511,12 +513,11 @@ func gen1_toggle_on(index: int) -> bool:
 	return bool(_gen1_toggle_on.get(index, true))
 
 
-## Every imported script's `bank:address` key, sorted, for a caller that has to
-## walk the whole corpus rather than follow one pointer. See [Gen2WorldCatalog].
-## The keys an item ball, a hidden item or a conditional background event points
-## at are NOT here: their bytes live in the map-scripts bank and are cached with
-## the scripts, but they are `db item, quantity` and the like rather than
-## commands, and a corpus walk that decoded them read item counts as opcodes.
+## Every imported script's `bank:address` key, sorted, for a caller that has to walk the whole corpus rather
+## than follow one pointer. See [Gen2WorldCatalog]. The keys an item ball, a hidden item or a conditional
+## background event points at are NOT here: their bytes live in the map-scripts bank and are cached with the
+## scripts, but they are `db item, quantity` and the like rather than commands, and a corpus walk that decoded
+## them read item counts as opcodes.
 func world_script_keys() -> Array:
 	if generation == RomRegistry.GEN3:
 		return []
@@ -529,8 +530,8 @@ func world_script_keys() -> Array:
 	return out
 
 
-## The pointer keys [method world_script_keys] leaves out, derived from the maps
-## rather than stored, so the importer and this side cannot drift apart.
+## The pointer keys [method world_script_keys] leaves out, derived from the maps rather than stored, so the
+## importer and this side cannot drift apart.
 func _script_data_pointers() -> Dictionary:
 	var out: Dictionary = {}
 	for map: Gen2WorldMap in _maps():
@@ -546,25 +547,23 @@ func _script_data_pointers() -> Dictionary:
 	return out
 
 
-## Raw bounded script bytes indexed by the cartridge's bank and CPU address.
-## Runtime never opens a ROM; these bytes come from the user cache only.
+## Raw bounded script bytes indexed by the cartridge's bank and CPU address. Runtime never opens a ROM; these
+## bytes come from the user cache only.
 func world_script(bank: int, address: int) -> PackedByteArray:
 	return _payload_bytes(
 		_scripts().get(Gen2WorldScript.pointer_key(bank, address), []), _blob("scripts")
 	)
 
 
-## The cached bytes from [param address] onward, whether or not a slice starts
-## there: a `elevfloor` list sits behind the script that names it and is inside
-## that script's own slice rather than at a key of its own. Empty when no cached
-## slice in [param bank] covers the address.
+## The cached bytes from [param address] onward, whether or not a slice starts there: a `elevfloor` list sits
+## behind the script that names it and is inside that script's own slice rather than at a key of its own.
+## Empty when no cached slice in [param bank] covers the address.
 func world_script_at(bank: int, address: int) -> PackedByteArray:
 	var exact: PackedByteArray = world_script(bank, address)
 	if not exact.is_empty():
 		return exact
-	## Slices overlap: every script is cached as a fixed span from its own start,
-	## so several can cover one address and the useful one is whichever reaches
-	## furthest past it.
+	## Slices overlap: every script is cached as a fixed span from its own start, so several can cover one
+	## address and the useful one is whichever reaches furthest past it.
 	var prefix: String = "%d:" % bank
 	var best: PackedByteArray = PackedByteArray()
 	for key: Variant in _scripts():
@@ -592,8 +591,8 @@ func world_menu_count() -> int:
 	return _menus().size()
 
 
-## One mart item list by the source MART_* index, or the default list when the
-## cartridge requested an index outside the static table.
+## One mart item list by the source MART_* index, or the default list when the cartridge requested an index
+## outside the static table.
 func world_mart(index: int) -> Dictionary:
 	var rows: Variant = _marts().get("marts", [])
 	if rows is Array and index >= 0 and index < (rows as Array).size():
@@ -602,8 +601,8 @@ func world_mart(index: int) -> Dictionary:
 	return _coerce_service_dictionary(default_value)
 
 
-## `GetFruitTreeItem`: the item a tree bears, by the `fruittree` command's own
-## one-based tree id. Zero for an id no cartridge tree carries.
+## `GetFruitTreeItem`: the item a tree bears, by the `fruittree` command's own one-based tree id. Zero for an
+## id no cartridge tree carries.
 func world_fruit_tree_item(tree_id: int) -> int:
 	var rows: Array = _fruit_trees()
 	if tree_id < 1 or tree_id > rows.size():
@@ -611,9 +610,8 @@ func world_fruit_tree_item(tree_id: int) -> int:
 	return int(rows[tree_id - 1])
 
 
-## `SpawnPoints` row [param index]: `{ map_group, map_number, x, y }`, and empty
-## for an index no spawn carries. This is where a Fly, a Dig, a Teleport and a
-## blackout each put the player down.
+## `SpawnPoints` row [param index]: `{ map_group, map_number, x, y }`, and empty for an index no spawn
+## carries. This is where a Fly, a Dig, a Teleport and a blackout each put the player down.
 func spawn_point(index: int) -> Dictionary:
 	var rows: Variant = _spawns().get("spawns", [])
 	if not rows is Array or index < 0 or index >= (rows as Array).size():
@@ -634,8 +632,8 @@ func spawn_point_count() -> int:
 	return (rows as Array).size() if rows is Array else 0
 
 
-## `Flypoints` row [param index]: `{ landmark, spawn }`. The index is a `FLY_*`
-## constant, which is what the fly map's cursor walks, not a landmark.
+## `Flypoints` row [param index]: `{ landmark, spawn }`. The index is a `FLY_*` constant, which is what the
+## fly map's cursor walks, not a landmark.
 func flypoint(index: int) -> Dictionary:
 	var rows: Variant = _spawns().get("flypoints", [])
 	if not rows is Array or index < 0 or index >= (rows as Array).size():
@@ -654,9 +652,8 @@ func flypoint_count() -> int:
 	return (rows as Array).size() if rows is Array else 0
 
 
-## One imported priced or special mart list. The source keeps these lists apart
-## from the indexed standard mart table because their prices and availability
-## are handled by a different shop routine.
+## One imported priced or special mart list. The source keeps these lists apart from the indexed standard mart
+## table because their prices and availability are handled by a different shop routine.
 func world_mart_special(variant: StringName) -> Dictionary:
 	var special: Variant = _marts().get("special", {})
 	if not special is Dictionary:
@@ -694,10 +691,9 @@ func world_phone_script(kind: StringName) -> Dictionary:
 	return _coerce_service_dictionary(metadata.get(key, {}))
 
 
-## One audio record by the number the caller spells it with. A Generation 2 cache
-## is indexed directly; a Generation 1 cache takes the same number as a role and
-## answers with the sound id that plays it, which is the one seam every
-## Crystal-numbered request in the tree passes through.
+## One audio record by the number the caller spells it with. A Generation 2 cache is indexed directly; a
+## Generation 1 cache takes the same number as a role and answers with the sound id that plays it, which is
+## the one seam every Crystal-numbered request in the tree passes through.
 func world_audio(kind: StringName, index: int) -> Dictionary:
 	if generation == RomRegistry.GEN1:
 		return _gen1_role(kind, index)
@@ -715,9 +711,9 @@ func _gen1_role(kind: StringName, index: int) -> Dictionary:
 	return {} if sound_id < 0 else gen1_sound(-1, sound_id)
 
 
-## One Generation 1 sound, named the way `PlaySound` names it. A bank below zero
-## is `wAudioROMBank`: an effect plays out of whichever copy of the driver the
-## game is already on, which is why the same request sounds different in battle.
+## One Generation 1 sound, named the way `PlaySound` names it. A bank below zero is `wAudioROMBank`: an effect
+## plays out of whichever copy of the driver the game is already on, which is why the same request sounds
+## different in battle.
 func gen1_sound(bank: int, sound_id: int) -> Dictionary:
 	if sound_id <= 0:
 		return {}
@@ -745,8 +741,8 @@ func gen1_pikachu_cry(index: int) -> PackedByteArray:
 	)
 
 
-## `Music_RivalAlternateStart` and its three siblings: the piece's record with
-## the routine's own channel pointers, fade and wait on it.
+## `Music_RivalAlternateStart` and its three siblings: the piece's record with the routine's own channel
+## pointers, fade and wait on it.
 func gen1_alternate_music(name: String) -> Dictionary:
 	var rows: Variant = _audio().get("alternate_music", {})
 	if not rows is Dictionary or not (rows as Dictionary).has(name):
@@ -772,8 +768,8 @@ func gen1_poke_flute() -> Dictionary:
 	return record
 
 
-## Every Generation 1 record of one kind, in the order the header tables walk:
-## what a corpus sweep and the parity harness both iterate.
+## Every Generation 1 record of one kind, in the order the header tables walk: what a corpus sweep and the
+## parity harness both iterate.
 func gen1_audio_rows(kind: StringName) -> Array:
 	var rows: Variant = _audio().get(String(kind), [])
 	if not rows is Array:
@@ -800,8 +796,8 @@ func _gen1_audio_row(bank: int, sound_id: int) -> Dictionary:
 	return {}
 
 
-## The audio banks a Generation 1 driver reads, or the wave samples and drum kits
-## a Generation 2 one does. Every host that plays a record hands these across.
+## The audio banks a Generation 1 driver reads, or the wave samples and drum kits a Generation 2 one does.
+## Every host that plays a record hands these across.
 func audio_assets() -> Dictionary:
 	if generation == RomRegistry.GEN1:
 		return {
@@ -827,9 +823,8 @@ func world_audio_pointer(kind: StringName, bank: int, address: int) -> Dictionar
 	return {}
 
 
-## `PokemonCries`' row for one species: which cry stream it plays and the
-## `wCryPitch`/`wCryLength` it plays it at. An empty answer is a species outside
-## the table, which is what a mod's own number is.
+## `PokemonCries`' row for one species: which cry stream it plays and the `wCryPitch`/`wCryLength` it plays it
+## at. An empty answer is a species outside the table, which is what a mod's own number is.
 func mon_cry(number: int) -> Dictionary:
 	var rows: Variant = _audio().get("mon_cries", [])
 	if not rows is Array or number < 1 or number > (rows as Array).size():
@@ -844,15 +839,15 @@ func mon_cry(number: int) -> Dictionary:
 	}
 
 
-## The cry one number plays, which is `PlayCry`'s own two steps: the
-## `PokemonCries` row, then the stream it names, with the row's pitch and length
-## carried on the record so `_PlayCry`'s modulation reaches the decoder.
+## The cry one number plays, which is `PlayCry`'s own two steps: the `PokemonCries` row, then the stream it
+## names, with the row's pitch and length carried on the record so `_PlayCry`'s modulation reaches the
+## decoder.
 func species_cry(number: int) -> Dictionary:
 	var row: Dictionary = mon_cry(number)
 	if row.is_empty():
 		return {}
-	## `GetCryData`: the cry column counts cries, and the id is `CRY_SFX_START`
-	## plus three times it because every cry header is three channels long.
+	## `GetCryData`: the cry column counts cries, and the id is `CRY_SFX_START` plus three times it because
+	## every cry header is three channels long.
 	var record: Dictionary = gen1_sound(
 		-1, Gen1Layout.AUDIO_CRY_FIRST_ID + int(row["index"]) * 3
 	) if generation == RomRegistry.GEN1 else world_audio(&"cries", int(row["index"]))
@@ -883,8 +878,8 @@ func world_service_counts() -> Dictionary:
 	}
 
 
-## One standard-script entry by its source table index. The pointer is retained
-## for diagnostics, while the bounded bytes keep the runtime independent of ROMs.
+## One standard-script entry by its source table index. The pointer is retained for diagnostics, while the
+## bounded bytes keep the runtime independent of ROMs.
 func world_standard_script(index: int) -> Dictionary:
 	var value: Variant = _standard_scripts().get(str(index), {})
 	if not value is Dictionary:
@@ -903,8 +898,8 @@ func world_text(bank: int, address: int) -> PackedByteArray:
 	)
 
 
-## One map dialogue, decoded, with any mod wording folded in. Every runtime
-## reader of a box takes this; the three reading a NAME stay on the bytes.
+## One map dialogue, decoded, with any mod wording folded in. Every runtime reader of a box takes this; the
+## three reading a NAME stay on the bytes.
 func world_text_string(bank: int, address: int, context: Dictionary = {}) -> Dictionary:
 	var decoded: Dictionary = Gen2TextStream.decode(world_text(bank, address), 0, context)
 	if not bool(decoded.get("ok", false)) or _text_overlay == null \
@@ -925,8 +920,8 @@ func world_movement(bank: int, address: int) -> PackedByteArray:
 	)
 
 
-## The decoded `cmdqueue` a `writecmdqueue` at this pointer writes. Empty when
-## the cartridge has none there, which is every map but two.
+## The decoded `cmdqueue` a `writecmdqueue` at this pointer writes. Empty when the cartridge has none there,
+## which is every map but two.
 func world_command_queue(bank: int, address: int) -> Dictionary:
 	var value: Variant = _command_queues().get(
 		Gen2WorldScript.pointer_key(bank, address), {}
@@ -943,9 +938,8 @@ func world_tileset_count() -> int:
 	return _tilesets().size()
 
 
-## One normal encounter record by method and map group/number. The runtime
-## names the water method "surf" while the cache keeps the cartridge table's
-## "water" name.
+## One normal encounter record by method and map group/number. The runtime names the water method "surf" while
+## the cache keeps the cartridge table's "water" name.
 func world_encounter(method: StringName, group: int, number: int, variant: int = 0) -> Dictionary:
 	var table_name: String = "water" if method == &"surf" else String(method)
 	var table: Variant = _encounters().get(table_name, {})
@@ -971,9 +965,9 @@ func world_encounter_variant_count(method: StringName, group: int, number: int) 
 	return _service_rows_count(value) if generation == RomRegistry.GEN3 else (0 if value.is_empty() else 1)
 
 
-## One region's normal encounter table, in the cartridge's own row order, which
-## is what `FindNest` walks. [param region] is `"johto"` or `"kanto"`; each row
-## carries the `"map"` key its group and number were merged under.
+## One region's normal encounter table, in the cartridge's own row order, which is what `FindNest` walks.
+## [param region] is `"johto"` or `"kanto"`; each row carries the `"map"` key its group and number were merged
+## under.
 func world_encounter_region_rows(method: StringName, region: String) -> Array:
 	var table: Variant = _encounters().get("water" if method == &"surf" else String(method), {})
 	if not table is Dictionary:
@@ -993,8 +987,8 @@ func world_encounter_region_rows(method: StringName, region: String) -> Array:
 	return out
 
 
-## `ItemUseOldRod`'s pair and `GoodRodMons`' two, as fishing groups above every
-## `SuperRodData` row so a mod patches them the way it patches a Super Rod group.
+## `ItemUseOldRod`'s pair and `GoodRodMons`' two, as fishing groups above every `SuperRodData` row so a mod
+## patches them the way it patches a Super Rod group.
 const PP_UPS_MAX: int = 3
 const PP_UP_STEP_MAX: int = 7
 const GEN1_OLD_ROD_GROUP: int = 0x100
@@ -1005,8 +999,8 @@ const GEN1_ROD_GROUPS: Dictionary = {
 }
 
 
-## One imported fishing group, indexed by the source map-header value. Group
-## zero is the cartridge's no-fishing sentinel.
+## One imported fishing group, indexed by the source map-header value. Group zero is the cartridge's
+## no-fishing sentinel.
 func world_fishing_group(group: int) -> Dictionary:
 	if group < 1:
 		return {}
@@ -1036,9 +1030,9 @@ func world_fishing_group_count() -> int:
 	return (groups as Array).size() if groups is Array else 0
 
 
-## Generation 1's `SuperRodData` index: the one-based fishing group a map is
-## named by, or zero for a map no row names, which is `ReadSuperRodData`'s own
-## "no fish on this map". [method world_fishing_group] reads the group itself.
+## Generation 1's `SuperRodData` index: the one-based fishing group a map is named by, or zero for a map no
+## row names, which is `ReadSuperRodData`'s own "no fish on this map". [method world_fishing_group] reads the
+## group itself.
 func world_fishing_map(map_number: int) -> int:
 	var fishing: Variant = _encounters().get("fishing", {})
 	if not fishing is Dictionary:
@@ -1047,8 +1041,8 @@ func world_fishing_map(map_number: int) -> int:
 	return int((maps as Dictionary).get(str(map_number), 0)) if maps is Dictionary else 0
 
 
-## The twenty-two day/night fishing substitutions used by entries whose
-## species byte is zero in the cartridge stream.
+## The twenty-two day/night fishing substitutions used by entries whose species byte is zero in the cartridge
+## stream.
 func world_fishing_time_groups() -> Array:
 	var fishing: Variant = _encounters().get("fishing", {})
 	if not fishing is Dictionary:
@@ -1077,9 +1071,9 @@ func world_roaming_mons() -> Array:
 	return _overlaid_rows(Gen2ContentOverlay.KIND_ROAMING, mons as Array)
 
 
-## GetTreeMonSet against TreeMonMaps or RockMonMaps: the treemon set number for
-## a map, or 0 for a map neither table names. Set 0 is TREEMON_SET_NONE, which
-## GetTreeMons refuses anyway, so a miss and a NONE row answer alike.
+## GetTreeMonSet against TreeMonMaps or RockMonMaps: the treemon set number for a map, or 0 for a map neither
+## table names. Set 0 is TREEMON_SET_NONE, which GetTreeMons refuses anyway, so a miss and a NONE row answer
+## alike.
 func treemon_set_for_map(group: int, number: int, rock: bool = false) -> int:
 	var treemons: Variant = _encounters().get("treemons", {})
 	if not treemons is Dictionary:
@@ -1096,8 +1090,8 @@ func treemon_set_for_map(group: int, number: int, rock: bool = false) -> int:
 	return 0
 
 
-## How many treemon sets this cartridge imported, which is what a caller walking
-## them needs: Gold and Silver ship six and Crystal nine.
+## How many treemon sets this cartridge imported, which is what a caller walking them needs: Gold and Silver
+## ship six and Crystal nine.
 func treemon_set_count() -> int:
 	var treemons: Variant = _encounters().get("treemons", {})
 	if not treemons is Dictionary:
@@ -1106,8 +1100,8 @@ func treemon_set_count() -> int:
 	return (sets as Array).size() if sets is Array else 0
 
 
-## GetTreeMons: one set's common and rare tables by set number. The caller
-## applies the profile's own set limit first; this answers the raw table.
+## GetTreeMons: one set's common and rare tables by set number. The caller applies the profile's own set limit
+## first; this answers the raw table.
 func treemon_set(index: int) -> Dictionary:
 	var treemons: Variant = _encounters().get("treemons", {})
 	if not treemons is Dictionary:
@@ -1122,15 +1116,14 @@ func treemon_set(index: int) -> Dictionary:
 	)
 
 
-## `ContestMons`, the eleven `%, species, min, max` rows
-## `ChooseWildEncounter_BugContest` walks. All three cartridges ship the same
-## table.
+## `ContestMons`, the eleven `%, species, min, max` rows `ChooseWildEncounter_BugContest` walks. All three
+## cartridges ship the same table.
 func bug_contest_mons() -> Array:
 	return _bug_contest_table("mons")
 
 
-## `BugContestantPointers`' ten AI contestants, each `db class, id` and three
-## `dbw mon, score` placings. The player's own entry zero is not among them.
+## `BugContestantPointers`' ten AI contestants, each `db class, id` and three `dbw mon, score` placings. The
+## player's own entry zero is not among them.
 func bug_contestants() -> Array:
 	return _bug_contest_table("contestants")
 
@@ -1142,16 +1135,15 @@ func _bug_contest_table(key: String) -> Array:
 	var value: Variant = (contest as Dictionary).get(key, [])
 	if not value is Array:
 		return []
-	## Only the mon rows are patchable. A contestant is a trainer and its three
-	## placings are the judging's own scores, which a wild shuffle has no say in.
+	## Only the mon rows are patchable. A contestant is a trainer and its three placings are the judging's own
+	## scores, which a wild shuffle has no say in.
 	if key != "mons":
 		return (value as Array).duplicate(true)
 	return _overlaid_rows(Gen2ContentOverlay.KIND_BUG_CONTEST, value as Array)
 
 
-## A table stored as an ARRAY of rows, each row overlaid under its own index.
-## The map tables are dictionaries keyed by a coordinate and go through
-## [method _overlaid]; these four are lists and the index IS the number.
+## A table stored as an ARRAY of rows, each row overlaid under its own index. The map tables are dictionaries
+## keyed by a coordinate and go through [method _overlaid]; these four are lists and the index IS the number.
 func _overlaid_rows(kind: StringName, rows: Array) -> Array:
 	var out: Array = []
 	for index: int in rows.size():
@@ -1162,8 +1154,8 @@ func _overlaid_rows(kind: StringName, rows: Array) -> Array:
 	return out
 
 
-## CheckSleepingTreeMon's list for one time of day. Empty on Gold and Silver,
-## which import no such lists because pokegold ships none.
+## CheckSleepingTreeMon's list for one time of day. Empty on Gold and Silver, which import no such lists
+## because pokegold ships none.
 func asleep_treemons(time_of_day: int) -> Array:
 	var treemons: Variant = _encounters().get("treemons", {})
 	if not treemons is Dictionary:
@@ -1175,8 +1167,8 @@ func asleep_treemons(time_of_day: int) -> Array:
 	var value: Variant = (asleep as Dictionary).get(key, [])
 	if not value is Array:
 		return []
-	# Restored to integers because JSON reads them back as floats, and this is
-	# the one treemon list a caller searches by value rather than by index.
+	# Restored to integers because JSON reads them back as floats, and this is the one treemon list a caller
+	# searches by value rather than by index.
 	var numbers: Array[int] = []
 	for entry: Variant in value as Array:
 		numbers.append(int(entry))
@@ -1189,13 +1181,11 @@ func world_encounter_count(method: StringName) -> int:
 	return (table as Dictionary).size() if table is Dictionary else 0
 
 
-## One battle animation region: the cached bytes plus the bank and address the
-## cartridge holds them at, so an in-bank pointer resolves by subtraction.
-## [param name] is `scripts`, `objects`, `framesets` or `oam_sets` on a
-## Generation 2 cache and the single `anims` on a Generation 1 one, whose four
-## tables share a bank and are reached through [method battle_anim_table].
-## Answers [code]{ bank, address, count, data }[/code], empty when the section is
-## absent or the name is not one the cache holds.
+## One battle animation region: the cached bytes plus the bank and address the cartridge holds them at, so an
+## in-bank pointer resolves by subtraction. [param name] is `scripts`, `objects`, `framesets` or `oam_sets` on
+## a Generation 2 cache and the single `anims` on a Generation 1 one, whose four tables share a bank and are
+## reached through [method battle_anim_table]. Answers [code]{ bank, address, count, data }[/code], empty when
+## the section is absent or the name is not one the cache holds.
 func battle_anim_region(name: StringName) -> Dictionary:
 	var value: Variant = _battle_anims().get(String(name), null)
 	if not value is Dictionary:
@@ -1209,10 +1199,9 @@ func battle_anim_region(name: StringName) -> Dictionary:
 	}
 
 
-## Where one animation's script starts, as the cartridge addresses it, or -1
-## when the index is outside `BattleAnimations`.
-## The table is the first bytes of the scripts region, so this reads it rather
-## than a copy: index 0 is `BattleAnim_Dummy` and the rest are move numbers.
+## Where one animation's script starts, as the cartridge addresses it, or -1 when the index is outside
+## `BattleAnimations`. The table is the first bytes of the scripts region, so this reads it rather than a
+## copy: index 0 is `BattleAnim_Dummy` and the rest are move numbers.
 func battle_anim_address(index: int) -> int:
 	var region: Dictionary = battle_anim_region(&"scripts")
 	if region.is_empty() or index < 0 or index >= int(region["count"]):
@@ -1224,9 +1213,8 @@ func battle_anim_address(index: int) -> int:
 	return data[at] | (data[at + 1] << 8)
 
 
-## Where one of the Generation 1 animation layer's tables stands inside the
-## `anims` region: `subanims`, `frame_blocks` or `base_coords`. -1 on a
-## Generation 2 cache, which gives each table a region of its own.
+## Where one of the Generation 1 animation layer's tables stands inside the `anims` region: `subanims`,
+## `frame_blocks` or `base_coords`. -1 on a Generation 2 cache, which gives each table a region of its own.
 func battle_anim_table(name: StringName) -> int:
 	var value: Variant = _battle_anims().get("tables", null)
 	if not value is Dictionary:
@@ -1234,8 +1222,8 @@ func battle_anim_table(name: StringName) -> int:
 	return int((value as Dictionary).get(String(name), -1))
 
 
-## `SpecialEffectPointers`' ids, which is every special effect a Generation 1
-## animation may name. Empty on a Generation 2 cache.
+## `SpecialEffectPointers`' ids, which is every special effect a Generation 1 animation may name. Empty on a
+## Generation 2 cache.
 func battle_anim_special_effects() -> PackedInt32Array:
 	var value: Variant = _battle_anims().get("special_effects", null)
 	var out := PackedInt32Array()
@@ -1245,9 +1233,8 @@ func battle_anim_special_effects() -> PackedInt32Array:
 	return out
 
 
-## `FallingObjects_DeltaXs` and the bytes past it two of Petal Dance's objects
-## read as their own drift; see [constant Gen1Layout.FALLING_DELTA_BYTES]. Empty
-## on a Generation 2 cache.
+## `FallingObjects_DeltaXs` and the bytes past it two of Petal Dance's objects read as their own drift; see
+## [constant Gen1Layout.FALLING_DELTA_BYTES]. Empty on a Generation 2 cache.
 func battle_anim_falling_deltas() -> PackedInt32Array:
 	var value: Variant = _battle_anims().get("falling_deltas", null)
 	var out := PackedInt32Array()
@@ -1257,8 +1244,8 @@ func battle_anim_falling_deltas() -> PackedInt32Array:
 	return out
 
 
-## `BattleAnimSineWave` as its own 64 cartridge bytes, or empty when the section
-## is absent. Thirty-two little-endian words, read rather than computed.
+## `BattleAnimSineWave` as its own 64 cartridge bytes, or empty when the section is absent. Thirty-two
+## little-endian words, read rather than computed.
 func battle_anim_sine() -> PackedByteArray:
 	var value: Variant = _battle_anims().get("sine", null)
 	if not value is Dictionary:
@@ -1266,8 +1253,8 @@ func battle_anim_sine() -> PackedByteArray:
 	return _payload_bytes(value, _blob("battle_anims"))
 
 
-## One `battleanimobj` row as [code]{ flags, y_fix, frameset, function, palette,
-## gfx }[/code], empty when the index is outside `BattleAnimObjects`.
+## One `battleanimobj` row as [code]{ flags, y_fix, frameset, function, palette, gfx }[/code], empty when the
+## index is outside `BattleAnimObjects`.
 func battle_anim_object(index: int) -> Dictionary:
 	var region: Dictionary = battle_anim_region(&"objects")
 	if region.is_empty() or index < 0 or index >= int(region["count"]):
@@ -1286,10 +1273,9 @@ func battle_anim_object(index: int) -> Dictionary:
 	}
 
 
-## One `AnimObjGFX` row as [code]{ tiles, bank, address, sheet }[/code]. `sheet`
-## is false for the three rows that name no graphics: index 0, which no
-## `anim_*gfx` reaches, and the two `NULL` rows the battler-graphics commands
-## fill in from the battler's own pic.
+## One `AnimObjGFX` row as [code]{ tiles, bank, address, sheet }[/code]. `sheet` is false for the three rows
+## that name no graphics: index 0, which no `anim_*gfx` reaches, and the two `NULL` rows the battler-graphics
+## commands fill in from the battler's own pic.
 func battle_anim_gfx(index: int) -> Dictionary:
 	var rows: Variant = _battle_anims().get("object_gfx", [])
 	if not rows is Array or index < 0 or index >= (rows as Array).size():
@@ -1322,8 +1308,8 @@ func battle_anim_gfx_indices(index: int) -> PackedByteArray:
 	return data
 
 
-## Metadata for one cartridge overworld sprite, indexed by the source sprite
-## number. Sprite number zero is reserved for no sprite by the cartridge.
+## Metadata for one cartridge overworld sprite, indexed by the source sprite number. Sprite number zero is
+## reserved for no sprite by the cartridge.
 func overworld_sprite(number: int) -> Gen2WorldSprite:
 	var row: Dictionary = _entry(_sprites(), number - 1)
 	return Gen2WorldSprite.from_cache(row) if not row.is_empty() else null
@@ -1344,11 +1330,10 @@ func overworld_sprite_indices(number: int) -> PackedByteArray:
 	return data
 
 
-## One of the sprites the engine draws over the map rather than as an object, by
-## the name `data/sprites/emotes.asm` or `Gen2WorldImporter.FIELD_MOVE_SHEETS`
-## gives it: { tiles, vtile, indices, colors }, empty when the cache lacks it.
-## `colors` is only on the heal machine, which is the one sheet that brings its
-## own palette instead of wearing an overworld one.
+## One of the sprites the engine draws over the map rather than as an object, by the name
+## `data/sprites/emotes.asm` or `Gen2WorldImporter.FIELD_MOVE_SHEETS` gives it: { tiles, vtile, indices,
+## colors }, empty when the cache lacks it. `colors` is only on the heal machine, which is the one sheet that
+## brings its own palette instead of wearing an overworld one.
 func overworld_effect(name: String) -> Dictionary:
 	for row: Variant in _overworld_effect_records():
 		if not row is Dictionary or String((row as Dictionary).get("name", "")) != name:
@@ -1387,13 +1372,11 @@ func overworld_icon_indices(icon_number: int) -> PackedByteArray:
 	return data
 
 
-## `ReadMonMenuIcon`: the icon a species is drawn with in a party menu, or zero
-## when the cache does not hold the table. Its `cp EGG` is [param egg], which
-## this save model carries beside a real species rather than as species $fd. A
-## mod species numbered past the cartridge's own range has no row in the imported
-## table, so its own row names one of the cartridge's icons instead; a mod that
-## supplied indices of its own answers zero here and is drawn through
-## [method species_icon_indices].
+## `ReadMonMenuIcon`: the icon a species is drawn with in a party menu, or zero when the cache does not hold
+## the table. Its `cp EGG` is [param egg], which this save model carries beside a real species rather than as
+## species $fd. A mod species numbered past the cartridge's own range has no row in the imported table, so its
+## own row names one of the cartridge's icons instead; a mod that supplied indices of its own answers zero
+## here and is drawn through [method species_icon_indices].
 func mon_menu_icon(species_number: int, egg: bool = false) -> int:
 	if egg:
 		return Gen2Layout.ICON_EGG
@@ -1407,9 +1390,9 @@ func mon_menu_icon(species_number: int, egg: bool = false) -> int:
 	return table[species_number - 1]
 
 
-## The two-frame strip a species is drawn with in a party menu: the cartridge
-## icon [method mon_menu_icon] names, or a mod's own indices where it supplied
-## them. Empty when neither exists, which is what a menu draws no icon for.
+## The two-frame strip a species is drawn with in a party menu: the cartridge icon [method mon_menu_icon]
+## names, or a mod's own indices where it supplied them. Empty when neither exists, which is what a menu draws
+## no icon for.
 func species_icon_indices(species_number: int, egg: bool = false) -> PackedByteArray:
 	if not egg:
 		var icon: Variant = species(species_number).get("icon", null)
@@ -1429,8 +1412,7 @@ func mon_menu_icon_table() -> PackedByteArray:
 	return data
 
 
-## `HeldItemIcons`, two tiles' worth of colour indices: the mail marker and the
-## item one, in that order.
+## `HeldItemIcons`, two tiles' worth of colour indices: the mail marker and the item one, in that order.
 func held_item_icon_indices() -> PackedByteArray:
 	var key: String = "overworld_icons/held_item"
 	if _indices.has(key):
@@ -1440,8 +1422,8 @@ func held_item_icon_indices() -> PackedByteArray:
 	return data
 
 
-## One of `PartyMenuOBPals`' two palettes, colour 0 first. Colour 0 is an object
-## palette's transparent index; the caller decides that, not this.
+## One of `PartyMenuOBPals`' two palettes, colour 0 first. Colour 0 is an object palette's transparent index;
+## the caller decides that, not this.
 func party_menu_icon_palette(index: int = 0) -> PackedColorArray:
 	var palettes: Array = _party_menu_icon_palettes()
 	if index < 0 or index >= palettes.size() or not palettes[index] is Array:
@@ -1452,9 +1434,9 @@ func party_menu_icon_palette(index: int = 0) -> PackedColorArray:
 	return out
 
 
-## One of the eight overworld object palette kinds for a time-of-day group.
-## The source's palette override bit selects the same eight rows while marking
-## that the object event, rather than the sprite table, supplied the choice.
+## One of the eight overworld object palette kinds for a time-of-day group. The source's palette override bit
+## selects the same eight rows while marking that the object event, rather than the sprite table, supplied the
+## choice.
 func overworld_sprite_palette(palette_index: int, time_of_day: int) -> PackedColorArray:
 	var group: int = clampi(time_of_day, 0, 3) * Gen2Layout.OVERWORLD_SPRITE_PALETTE_COUNT \
 		+ (palette_index & (Gen2Layout.OVERWORLD_SPRITE_PALETTE_COUNT - 1))
@@ -1469,9 +1451,9 @@ func overworld_sprite_palette(palette_index: int, time_of_day: int) -> PackedCol
 	return out
 
 
-## One of the cartridge's four-colour background palette groups.
-## Decoded once and kept: there are forty-two groups, they never change, and the
-## overworld asks for them again every time an animated tile redraws the atlas.
+## One of the cartridge's four-colour background palette groups. Decoded once and kept: there are forty-two
+## groups, they never change, and the overworld asks for them again every time an animated tile redraws the
+## atlas.
 func world_palette(number: int) -> PackedColorArray:
 	if _decoded_palettes.has(number):
 		return _decoded_palettes[number]
@@ -1487,8 +1469,8 @@ func world_palette(number: int) -> PackedColorArray:
 	return out
 
 
-## `LoadSpecialMapPalette`'s eight, or nothing for a tileset with no set and for
-## the INDOOR Hall of Fame sharing `TILESET_ICE_PATH`.
+## `LoadSpecialMapPalette`'s eight, or nothing for a tileset with no set and for the INDOOR Hall of Fame
+## sharing `TILESET_ICE_PATH`.
 func special_map_palettes(tileset: int, environment: int) -> Array:
 	var index: int = Gen2Layout.SPECIAL_PALETTE_TILESETS.find(tileset)
 	if index < 0:
@@ -1505,21 +1487,18 @@ func special_map_palettes(tileset: int, environment: int) -> Array:
 	return out
 
 
-## The three tilesets `home/map.asm` gates `LoadMapGroupRoof` on: "These tilesets
-## support dynamic per-mapgroup roof tiles." Every other tileset owns tiles
-## $0A..$12 itself, so writing a roof over them is the map's own art destroyed.
-## pokegold ships no `TilesetBattleTowerOutside` and its gate is the two Johto
-## rows alone, which is also why every tileset past index 3 sits one lower
-## there; the numbers below are each pin's own.
+## The three tilesets `home/map.asm` gates `LoadMapGroupRoof` on: "These tilesets support dynamic per-mapgroup
+## roof tiles." Every other tileset owns tiles $0A..$12 itself, so writing a roof over them is the map's own
+## art destroyed. pokegold ships no `TilesetBattleTowerOutside` and its gate is the two Johto rows alone,
+## which is also why every tileset past index 3 sits one lower there; the numbers below are each pin's own.
 const ROOF_TILESETS: Array[int] = [0x01, 0x02, 0x04]
 const ROOF_TILESETS_GOLD_SILVER: Array[int] = [0x01, 0x02]
 
 
-## The roof [param map] is drawn with, or -1 for a map that takes none. This is
-## `MapGroupRoofs` behind `home/map.asm`'s own tileset gate, and it is the one
-## question both readers of a roof ask, so neither can apply one to an indoor
-## map: the bedroom, every house, every gym and every Pokemon Center in a roofed
-## group had tiles $0A..$12 of their own art overwritten with roof shingles.
+## The roof [param map] is drawn with, or -1 for a map that takes none. This is `MapGroupRoofs` behind
+## `home/map.asm`'s own tileset gate, and it is the one question both readers of a roof ask, so neither can
+## apply one to an indoor map: the bedroom, every house, every gym and every Pokemon Center in a roofed group
+## had tiles $0A..$12 of their own art overwritten with roof shingles.
 func map_roof(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> int:
 	if map == null or tileset == null:
 		return -1
@@ -1530,10 +1509,9 @@ func map_roof(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> int:
 	return map_group_roof(map.group)
 
 
-## `MapGroupRoofs`: which of the five roof runs a map group draws, or -1 for a
-## group whose maps have no roof tiles of their own. `_LoadMapPals` reads this
-## off `wMapGroup` alone, which is why the tileset gate is [method map_roof]'s
-## and not this one's.
+## `MapGroupRoofs`: which of the five roof runs a map group draws, or -1 for a group whose maps have no roof
+## tiles of their own. `_LoadMapPals` reads this off `wMapGroup` alone, which is why the tileset gate is
+## [method map_roof]'s and not this one's.
 func map_group_roof(map_group: int) -> int:
 	var groups: Variant = _roofs().get("groups", [])
 	if not groups is Array or map_group < 0 or map_group >= (groups as Array).size():
@@ -1542,9 +1520,8 @@ func map_group_roof(map_group: int) -> int:
 	return -1 if value == 0xFF else value
 
 
-## One roof run as an eight-row index strip, the shape a tileset's own tiles come
-## in, so [constant Gen2Layout.ROOF_TILES] tiles can be written straight over
-## `vTiles2 tile $0a`.
+## One roof run as an eight-row index strip, the shape a tileset's own tiles come in, so [constant
+## Gen2Layout.ROOF_TILES] tiles can be written straight over `vTiles2 tile $0a`.
 func roof_tile_indices(roof: int) -> PackedByteArray:
 	var tiles: Variant = _roofs().get("tiles", [])
 	if not tiles is Array or roof < 0 or roof >= (tiles as Array).size():
@@ -1559,9 +1536,8 @@ func roof_tile_indices(roof: int) -> PackedByteArray:
 	return out
 
 
-## A map group's two roof colours, which stand in for colours 1 and 2 of
-## `PAL_BG_ROOF`. `_LoadMapPals` walks four bytes forward for NITE and DARKNESS,
-## so [param night] is the second pair rather than a third row.
+## A map group's two roof colours, which stand in for colours 1 and 2 of `PAL_BG_ROOF`. `_LoadMapPals` walks
+## four bytes forward for NITE and DARKNESS, so [param night] is the second pair rather than a third row.
 func roof_palette(map_group: int, night: bool) -> PackedColorArray:
 	var palettes: Variant = _roofs().get("palettes", [])
 	var out := PackedColorArray()
@@ -1576,13 +1552,11 @@ func roof_palette(map_group: int, night: bool) -> PackedColorArray:
 	return out
 
 
-## `LoadMapGroupRoof`, which runs on every map load whatever the environment is:
-## a map group's nine roof tiles are copied over `vTiles2 tile $0a`, so they
-## replace whatever the tileset's own strip holds there. A group with no roof
-## (`cp -1 / ret z`) is handed its strip back unchanged.
-## [param roof] is [method map_group_roof]'s answer, passed in rather than a map,
-## because the overworld's animated strip goes through here on every pass that
-## rotates a tile and the group is already resolved by then.
+## `LoadMapGroupRoof`, which runs on every map load whatever the environment is: a map group's nine roof tiles
+## are copied over `vTiles2 tile $0a`, so they replace whatever the tileset's own strip holds there. A group
+## with no roof (`cp -1 / ret z`) is handed its strip back unchanged. [param roof] is [method
+## map_group_roof]'s answer, passed in rather than a map, because the overworld's animated strip goes through
+## here on every pass that rotates a tile and the group is already resolved by then.
 func roofed_tile_indices(
 	indices: PackedByteArray, roof: int, tile_count: int
 ) -> PackedByteArray:
@@ -1602,9 +1576,8 @@ func roofed_tile_indices(
 	return out
 
 
-## The strip a map is actually drawn from: its tileset's own tiles with its map
-## group's roof over them. Every static reader of a map's tiles goes through
-## this so none of them can forget the roof.
+## The strip a map is actually drawn from: its tileset's own tiles with its map group's roof over them. Every
+## static reader of a map's tiles goes through this so none of them can forget the roof.
 func map_tile_indices(map: Gen2WorldMap, tileset: Gen2WorldTileset) -> PackedByteArray:
 	if map == null or tileset == null:
 		return PackedByteArray()
@@ -1625,10 +1598,9 @@ func world_animation_asset(name: String) -> PackedByteArray:
 	return out
 
 
-## Indexed 2bpp pixels for one tileset's overworld tiles, loaded on demand.
-## The strip is [constant Gen2Layout.TILESET_TILE_COUNT] tiles wide and is indexed
-## by the metatile byte itself, so both graphics blocks are addressable; see that
-## constant for what sits where.
+## Indexed 2bpp pixels for one tileset's overworld tiles, loaded on demand. The strip is [constant
+## Gen2Layout.TILESET_TILE_COUNT] tiles wide and is indexed by the metatile byte itself, so both graphics
+## blocks are addressable; see that constant for what sits where.
 func world_tileset_indices(number: int) -> PackedByteArray:
 	var key: String = "world_tiles/%d" % number
 	if _indices.has(key):
@@ -1638,8 +1610,8 @@ func world_tileset_indices(number: int) -> PackedByteArray:
 	return data
 
 
-## `LoadMonFrontSprite`'s cost for one species, off its own picture; see
-## [method Gen1Layout.pic_load_frames]. Zero outside Generation 1.
+## `LoadMonFrontSprite`'s cost for one species, off its own picture; see [method Gen1Layout.pic_load_frames].
+## Zero outside Generation 1.
 func gen1_pic_load_frames(number: int) -> int:
 	var entry: Dictionary = species(number)
 	if generation != RomRegistry.GEN1 or not entry.has("front_tiles"):
@@ -1650,8 +1622,8 @@ func gen1_pic_load_frames(number: int) -> int:
 	)
 
 
-## A Generation 1 internal index as the dex number the cache speaks, off the
-## `index` each species row keeps; 0 for a slot no species stands in.
+## A Generation 1 internal index as the dex number the cache speaks, off the `index` each species row keeps; 0
+## for a slot no species stands in.
 func gen1_dex_of_index(index: int) -> int:
 	for number: int in range(1, species_count() + 1):
 		if int(species(number).get("index", -1)) == index:
@@ -1659,36 +1631,32 @@ func gen1_dex_of_index(index: int) -> int:
 	return 0
 
 
-## One species by Pokédex number, or an empty Dictionary if there is no such
-## number. Out of range is a question, not a crash: a mod may well ask.
+## One species by Pokédex number, or an empty Dictionary if there is no such number. Out of range is a
+## question, not a crash: a mod may well ask.
 func species(number: int) -> Dictionary:
 	return _content(Gen2ContentOverlay.KIND_SPECIES, _species, number)
 
 
-## A species' level-up moves, in the cartridge's own order, as
-## { level, move } with both coerced back to int.
-## The order is not sorted and must not be: it decides which four moves a fresh
-## Pokémon ends up with, and one species' list genuinely is out of order. See
-## [Gen2Learnset], which is what turns this into an answer.
+## A species' level-up moves, in the cartridge's own order, as { level, move } with both coerced back to int.
+## The order is not sorted and must not be: it decides which four moves a fresh Pokémon ends up with, and one
+## species' list genuinely is out of order. See [Gen2Learnset], which is what turns this into an answer.
 func learnset(number: int) -> Array:
 	return _rows(species(number), "learnset", ["level", "move"])
 
 
-## How a species evolves, as { method, parameter, condition, target }. Empty for
-## the ones that do not. [code]method[/code] is one of the
-## [code]Gen2Layout.EVOLVE_*[/code] constants and decides what
-## [code]parameter[/code] means: a level, an item, a held item or a time of day.
-## [code]condition[/code] is only ever set by [constant Gen2Layout.EVOLVE_STAT].
+## How a species evolves, as { method, parameter, condition, target }. Empty for the ones that do not.
+## [code]method[/code] is one of the [code]Gen2Layout.EVOLVE_*[/code] constants and decides what
+## [code]parameter[/code] means: a level, an item, a held item or a time of day. [code]condition[/code] is
+## only ever set by [constant Gen2Layout.EVOLVE_STAT].
 func evolutions(number: int) -> Array:
 	return _rows(species(number), "evolutions", ["method", "parameter", "condition", "target"])
 
 
-## The moves a species can inherit from its father, in `EggMovePointers`' own
-## order. Empty for the 145 or 146 species that inherit none, and for a mod
-## species that named none. Move numbers alone: an egg move has no level, unlike a
-## [method learnset] row. Which of them a hatched Pokémon actually knows is the
-## breeding rule rather than this table: [method Gen2WorldDayCare.inherits_move]
-## is that rule, and this is one of the three ways in it reads.
+## The moves a species can inherit from its father, in `EggMovePointers`' own order. Empty for the 145 or 146
+## species that inherit none, and for a mod species that named none. Move numbers alone: an egg move has no
+## level, unlike a [method learnset] row. Which of them a hatched Pokémon actually knows is the breeding rule
+## rather than this table: [method Gen2WorldDayCare.inherits_move] is that rule, and this is one of the three
+## ways in it reads.
 func egg_moves(number: int) -> Array[int]:
 	var out: Array[int] = []
 	for move_id: Variant in species(number).get("egg_moves", []):
@@ -1696,12 +1664,10 @@ func egg_moves(number: int) -> Array[int]:
 	return out
 
 
-## A species' Pokedex entry as { category, height, weight, pages }, or an empty
-## Dictionary if there is no such number.
-## [code]height[/code] and [code]weight[/code] are the cartridge's own numbers,
-## not measurements: see [method RomImporter.read_dex_entry]. [code]pages[/code]
-## is the pages in order, one on FireRed, LeafGreen and Emerald. It goes through
-## [method species] so a mod that replaces a species replaces its dex entry too.
+## A species' Pokedex entry as { category, height, weight, pages }, or an empty Dictionary if there is no such
+## number. [code]height[/code] and [code]weight[/code] are the cartridge's own numbers, not measurements: see
+## [method RomImporter.read_dex_entry]. [code]pages[/code] is the pages in order, one on FireRed, LeafGreen
+## and Emerald. It goes through [method species] so a mod that replaces a species replaces its dex entry too.
 func dex_entry(number: int) -> Dictionary:
 	var entry: Variant = species(number).get("dex", {})
 	if not entry is Dictionary or (entry as Dictionary).is_empty():
@@ -1718,10 +1684,9 @@ func dex_entry(number: int) -> Dictionary:
 	}
 
 
-## Every species number a mod defined, ascending, and empty when no mod did.
-## Both dex order tables are cartridge data of exactly [constant
-## Gen2Layout.SPECIES_COUNT] entries, so a mod row can only follow them; see
-## [method Gen2Pokedex.order_by_mode].
+## Every species number a mod defined, ascending, and empty when no mod did. Both dex order tables are
+## cartridge data of exactly [constant Gen2Layout.SPECIES_COUNT] entries, so a mod row can only follow them;
+## see [method Gen2Pokedex.order_by_mode].
 func mod_species_numbers() -> Array[int]:
 	if _overlay == null:
 		return [] as Array[int]
@@ -1733,16 +1698,14 @@ func dex_order_new() -> PackedInt32Array:
 	return _dex_orders.get("new", PackedInt32Array())
 
 
-## data/pokemon/dex_order_alpha.asm, the order DEXMODE_ABC filters down to the
-## species that have been seen.
+## data/pokemon/dex_order_alpha.asm, the order DEXMODE_ABC filters down to the species that have been seen.
 func dex_order_alpha() -> PackedInt32Array:
 	return _dex_orders.get("alpha", PackedInt32Array())
 
 
-## Both order tables, coerced out of JSON's single number type once on open. A
-## table that is missing or the wrong length is dropped rather than half-kept:
-## an order with a hole in it would list a species number of zero, which
-## `.PrintEntry` treats as the end of the list.
+## Both order tables, coerced out of JSON's single number type once on open. A table that is missing or the
+## wrong length is dropped rather than half-kept: an order with a hole in it would list a species number of
+## zero, which `.PrintEntry` treats as the end of the list.
 func _load_dex_orders(path: String) -> void:
 	var raw: Variant = RomCache.read_json(path)
 	if not raw is Dictionary:
@@ -1763,9 +1726,8 @@ func moves_at_level(number: int, level: int) -> Array:
 	return known
 
 
-## `wMonHMoves`: the four moves a Generation 1 base-stats row carries, which
-## `AddPartyMon` writes before `WriteMonMoves` walks the learnset over them.
-## Crystal dropped the column and starts every Pokemon empty.
+## `wMonHMoves`: the four moves a Generation 1 base-stats row carries, which `AddPartyMon` writes before
+## `WriteMonMoves` walks the learnset over them. Crystal dropped the column and starts every Pokemon empty.
 func starting_moves(number: int) -> Array:
 	var out: Array = []
 	for known: Variant in species(number).get("starting_moves", []) as Array:
@@ -1773,9 +1735,8 @@ func starting_moves(number: int) -> Array:
 	return out
 
 
-## The moves a Pokémon of this species is offered on reaching exactly
-## [param level] by levelling up, which is not [method moves_at_level]'s
-## question asked again: see [Gen2Learnset] for why Muk's own list answers the
+## The moves a Pokémon of this species is offered on reaching exactly [param level] by levelling up, which is
+## not [method moves_at_level]'s question asked again: see [Gen2Learnset] for why Muk's own list answers the
 ## two differently.
 func moves_learned_at(number: int, level: int) -> Array:
 	return Gen2Learnset.moves_learned_at(
@@ -1783,8 +1744,7 @@ func moves_learned_at(number: int, level: int) -> Array:
 	)
 
 
-## One of the per-species lists, with every named field coerced out of JSON's
-## single number type.
+## One of the per-species lists, with every named field coerced out of JSON's single number type.
 func _rows(entry: Dictionary, key: String, fields: Array) -> Array:
 	var value: Variant = entry.get(key, [])
 	if not value is Array:
@@ -1799,10 +1759,9 @@ func _rows(entry: Dictionary, key: String, fields: Array) -> Array:
 	return out
 
 
-## How many moves the cartridge carried, the counterpart of
-## [method species_count] and [method trainer_count]: mod moves are numbered
-## above the cartridge's range and enumerated through
-## [method Gen2ContentOverlay.defined_numbers].
+## How many moves the cartridge carried, the counterpart of [method species_count] and [method trainer_count]:
+## mod moves are numbered above the cartridge's range and enumerated through [method
+## Gen2ContentOverlay.defined_numbers].
 func move_count() -> int:
 	return _moves.size()
 
@@ -1822,17 +1781,15 @@ func tmhm_moves() -> Array[int]:
 	return _tmhm_moves.duplicate()
 
 
-## GetTMHMMove: the move one TM/HM number teaches, or 0 when the number is not
-## one this cartridge carries.
+## GetTMHMMove: the move one TM/HM number teaches, or 0 when the number is not one this cartridge carries.
 func tmhm_move(number: int) -> int:
 	if number < 1 or number > _tmhm_moves.size():
 		return 0
 	return _tmhm_moves[number - 1]
 
 
-## CanLearnTMHMMove's own scan of TMHMMoves for wPutativeTMHMMove: the one-based
-## number that teaches [param move_number], or 0. The source takes the first match, so
-## this does too.
+## CanLearnTMHMMove's own scan of TMHMMoves for wPutativeTMHMMove: the one-based number that teaches [param
+## move_number], or 0. The source takes the first match, so this does too.
 func tmhm_number_for_move(move_number: int) -> int:
 	if move_number <= 0:
 		return 0
@@ -1840,10 +1797,9 @@ func tmhm_number_for_move(move_number: int) -> int:
 	return found + 1 if found >= 0 else 0
 
 
-## `ChangeHappiness`'s own row lookup: the three changes HAPPINESS_[param kind]
-## makes, below 100, below 200 and above it. [param kind] is one-based the way
-## the source passes it. Empty for a row this cartridge does not carry, which is
-## HAPPINESS_GAINLEVELATHOME off Crystal, and a caller reads that as no change.
+## `ChangeHappiness`'s own row lookup: the three changes HAPPINESS_[param kind] makes, below 100, below 200
+## and above it. [param kind] is one-based the way the source passes it. Empty for a row this cartridge does
+## not carry, which is HAPPINESS_GAINLEVELATHOME off Crystal, and a caller reads that as no change.
 func happiness_changes(kind: int) -> Array[int]:
 	var out: Array[int] = []
 	if kind < 1 or kind > _happiness_changes.size():
@@ -1853,10 +1809,9 @@ func happiness_changes(kind: int) -> Array[int]:
 	return out
 
 
-## One of data/text/name_input_chars.asm's four keyboards as rows of raw
-## cartridge codes, in block order: NameInputLower, BoxNameInputLower,
-## NameInputUpper, BoxNameInputUpper. Empty when the table is missing, which the
-## caller reports rather than drawing a blank grid.
+## One of data/text/name_input_chars.asm's four keyboards as rows of raw cartridge codes, in block order:
+## NameInputLower, BoxNameInputLower, NameInputUpper, BoxNameInputUpper. Empty when the table is missing,
+## which the caller reports rather than drawing a blank grid.
 func name_input_chars(table: int) -> Array:
 	if table < 0 or table >= _name_input_chars.size():
 		return []
@@ -1869,9 +1824,8 @@ func name_input_chars(table: int) -> Array:
 	return out
 
 
-## `MailItems`, the ten item numbers `ItemIsMail` answers for. Empty on a cache
-## written before mail was imported, which is what [method Gen2HeldItem.is_mail]
-## falls back to its own pin for.
+## `MailItems`, the ten item numbers `ItemIsMail` answers for. Empty on a cache written before mail was
+## imported, which is what [method Gen2HeldItem.is_mail] falls back to its own pin for.
 func mail_items() -> Array:
 	var out: Array = []
 	for number: Variant in _mail_items:
@@ -1879,9 +1833,8 @@ func mail_items() -> Array:
 	return out
 
 
-## One of `LoadMailPalettes.MailPals`' ten, in `MailGFXPointers` order and whole:
-## the read-mail screen draws every one of its four colours, unlike the pairs
-## `LoadPalette_White_Col1_Col2_Black` expands.
+## One of `LoadMailPalettes.MailPals`' ten, in `MailGFXPointers` order and whole: the read-mail screen draws
+## every one of its four colours, unlike the pairs `LoadPalette_White_Col1_Col2_Black` expands.
 func mail_palette(index: int) -> PackedColorArray:
 	if index < 0 or index >= _mail_palettes.size():
 		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
@@ -1892,11 +1845,10 @@ func mail_palette(index: int) -> PackedColorArray:
 	return out
 
 
-## Which `text_buffer` argument a `TX_RAM` address names, or -1 for an address
-## this cartridge does not use as a string buffer.
-## `TextCommand_RAM` prints from a raw WRAM pointer while `getstring` and
-## `verbosegiveitem` fill buffers by number, so a runner that only knows the
-## numbers cannot answer a `text_ram`. StringBufferPointers is the way across.
+## Which `text_buffer` argument a `TX_RAM` address names, or -1 for an address this cartridge does not use as
+## a string buffer. `TextCommand_RAM` prints from a raw WRAM pointer while `getstring` and `verbosegiveitem`
+## fill buffers by number, so a runner that only knows the numbers cannot answer a `text_ram`.
+## StringBufferPointers is the way across.
 func string_buffer_for_address(address: int) -> int:
 	return _string_buffer_pointers.find(address)
 
@@ -1906,8 +1858,8 @@ func string_buffer_addresses() -> Array[int]:
 	return _string_buffer_pointers.duplicate()
 
 
-## The intro's texts, named by [constant RomImporter.INTRO_TEXT_OPENINGS]:
-## `oak_1`, `oak_2`, `oak_4` to `oak_7`, and Crystal's own `gender`.
+## The intro's texts, named by [constant RomImporter.INTRO_TEXT_OPENINGS]: `oak_1`, `oak_2`, `oak_4` to
+## `oak_7`, and Crystal's own `gender`.
 func intro_text(key: String) -> String:
 	return text(&"intro", key)
 
@@ -1929,14 +1881,14 @@ func item_name(number: int) -> String:
 	return String(item(number).get("name", ""))
 
 
-## How many items the cartridge carried, the counterpart of
-## [method species_count]: mod items are numbered above this run.
+## How many items the cartridge carried, the counterpart of [method species_count]: mod items are numbered
+## above this run.
 func item_count() -> int:
 	return _items.size()
 
 
-## One imported NPC trade record, or an empty dictionary when this cartridge
-## does not contain the requested row.
+## One imported NPC trade record, or an empty dictionary when this cartridge does not contain the requested
+## row.
 func world_trade(index: int) -> Dictionary:
 	return _entry(_world_trades, index)
 
@@ -1945,25 +1897,22 @@ func world_trade_count() -> int:
 	return _world_trades.size()
 
 
-## How many types the cartridge carried. Generation 1 leaves an eleven-entry
-## hole in its own numbering and does not cache it, so this is not the highest
-## type number plus one.
+## How many types the cartridge carried. Generation 1 leaves an eleven-entry hole in its own numbering and
+## does not cache it, so this is not the highest type number plus one.
 func type_count() -> int:
 	return _types.size()
 
 
-## Type names are indexed from zero, unlike everything else here, which is why
-## this passes the number to the overlay untouched rather than through
-## [method _content]'s one-based subtraction.
+## Type names are indexed from zero, unlike everything else here, which is why this passes the number to the
+## overlay untouched rather than through [method _content]'s one-based subtraction.
 func type_name(number: int) -> String:
 	return String(_overlaid(Gen2ContentOverlay.KIND_TYPE, number, _type_row(number))
 		.get("name", ""))
 
 
-## The row a type number names. Generation 1's numbering skips $09 to $13 and
-## the cache holds only the types that exist, so a row answers for its own
-## `number` rather than for its place in the array; Crystal's run is dense and
-## takes the first test.
+## The row a type number names. Generation 1's numbering skips $09 to $13 and the cache holds only the types
+## that exist, so a row answers for its own `number` rather than for its place in the array; Crystal's run is
+## dense and takes the first test.
 func _type_row(number: int) -> Dictionary:
 	var row: Dictionary = _entry(_types, number)
 	if int(row.get("number", -1)) == number:
@@ -1983,15 +1932,15 @@ func ability_count() -> int:
 	return _abilities.size()
 
 
-## Which stat pair a type attacks and defends with. The cartridge's answer is
-## [method Gen2Damage.is_physical]'s number comparison; a mod type carries the
-## choice on its own row, since Generation II has no per-move category.
+## Which stat pair a type attacks and defends with. The cartridge's answer is [method
+## Gen2Damage.is_physical]'s number comparison; a mod type carries the choice on its own row, since Generation
+## II has no per-move category.
 func type_is_physical(number: int) -> bool:
 	return Gen2Damage.is_physical(number)
 
 
-## Every type number a mod defined, ascending. The cartridge's own run is
-## [constant Gen2Layout.TYPE_COUNT] wide and includes the padding these follow.
+## Every type number a mod defined, ascending. The cartridge's own run is [constant Gen2Layout.TYPE_COUNT]
+## wide and includes the padding these follow.
 func mod_type_numbers() -> Array[int]:
 	if _overlay == null:
 		return [] as Array[int]
@@ -2008,8 +1957,8 @@ func matched_defending_types(attacking: int, defending: Array) -> Array:
 	return out
 
 
-## `wDamageMultipliers` after `AdjustDamageForMoveType`: each matched row
-## overwrites it, so the last in table order, not [method type_effectiveness]'s product.
+## `wDamageMultipliers` after `AdjustDamageForMoveType`: each matched row overwrites it, so the last in table
+## order, not [method type_effectiveness]'s product.
 func last_matched_multiplier(attacking: int, defending: Array) -> int:
 	var matched: Array = matched_defending_types(attacking, defending)
 	if matched.is_empty():
@@ -2026,13 +1975,12 @@ func ordered_defending_types(attacking: int, defending: Array) -> Array:
 	return out
 
 
-## How effective [param attacking] is against [param defending], in tenths: 0 an
-## immunity, 5 a resistance, 20 a weakness, 10 otherwise. Tenths because that is
-## what the cartridge stores and what the damage formula divides by, truncating
-## after each of a defender's two types. Only exceptions are listed, so an absent
-## pair is neutral, as is a type missing from the chart. [param foresight]
-## cancels the Ghost immunities alone. The key keeps both ids whole so a mod type
-## cannot alias a cartridge pair, and the overlay is asked only when a mod loaded.
+## How effective [param attacking] is against [param defending], in tenths: 0 an immunity, 5 a resistance, 20
+## a weakness, 10 otherwise. Tenths because that is what the cartridge stores and what the damage formula
+## divides by, truncating after each of a defender's two types. Only exceptions are listed, so an absent pair
+## is neutral, as is a type missing from the chart. [param foresight] cancels the Ghost immunities alone. The
+## key keeps both ids whole so a mod type cannot alias a cartridge pair, and the overlay is asked only when a
+## mod loaded.
 func type_matchup(attacking: int, defending: int, foresight: bool = false) -> int:
 	var key: int = Gen2ContentOverlay.matchup_number(attacking, defending)
 	if _overlay != null and not _overlay.is_empty():
@@ -2047,10 +1995,9 @@ func type_matchup(attacking: int, defending: int, foresight: bool = false) -> in
 	return int(_matchups.get(key, Gen2Layout.MATCHUP_EFFECTIVE))
 
 
-## The cartridge's own row for a pair, in the shape a patch merges onto. Never
-## empty, because an absent pair is a real answer here (neutral) rather than a
-## row the cartridge does not carry: [method Gen2ContentOverlay.resolve] leaves an
-## empty base untouched.
+## The cartridge's own row for a pair, in the shape a patch merges onto. Never empty, because an absent pair
+## is a real answer here (neutral) rather than a row the cartridge does not carry: [method
+## Gen2ContentOverlay.resolve] leaves an empty base untouched.
 func _matchup_row(key: int) -> Dictionary:
 	return {
 		"multiplier": int(_matchups.get(key, Gen2Layout.MATCHUP_EFFECTIVE)),
@@ -2058,9 +2005,8 @@ func _matchup_row(key: int) -> Dictionary:
 	}
 
 
-## `AIGetTypeEffectiveness`: the first chart row hitting either of
-## [param defending], or -1. The walk returns on the first match, so a dual
-## type answers with whichever of its two the table lists first.
+## `AIGetTypeEffectiveness`: the first chart row hitting either of [param defending], or -1. The walk returns
+## on the first match, so a dual type answers with whichever of its two the table lists first.
 func first_matchup(attacking: int, defending: Array) -> int:
 	for key: int in _matchups.keys():
 		for kind: int in defending:
@@ -2069,13 +2015,11 @@ func first_matchup(attacking: int, defending: Array) -> int:
 	return -1
 
 
-## How effective [param attacking] is against a defender of one or two types, in
-## tenths, accumulated the way the cartridge accumulates it: start at ten,
-## multiply by each matching type in turn, truncate after each.
-## The number a battle announces, not the one it deals damage with. The hardware
-## computes them separately and they disagree: a move resisted by both halves of
-## a dual type reports 2 rather than 2.5. Use [method type_matchup] per type for
-## damage. A single-type Pokemon carries its type in both slots and repeats skip.
+## How effective [param attacking] is against a defender of one or two types, in tenths, accumulated the way
+## the cartridge accumulates it: start at ten, multiply by each matching type in turn, truncate after each.
+## The number a battle announces, not the one it deals damage with. The hardware computes them separately and
+## they disagree: a move resisted by both halves of a dual type reports 2 rather than 2.5. Use [method
+## type_matchup] per type for damage. A single-type Pokemon carries its type in both slots and repeats skip.
 func type_effectiveness(attacking: int, defending: Array, foresight: bool = false) -> int:
 	var out: int = Gen2Layout.MATCHUP_EFFECTIVE
 	for defending_type: int in ordered_defending_types(attacking, defending):
@@ -2105,8 +2049,8 @@ func palette(number: int, shiny: bool = false, form: int = 0) -> PackedColorArra
 	if entry_palette.is_empty():
 		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
-	# Generation 1's `SuperPalettes` row is all four colours and has no shiny
-	# half; Generation 2 stores only the two that sit between white and black.
+	# Generation 1's `SuperPalettes` row is all four colours and has no shiny half; Generation 2 stores only
+	# the two that sit between white and black.
 	if entry_palette.has("colors"):
 		var colors: PackedColorArray = PackedColorArray()
 		for packed: Variant in entry_palette["colors"] as Array:
@@ -2158,16 +2102,15 @@ static func _gen2_shiny_pair(number: int) -> PackedColorArray:
 	return _gen2_shiny_pairs.get(number, PackedColorArray())
 
 
-## One of the battle bars' palettes, by the names in
-## [constant Gen2Layout.BAR_PALETTE_NAMES]. An unknown name answers with white and
-## black, which draws a bar that is legible and obviously not coloured.
+## One of the battle bars' palettes, by the names in [constant Gen2Layout.BAR_PALETTE_NAMES]. An unknown name
+## answers with white and black, which draws a bar that is legible and obviously not coloured.
 func bar_palette(name: String) -> PackedColorArray:
 	var stored: Variant = _bar_palettes.get(name, null)
 	if not stored is Array or (stored as Array).size() < 2:
 		return PokePalette.pic_palette(PackedColorArray([Color.WHITE, Color.BLACK]))
 
-	# Generation 1 stores a `SuperPalettes` row whole; Crystal stores only the
-	# two colours that sit between white and black.
+	# Generation 1 stores a `SuperPalettes` row whole; Crystal stores only the two colours that sit between
+	# white and black.
 	if (stored as Array).size() >= Gen1Layout.SUPER_PALETTE_COLORS:
 		var row := PackedColorArray()
 		for packed: Variant in stored as Array:
@@ -2179,8 +2122,8 @@ func bar_palette(name: String) -> PackedColorArray:
 	]))
 
 
-## One of `_CGB_TrainerCard`'s eight background palettes, expanded the way
-## `LoadPalette_White_Col1_Col2_Black` expands a trainer class pair.
+## One of `_CGB_TrainerCard`'s eight background palettes, expanded the way `LoadPalette_White_Col1_Col2_Black`
+## expands a trainer class pair.
 func card_palette(slot: int) -> PackedColorArray:
 	var stored: Variant = _card_palettes.get("background", [])
 	if not stored is Array or slot < 0 or slot >= (stored as Array).size():
@@ -2192,11 +2135,9 @@ func card_palette(slot: int) -> PackedColorArray:
 	]))
 
 
-## One of the eight `PAL_BATTLE_OB_*` object palettes an animation object is
-## drawn with, whole.
-## Slots 0 and 1 are the two battlers' own and are not in the table:
-## `_CGB_BattleScreenLayout` fills them from whoever is on the field, so a caller
-## passes those two in as [param enemy] and [param player] pairs. Everything from
+## One of the eight `PAL_BATTLE_OB_*` object palettes an animation object is drawn with, whole. Slots 0 and 1
+## are the two battlers' own and are not in the table: `_CGB_BattleScreenLayout` fills them from whoever is on
+## the field, so a caller passes those two in as [param enemy] and [param player] pairs. Everything from
 ## `PAL_BATTLE_OB_GRAY` on is `BattleObjectPals`, four colours each.
 func battle_object_palette(
 	slot: int, enemy: Array = [], player: Array = []
@@ -2225,8 +2166,8 @@ func battle_object_palette(
 	return colors
 
 
-## `Palette_TextBG7`, the four colours a text box is drawn through. Empty on a
-## cartridge that ships none, which leaves a caller on its own black-on-white.
+## `Palette_TextBG7`, the four colours a text box is drawn through. Empty on a cartridge that ships none,
+## which leaves a caller on its own black-on-white.
 func text_bg_palette() -> PackedColorArray:
 	if _text_bg_palette.size() < Gen2Layout.TEXT_BG_PALETTE_COLORS:
 		return PackedColorArray()
@@ -2236,8 +2177,8 @@ func text_bg_palette() -> PackedColorArray:
 	return colors
 
 
-## `LoadGenderScreenPal`'s four colours, whole. Empty on a cartridge with no
-## gender screen, which is the caller's cue that the screen is not asked for.
+## `LoadGenderScreenPal`'s four colours, whole. Empty on a cartridge with no gender screen, which is the
+## caller's cue that the screen is not asked for.
 func gender_screen_palette() -> PackedColorArray:
 	if _gender_screen_palette.size() < Gen2Layout.GENDER_SCREEN_PALETTE_COLORS:
 		return PackedColorArray()
@@ -2247,9 +2188,8 @@ func gender_screen_palette() -> PackedColorArray:
 	return colors
 
 
-## `CopyrightString`'s tile codes, in source order and including the `next`
-## that separates its rows. Empty on a cache that has no copyright screen, which
-## is the caller's cue not to draw one.
+## `CopyrightString`'s tile codes, in source order and including the `next` that separates its rows. Empty on
+## a cache that has no copyright screen, which is the caller's cue not to draw one.
 func copyright_string() -> PackedByteArray:
 	var out := PackedByteArray()
 	for code: Variant in _copyright_string:
@@ -2257,8 +2197,8 @@ func copyright_string() -> PackedByteArray:
 	return out
 
 
-## PREDEFPAL_GAMEFREAK_LOGO_BG, the copyright screen's own four colours. Empty
-## on a cache imported before they were.
+## PREDEFPAL_GAMEFREAK_LOGO_BG, the copyright screen's own four colours. Empty on a cache imported before they
+## were.
 func copyright_palette() -> PackedColorArray:
 	if _copyright_palette.size() < Gen2Layout.COPYRIGHT_PALETTE_COLORS:
 		return PackedColorArray()
@@ -2268,9 +2208,8 @@ func copyright_palette() -> PackedColorArray:
 	return colors
 
 
-## One named box with any mod wording folded in, still carrying
-## [Gen2TextStream]'s markers. A run outside [constant TEXT_RUNS] is a
-## `Gen2Layout.SPECIAL_TEXT_RUNS` one; a box the cartridge lacks reads empty.
+## One named box with any mod wording folded in, still carrying [Gen2TextStream]'s markers. A run outside
+## [constant TEXT_RUNS] is a `Gen2Layout.SPECIAL_TEXT_RUNS` one; a box the cartridge lacks reads empty.
 func text(run: StringName, name: String) -> String:
 	var value: Variant = _text_store(run).get(name, "")
 	return _overlaid_text(run, name, String(value) if value is String else "")
@@ -2355,8 +2294,8 @@ func special_text(run: String, name: String) -> String:
 	return text(StringName(run), name)
 
 
-## `PrizeDifferentMenuPtrs`' three menus, each `{tms, rows}` with a row's item,
-## cost and the level a prize Pokemon arrives at. Empty outside Generation 1.
+## `PrizeDifferentMenuPtrs`' three menus, each `{tms, rows}` with a row's item, cost and the level a prize
+## Pokemon arrives at. Empty outside Generation 1.
 func prize_menus() -> Array:
 	return _prizes.duplicate(true)
 
@@ -2366,23 +2305,21 @@ func vending_rows() -> Array:
 	return _vending.duplicate(true)
 
 
-## The WRAM address a `text_ram` in one of those boxes names, by the name
-## `Gen2Layout`'s own `special_text_ram` gives it, or -1 on a cartridge that
-## ships no such buffer.
+## The WRAM address a `text_ram` in one of those boxes names, by the name `Gen2Layout`'s own
+## `special_text_ram` gives it, or -1 on a cartridge that ships no such buffer.
 func special_text_ram(name: String) -> int:
 	return int(_special_text_ram.get(name, -1))
 
 
-## Whether the cartridge shipped [param run] at all, which is not the same
-## question as whether one box of it is empty.
+## Whether the cartridge shipped [param run] at all, which is not the same question as whether one box of it
+## is empty.
 func has_special_text(run: String) -> bool:
 	return (_special_text.get(run, {}) as Dictionary).size() > 0 \
 		if _special_text.get(run, {}) is Dictionary else false
 
 
-## `.MenuDesc`'s line for one start-menu item, by the item's own kind. Empty for
-## an item the cartridge has no description for, and for every item on a cache
-## imported before the run was.
+## `.MenuDesc`'s line for one start-menu item, by the item's own kind. Empty for an item the cartridge has no
+## description for, and for every item on a cache imported before the run was.
 func menu_description(kind: StringName) -> String:
 	var descriptions: Variant = _menu_text.get("descriptions", {})
 	var base: String = String((descriptions as Dictionary).get(String(kind), "")) \
@@ -2390,9 +2327,8 @@ func menu_description(kind: StringName) -> String:
 	return _overlaid_text(&"menu_description", String(kind), base)
 
 
-## One of the splash's object palettes: `object` is
-## PREDEFPAL_GAMEFREAK_LOGO_OB, `ditto` is `gfx/splash/ditto.pal` and
-## `ditto_fade` is the sixteen-step transform. Empty for a palette this profile
+## One of the splash's object palettes: `object` is PREDEFPAL_GAMEFREAK_LOGO_OB, `ditto` is
+## `gfx/splash/ditto.pal` and `ditto_fade` is the sixteen-step transform. Empty for a palette this profile
 ## does not ship, which is how Gold and Silver say they have no Ditto.
 func presents_palette(name: String) -> PackedColorArray:
 	var stored: Variant = _presents_palettes.get(name, [])
@@ -2404,10 +2340,9 @@ func presents_palette(name: String) -> PackedColorArray:
 	return colors
 
 
-## One of the title screen's palette runs, four colours to a palette:
-## [code]palettes[/code] is Crystal's sixteen, and [code]bg_palettes[/code] and
-## [code]ob_palettes[/code] are Gold and Silver's five and two. Empty for a run
-## this profile does not ship, which is how the two screens are told apart.
+## One of the title screen's palette runs, four colours to a palette: [code]palettes[/code] is Crystal's
+## sixteen, and [code]bg_palettes[/code] and [code]ob_palettes[/code] are Gold and Silver's five and two.
+## Empty for a run this profile does not ship, which is how the two screens are told apart.
 func title_palettes(name: String) -> Array[PackedColorArray]:
 	var stored: Variant = _title.get(name, [])
 	var out: Array[PackedColorArray] = []
@@ -2422,9 +2357,8 @@ func title_palettes(name: String) -> Array[PackedColorArray]:
 	return out
 
 
-## `TitleScreenTilemap`, the `$FF`-terminated run `LoadTitleScreenTilemap` writes
-## straight into the BG map. Empty on Crystal, which draws its title screen with
-## `DrawTitleGraphic` instead of a stored map.
+## `TitleScreenTilemap`, the `$FF`-terminated run `LoadTitleScreenTilemap` writes straight into the BG map.
+## Empty on Crystal, which draws its title screen with `DrawTitleGraphic` instead of a stored map.
 func title_tilemap() -> PackedByteArray:
 	var stored: Variant = _title.get("tilemap", [])
 	var out := PackedByteArray()
@@ -2435,26 +2369,24 @@ func title_tilemap() -> PackedByteArray:
 	return out
 
 
-## One of Prof Oak's PC's four fixed texts: `ask` is `_OakPCText1`'s question,
-## `level` `_OakPCText2`, `counts` `_OakPCText3` with its two `text_ram` markers
-## still in, and `closed` `_OakPCText4`. Empty on a cache imported without them.
+## One of Prof Oak's PC's four fixed texts: `ask` is `_OakPCText1`'s question, `level` `_OakPCText2`, `counts`
+## `_OakPCText3` with its two `text_ram` markers still in, and `closed` `_OakPCText4`. Empty on a cache
+## imported without them.
 func oak_pc_text(name: String) -> String:
 	return String(_oak_ratings.get(name, ""))
 
 
-## One row string of either of the PC's two menus, by the name
-## `Gen2Layout.POKECENTER_PC_ROWS` or `POKECENTER_PC_PLAYERS_ROWS` gives it.
-## `<PLAYER>` is still in `players_pc`, the way the cartridge stores it. Empty on
-## a cache imported without them.
+## One row string of either of the PC's two menus, by the name `Gen2Layout.POKECENTER_PC_ROWS` or
+## `POKECENTER_PC_PLAYERS_ROWS` gives it. `<PLAYER>` is still in `players_pc`, the way the cartridge stores
+## it. Empty on a cache imported without them.
 func pokecenter_pc_row(name: String, players: bool = false) -> String:
 	var rows: Variant = _pokecenter_pc.get("players_rows" if players else "rows", {})
 	return String((rows as Dictionary).get(name, "")) if rows is Dictionary else ""
 
 
-## `.WhichPC`: which rows each of the menu's per-state lists offers, as indices
-## into the row order above. Empty on a cache imported without them.
-## JSON numbers come back as floats, so the rows are converted here rather than
-## at every reader.
+## `.WhichPC`: which rows each of the menu's per-state lists offers, as indices into the row order above.
+## Empty on a cache imported without them. JSON numbers come back as floats, so the rows are converted here
+## rather than at every reader.
 func pokecenter_pc_lists(players: bool = false) -> Array:
 	var lists: Variant = _pokecenter_pc.get("players_lists" if players else "lists", [])
 	if not lists is Array:
@@ -2469,16 +2401,14 @@ func pokecenter_pc_lists(players: bool = false) -> Array:
 	return out
 
 
-## One of the routine's own six texts, by the name
-## `Gen2Layout.POKECENTER_PC_TEXT_AT` gives it.
+## One of the routine's own six texts, by the name `Gen2Layout.POKECENTER_PC_TEXT_AT` gives it.
 func pokecenter_pc_text(name: String) -> String:
 	var texts: Variant = _pokecenter_pc.get("texts", {})
 	return String((texts as Dictionary).get(name, "")) if texts is Dictionary else ""
 
 
-## One `DecorationAttributes` row by its own `DECO_*` id, as
-## [code]{ type, name, action, flag, sprite }[/code]. Empty for an id outside the
-## table and on a cache imported without it.
+## One `DecorationAttributes` row by its own `DECO_*` id, as [code]{ type, name, action, flag, sprite
+## }[/code]. Empty for an id outside the table and on a cache imported without it.
 func decoration(deco: int) -> Dictionary:
 	var rows: Variant = _decorations.get("attributes", [])
 	if not rows is Array or deco < 0 or deco >= (rows as Array).size():
@@ -2497,9 +2427,9 @@ func decoration_count() -> int:
 	return (rows as Array).size() if rows is Array else 0
 
 
-## One `momitem` row as `{ trigger, cost, kind, item }`. [param set_number] is
-## `wWhichMomItemSet`: 0 is `MomItems_2`, the ladder, and anything else is
-## `MomItems_1`, the five she picks between. Empty for a row outside its list.
+## One `momitem` row as `{ trigger, cost, kind, item }`. [param set_number] is `wWhichMomItemSet`: 0 is
+## `MomItems_2`, the ladder, and anything else is `MomItems_1`, the five she picks between. Empty for a row
+## outside its list.
 func mom_item(set_number: int, index: int) -> Dictionary:
 	var rows: Variant = _mom_phone.get("items_2" if set_number == 0 else "items_1", [])
 	if not rows is Array or index < 0 or index >= (rows as Array).size():
@@ -2513,15 +2443,15 @@ func mom_item_count(set_number: int) -> int:
 	return (rows as Array).size() if rows is Array else 0
 
 
-## `Mom_GetScriptPointer`'s two answers, as the `{ bank, address }` every phone
-## script carries. [param doll] picks `.DollScript` over `.ItemScript`.
+## `Mom_GetScriptPointer`'s two answers, as the `{ bank, address }` every phone script carries. [param doll]
+## picks `.DollScript` over `.ItemScript`.
 func mom_phone_script(doll: bool) -> Dictionary:
 	var script: Variant = _mom_phone.get("doll_script" if doll else "item_script", {})
 	return (script as Dictionary).duplicate() if script is Dictionary else {}
 
 
-## `DecorationIDs`: the decoration a `DECOFLAG_*` index names, or 0 for an index
-## outside the run. Zero is the CANCEL row, which owns nothing.
+## `DecorationIDs`: the decoration a `DECOFLAG_*` index names, or 0 for an index outside the run. Zero is the
+## CANCEL row, which owns nothing.
 func decoration_id_for_flag(index: int) -> int:
 	var ids: Variant = _decorations.get("ids", [])
 	if not ids is Array or index < 0 or index >= (ids as Array).size():
@@ -2529,9 +2459,8 @@ func decoration_id_for_flag(index: int) -> int:
 	return int((ids as Array)[index])
 
 
-## One `DecorationNames` part by its own index, which is what a row's `name`
-## field carries for every type but the poster, doll and big doll: those name a
-## species instead.
+## One `DecorationNames` part by its own index, which is what a row's `name` field carries for every type but
+## the poster, doll and big doll: those name a species instead.
 func decoration_name_part(index: int) -> String:
 	var names: Variant = _decorations.get("names", [])
 	if not names is Array or index < 0 or index >= (names as Array).size():
@@ -2539,26 +2468,24 @@ func decoration_name_part(index: int) -> String:
 	return String((names as Array)[index])
 
 
-## The word `PrintUnownWord` puts under Unown form [param form], A being 1.
-## Empty for a form outside the range or a cache imported without the table.
+## The word `PrintUnownWord` puts under Unown form [param form], A being 1. Empty for a form outside the range
+## or a cache imported without the table.
 func unown_word(form: int) -> String:
 	if form < 1 or form > _unown_words.size():
 		return ""
 	return _unown_words[form - 1]
 
 
-## The word `DisplayUnownWords` spells on a chamber wall, by its own
-## `UNOWNWORDS_*` index. Empty for an index outside the four and on Gold and
-## Silver, which ship neither the words nor the special that draws them.
+## The word `DisplayUnownWords` spells on a chamber wall, by its own `UNOWNWORDS_*` index. Empty for an index
+## outside the four and on Gold and Silver, which ship neither the words nor the special that draws them.
 func unown_wall_word(index: int) -> String:
 	if index < 0 or index >= _unown_walls.size():
 		return ""
 	return _unown_walls[index]
 
 
-## `OddEggProbabilities` and `OddEggs` as one table: the cumulative word the
-## roll is compared against, and the nicknamed-mon bytes the row hands over.
-## Empty on Gold and Silver, which ship no Odd Egg.
+## `OddEggProbabilities` and `OddEggs` as one table: the cumulative word the roll is compared against, and the
+## nicknamed-mon bytes the row hands over. Empty on Gold and Silver, which ship no Odd Egg.
 func odd_eggs() -> Array:
 	return _odd_eggs
 
@@ -2582,8 +2509,8 @@ func oak_ratings() -> Array:
 	return stored if stored is Array else []
 
 
-## `CreditsScript`, terminator included. Empty on a cache imported without the
-## credits, which is the caller's cue not to open them.
+## `CreditsScript`, terminator included. Empty on a cache imported without the credits, which is the caller's
+## cue not to open them.
 func credits_script() -> PackedByteArray:
 	var stored: Variant = _credits.get("script", [])
 	var out := PackedByteArray()
@@ -2594,9 +2521,8 @@ func credits_script() -> PackedByteArray:
 	return out
 
 
-## One `CreditsStringsPointers` entry, as the tile codes `PlaceString` writes:
-## letters and `<NEXT>` for a name or a heading, `CopyrightGFX`'s own tile
-## numbers for the copyright.
+## One `CreditsStringsPointers` entry, as the tile codes `PlaceString` writes: letters and `<NEXT>` for a name
+## or a heading, `CopyrightGFX`'s own tile numbers for the copyright.
 func credits_string(index: int) -> PackedByteArray:
 	var stored: Variant = _credits.get("strings", [])
 	var out := PackedByteArray()
@@ -2607,9 +2533,8 @@ func credits_string(index: int) -> PackedByteArray:
 	return out
 
 
-## The two `CreditsScript` indices `ParseCredits` branches on: `staff` is the
-## first heading, below which every index is a name, and `copyright` the one
-## string printed from column 2. -1 on a cache without the credits.
+## The two `CreditsScript` indices `ParseCredits` branches on: `staff` is the first heading, below which every
+## index is a name, and `copyright` the one string printed from column 2. -1 on a cache without the credits.
 func credits_index(name: String) -> int:
 	return int(_credits.get(name, -1))
 
@@ -2619,8 +2544,8 @@ func surfing() -> Dictionary:
 	return _surfing
 
 
-## `PlayIntro`'s and `DisplayTitleScreen`'s tables, as [method Gen1Importer.read_opening]
-## wrote them. Empty on a cache with no Generation 1 opening.
+## `PlayIntro`'s and `DisplayTitleScreen`'s tables, as [method Gen1Importer.read_opening] wrote them. Empty on
+## a cache with no Generation 1 opening.
 func opening() -> Dictionary:
 	return _opening
 
@@ -2658,8 +2583,8 @@ func credits_copyright_rows() -> Array:
 	return out
 
 
-## Whether this cache carries `CrystalIntro`'s art. False on Gold and Silver,
-## which run `GoldSilverIntro` instead; [method has_gs_intro] is that one.
+## Whether this cache carries `CrystalIntro`'s art. False on Gold and Silver, which run `GoldSilverIntro`
+## instead; [method has_gs_intro] is that one.
 func has_intro_movie() -> bool:
 	return not (_intro_movie.get("maps", []) as Array).is_empty()
 
@@ -2669,16 +2594,14 @@ func has_gs_intro() -> bool:
 	return not (_gs_intro.get("maps", []) as Array).is_empty()
 
 
-## One of `GoldSilverIntro`'s metatile runs, by the name
-## `Gen2Layout.GS_INTRO_SECTION` gives it: a `_tilemap` is a 16-wide map of
-## metatile numbers and a `_meta` the four tiles each of those names.
+## One of `GoldSilverIntro`'s metatile runs, by the name `Gen2Layout.GS_INTRO_SECTION` gives it: a `_tilemap`
+## is a 16-wide map of metatile numbers and a `_meta` the four tiles each of those names.
 func gs_intro_map(name: String) -> PackedByteArray:
 	return tile_indices("gs_intro_%s" % name)
 
 
-## One of `GoldSilverIntro`'s palette runs: `magikarp` and `shellder_lapras` for
-## the two INCLUDEd inside the code, and the `Gen2Layout.GS_INTRO_PREDEF` names
-## for the entries the scenes take out of `PredefPals`.
+## One of `GoldSilverIntro`'s palette runs: `magikarp` and `shellder_lapras` for the two INCLUDEd inside the
+## code, and the `Gen2Layout.GS_INTRO_PREDEF` names for the entries the scenes take out of `PredefPals`.
 func gs_intro_palette(name: String) -> PackedColorArray:
 	var stored: Variant = (_gs_intro.get("palettes", {}) as Dictionary).get(name, [])
 	var colors := PackedColorArray()
@@ -2708,8 +2631,8 @@ func gen1_trade_info_lines() -> Array:
 	return _trade_anim.get("info_text", [])
 
 
-## The address one of the trade's `text_ram` buffers stands at: `string`,
-## `name` or `enemy_trainer`. Zero on a cache without the movie.
+## The address one of the trade's `text_ram` buffers stands at: `string`, `name` or `enemy_trainer`. Zero on a
+## cache without the movie.
 func gen1_trade_buffer(name: String) -> int:
 	return int((_trade_anim.get("buffers", {}) as Dictionary).get(name, 0))
 
@@ -2724,15 +2647,14 @@ func trade_anim_palette(name: String) -> PackedColorArray:
 	return colors
 
 
-## One of the intro movie's 32x32 BG maps or attribute planes, by the name
-## `Gen2Layout.INTRO_SECTION` gives it. Empty on a cache without the movie.
+## One of the intro movie's 32x32 BG maps or attribute planes, by the name `Gen2Layout.INTRO_SECTION` gives
+## it. Empty on a cache without the movie.
 func intro_map(name: String) -> PackedByteArray:
 	return tile_indices("intro_%s" % name)
 
 
-## One of the intro movie's palette runs, by the name
-## `Gen2Layout.INTRO_SECTION` gives it, plus `fade` and `unown`. Sixteen
-## palettes for a scene's own run, eight for the fade and two for the Unown.
+## One of the intro movie's palette runs, by the name `Gen2Layout.INTRO_SECTION` gives it, plus `fade` and
+## `unown`. Sixteen palettes for a scene's own run, eight for the fade and two for the Unown.
 func intro_palette(name: String) -> PackedColorArray:
 	var stored: Variant = (_intro_movie.get("palettes", {}) as Dictionary).get(name, [])
 	var colors := PackedColorArray()
@@ -2743,20 +2665,20 @@ func intro_palette(name: String) -> PackedColorArray:
 	return colors
 
 
-## Whether the cache carries `_UnownPuzzle`'s art. False refuses the special
-## rather than opening an empty board.
+## Whether the cache carries `_UnownPuzzle`'s art. False refuses the special rather than opening an empty
+## board.
 func has_unown_puzzle() -> bool:
 	return not (_unown_puzzle.get("palette", []) as Array).is_empty()
 
 
-## One of `_UnownPuzzle`'s tile strips, by the name
-## `Gen2Layout.UNOWN_PUZZLE_SECTION` gives it plus `tile_borders`.
+## One of `_UnownPuzzle`'s tile strips, by the name `Gen2Layout.UNOWN_PUZZLE_SECTION` gives it plus
+## `tile_borders`.
 func unown_puzzle_indices(name: String) -> PackedByteArray:
 	return tile_indices("unown_puzzle_%s" % name)
 
 
-## PREDEFPAL_UNOWN_PUZZLE, the one palette `_CGB_UnownPuzzle` gives all four
-## background slots and object palette 0.
+## PREDEFPAL_UNOWN_PUZZLE, the one palette `_CGB_UnownPuzzle` gives all four background slots and object
+## palette 0.
 func unown_puzzle_palette() -> PackedColorArray:
 	var colors := PackedColorArray()
 	for packed: Variant in _unown_puzzle.get("palette", []) as Array:
@@ -2764,9 +2686,8 @@ func unown_puzzle_palette() -> PackedColorArray:
 	return colors
 
 
-## `DiplomaGFX`'s own strip, and one of `PlaceDiplomaOnScreen`'s two tilemaps by
-## its page number. A cache imported before format 84 carries neither, which is
-## what `has_diploma` answers for.
+## `DiplomaGFX`'s own strip, and one of `PlaceDiplomaOnScreen`'s two tilemaps by its page number. A cache
+## imported before format 84 carries neither, which is what `has_diploma` answers for.
 func has_diploma() -> bool:
 	return not (_diploma.get("page1", []) as Array).is_empty() \
 		or not (_diploma.get("strings", []) as Array).is_empty()
@@ -2793,8 +2714,7 @@ func diploma_tilemap(page: int) -> PackedByteArray:
 	return out
 
 
-## PREDEFPAL_DIPLOMA, the one palette SCGB_DIPLOMA's own layout gives every cell
-## of the page.
+## PREDEFPAL_DIPLOMA, the one palette SCGB_DIPLOMA's own layout gives every cell of the page.
 func diploma_palette() -> PackedColorArray:
 	var colors := PackedColorArray()
 	for packed: Variant in _diploma.get("palette", []) as Array:
@@ -2802,9 +2722,8 @@ func diploma_palette() -> PackedColorArray:
 	return colors
 
 
-## `InitMysteryGiftLayout`'s art and the two gift tables beside it. A cache
-## imported before format 89 carries none of it, which is what
-## [method has_mystery_gift] answers for.
+## `InitMysteryGiftLayout`'s art and the two gift tables beside it. A cache imported before format 89 carries
+## none of it, which is what [method has_mystery_gift] answers for.
 func has_mystery_gift() -> bool:
 	return not (_mystery_gift.get("items", []) as Array).is_empty()
 
@@ -2813,8 +2732,7 @@ func mystery_gift_indices() -> PackedByteArray:
 	return tile_indices("mystery_gift")
 
 
-## `_CGB_MysteryGift`'s own copy into `wBGPals1`: two palettes on Crystal and
-## one on Gold and Silver.
+## `_CGB_MysteryGift`'s own copy into `wBGPals1`: two palettes on Crystal and one on Gold and Silver.
 func mystery_gift_palette() -> PackedColorArray:
 	var colors := PackedColorArray()
 	for packed: Variant in _mystery_gift.get("palette", []) as Array:
@@ -2827,18 +2745,16 @@ func mystery_gift_prompt() -> String:
 	return String(_mystery_gift.get("prompt", ""))
 
 
-## `MysteryGiftItems` or `MysteryGiftDecos`, whichever
-## `wMysteryGiftPartnerSentDeco` names.
+## `MysteryGiftItems` or `MysteryGiftDecos`, whichever `wMysteryGiftPartnerSentDeco` names.
 func mystery_gift_table(decorations: bool) -> Array:
 	return (_mystery_gift.get("decos" if decorations else "items", []) as Array).duplicate()
 
 
-## `LinkCommsBorderGFX`'s strip and, on Crystal alone, the three tilemaps the
-## trade screen is laid out from. A cache imported before the border carries
-## neither, which [method has_link_border] answers for; one with the strip and no
-## screen is Gold or Silver, whose trade screen is two `LinkTextboxAtHL` boxes.
-## Below it, `wOtherPlayerLinkMode`, whose address the cartridges do not share: a
-## runner writing Crystal's leaves Gold's zero and "can't link to the past".
+## `LinkCommsBorderGFX`'s strip and, on Crystal alone, the three tilemaps the trade screen is laid out from. A
+## cache imported before the border carries neither, which [method has_link_border] answers for; one with the
+## strip and no screen is Gold or Silver, whose trade screen is two `LinkTextboxAtHL` boxes. Below it,
+## `wOtherPlayerLinkMode`, whose address the cartridges do not share: a runner writing Crystal's leaves Gold's
+## zero and "can't link to the past".
 func other_player_link_mode_address() -> int:
 	return _other_player_link_mode
 
@@ -2851,8 +2767,8 @@ func link_border_indices() -> PackedByteArray:
 	return tile_indices("link_border")
 
 
-## `MobileTradeBorderTilemap`, `CableTradeBorderTopTilemap` and
-## `CableTradeBorderBottomTilemap` by name, empty on Gold and Silver.
+## `MobileTradeBorderTilemap`, `CableTradeBorderTopTilemap` and `CableTradeBorderBottomTilemap` by name, empty
+## on Gold and Silver.
 func link_border_tilemap(name: String) -> PackedByteArray:
 	var out := PackedByteArray()
 	for code: Variant in _link_border.get(name, []) as Array:
@@ -2860,28 +2776,26 @@ func link_border_tilemap(name: String) -> PackedByteArray:
 	return out
 
 
-## One `GBPrinterStrings` entry by the status it names, or the empty string,
-## which is what a status of zero prints and what a cache too old to carry the
-## run answers for every name.
+## One `GBPrinterStrings` entry by the status it names, or the empty string, which is what a status of zero
+## prints and what a cache too old to carry the run answers for every name.
 func printer_status_string(name: String) -> String:
 	return String(_printer_strings.get(name, ""))
 
 
-## Whether the cache carries `_SlotMachine`'s art. False refuses the special
-## rather than opening an empty machine.
+## Whether the cache carries `_SlotMachine`'s art. False refuses the special rather than opening an empty
+## machine.
 func has_slots() -> bool:
 	return not (_slots.get("palettes", []) as Array).is_empty()
 
 
-## One of `_SlotMachine`'s three tile strips, by the name
-## `Gen2Layout.SLOTS_SECTION` gives it.
+## One of `_SlotMachine`'s three tile strips, by the name `Gen2Layout.SLOTS_SECTION` gives it.
 func slots_indices(name: String) -> PackedByteArray:
 	return tile_indices(name)
 
 
-## `Reel1Tilemap`, `Reel2Tilemap` or `Reel3Tilemap` as `SLOTS_*` symbol values,
-## eighteen long: the fifteen the reel carries and its own first three again;
-## a Generation 1 cache answers `SlotMachineWheel1` to `3` as bytes.
+## `Reel1Tilemap`, `Reel2Tilemap` or `Reel3Tilemap` as `SLOTS_*` symbol values, eighteen long: the fifteen the
+## reel carries and its own first three again; a Generation 1 cache answers `SlotMachineWheel1` to `3` as
+## bytes.
 func slots_reel(reel: int) -> PackedByteArray:
 	var stored: Variant = _slots.get("reels", [])
 	var out := PackedByteArray()
@@ -2912,9 +2826,8 @@ func slots_tilemap() -> PackedByteArray:
 	return out
 
 
-## One of `SlotMachinePals`'s sixteen palettes: 0 to 7 are the background's and
-## 8 to 15 the objects', which is what `FarCopyWRAM`'s `16 palettes` copies
-## across `wBGPals1` and the `wOBPals1` behind it.
+## One of `SlotMachinePals`'s sixteen palettes: 0 to 7 are the background's and 8 to 15 the objects', which is
+## what `FarCopyWRAM`'s `16 palettes` copies across `wBGPals1` and the `wOBPals1` behind it.
 func slots_palette(index: int) -> PackedColorArray:
 	var stored: Variant = _slots.get("palettes", [])
 	var colors := PackedColorArray()
@@ -2934,26 +2847,24 @@ func slots_blocks() -> Array:
 	return (stored as Array).duplicate(true) if stored is Array else []
 
 
-## One of the slot machine's boxes, by the name `Gen2Layout.SLOTS_TEXT_RUNS` or
-## `Gen1Layout.SLOTS_TEXT_AT` gives it.
+## One of the slot machine's boxes, by the name `Gen2Layout.SLOTS_TEXT_RUNS` or `Gen1Layout.SLOTS_TEXT_AT`
+## gives it.
 func slots_text(name: String) -> String:
 	return String(_slots_text.get(name, ""))
 
 
-## Whether the cache carries `_CardFlip`'s art, which is what the special is
-## refused on rather than opening an empty table.
+## Whether the cache carries `_CardFlip`'s art, which is what the special is refused on rather than opening an
+## empty table.
 func has_card_flip() -> bool:
 	return not (_card_flip.get("palettes", []) as Array).is_empty()
 
 
-## One of `_CardFlip`'s five tile strips, by the name
-## `Gen2Layout.CARD_FLIP_SECTION` gives it.
+## One of `_CardFlip`'s five tile strips, by the name `Gen2Layout.CARD_FLIP_SECTION` gives it.
 func card_flip_indices(name: String) -> PackedByteArray:
 	return tile_indices(name)
 
 
-## `CardFlipTilemap`, the eleven-wide picture `CardFlip_InitTilemap` places at
-## column nine.
+## `CardFlipTilemap`, the eleven-wide picture `CardFlip_InitTilemap` places at column nine.
 func card_flip_tilemap() -> PackedByteArray:
 	var out := PackedByteArray()
 	for code: Variant in _card_flip.get("tilemap", []) as Array:
@@ -2961,9 +2872,9 @@ func card_flip_tilemap() -> PackedByteArray:
 	return out
 
 
-## One of `gfx/card_flip/card_flip.pal`'s nine, all of them background palettes:
-## `CardFlip_InitAttrPals` copies the run into `wBGPals1` and writes no object
-## palette at all, which is why every sprite here is drawn through `wOBP0`.
+## One of `gfx/card_flip/card_flip.pal`'s nine, all of them background palettes: `CardFlip_InitAttrPals`
+## copies the run into `wBGPals1` and writes no object palette at all, which is why every sprite here is drawn
+## through `wOBP0`.
 func card_flip_palette(index: int) -> PackedColorArray:
 	var stored: Variant = _card_flip.get("palettes", [])
 	var colors := PackedColorArray()
@@ -2977,15 +2888,13 @@ func card_flip_palette(index: int) -> PackedColorArray:
 	return colors
 
 
-## One of the card flip's eight boxes, by the name
-## `Gen2Layout.CARD_FLIP_TEXT_ORDER` gives it.
+## One of the card flip's eight boxes, by the name `Gen2Layout.CARD_FLIP_TEXT_ORDER` gives it.
 func card_flip_text(name: String) -> String:
 	return String(_card_flip_text.get(name, ""))
 
 
-## `CreditsPalettes` for one scene: three palettes on Crystal (the banner, the
-## border and the text region) and one on Gold and Silver, which gives the same
-## four colours to the first two slots.
+## `CreditsPalettes` for one scene: three palettes on Crystal (the banner, the border and the text region) and
+## one on Gold and Silver, which gives the same four colours to the first two slots.
 func credits_palette(scene: int, slot: int = 0) -> PackedColorArray:
 	var stored: Variant = _credits.get("palettes", [])
 	var per_scene: int = int(_credits.get("scene_palettes", 0))
@@ -3003,8 +2912,8 @@ func credits_palette(scene: int, slot: int = 0) -> PackedColorArray:
 	return colors
 
 
-## `Credits_LoadBorderGFX.Frames`: which sixteen-tile block of the mon run one
-## scene's frame draws. -1 outside the table.
+## `Credits_LoadBorderGFX.Frames`: which sixteen-tile block of the mon run one scene's frame draws. -1 outside
+## the table.
 func credits_frame_block(scene: int, frame: int) -> int:
 	var stored: Variant = _credits.get("frames", [])
 	var at: int = scene * Gen2Layout.CREDITS_SCENE_FRAMES + frame
@@ -3013,8 +2922,8 @@ func credits_frame_block(scene: int, frame: int) -> int:
 	return int((stored as Array)[at])
 
 
-## `JohtoMap` or `KantoMap`: one tile number per cell of the whole screen, in
-## `FillTownMap`'s own order. Empty on a cache imported without the region map.
+## `JohtoMap` or `KantoMap`: one tile number per cell of the whole screen, in `FillTownMap`'s own order. Empty
+## on a cache imported without the region map.
 func town_map_region(region: String) -> PackedByteArray:
 	var stored: Variant = _town_map.get(region, [])
 	var out := PackedByteArray()
@@ -3025,8 +2934,8 @@ func town_map_region(region: String) -> PackedByteArray:
 	return out
 
 
-## `ClockTilemapRLE` and its two neighbours, decoded: the twelve rows a Pokegear
-## card draws above its text box. Empty for a name no card has.
+## `ClockTilemapRLE` and its two neighbours, decoded: the twelve rows a Pokegear card draws above its text
+## box. Empty for a name no card has.
 func pokegear_card(card: StringName) -> PackedByteArray:
 	var cards: Variant = _town_map.get("cards", {})
 	var out := PackedByteArray()
@@ -3048,9 +2957,8 @@ func pokegear_text(name: String) -> String:
 	return String((texts as Dictionary).get(name, ""))
 
 
-## `TownMapPals`: which of the six palettes a region-map tile is drawn through.
-## Its table covers $00 to $5f; $60 and above take palette 0, and so does a cache
-## that has no palette map.
+## `TownMapPals`: which of the six palettes a region-map tile is drawn through. Its table covers $00 to $5f;
+## $60 and above take palette 0, and so does a cache that has no palette map.
 func town_map_palette_of(tile: int) -> int:
 	var stored: Variant = _town_map.get("palette_map", [])
 	if not stored is Array or tile < 0 or tile >= Gen2Layout.TOWN_MAP_PALETTE_MAP_LIMIT:
@@ -3064,8 +2972,8 @@ func town_map_palette_of(tile: int) -> int:
 	return (byte >> 4) & 0x07 if tile & 1 else byte & 0x07
 
 
-## One of the six region-map palettes. [param female] is Kris's own city colours,
-## which only Crystal ships; every other palette of the pair is the same.
+## One of the six region-map palettes. [param female] is Kris's own city colours, which only Crystal ships;
+## every other palette of the pair is the same.
 func town_map_palette(slot: int, female: bool = false) -> PackedColorArray:
 	var name: String = "palettes_female" if female and _town_map.has("palettes_female") \
 		else "palettes"
@@ -3082,8 +2990,8 @@ func town_map_palette(slot: int, female: bool = false) -> PackedColorArray:
 	return colors
 
 
-## `TownMapOrder`, the map ids `DisplayTownMap`'s cursor walks. Empty on a
-## Generation 2 cache, whose cursor walks a landmark window instead.
+## `TownMapOrder`, the map ids `DisplayTownMap`'s cursor walks. Empty on a Generation 2 cache, whose cursor
+## walks a landmark window instead.
 func town_map_order() -> PackedInt32Array:
 	var stored: Variant = _town_map.get("order", [])
 	var out := PackedInt32Array()
@@ -3094,9 +3002,8 @@ func town_map_order() -> PackedInt32Array:
 	return out
 
 
-## `FlyWarpDataPtr`'s row for [param map]: `{ x, y }`, the tile `.usedFlyWarp`
-## puts the player on. Empty for a map no row names, which is what
-## `.flyWarpDataPtrLoop` never returning from means for a bad destination.
+## `FlyWarpDataPtr`'s row for [param map]: `{ x, y }`, the tile `.usedFlyWarp` puts the player on. Empty for a
+## map no row names, which is what `.flyWarpDataPtrLoop` never returning from means for a bad destination.
 func gen1_fly_warp(map: int) -> Dictionary:
 	var stored: Variant = _town_map.get("fly_warps", [])
 	if not stored is Array:
@@ -3110,9 +3017,9 @@ func gen1_fly_warp(map: int) -> Dictionary:
 	return {}
 
 
-## `.dungeonWarpListLoop`: the `DungeonWarpData` tile hole [param warp] falling
-## onto [param map] lands on. Empty for a pair the list does not hold, which is
-## Victory Road 3F's switch alone and which the source walks off the end for.
+## `.dungeonWarpListLoop`: the `DungeonWarpData` tile hole [param warp] falling onto [param map] lands on.
+## Empty for a pair the list does not hold, which is Victory Road 3F's switch alone and which the source walks
+## off the end for.
 func gen1_dungeon_warp(map: int, warp: int) -> Dictionary:
 	for row: Variant in _special_warps.get("dungeon_warps", []) as Array:
 		var entry: Dictionary = row
@@ -3121,9 +3028,8 @@ func gen1_dungeon_warp(map: int, warp: int) -> Dictionary:
 	return {}
 
 
-## Whether `ForcedBikeOrSurfMaps` holds [param map] at [param cell], which is
-## everything `CheckForceBikeOrSurf` asks of the table: which of the two rides
-## it forces is the map id's own answer.
+## Whether `ForcedBikeOrSurfMaps` holds [param map] at [param cell], which is everything
+## `CheckForceBikeOrSurf` asks of the table: which of the two rides it forces is the map id's own answer.
 func gen1_forces_ride(map: int, cell: Vector2i) -> bool:
 	for row: Variant in _special_warps.get("forced_bike_surf", []) as Array:
 		var entry: Dictionary = row
@@ -3141,8 +3047,8 @@ func gen1_boulder_dust_offsets() -> Array:
 	return out
 
 
-## The Snorlax whose flute cells hold [param cell] on [param map], as the
-## `SetEvent` and `CheckEvent` pair `ItemUsePokeFlute` reads there.
+## The Snorlax whose flute cells hold [param cell] on [param map], as the `SetEvent` and `CheckEvent` pair
+## `ItemUsePokeFlute` reads there.
 func gen1_snorlax_flute(map: int, cell: Vector2i) -> Dictionary:
 	for row: Variant in _special_warps.get("snorlax_flute", []) as Array:
 		var flute: Dictionary = row
@@ -3159,8 +3065,8 @@ func gen1_new_game_warp() -> Dictionary:
 	return _special_warp(_special_warps.get("new_game_warp", {}))
 
 
-## One of `LoadSpecialWarpData`'s four cable club rows, by its name in
-## `Gen1Layout.CABLE_CLUB_WARP_ROWS`; empty outside Generation 1.
+## One of `LoadSpecialWarpData`'s four cable club rows, by its name in `Gen1Layout.CABLE_CLUB_WARP_ROWS`;
+## empty outside Generation 1.
 func gen1_cable_club_warp(name: String) -> Dictionary:
 	return _special_warp((_special_warps.get("cable_club_warps", {}) as Dictionary).get(name, {}))
 
@@ -3182,8 +3088,8 @@ func gen1_default_names(rival: bool) -> Array[String]:
 	return out
 
 
-## One of the `db` lists ending in `-1` that `_import_special_warps` reads:
-## `EscapeRopeTilesets`, `SafariZoneRestHouses` or `BikeRidingTilesets`.
+## One of the `db` lists ending in `-1` that `_import_special_warps` reads: `EscapeRopeTilesets`,
+## `SafariZoneRestHouses` or `BikeRidingTilesets`.
 func gen1_special_warp_list(name: String) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	for value: Variant in _special_warps.get(name, []) as Array:
@@ -3191,8 +3097,7 @@ func gen1_special_warp_list(name: String) -> PackedInt32Array:
 	return out
 
 
-## Yellow's `PikachuEmotionTable` with its mood and happiness lookups, empty on
-## the other two.
+## Yellow's `PikachuEmotionTable` with its mood and happiness lookups, empty on the other two.
 func gen1_pikachu() -> Dictionary:
 	return _pikachu
 
@@ -3202,8 +3107,8 @@ func landmark_count() -> int:
 	return (stored as Array).size() if stored is Array else 0
 
 
-## One `Landmarks` row: [code]{ x, y, codes }[/code], where x and y are screen
-## pixels and `codes` is the name as `GetLandmarkName` copies it.
+## One `Landmarks` row: [code]{ x, y, codes }[/code], where x and y are screen pixels and `codes` is the name
+## as `GetLandmarkName` copies it.
 func landmark(index: int) -> Dictionary:
 	var stored: Variant = _town_map.get("landmarks", [])
 	if not stored is Array or index < 0 or index >= (stored as Array).size():
@@ -3214,15 +3119,15 @@ func landmark(index: int) -> Dictionary:
 		codes.append(int(code))
 	return {
 		"x": int(row.get("x", 0)), "y": int(row.get("y", 0)), "codes": codes,
-		## `LoadTownMapEntry`'s own packed pair, which only Generation 1 stores
-		## and only `DisplayWildLocations`' Cerulean Cave test reads.
+		## `LoadTownMapEntry`'s own packed pair, which only Generation 1 stores and only
+		## `DisplayWildLocations`' Cerulean Cave test reads.
 		"packed": int(row.get("packed", -1)),
 	}
 
 
-## The landmark standing for [param index]'s AREA: the lowest map id drawing the
-## same `LoadTownMapEntry` cell under the same name, which is what a dungeon's
-## floors share. Generation 2 has that in `wCurLandmark`, so it answers itself.
+## The landmark standing for [param index]'s AREA: the lowest map id drawing the same `LoadTownMapEntry` cell
+## under the same name, which is what a dungeon's floors share. Generation 2 has that in `wCurLandmark`, so it
+## answers itself.
 func area_landmark(index: int) -> int:
 	if generation != RomRegistry.GEN1:
 		return index
@@ -3236,16 +3141,16 @@ func area_landmark(index: int) -> int:
 	return int(_areas.get(index, index))
 
 
-## The landmark naming [param map]'s area: `wCurLandmark` on Generation 2 and the
-## shared `LoadTownMapEntry` cell on Generation 1, whose headers carry none.
+## The landmark naming [param map]'s area: `wCurLandmark` on Generation 2 and the shared `LoadTownMapEntry`
+## cell on Generation 1, whose headers carry none.
 func map_landmark(map: Gen2WorldMap) -> int:
 	if map == null:
 		return 0
 	return area_landmark(map.number) if generation == RomRegistry.GEN1 else map.location
 
 
-## A landmark's name as text. `<BSP>` reads as the space it is everywhere but the
-## region map, where [Gen2TownMapPage] breaks the line on it instead.
+## A landmark's name as text. `<BSP>` reads as the space it is everywhere but the region map, where
+## [Gen2TownMapPage] breaks the line on it instead.
 func landmark_name(index: int) -> String:
 	var entry: Dictionary = landmark(index)
 	if entry.is_empty():
@@ -3268,9 +3173,9 @@ func card_badge_palette() -> PackedColorArray:
 	return colors
 
 
-## One of `_CGB_Pokedex`'s three palettes by name: `interface` is
-## PREDEFPAL_POKEDEX, `question_mark` what an unseen species' picture wears, and
-## `cursor` the arrow's object palette. Empty when the cache does not carry it.
+## One of `_CGB_Pokedex`'s three palettes by name: `interface` is PREDEFPAL_POKEDEX, `question_mark` what an
+## unseen species' picture wears, and `cursor` the arrow's object palette. Empty when the cache does not carry
+## it.
 func pokedex_palette(name: String) -> PackedColorArray:
 	var stored: Variant = _pokedex_palettes.get(name, [])
 	if not stored is Array or (stored as Array).size() < PokePalette.COLORS_PER_PIC:
@@ -3281,8 +3186,8 @@ func pokedex_palette(name: String) -> PackedColorArray:
 	return colors
 
 
-## `BillsPCOrangePalette`, the mon-pic box's colours while the PC's cursor
-## stands on a row holding no Pokemon. Empty for a cache without the screen.
+## `BillsPCOrangePalette`, the mon-pic box's colours while the PC's cursor stands on a row holding no Pokemon.
+## Empty for a cache without the screen.
 func pc_palette() -> PackedColorArray:
 	if _pc_palette.size() < Gen2Layout.PC_PALETTE_COLORS:
 		return PackedColorArray()
@@ -3292,9 +3197,8 @@ func pc_palette() -> PackedColorArray:
 	return colors
 
 
-## `DrawPocketName`'s own 5x3 piece for [param pocket], as the tile numbers it
-## copies. Empty for a cache without the screen, or for a pocket outside the
-## four the tilemap holds.
+## `DrawPocketName`'s own 5x3 piece for [param pocket], as the tile numbers it copies. Empty for a cache
+## without the screen, or for a pocket outside the four the tilemap holds.
 func pack_pocket_name(pocket: int) -> PackedByteArray:
 	var stored: Variant = _pack.get("pocket_names", [])
 	var cells: int = Gen2Layout.PACK_NAME_COLUMNS * Gen2Layout.PACK_NAME_ROWS
@@ -3307,9 +3211,8 @@ func pack_pocket_name(pocket: int) -> PackedByteArray:
 	return out
 
 
-## One of `_CGB_PackPals`' six palettes, Kris's set for [param female]. Empty
-## where the cache does not carry it, which is every Gold and Silver cache for
-## the female set.
+## One of `_CGB_PackPals`' six palettes, Kris's set for [param female]. Empty where the cache does not carry
+## it, which is every Gold and Silver cache for the female set.
 func pack_palette(index: int, female: bool = false) -> PackedColorArray:
 	var stored: Variant = _pack.get("female_palettes" if female else "palettes", [])
 	if not stored is Array or index < 0 or index >= Gen2Layout.PACK_PALETTES:
@@ -3323,11 +3226,9 @@ func pack_palette(index: int, female: bool = false) -> PackedColorArray:
 	return colors
 
 
-## The four tiles of a species' footprint, in the `footprints` strip's own
-## numbering: the two top halves where the species sits, and the two bottom
-## halves [constant Gen2Layout.FOOTPRINT_HALF_STRIDE] tiles further on, which is
-## the offset the source calls a forgotten tile-editor fix. Empty for a species
-## outside the run.
+## The four tiles of a species' footprint, in the `footprints` strip's own numbering: the two top halves where
+## the species sits, and the two bottom halves [constant Gen2Layout.FOOTPRINT_HALF_STRIDE] tiles further on,
+## which is the offset the source calls a forgotten tile-editor fix. Empty for a species outside the run.
 func footprint_tiles(number: int) -> PackedInt32Array:
 	if number < 1 or number > Gen2Layout.FOOTPRINT_SPECIES:
 		return PackedInt32Array()
@@ -3341,21 +3242,20 @@ func footprint_tiles(number: int) -> PackedInt32Array:
 	])
 
 
-## The three bar palettes in `GetHPPal`'s own order, and `ExpBarPalette`'s key
-## beside them, both as [method bar_palette] takes them.
+## The three bar palettes in `GetHPPal`'s own order, and `ExpBarPalette`'s key beside them, both as [method
+## bar_palette] takes them.
 const HP_BAR_PALETTE_NAMES: Array[String] = ["hp_green", "hp_yellow", "hp_red"]
 const EXP_BAR_PALETTE: String = "exp"
 
 
-## Which HP bar palette a bar of [param lit] pixels is drawn in. The colour
-## follows what is drawn rather than the numbers behind it, which is why a bar
-## can turn red on a Pokémon that still has a good few hit points.
+## Which HP bar palette a bar of [param lit] pixels is drawn in. The colour follows what is drawn rather than
+## the numbers behind it, which is why a bar can turn red on a Pokémon that still has a good few hit points.
 static func hp_bar_palette_name(lit: int, gen1: bool = false) -> String:
 	return HP_BAR_PALETTE_NAMES[hp_bar_palette_index(lit, gen1)]
 
 
-## `GetHPPal`'s own answer, HP_GREEN, HP_YELLOW or HP_RED, for the callers that
-## index a table with it rather than naming a palette; `GetHealthBarColor`'s 27.
+## `GetHPPal`'s own answer, HP_GREEN, HP_YELLOW or HP_RED, for the callers that index a table with it rather
+## than naming a palette; `GetHealthBarColor`'s 27.
 static func hp_bar_palette_index(lit: int, gen1: bool = false) -> int:
 	if lit >= (Gen1Layout.HP_GREEN_PIXELS if gen1 else Gen2Layout.HP_GREEN_PIXELS):
 		return 0
@@ -3368,8 +3268,8 @@ func trainer_count() -> int:
 	return _trainers.size()
 
 
-## A trainer class in Generations 1 and 2, or an individual trainer ID in
-## Generation 3. Zero is reserved and has no cached entry.
+## A trainer class in Generations 1 and 2, or an individual trainer ID in Generation 3. Zero is reserved and
+## has no cached entry.
 func trainer(number: int) -> Dictionary:
 	return _content(Gen2ContentOverlay.KIND_TRAINER, _trainers, number)
 
@@ -3405,8 +3305,8 @@ func trainer_party_count(number: int) -> int:
 	return (trainer(number).get("trainers", []) as Array).size()
 
 
-## A GB class member or a GBA individual (index zero). Party fields are integers;
-## GBA rows also retain IV bytes and the trainer's own flags and attributes.
+## A GB class member or a GBA individual (index zero). Party fields are integers; GBA rows also retain IV
+## bytes and the trainer's own flags and attributes.
 func trainer_party(number: int, index: int = 0) -> Dictionary:
 	if generation == RomRegistry.GEN3:
 		return _gen3_trainer_party(number) if index == 0 else {}
@@ -3436,8 +3336,8 @@ func trainer_party(number: int, index: int = 0) -> Dictionary:
 	}
 
 
-## Restore Generation 3's scalar and array numbers without dropping its IV byte
-## or individual attributes, which the older class-party schema cannot express.
+## Restore Generation 3's scalar and array numbers without dropping its IV byte or individual attributes,
+## which the older class-party schema cannot express.
 func _gen3_trainer_party(number: int) -> Dictionary:
 	var entry: Dictionary = trainer(number).duplicate(true)
 	if entry.is_empty():
@@ -3484,9 +3384,9 @@ func trainer_attributes(number: int) -> Dictionary:
 	}
 
 
-## A trainer class's own DVs as [method Gen2BattleMon.create]'s [code]dv_word[/code],
-## [constant Gen2BattleMon.PERFECT_DVS] for a class the cache does not carry.
-## Generation 1 writes one word for every class; Generation 3 has IVs, not DVs.
+## A trainer class's own DVs as [method Gen2BattleMon.create]'s [code]dv_word[/code], [constant
+## Gen2BattleMon.PERFECT_DVS] for a class the cache does not carry. Generation 1 writes one word for every
+## class; Generation 3 has IVs, not DVs.
 func trainer_dvs(number: int) -> int:
 	if generation == RomRegistry.GEN3:
 		return 0
@@ -3510,8 +3410,8 @@ func trainer_encounter_music(number: int) -> Dictionary:
 	return world_audio(&"music", track)
 
 
-## `GetPlayerOrMonPalettePointer`: the backpic's colours, which the Dude shares,
-## so [param kind] is a gender rather than a picture.
+## `GetPlayerOrMonPalettePointer`: the backpic's colours, which the Dude shares, so [param kind] is a gender
+## rather than a picture.
 func player_palette(kind: String) -> PackedColorArray:
 	var stored: Variant = _player_palettes.get(kind, null)
 	if not stored is Array or (stored as Array).size() < 2:
@@ -3522,10 +3422,9 @@ func player_palette(kind: String) -> PackedColorArray:
 	]))
 
 
-## `_CGB_BattleGrayscale`'s, which is `PredefPals`' `BLACKOUT`: white, two grays
-## and black. Every background and object palette holds it from `StartBattle`'s
-## own `GetSGBLayout` until `SCGB_BATTLE_COLORS` replaces it after
-## `BattleIntroSlidingPics`, which is why a battle slides in without colour.
+## `_CGB_BattleGrayscale`'s, which is `PredefPals`' `BLACKOUT`: white, two grays and black. Every background
+## and object palette holds it from `StartBattle`'s own `GetSGBLayout` until `SCGB_BATTLE_COLORS` replaces it
+## after `BattleIntroSlidingPics`, which is why a battle slides in without colour.
 func battle_grayscale_palette() -> PackedColorArray:
 	if _battle_grayscale_palette.size() < Gen2Layout.PREDEF_PALETTE_COLORS:
 		return PackedColorArray()
@@ -3535,16 +3434,15 @@ func battle_grayscale_palette() -> PackedColorArray:
 	return out
 
 
-## `_CGB_MoveList`'s background palette, `PredefPals`' `GOLDENROD`. White and
-## black on a cartridge with no pin for it, which is what the screen was drawn
-## in before it was imported.
+## `_CGB_MoveList`'s background palette, `PredefPals`' `GOLDENROD`. White and black on a cartridge with no pin
+## for it, which is what the screen was drawn in before it was imported.
 func move_screen_palette() -> PackedColorArray:
 	return _predef_colors(_move_screen_palette)
 
 
-## One of `StatsScreenPagePals`, the whole four-colour palette a page indicator
-## block wears. Pages past the cartridge's three are this project's own
-## ([method Gen2StatsScreenPage.page_count]), so they cycle the three.
+## One of `StatsScreenPagePals`, the whole four-colour palette a page indicator block wears. Pages past the
+## cartridge's three are this project's own ([method Gen2StatsScreenPage.page_count]), so they cycle the
+## three.
 func stats_page_palette(page: int) -> PackedColorArray:
 	var pages: Variant = _stats_screen_palettes.get("pages", [])
 	if not pages is Array or (pages as Array).is_empty():
@@ -3552,9 +3450,9 @@ func stats_page_palette(page: int) -> PackedColorArray:
 	return _predef_colors((pages as Array)[_stats_page_index(page, (pages as Array).size())])
 
 
-## One of `StatsScreenPals`, the colour `LoadStatsScreenPals` writes over colour
-## 0 of the HP and exp palettes, so the open page tints the lower screen. White
-## for a cartridge with no pin, which draws the page the way it was drawn before.
+## One of `StatsScreenPals`, the colour `LoadStatsScreenPals` writes over colour 0 of the HP and exp palettes,
+## so the open page tints the lower screen. White for a cartridge with no pin, which draws the page the way it
+## was drawn before.
 func stats_page_tint(page: int) -> Color:
 	var tints: Variant = _stats_screen_palettes.get("tints", [])
 	if not tints is Array or (tints as Array).is_empty():
@@ -3564,8 +3462,7 @@ func stats_page_tint(page: int) -> Color:
 	)
 
 
-## `LoadStatsScreenPals`' own `dec c`: the pink page is 1 and the table starts
-## at 0.
+## `LoadStatsScreenPals`' own `dec c`: the pink page is 1 and the table starts at 0.
 func _stats_page_index(page: int, count: int) -> int:
 	return posmod(page - Gen2StatsScreenPage.PINK_PAGE, count)
 
@@ -3579,9 +3476,8 @@ func _predef_colors(stored: Variant) -> PackedColorArray:
 	return out
 
 
-## `StartTrainerBattle_LoadPokeBallGraphics`' own palette, which every
-## background tile is drawn in while a trainer transition runs. The dark one is
-## `wTimeOfDayPal`'s `DARKNESS_F`.
+## `StartTrainerBattle_LoadPokeBallGraphics`' own palette, which every background tile is drawn in while a
+## trainer transition runs. The dark one is `wTimeOfDayPal`'s `DARKNESS_F`.
 func battle_transition_palette(dark: bool = false) -> PackedColorArray:
 	var stored: Variant = _transition_palettes.get("dark" if dark else "day", null)
 	if not stored is Array or (stored as Array).size() < Gen2Layout.TRANSITION_PALETTE_COLORS:
@@ -3592,9 +3488,8 @@ func battle_transition_palette(dark: bool = false) -> PackedColorArray:
 	return out
 
 
-## `GetTrainerBackpic`. The kinds are the generation's own: Chris, Kris and the
-## Dude in Generation 2, the player and the old man in Generation 1; Gold and
-## Silver ship no Kris and answer empty.
+## `GetTrainerBackpic`. The kinds are the generation's own: Chris, Kris and the Dude in Generation 2, the
+## player and the old man in Generation 1; Gold and Silver ship no Kris and answer empty.
 func player_backpic(kind: String) -> Dictionary:
 	var kinds: Array[String] = Gen1Layout.PLAYER_BACKPICS if generation == RomRegistry.GEN1 \
 		else Gen2Layout.PLAYER_BACKPICS
@@ -3672,10 +3567,9 @@ func tile_indices(name: String) -> PackedByteArray:
 	return indices
 
 
-## Where a species sits in an atlas: { atlas, slot, width, height } in pixels.
-## Smaller Game Boy pics occupy the top-left of a cell. Generation 3 frame -1
-## selects the cartridge's native picture; nonnegative frames select stored data.
-## Mod pictures carry their own pixels; see [method _supplied_pic].
+## Where a species sits in an atlas: { atlas, slot, width, height } in pixels. Smaller Game Boy pics occupy
+## the top-left of a cell. Generation 3 frame -1 selects the cartridge's native picture; nonnegative frames
+## select stored data. Mod pictures carry their own pixels; see [method _supplied_pic].
 func species_pic(number: int, back: bool = false, frame: int = -1) -> Dictionary:
 	var entry: Dictionary = species(number)
 	if entry.is_empty():
@@ -3711,8 +3605,7 @@ func species_pic(number: int, back: bool = false, frame: int = -1) -> Dictionary
 	}
 
 
-## `GetEggFrontpic`'s picture, in [method species_pic]'s shape. Empty on a cache
-## written before eggs had one.
+## `GetEggFrontpic`'s picture, in [method species_pic]'s shape. Empty on a cache written before eggs had one.
 func egg_pic() -> Dictionary:
 	if _egg_pic.is_empty() or atlas("egg_front").is_empty():
 		return {}
@@ -3734,12 +3627,11 @@ func egg_palette(shiny: bool = false) -> PackedColorArray:
 	]))
 
 
-## A mod's own picture for a numbered row, in [method species_pic]'s shape but
-## carrying the pixels instead of an atlas cell to crop.
-## The atlases hold exactly the cartridge's slots, so a defined species or
-## trainer class has no cell to point at and supplies decoded indices on its own
-## row instead. [method Gen2PicImage.atlas_cell] takes either, which is what lets
-## every screen draw both without knowing which it has.
+## A mod's own picture for a numbered row, in [method species_pic]'s shape but carrying the pixels instead of
+## an atlas cell to crop. The atlases hold exactly the cartridge's slots, so a defined species or trainer
+## class has no cell to point at and supplies decoded indices on its own row instead. [method
+## Gen2PicImage.atlas_cell] takes either, which is what lets every screen draw both without knowing which it
+## has.
 func _supplied_pic(art: Variant) -> Dictionary:
 	if not art is Dictionary or (art as Dictionary).is_empty():
 		return {}
@@ -3756,12 +3648,10 @@ func _supplied_pic(art: Variant) -> Dictionary:
 	}
 
 
-## Where a species' animation tiles sit, in [method species_pic]'s shape. The
-## cell is the same square as the front pic's and holds the `w * h` tiles
-## `GetAnimatedEnemyFrontpic` copies out of the run behind the picture. Empty
-## for a cartridge with no pic animation and for a mod's own supplied picture,
-## neither of which has frames to draw.
-## One of `GetMonHeader`'s three pictures outside the species run, by name.
+## Where a species' animation tiles sit, in [method species_pic]'s shape. The cell is the same square as the
+## front pic's and holds the `w * h` tiles `GetAnimatedEnemyFrontpic` copies out of the run behind the
+## picture. Empty for a cartridge with no pic animation and for a mod's own supplied picture, neither of which
+## has frames to draw. One of `GetMonHeader`'s three pictures outside the species run, by name.
 func gen1_special_pic(name: String) -> Dictionary:
 	var slot: int = Gen1Layout.SPECIAL_PICS.values().find(name)
 	var cell: int = int(atlas("special_front").get("cell", 0))
@@ -3785,11 +3675,10 @@ func species_pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	return pic
 
 
-## `AnimateFrontpic`'s record for a species, or for one of Unown's letters when
-## [param unown_form] is a letter rather than zero: { height, script, idle,
-## frames }, the scripts and each frame as a [PackedByteArray].
-## Empty for Gold and Silver, which have no pic animation at all, and for an egg:
-## `AnimateMon_CheckIfPokemon` refuses `EGG`; see [method egg_pic_animation].
+## `AnimateFrontpic`'s record for a species, or for one of Unown's letters when [param unown_form] is a letter
+## rather than zero: { height, script, idle, frames }, the scripts and each frame as a [PackedByteArray].
+## Empty for Gold and Silver, which have no pic animation at all, and for an egg: `AnimateMon_CheckIfPokemon`
+## refuses `EGG`; see [method egg_pic_animation].
 func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	var section: Dictionary = _pic_anims()
 	if section.is_empty():
@@ -3808,8 +3697,8 @@ func pic_animation(number: int, unown_form: int = 0) -> Dictionary:
 	return _pic_anim_record(value as Dictionary)
 
 
-## `EggAnimation`, `EggAnimationIdle`, `EggFrames` and `EggBitmasks` in
-## [method pic_animation]'s shape: `StatsScreen_AnimateEgg`'s, Crystal only.
+## `EggAnimation`, `EggAnimationIdle`, `EggFrames` and `EggBitmasks` in [method pic_animation]'s shape:
+## `StatsScreen_AnimateEgg`'s, Crystal only.
 func egg_pic_animation() -> Dictionary:
 	var value: Variant = _pic_anims().get("egg", null)
 	return _pic_anim_record(value as Dictionary) if value is Dictionary else {}
@@ -3836,9 +3725,8 @@ func _pic_anim_record(record: Dictionary) -> Dictionary:
 	}
 
 
-## The whole Battle Tower block, empty on a cartridge that has no tower:
-## { trainers, mons, class_genders, class_sprites, texts, level_rows, menu_rows,
-## menu_text }. See [Gen2BattleTower], which is the only reader.
+## The whole Battle Tower block, empty on a cartridge that has no tower: { trainers, mons, class_genders,
+## class_sprites, texts, level_rows, menu_rows, menu_text }. See [Gen2BattleTower], which is the only reader.
 func battle_tower() -> Dictionary:
 	if _claim_section("battle_tower"):
 		_battle_tower_section = _read_section(RomCache.battle_tower_path(directory), false)
@@ -3849,9 +3737,8 @@ func has_battle_tower() -> bool:
 	return not battle_tower().is_empty()
 
 
-## One `BattleTowerMons` row as the party-mon struct plus nickname it is:
-## [param group] is `wBTChoiceOfLvlGroup - 1` and [param index] the row inside
-## it. Empty when either is outside the table.
+## One `BattleTowerMons` row as the party-mon struct plus nickname it is: [param group] is
+## `wBTChoiceOfLvlGroup - 1` and [param index] the row inside it. Empty when either is outside the table.
 func battle_tower_mon(group: int, index: int) -> PackedByteArray:
 	var groups: Variant = battle_tower().get("mons", [])
 	if not groups is Array or group < 0 or group >= (groups as Array).size():
@@ -3887,8 +3774,8 @@ func unown_pic(form: int, back: bool = false, frame: int = -1) -> Dictionary:
 	return pic
 
 
-## True once [param section] has been read, marking it read on the first ask.
-## The caller fills the matching member; a section is only ever read once.
+## True once [param section] has been read, marking it read on the first ask. The caller fills the matching
+## member; a section is only ever read once.
 func _claim_section(section: String) -> bool:
 	if _sections.has(section):
 		return false
@@ -3896,9 +3783,8 @@ func _claim_section(section: String) -> bool:
 	return true
 
 
-## One cached world file, as an Array or a Dictionary. A file that is missing or
-## the wrong shape answers empty, which is the same answer an unimported section
-## gave before these became lazy.
+## One cached world file, as an Array or a Dictionary. A file that is missing or the wrong shape answers
+## empty, which is the same answer an unimported section gave before these became lazy.
 func _read_section(path: String, as_array: bool) -> Variant:
 	var value: Variant = RomCache.read_json(path)
 	if as_array:
@@ -3906,9 +3792,8 @@ func _read_section(path: String, as_array: bool) -> Variant:
 	return value if value is Dictionary else {}
 
 
-## The binary blob a section's byte spans address, read once and kept. It is a
-## [PackedByteArray], so it costs one byte per cartridge byte rather than the
-## twenty-odd a Variant in an Array costs.
+## The binary blob a section's byte spans address, read once and kept. It is a [PackedByteArray], so it costs
+## one byte per cartridge byte rather than the twenty-odd a Variant in an Array costs.
 func _blob(section: String) -> PackedByteArray:
 	var key: String = "blob/%s" % section
 	if _indices.has(key):
@@ -3965,8 +3850,7 @@ func _maps() -> Array:
 			map.name = Gen1Layout.map_name(id, map.number) \
 				if generation == RomRegistry.GEN1 \
 				else Gen2Layout.map_name(Gen2WorldState.is_crystal_game_id(id), map.group, map.number)
-			# The first record of a duplicated identity wins, matching the scan
-			# this replaced.
+			# The first record of a duplicated identity wins, matching the scan this replaced.
 			var key := Vector2i(map.group, map.number)
 			if not _world_map_index.has(key):
 				_world_map_index[key] = _world_maps.size()
@@ -4145,35 +4029,31 @@ func _entry(rows: Array, index: int) -> Dictionary:
 	return rows[index]
 
 
-## One numbered content row, with the mod overlay consulted first: the chokepoint
-## species, moves, items and trainers all read through, and so the one place that
-## has to know a mod may have added or changed one. Everything carried on a
-## species row rides along, because [method learnset], [method evolutions] and the
-## TM/HM gate all read them back off this row. Numbering is one-based, the
-## cartridge's own.
+## One numbered content row, with the mod overlay consulted first: the chokepoint species, moves, items and
+## trainers all read through, and so the one place that has to know a mod may have added or changed one.
+## Everything carried on a species row rides along, because [method learnset], [method evolutions] and the
+## TM/HM gate all read them back off this row. Numbering is one-based, the cartridge's own.
 func _content(kind: StringName, rows: Array, number: int) -> Dictionary:
 	return _overlaid(kind, number, _entry(rows, number - 1))
 
 
-## The same for a row that is not one of the numbered content tables: an
-## encounter record or a fishing group, whose number is a table coordinate. A
-## number of -1 is a row no mod could have named and is answered untouched.
+## The same for a row that is not one of the numbered content tables: an encounter record or a fishing group,
+## whose number is a table coordinate. A number of -1 is a row no mod could have named and is answered
+## untouched.
 func _overlaid(kind: StringName, number: int, base: Dictionary) -> Dictionary:
 	if _overlay == null or _overlay.is_empty() or number < 0:
 		return base
 	return _overlay.resolve(kind, number, base)
 
 
-## The catalog of gameplay sites this cartridge holds, built once and kept: the
-## walk is the whole script corpus and nothing about it changes while a cache is
-## open. See [Gen2WorldCatalog].
+## The catalog of gameplay sites this cartridge holds, built once and kept: the walk is the whole script
+## corpus and nothing about it changes while a cache is open. See [Gen2WorldCatalog].
 func catalog() -> Gen2WorldCatalog:
 	if _catalog != null:
 		return _catalog
-	## The scan costs about thirteen seconds and its answer is a function of the
-	## cache alone, so it is read from the sidecar the import wrote. A cache from
-	## a build before the sidecar existed, or one whose sidecar is stale, pays
-	## the scan once and then has one.
+	## The scan costs about thirteen seconds and its answer is a function of the cache alone, so it is read
+	## from the sidecar the import wrote. A cache from a build before the sidecar existed, or one whose
+	## sidecar is stale, pays the scan once and then has one.
 	_catalog = Gen2WorldCatalog.from_dict(
 		self, RomCache.read_json(RomCache.world_catalog_path(directory))
 	)
@@ -4184,15 +4064,14 @@ func catalog() -> Gen2WorldCatalog:
 	return _catalog
 
 
-## One catalog row with any patch folded in. Called by the catalog itself, which
-## holds the rows; nothing else should need it.
+## One catalog row with any patch folded in. Called by the catalog itself, which holds the rows; nothing else
+## should need it.
 func overlaid_check(check_id: int, base: Dictionary) -> Dictionary:
 	return _overlaid(Gen2ContentOverlay.KIND_CHECK, check_id, base)
 
 
-## Whether any mod content reaches this cache at all, which is the one check a
-## hot path pays before asking the overlay anything. Not the SHARED overlay: a
-## tool or a test may hand this cache one of its own.
+## Whether any mod content reaches this cache at all, which is the one check a hot path pays before asking the
+## overlay anything. Not the SHARED overlay: a tool or a test may hand this cache one of its own.
 func set_text_overlay(overlay: Gen2TextOverlay) -> void:
 	_text_overlay = overlay
 
@@ -4201,8 +4080,8 @@ func has_content_overlay() -> bool:
 	return _overlay != null and not _overlay.is_empty()
 
 
-## Replaces the mod content this cache answers with. For a tool or a test that
-## needs content of its own without touching the shared overlay.
+## Replaces the mod content this cache answers with. For a tool or a test that needs content of its own
+## without touching the shared overlay.
 func set_content_overlay(overlay: Gen2ContentOverlay) -> void:
 	_overlay = overlay
 
@@ -4250,10 +4129,10 @@ func _coerce_service_value(value: Variant, blob: PackedByteArray) -> Variant:
 	return value
 
 
-## Resolves one cached byte run, whichever way the cache holds it. A record
-## carrying a [constant RomCache.PAYLOAD_KEY] is a span into the section's blob.
-## A bare Array is read inline, which is what a hand-written test fixture holds.
-## The two never have to be told apart by shape: the key says which one this is.
+## Resolves one cached byte run, whichever way the cache holds it. A record carrying a [constant
+## RomCache.PAYLOAD_KEY] is a span into the section's blob. A bare Array is read inline, which is what a
+## hand-written test fixture holds. The two never have to be told apart by shape: the key says which one this
+## is.
 func _payload_bytes(value: Variant, blob: PackedByteArray) -> PackedByteArray:
 	if value is PackedByteArray:
 		return value
@@ -4269,8 +4148,8 @@ func _payload_bytes(value: Variant, blob: PackedByteArray) -> PackedByteArray:
 	return out
 
 
-## Reads an [offset, length] span out of a section blob. A span that does not
-## address the blob answers empty rather than reading a neighbouring record.
+## Reads an [offset, length] span out of a section blob. A span that does not address the blob answers empty
+## rather than reading a neighbouring record.
 func _span_bytes(span: Variant, blob: PackedByteArray) -> PackedByteArray:
 	if not span is Array or (span as Array).size() != RomCache.PAYLOAD_SPAN:
 		return PackedByteArray()

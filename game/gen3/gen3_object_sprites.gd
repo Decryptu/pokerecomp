@@ -1,7 +1,8 @@
 class_name Gen3ObjectSprites
 extends RefCounted
 
-## The object events' OBJ palettes (`event_object_movement.c`) and the OAM `BuildOamBuffer` makes of them.
+## The object events' OBJ palettes (`event_object_movement.c`) in the OBJ half of [member palette], and the OAM
+## `BuildOamBuffer` makes of them.
 
 const PALETTE_SLOTS: int = 10
 const LINK_PALETTE_SLOTS: int = 6
@@ -37,7 +38,9 @@ const REFLECTION_DELTAS: Array[int] = [1, 0, -1, 0, -1, 0, 1, 0]
 const SHADOW_Y_OFFSETS: Array[int] = [4, 4, 4, 16]
 
 var data: GameData
-var palettes := PackedByteArray()
+var palette: Gen3Palette
+## The field's weather, which `UpdateSpritePaletteWithWeather` asks after each reflection palette load.
+var weather: Gen3FieldWeather
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
 var reflections: Array[Dictionary] = []
@@ -47,9 +50,9 @@ var _ruby: bool = false
 var _order: Array[int] = []
 
 
-func _init(game: GameData) -> void:
+func _init(game: GameData, palettes: Gen3Palette = null) -> void:
 	data = game
-	palettes.resize(16 * 32)
+	palette = palettes if palettes != null else Gen3Palette.new()
 	_ruby = game.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE]
 	for slot: int in SPRITE_COUNT:
 		_order.append(slot)
@@ -65,10 +68,9 @@ func init_palettes(type: int) -> void:
 		patch(int(tags[slot]), slot)
 
 
+## `PatchObjectPalette`: `LoadPalette` into OBJ palette [param slot].
 func patch(tag: int, slot: int) -> void:
-	var colors: PackedByteArray = data.world_object_palette(tag)
-	for index: int in colors.size():
-		palettes[slot * 32 + index] = colors[index]
+	palette.load(data.world_object_palette(tag), Gen3Palette.OBJ_OFFSET + slot * 16)
 
 
 ## `TrySetupObjectEventSprite` ([param spawn]) and `ObjectEventSetGraphicsId`'s palette loads.
@@ -185,6 +187,8 @@ func _load_reflection_palette(info: Dictionary, slot: int, bridge: bool) -> void
 			int(info["palette_tag"]), slot)
 	else:
 		patch(palette_tag(slot), slot)
+	if weather != null:
+		weather.update_sprite_palette(slot)
 
 
 ## `GetObjectPaletteTag` uses the last special object's tag for every slot above the regular bank.

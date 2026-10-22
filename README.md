@@ -100,8 +100,9 @@ their pictures, palettes, OAM shapes, subsprite tables, sprite animations and
 step-animation positions, trainers, map headers,
 layouts, tilesets with their animation frames and timing, events, map script
 entry points, reachable
-bytecode and the texts, braille, movement lists and marts it names, wild
-encounters and front/back pictures with normal and shiny palettes. Picture
+bytecode and the texts, braille, movement lists and marts it names, the
+weather's sprite palette and drought colour tables, wild encounters and
+front/back pictures with normal and shiny palettes. Picture
 frames and all 28 Unown forms are retained; none of these cartridges is
 playable. `tools/import_rom.gd` skips them unless given `--dev`. Static map
 previews use
@@ -109,7 +110,8 @@ previews use
 and draw the map as the field loads it, with the neighbouring maps' edges and
 the border around it; a frame count after the path renders the map that many
 tileset animation frames in, and a layout cell after the count draws the
-240x160 field screen with the player standing there and the objects in view
+240x160 field screen with the player standing there and the objects in view,
+the frames counted from the warp's fade in under the map's weather
 ([Gen3ObjectSprites](game/gen3/gen3_object_sprites.gd): OBJ palettes, priority
 by elevation, subsprite splits, shadows, reflections and shared `SortSprites`
 order). The field's camera steps across map connections as the cartridge's does, spawning and removing the map's objects as they enter
@@ -133,9 +135,14 @@ walk up and turn the player; FireRed and LeafGreen scroll the camera to a
 trainer above the view. Jump shadows follow each object at ground level and
 stop on landing, grass, water or reflective ground. Water and ice reflections
 follow the object's current frame, visibility and jump offsets, with bridge
-palettes and the shared water distortion clock. Weather palette processing,
-other affine sprite animations, field effects and gate rendering await the field
-host. Script bytecode and its data are decoded and cached; script execution awaits the rest of the GBA world model.
+palettes and the shared water distortion clock. [The weather](game/gen3/gen3_field_weather.gd)
+darkens, brightens and fades the field's colours through one
+[palette RAM](game/gen3/gen3_palette.gd) as each engine does: the colour maps
+rain and shade step through, Ruby, Sapphire and Emerald's drought tables, fog's
+lightened sprites, Emerald's alternating Groudon/Kyogre weather and the screen
+fades. Weather sprites and their timing (rain, snow, lightning, fog, ash and
+sand), other affine sprite animations, field effects and gate rendering await
+the field host. Script bytecode and its data are decoded and cached; script execution awaits the rest of the GBA world model.
 
 | Game | SHA-1 |
 |---|---|

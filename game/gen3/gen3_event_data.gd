@@ -21,6 +21,11 @@ const CLEARED_SYSTEM_FLAGS: Dictionary = {
 
 var berries: Gen3BerryTrees
 var game: StringName
+## `gSaveBlock1Ptr->weather` and `weatherCycleStage`.
+var weather: int = 0
+var weather_cycle_stage: int = 0
+## `IncrementGameStat`'s counters by `GAME_STAT_*`.
+var stats: Dictionary = {}
 var _flags: Dictionary = {}
 var _vars: Dictionary = {}
 
@@ -60,3 +65,8 @@ func clear_temp() -> void:
 		_vars.erase(VARS_START + id)
 	for id: int in CLEARED_SYSTEM_FLAGS[game]:
 		_flags.erase(id)
+
+
+## `IncrementGameStat`: counters stop at 0xFFFFFF.
+func increment_stat(id: int) -> void:
+	stats[id] = mini(int(stats.get(id, 0)) + 1, 0xFFFFFF)
