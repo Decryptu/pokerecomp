@@ -100,8 +100,8 @@ static func _background(rom: RomFile, at: int) -> Dictionary:
 	return out
 
 
-## src/script.c: five-byte dispatch rows; types 2/4 point at eight-byte comparisons.
-## Table terminators are one byte and two bytes respectively, with no pointer.
+## src/script.c: five-byte dispatch rows; types 2/4 point at eight-byte comparisons. Table terminators are one
+## byte and two bytes respectively, with no pointer.
 static func map_scripts(rom: RomFile, at: int) -> Array:
 	if at == 0:
 		return []

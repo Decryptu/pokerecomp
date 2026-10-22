@@ -1,10 +1,9 @@
 class_name Gen3TilesetAnims
 extends RefCounted
 
-## A tileset's callback is an `InitTilesetAnim_*` (Ruby: `TilesetCB_*`) routine,
-## copied as rows: when `timer % every == at`, queue `table[(timer / div - sub) % count]`
-## (u16 subtraction) at `tile` or BG `palette`. `dests` unrolls the `timer_mod`
-## families over that VRAM pointer table; `length` -1 is the primary's length.
+## A tileset's callback is an `InitTilesetAnim_*` (Ruby: `TilesetCB_*`) routine, copied as rows: when `timer %
+## every == at`, queue `table[(timer / div - sub) % count]` (u16 subtraction) at `tile` or BG `palette`.
+## `dests` unrolls the `timer_mod` families over that VRAM pointer table; `length` -1 is the primary's length.
 
 const VRAM_BASE: int = 0x06000000
 const TILE_BYTES: int = 32

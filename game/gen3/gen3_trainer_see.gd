@@ -1,10 +1,9 @@
 class_name Gen3TrainerSee
 extends RefCounted
 
-## `trainer_see.c`: trainers spotting the player, their approach and the
-## buried-trainer reveal. [method run_tasks] is the tasks' share of `RunTasks`;
-## battle setup and the scripts that start and wait on the approach stay with
-## their hosts, which read [member approaching].
+## `trainer_see.c`: trainers spotting the player, their approach and the buried-trainer reveal. [method
+## run_tasks] is the tasks' share of `RunTasks`; battle setup and the scripts that start and wait on the
+## approach stay with their hosts, which read [member approaching].
 
 enum TrainerType { NONE, NORMAL, SEE_ALL_DIRECTIONS, BURIED }
 ## `sTrainerSeeFuncList`; the last three are FireRed/LeafGreen's camera scroll.
@@ -29,8 +28,8 @@ const REVEAL_TRAINER: Array[int] = [0x59, 0x67]
 
 var objects: Gen3ObjectEvents
 var avatar: Gen3PlayerAvatar
-## `gApproachingTrainers`: each trainer the last check found, with its slot,
-## script offset (-1 for Trainer Hill's shared script) and sight distance.
+## `gApproachingTrainers`: each trainer the last check found, with its slot, script offset (-1 for Trainer
+## Hill's shared script) and sight distance.
 var approaching: Array[Dictionary] = []
 ## Emerald's `gApproachingTrainerId` and `gTrainerApproachedPlayer`.
 var approaching_id: int = 0
@@ -51,10 +50,9 @@ func _init(field_objects: Gen3ObjectEvents, player_avatar: Gen3PlayerAvatar) -> 
 		_wait_buried, _camera_spawn, _camera_up, _camera_down])
 
 
-## `CheckForTrainersWantingBattle` (Ruby's `CheckTrainers`): an approach task
-## for each trainer that sees the player. Emerald keeps looking for a second
-## while the party has two usable Pokémon. [param facility_flag] answers
-## Emerald's Battle Pyramid and Trainer Hill trainer flags by slot.
+## `CheckForTrainersWantingBattle` (Ruby's `CheckTrainers`): an approach task for each trainer that sees the
+## player. Emerald keeps looking for a second while the party has two usable Pokémon. [param facility_flag]
+## answers Emerald's Battle Pyramid and Trainer Hill trainer flags by slot.
 func check_trainers(two_usable_mons: bool = true, facility_flag: Callable = Callable()) -> bool:
 	approaching.clear()
 	approaching_id = 0
@@ -70,8 +68,8 @@ func check_trainers(two_usable_mons: bool = true, facility_flag: Callable = Call
 	return approached_player
 
 
-## `DoTrainerApproach` (`EndTrainerApproach` before Emerald): the current
-## trainer's task starts and runs at once, from the script.
+## `DoTrainerApproach` (`EndTrainerApproach` before Emerald): the current trainer's task starts and runs at
+## once, from the script.
 func start_approach() -> Array:
 	var requests: Array = []
 	var task: Dictionary = {}
@@ -102,8 +100,8 @@ func prepare_second_trainer() -> bool:
 	return true
 
 
-## Tasks by priority, buried reveals (0) before approaches (0x50), including reveals the last
-## object callbacks queued. `script_enable` asks the waiting script to resume.
+## Tasks by priority, buried reveals (0) before approaches (0x50), including reveals the last object callbacks
+## queued. `script_enable` asks the waiting script to resume.
 func run_tasks() -> Array:
 	var requests: Array = []
 	for slot: int in objects.buried_reveals:
@@ -176,8 +174,8 @@ func _approach_distance(object: Gen3ObjectEvents.ObjectEvent) -> int:
 	return 0
 
 
-## `GetTrainerApproachDistance{South,North,West,East}` to the player's
-## destination. FRLG's south sight needs a free slot for the camera past three.
+## `GetTrainerApproachDistance{South,North,West,East}` to the player's destination. FRLG's south sight needs a
+## free slot for the camera past three.
 func _sight(object: Gen3ObjectEvents.ObjectEvent, direction: int) -> int:
 	var player: Vector2i = avatar.object().current
 	var reach: int = object.trainer_range
@@ -200,10 +198,9 @@ func _sight(object: Gen3ObjectEvents.ObjectEvent, direction: int) -> int:
 	return distance
 
 
-## `CheckPathBetweenTrainerAndPlayer`: the cells short of the player, then the
-## player's cell with the trainer's range cleared. Emerald starts past the
-## trainer and ignores only an out-of-range bit; Ruby and FRLG include the
-## trainer's own cell, and Ruby's mask blocks on nothing but that bit.
+## `CheckPathBetweenTrainerAndPlayer`: the cells short of the player, then the player's cell with the
+## trainer's range cleared. Emerald starts past the trainer and ignores only an out-of-range bit; Ruby and
+## FRLG include the trainer's own cell, and Ruby's mask blocks on nothing but that bit.
 func _clear_path(object: Gen3ObjectEvents.ObjectEvent, distance: int, direction: int) -> int:
 	if distance == 0:
 		return 0
@@ -238,8 +235,8 @@ static func _ready(object: Gen3ObjectEvents.ObjectEvent) -> bool:
 		or Gen3ObjectEvents.clear_held_movement_if_finished(object) != 0
 
 
-## `Task_RunTrainerSeeFuncList`, or `Task_SetBuriedTrainerMovement` for a
-## reveal, which runs one step a frame from `sTrainerSeeFuncList2`.
+## `Task_RunTrainerSeeFuncList`, or `Task_SetBuriedTrainerMovement` for a reveal, which runs one step a frame
+## from `sTrainerSeeFuncList2`.
 func _run(task: Dictionary, requests: Array) -> void:
 	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[int(task["slot"])]
 	if task["buried"]:
@@ -374,8 +371,8 @@ func _wait_buried(task: Dictionary, _object: Gen3ObjectEvents.ObjectEvent, _requ
 	return false
 
 
-## FRLG's `SpawnSpecialObjectEventParameterized` at the player's view focus;
-## `camera_follow` asks the host's camera to follow that object.
+## FRLG's `SpawnSpecialObjectEventParameterized` at the player's view focus; `camera_follow` asks the host's
+## camera to follow that object.
 func _camera_spawn(task: Dictionary, _object: Gen3ObjectEvents.ObjectEvent, requests: Array) -> bool:
 	task["camera_steps"] = 0
 	var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()

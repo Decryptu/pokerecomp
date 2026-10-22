@@ -1,8 +1,8 @@
 class_name Gen3Script
 extends RefCounted
 
-## pret src/scrcmd.c and data/script_cmd_table.inc, including consumed operands
-## of no-op handlers. Digits are ScriptReadByte/Halfword/Word widths, not macros.
+## pret src/scrcmd.c and data/script_cmd_table.inc, including consumed operands of no-op handlers. Digits are
+## ScriptReadByte/Halfword/Word widths, not macros.
 const FORMAT_COUNTS: Dictionary = {
 	RomRegistry.RUBY: [198, 9], RomRegistry.SAPPHIRE: [198, 9],
 	RomRegistry.FIRERED: [213, 10], RomRegistry.LEAFGREEN: [213, 10],
@@ -282,8 +282,8 @@ const FRLG_COMMANDS: Dictionary = {
 	0xD4: "bufferitemnameplural:122",
 }
 
-## battle_setup.c's TrainerBattleLoadArgs consumes texts and optional scripts.
-## Mode 9 in FRLG stores defeat/victory texts, not Hoenn's facility arguments.
+## battle_setup.c's TrainerBattleLoadArgs consumes texts and optional scripts. Mode 9 in FRLG stores
+## defeat/victory texts, not Hoenn's facility arguments.
 const TRAINER_WIDTHS: Array[String] = [
 	"12244", "122444", "122444", "1224", "122444", "12244",
 	"1224444", "122444", "1224444", "12244", "12244", "12244", "12244",
@@ -293,8 +293,8 @@ const TERMINATORS: Array[int] = [2, 3, 5, 12, 13, 0x5E, 0x5F, 0xB9]
 ## DoWarp's map load replaces the context; these scripts often have no end.
 const WARPS: Array[int] = [0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0xD1, 0xD7, 0xE0]
 
-## Operands naming data a handler reads: operand index and table. `loadword 0`
-## is msgbox's text, and every trainerbattle word but a continuation is a text.
+## Operands naming data a handler reads: operand index and table. `loadword 0` is msgbox's text, and every
+## trainerbattle word but a continuation is a text.
 const DATA_OPERANDS: Dictionary = {
 	"message": [0, "texts"], "messageautoscroll": [0, "texts"],
 	"messageinstant": [0, "texts"], "pokenavcall": [0, "texts"],
@@ -401,8 +401,8 @@ static func read(rom: RomFile, layout: Dictionary, headers: Dictionary) -> Dicti
 	return out
 
 
-## Instructions share no byte with each other or with data. A movement label
-## inside another list shares its tail, so overlapping data must end together.
+## Instructions share no byte with each other or with data. A movement label inside another list shares its
+## tail, so overlapping data must end together.
 static func _valid_boundaries(instructions: Dictionary, data: Dictionary) -> bool:
 	var runs: Array[Vector3i] = []
 	for key: String in instructions:

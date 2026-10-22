@@ -96,7 +96,8 @@ over a one-pocket bag.
 Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
 the shelf. An import reads their species with Pokédex entries, moves, types,
 matchup chart, items, abilities, berry growth parameters, object graphics with
-their sprite animations and step-animation positions, trainers, map headers,
+their pictures, palettes, OAM shapes, subsprite tables, sprite animations and
+step-animation positions, trainers, map headers,
 layouts, tilesets with their animation frames and timing, events, map script
 entry points, reachable
 bytecode and the texts, braille, movement lists and marts it names, wild
@@ -107,7 +108,10 @@ previews use
 `godot --headless --path . -s res://tools/preview_world.gd -- emerald 0 9 /tmp/littleroot.png`
 and draw the map as the field loads it, with the neighbouring maps' edges and
 the border around it; a frame count after the path renders the map that many
-tileset animation frames in. The field's camera steps across map connections
+tileset animation frames in, and a layout cell after the count draws the
+240x160 field screen with the player standing there and the objects in view
+([Gen3ObjectSprites](game/gen3/gen3_object_sprites.gd): OBJ palettes, priority
+by elevation, subsprite splits, `SortSprites` order). The field's camera steps across map connections
 as the cartridge's does, spawning and removing the map's objects as they enter
 and leave the view, and its collision test answers as the cartridge's. Every
 held object movement runs frame by frame through
@@ -126,7 +130,8 @@ and regrowth; their objects run growth animations and request sparkles.
 [Trainers](game/gen3/gen3_trainer_see.gd) spot the player along each engine's
 sight path, show the exclamation mark, reveal disguises or climb out of ash,
 walk up and turn the player; FireRed and LeafGreen scroll the camera to a
-trainer above the view. Object and gate rendering await the field host. Script bytecode and its data are
+trainer above the view. Shadows, reflections, affine sprite animations, field
+effects and gate rendering await the field host. Script bytecode and its data are
 decoded and cached; script execution awaits the rest of the GBA world model.
 
 | Game | SHA-1 |

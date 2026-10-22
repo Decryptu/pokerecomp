@@ -1,9 +1,8 @@
 class_name Gen3PlayerAvatar
 extends RefCounted
 
-## `field_player_avatar.c`: initialization, state queries and collision
-## decisions, Strength, surf dismount tasks and rotating-gate puzzles.
-## Sprites are left to the field drawing host.
+## `field_player_avatar.c`: initialization, state queries and collision decisions, Strength, surf dismount
+## tasks and rotating-gate puzzles. Sprites are left to the field drawing host.
 
 enum Flag { ON_FOOT = 1, MACH_BIKE = 2, ACRO_BIKE = 4, SURFING = 8,
 	UNDERWATER = 16, CONTROLLABLE = 32, FORCED_MOVE = 64, DASH = 128 }
@@ -72,9 +71,9 @@ var _gate_map: String = ""
 var _gates: Array = []
 
 
-## `InitPlayerAvatar` takes backup coordinates. The slot is reserved before
-## spawning map objects, as `InitObjectEventsLocal` does. Null on a full pool or
-## a duplicate player, rather than the cartridge's out-of-bounds write.
+## `InitPlayerAvatar` takes backup coordinates. The slot is reserved before spawning map objects, as
+## `InitObjectEventsLocal` does. Null on a full pool or a duplicate player, rather than the cartridge's
+## out-of-bounds write.
 static func open(field_objects: Gen3ObjectEvents, at: Vector2i, direction: int, player_gender: int) -> Gen3PlayerAvatar:
 	if player_gender not in [0, 1] or direction < 0 or direction > 4:
 		return null
@@ -143,8 +142,8 @@ func check_collision(direction: int) -> Dictionary:
 	return collision_at(object(), at, direction)
 
 
-## `CheckForObjectEventCollision`. Emerald's static query skips dismounts, ledges and
-## boulders. The input host consumes effects once to start tasks and update game statistics.
+## `CheckForObjectEventCollision`. Emerald's static query skips dismounts, ledges and boulders. The input host
+## consumes effects once to start tasks and update game statistics.
 func collision_at(probe: Gen3ObjectEvents.ObjectEvent, at: Vector2i, direction: int,
 		static_only: bool = false) -> Dictionary:
 	if direction < 1 or direction > 4:
@@ -195,8 +194,8 @@ func _pushable_boulder(at: Vector2i, direction: int) -> int:
 	return -1
 
 
-## `IsPlayerFacingSurfableFishableWater`: FRLG reads terrain attributes;
-## Hoenn reads the behavior predicates, which exclude waterfalls.
+## `IsPlayerFacingSurfableFishableWater`: FRLG reads terrain attributes; Hoenn reads the behavior predicates,
+## which exclude waterfalls.
 func facing_fishable_water() -> bool:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	if player.facing < 1 or player.facing > 4:
@@ -216,9 +215,8 @@ static func _result(collision: int, requests: Array = []) -> Dictionary:
 	return {"collision": collision, "requests": requests}
 
 
-## The collision branch of `PlayerNotOnBikeCollide`: query once, consume its
-## effects and start the task immediately. Tasks block further player steps;
-## ordinary walks and stairs are left to the field input host.
+## The collision branch of `PlayerNotOnBikeCollide`: query once, consume its effects and start the task
+## immediately. Tasks block further player steps; ordinary walks and stairs are left to the field input host.
 func begin_collision_movement(direction: int) -> Dictionary:
 	if prevent_step:
 		return _result(Collision.IMPASSABLE)
@@ -252,8 +250,8 @@ func begin_collision_movement(direction: int) -> Dictionary:
 	return result
 
 
-## `RunTasks` precedes `AnimateSprites`: call this once per field frame, after
-## [method Gen3TrainerSee.run_tasks], then [method Gen3ObjectEvents.step_movements]. Presentation requests leave
+## `RunTasks` precedes `AnimateSprites`: call this once per field frame, after [method
+## Gen3TrainerSee.run_tasks], then [method Gen3ObjectEvents.step_movements]. Presentation requests leave
 ## flags, occupancy and held actions owned by these models.
 func step_movement_tasks() -> Array:
 	var requests: Array = []
@@ -277,8 +275,8 @@ func cancel_forced_movement() -> void:
 		flags &= ~Flag.FORCED_MOVE
 
 
-## Emerald's `PushBoulder_Move` clears finished holds before testing overrides;
-## `DoBoulderDust` on Ruby/Sapphire/FRLG does not, even for a finished hold.
+## Emerald's `PushBoulder_Move` clears finished holds before testing overrides; `DoBoulderDust` on
+## Ruby/Sapphire/FRLG does not, even for a finished hold.
 func _start_push(requests: Array) -> void:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	var boulder: Gen3ObjectEvents.ObjectEvent = objects.objects[_boulder_id]
@@ -332,8 +330,8 @@ func _finish_dismount(requests: Array) -> void:
 	task = Task.NONE
 
 
-## `RotatingGate_InitPuzzle` resets bytes in temp vars; graphics initialization
-## reloads the config without resetting it. The script/field host calls this.
+## `RotatingGate_InitPuzzle` resets bytes in temp vars; graphics initialization reloads the config without
+## resetting it. The script/field host calls this.
 func load_rotating_gates(reset: bool = false) -> void:
 	_gate_map = "%d:%d" % [objects.camera.group, objects.camera.number]
 	_gates = []
@@ -388,8 +386,8 @@ func _gate_has_arm(gate: int, info: int) -> bool:
 	return arm >= 0 and int(GATE_ARMS[int(_gates[gate][2])][arm * 2 + info % 2]) != 0
 
 
-## `RotatingGate_CanRotate` blocks collision 1 only, including its cartridge
-## bug that permits arms through cells with collision 2 or 3.
+## `RotatingGate_CanRotate` blocks collision 1 only, including its cartridge bug that permits arms through
+## cells with collision 2 or 3.
 func _gate_can_rotate(gate: int, center: Vector2i, rotation: int) -> bool:
 	var arms: Array = GATE_ARMS[int(_gates[gate][2])]
 	for arm: int in arms.size():

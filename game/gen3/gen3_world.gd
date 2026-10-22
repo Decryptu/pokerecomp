@@ -33,18 +33,20 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	var scripts: Dictionary = Gen3Script.read(rom, layout, headers)
 	var movement_types: Array = _movement_types(rom, layout)
-	var berries: Array = _berries(rom, layout)
-	var object_graphics: Dictionary = _object_graphics(rom, layout)
-	if scripts.is_empty() or movement_types.is_empty() or berries.is_empty() or object_graphics.is_empty():
+	var object_graphics: Dictionary = _object_graphics(rom, layout, graphics)
+	var berries: Array = [] if object_graphics.is_empty() else _berries(rom, layout, object_graphics, graphics)
+	var palettes: Dictionary = _object_palettes(rom, layout, object_graphics, graphics)
+	if scripts.is_empty() or movement_types.is_empty() or berries.is_empty() or palettes.is_empty():
 		return {}
 	scripts["movement_types"] = movement_types
 	scripts["berries"] = berries
 	scripts.merge(object_graphics)
+	scripts["object_palettes"] = palettes
 	return {"headers": headers, "encounters": encounters, "graphics": graphics, "scripts": scripts}
 
 
-## Per `MOVEMENT_TYPE_*`, whether `InitObjectEventStateFromTemplate` gives it a
-## range of at least one, and the direction an object of that type starts facing.
+## Per `MOVEMENT_TYPE_*`, whether `InitObjectEventStateFromTemplate` gives it a range of at least one, and the
+## direction an object of that type starts facing.
 static func _movement_types(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout["movement_types"])
 	var count: int = int(layout["movement_type_count"])
@@ -60,9 +62,9 @@ static func _movement_types(rom: RomFile, layout: Dictionary) -> Array:
 	return out
 
 
-## `gBerries` has 43 padded 28-byte records. Hoenn's graphics lookup also
-## accepts ID 44: its palette pointer runs into the following graphics table.
-static func _berries(rom: RomFile, layout: Dictionary) -> Array:
+## `gBerries` has 43 padded 28-byte records. Hoenn's graphics lookup also accepts ID 44: its pic and palette
+## pointers run into the following tables.
+static func _berries(rom: RomFile, layout: Dictionary, object_graphics: Dictionary, graphics: Dictionary) -> Array:
 	var at: int = int(layout["berries"])
 	if not rom.in_bounds(at, 43 * 28):
 		return []
@@ -81,16 +83,29 @@ static func _berries(rom: RomFile, layout: Dictionary) -> Array:
 			if source < 0:
 				return []
 			row[table] = Array(rom.slice(source, 5))
+		if layout.has("berry_pics"):
+			var pics: int = Gen3Layout.read_pointer(rom, int(layout["berry_pics"]) + index * 4, 8)
+			if pics < 0:
+				return []
+			var last: int = 0
+			for graphics_id: int in row["berry_graphics"]:
+				if graphics_id >= object_graphics["object_graphics"].size():
+					return []
+				var anims: String = str(int(object_graphics["object_graphics"][graphics_id]["anims"]))
+				last = maxi(last, _last_image(object_graphics["sprite_anims"][anims]))
+			_read_images(rom, pics, last, object_graphics, graphics)
+			row["berry_images"] = pics
 		out.append(row)
 	return out
 
 
-## Each `ObjectEventGraphicsInfo`'s `inanimate` bit and its `anims` table, keyed
-## by dump offset. A table runs over every following pointer to an anim
-## sequence, so an index past its own entries reads on as the cartridge does.
-static func _object_graphics(rom: RomFile, layout: Dictionary) -> Dictionary:
+## Each `ObjectEventGraphicsInfo` but its tile tag and affine anims, tables keyed by dump offset. An anims
+## table runs over every following sequence pointer, as the cartridge reads it, and images as far as it
+## indexes.
+static func _object_graphics(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> Dictionary:
 	var tables: Dictionary = {}
-	var out: Dictionary = {"sprite_anims": tables}
+	var out: Dictionary = {"sprite_anims": tables, "sprite_images": {}, "subsprite_tables": {}}
+	graphics["sprite_images"] = {}
 	for key: String in ["object_graphics", "mauville_graphics"]:
 		if not layout.has(key):
 			continue
@@ -102,13 +117,161 @@ static func _object_graphics(rom: RomFile, layout: Dictionary) -> Dictionary:
 				return {}
 			if not tables.has(str(anims)):
 				tables[str(anims)] = _anim_table(rom, anims)
-			if tables[str(anims)].is_empty():
+			var row: Dictionary = _graphics_info(rom, info, tables[str(anims)], out, graphics)
+			if tables[str(anims)].is_empty() or row.is_empty():
 				return {}
-			rows.append({"inanimate": bool(rom.u8(info + 0x0C) & 0x40), "anims": anims})
+			row["anims"] = anims
+			rows.append(row)
 		out[key] = rows
 	var steps: Dictionary = {}
 	out["step_anims"] = steps
 	return out if _step_anims(rom, layout, tables, steps) else {}
+
+
+static func _graphics_info(rom: RomFile, info: int, anims: Array, out: Dictionary, graphics: Dictionary) -> Dictionary:
+	var oam: int = Gen3Layout.read_pointer(rom, info + 0x10, 8)
+	var images: int = Gen3Layout.read_pointer(rom, info + 0x1C, 8)
+	var subsprites: int = 0 if rom.u32le(info + 0x14) == 0 else Gen3Layout.read_pointer(rom, info + 0x14, 48)
+	if oam < 0 or images < 0 or subsprites < 0:
+		return {}
+	var bits: int = rom.u8(info + 0x0C)
+	var row: Dictionary = {
+		"palette_tag": rom.u16le(info + 2), "reflection_palette_tag": rom.u16le(info + 4),
+		"size": rom.u16le(info + 6), "width": rom.s16le(info + 8), "height": rom.s16le(info + 10),
+		"palette_slot": bits & 0xF, "shadow_size": (bits >> 4) & 3, "inanimate": bool(bits & 0x40),
+		"disable_reflection_palette_load": bool(bits & 0x80), "tracks": rom.u8(info + 0x0D),
+		"oam": {"affine_mode": (rom.u16le(oam) >> 8) & 3, "obj_mode": (rom.u16le(oam) >> 10) & 3,
+			"shape": rom.u16le(oam) >> 14, "size": rom.u16le(oam + 2) >> 14,
+			"priority": (rom.u16le(oam + 4) >> 10) & 3},
+		"images": images, "subsprite_tables": subsprites,
+	}
+	_read_images(rom, images, _last_image(anims), out, graphics)
+	if subsprites != 0 and not out["subsprite_tables"].has(str(subsprites)):
+		out["subsprite_tables"][str(subsprites)] = _subsprite_tables(rom, subsprites)
+	if out["sprite_images"][str(images)].is_empty() \
+			or (subsprites != 0 and out["subsprite_tables"][str(subsprites)].is_empty()):
+		return {}
+	return row
+
+
+## A table shared by several rows is read as far as any of their anims index it.
+static func _read_images(rom: RomFile, at: int, last: int, out: Dictionary, graphics: Dictionary) -> void:
+	var read: Array = out["sprite_images"].get(str(at), [])
+	if read.size() <= last:
+		out["sprite_images"][str(at)] = _image_table(rom, at, last, graphics["sprite_images"])
+
+
+static func _last_image(anims: Array) -> int:
+	var last: int = 0
+	for sequence: Array in anims:
+		for word: int in sequence:
+			if word & 0xFFFF < 0x8000:
+				last = maxi(last, word & 0xFFFF)
+	return last
+
+
+## `SpriteFrameImage` rows 0 to [param last] as [data offset, size], up to the first that points at no data.
+static func _image_table(rom: RomFile, at: int, last: int, bytes: Dictionary) -> Array:
+	var out: Array = []
+	for index: int in last + 1:
+		var size: int = rom.u16le(at + index * 8 + 4) if rom.in_bounds(at + index * 8, 8) else 0
+		var data: int = Gen3Layout.read_pointer(rom, at + index * 8, maxi(size, 1), 1)
+		if data < 0 or size == 0 or size % GbaTiles.TILE_BYTES != 0:
+			break
+		out.append([data, size])
+		if bytes.get(str(data), {}).get("bytes", []).size() < size:
+			bytes[str(data)] = {"bytes": Array(rom.slice(data, size))}
+	return out
+
+
+## The six `SubspriteTable`s, a null list empty. Ruby and Sapphire's halfword `x` and `y` pad `Subsprite` to 8 bytes.
+static func _subsprite_tables(rom: RomFile, at: int) -> Array:
+	var wide: bool = rom.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE]
+	var size: int = 8 if wide else 4
+	var out: Array = []
+	for index: int in Gen3ObjectSprites.SUBSPRITE_TABLES:
+		var count: int = rom.u8(at + index * 8)
+		var list: int = 0 if rom.u32le(at + index * 8 + 4) == 0 \
+			else Gen3Layout.read_pointer(rom, at + index * 8 + 4, count * size, 2)
+		if list < 0 or count > Gen3ObjectSprites.SUBSPRITE_LIMIT or (list == 0) != (count == 0):
+			return []
+		var table: Array = []
+		for part: int in count:
+			var p: int = list + part * size
+			var bits: int = rom.u16le(p + (4 if wide else 2))
+			table.append({"x": rom.s16le(p) if wide else rom.s8(p),
+				"y": rom.s16le(p + 2) if wide else rom.s8(p + 1),
+				"shape": bits & 3, "size": (bits >> 2) & 3, "tile_offset": (bits >> 4) & 0x3FF,
+				"priority": bits >> 14})
+		out.append(table)
+	return out
+
+
+## `sObjectEventSpritePalettes`, the four `sObjectPaletteTagSets` and the reflection sets by main tag.
+static func _object_palettes(rom: RomFile, layout: Dictionary, object_graphics: Dictionary,
+		graphics: Dictionary) -> Dictionary:
+	if object_graphics.is_empty():
+		return {}
+	var rows: Array = []
+	graphics["object_palettes"] = {}
+	if not layout.has("object_palettes"):
+		return {"rows": rows, "tag_sets": [], "player_reflections": {}, "special_reflections": {}}
+	var at: int = int(layout["object_palettes"])
+	while rom.in_bounds(at, 8) and rom.u32le(at) != 0:
+		var colors: int = Gen3Layout.read_pointer(rom, at, Gen3Layout.PALETTE_BYTES, 2)
+		if colors < 0:
+			return {}
+		rows.append([rom.u16le(at + 4), colors])
+		graphics["object_palettes"][str(colors)] = {"bytes": Array(rom.slice(colors, Gen3Layout.PALETTE_BYTES))}
+		at += 8
+	var out: Dictionary = {"rows": rows, "tag_sets": [],
+		"player_reflections": _reflection_sets(rom, int(layout["player_reflection_palettes"])),
+		"special_reflections": _reflection_sets(rom, int(layout["special_reflection_palettes"]))}
+	if out["player_reflections"].is_empty() or out["special_reflections"].is_empty():
+		return {}
+	for index: int in Gen3ObjectSprites.REFLECTION_TYPES:
+		var tag_set: int = Gen3Layout.read_pointer(rom, int(layout["object_palette_tags"]) + index * 4,
+			Gen3ObjectSprites.PALETTE_SLOTS * 2, 2)
+		if tag_set < 0:
+			return {}
+		out["tag_sets"].append(range(Gen3ObjectSprites.PALETTE_SLOTS).map(
+			func(slot: int) -> int: return rom.u16le(tag_set + slot * 2)))
+	return out if _palette_tags_found(out, object_graphics) else {}
+
+
+## Every tag the palette code can look up has a row; `FindObjectEventPaletteIndexByTag` would miss and copy
+## from past the table. FRLG's reflection sets name Hoenn tags no graphics reach.
+static func _palette_tags_found(palettes: Dictionary, object_graphics: Dictionary) -> bool:
+	var tags: Array = palettes["rows"].map(func(row: Array) -> int: return int(row[0]))
+	var needed: Array = []
+	for type: int in Gen3ObjectSprites.USED_REFLECTION_TYPES:
+		needed.append_array(palettes["tag_sets"][type])
+	var sets: Dictionary = {Gen3ObjectSprites.PALSLOT_PLAYER: "player_reflections",
+		Gen3ObjectSprites.PALSLOT_NPC_SPECIAL: "special_reflections"}
+	for row: Dictionary in object_graphics.get("object_graphics", []) + object_graphics.get("mauville_graphics", []):
+		var slot: int = int(row["palette_slot"])
+		if sets.has(slot):
+			needed.append(int(row["palette_tag"]))
+			var reflections: Array = palettes[sets[slot]].get(str(int(row["palette_tag"])), [])
+			for type: int in Gen3ObjectSprites.USED_REFLECTION_TYPES:
+				needed.append_array(reflections.slice(type, type + 1))
+	for tag: int in needed:
+		if not tags.has(tag):
+			return false
+	return true
+
+
+static func _reflection_sets(rom: RomFile, at: int) -> Dictionary:
+	var out: Dictionary = {}
+	while rom.in_bounds(at, 8) and rom.u16le(at) != Gen3ObjectSprites.PALETTE_TAG_NONE:
+		var data: int = Gen3Layout.read_pointer(rom, at + 4, Gen3ObjectSprites.REFLECTION_TYPES * 2, 2)
+		if data < 0:
+			return {}
+		if not out.has(str(rom.u16le(at))):
+			out[str(rom.u16le(at))] = range(Gen3ObjectSprites.REFLECTION_TYPES).map(
+				func(type: int) -> int: return rom.u16le(data + type * 2))
+		at += 8
+	return out
 
 
 ## `GetStepAnimTable`'s `animPos` by anims table; Ruby's `sub_805FE28` steps every table.
@@ -138,8 +301,8 @@ static func _anim_table(rom: RomFile, at: int) -> Array:
 	return out
 
 
-## `union AnimCmd` words through `ANIMCMD_END` or `ANIMCMD_JUMP`; a frame keeps
-## its top byte clear, so a run of other data is not taken for one.
+## `union AnimCmd` words through `ANIMCMD_END` or `ANIMCMD_JUMP`; a frame keeps its top byte clear, so a run
+## of other data is not taken for one.
 static func _anim_sequence(rom: RomFile, at: int) -> Array:
 	var out: Array = []
 	while out.size() < Gen3SpriteAnim.SEQUENCE_LIMIT and rom.in_bounds(at + out.size() * 4, 4):
@@ -288,8 +451,8 @@ static func _encounters(rom: RomFile, layout: Dictionary, headers: Dictionary) -
 	return out
 
 
-## GetCurrentMapWildMonHeaderId adds the Altering Cave set to its first row.
-## Every occurrence keeps its ordinal even when a method is absent in that set.
+## GetCurrentMapWildMonHeaderId adds the Altering Cave set to its first row. Every occurrence keeps its
+## ordinal even when a method is absent in that set.
 static func _encounter_methods(rom: RomFile, layout: Dictionary, at: int, key: String, variant: int, out: Dictionary) -> bool:
 	var records: Dictionary = {}
 	for method: int in WILD_METHODS.size():
@@ -340,8 +503,8 @@ static func _wild_info(rom: RomFile, layout: Dictionary, pointer_at: int, method
 	return {"rate": rate, "slots": slots}
 
 
-## pret's metatiles.h/metatiles.inc places each attribute array immediately
-## after its eight-word metatile array. FRLG swaps callback/attributes in Tileset.
+## pret's metatiles.h/metatiles.inc places each attribute array immediately after its eight-word metatile
+## array. FRLG swaps callback/attributes in Tileset.
 static func _graphics(rom: RomFile, headers: Dictionary) -> Dictionary:
 	var layouts: Dictionary = {}
 	var tilesets: Dictionary = {}
@@ -401,9 +564,9 @@ static func _tileset(rom: RomFile, at: int) -> Dictionary:
 	return out
 
 
-## The ROM after a metatile or attribute array, up to the bank's id space: `DrawMetatileAt`
-## and `GetMetatileAttributesById` index past the array for an id the tileset lacks, which
-## a connection strip from a map on another secondary tileset brings into the backup map.
+## The ROM after a metatile or attribute array, up to the bank's id space: `DrawMetatileAt` and
+## `GetMetatileAttributesById` index past the array for an id the tileset lacks, which a connection strip from
+## a map on another secondary tileset brings into the backup map.
 static func _tail(rom: RomFile, at: int, length: int) -> PackedByteArray:
 	return rom.slice(at, clampi(rom.size() - at, 0, length))
 
@@ -437,8 +600,8 @@ static func primary_tile_count(id: StringName) -> int:
 	return 640 if id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 512
 
 
-## One metatile id's tiles and attributes. An id past the tileset's rows reads
-## the ROM after the arrays, as the cartridge does; one past that is empty.
+## One metatile id's tiles and attributes. An id past the tileset's rows reads the ROM after the arrays, as
+## the cartridge does; one past that is empty.
 static func metatile(tileset: Dictionary, number: int) -> Dictionary:
 	var row: Array = _metatile_row(tileset, number)
 	if row.is_empty():

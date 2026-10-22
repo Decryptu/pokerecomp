@@ -1,7 +1,7 @@
 extends RefCounted
 
-## Generation 3's content, trainer, picture and world tables. Pins
-## come from pret's data files; the sweeps catch a stride that reads plausibly.
+## Generation 3's content, trainer, picture and world tables. Pins come from pret's data files; the sweeps
+## catch a stride that reads plausibly.
 
 const SPECIES_COUNT: int = 386
 const MOVE_COUNT: int = 354
@@ -85,6 +85,8 @@ func _one_game() -> void:
 	_object_events()
 	_player_avatars()
 	_step_anim_rows()
+	_object_sprites()
+	_object_sprite_frames()
 	_held_movements()
 	_object_movements(false)
 	_object_movements(true)
@@ -317,8 +319,8 @@ func _picture_coordinates(data: GameData) -> void:
 			"Bulbasaur's %s coordinates read %s." % [kind, actual])
 
 
-## Trainer and party files pin one member of each stored format; the sweep
-## reads every individual through GameData rather than treating IDs as classes.
+## Trainer and party files pin one member of each stored format; the sweep reads every individual through
+## GameData rather than treating IDs as classes.
 func _trainers() -> void:
 	var data: GameData = _r.data
 	var layout: Dictionary = Gen3Layout.for_id(data.id)
@@ -553,10 +555,9 @@ func _tileset_animations() -> void:
 	_r.digest_matches("gen3_tileset_animations", lines, ANIMATION_DIGESTS[data.id])
 
 
-## Each map's backup buffer, `MapGridGet*` and `GetMapBorderIdAt` from one
-## cell outside it, the words `DrawMetatileAt` reads for each id met, and the
-## palettes `LoadMapTilesetPalettes` leaves, loading the maps in cache order;
-## Unicorn runs of the pret builds agree.
+## Each map's backup buffer, `MapGridGet*` and `GetMapBorderIdAt` from one cell outside it, the words
+## `DrawMetatileAt` reads for each id met, and the palettes `LoadMapTilesetPalettes` leaves, loading the maps
+## in cache order; Unicorn runs of the pret builds agree.
 const GRID_DIGESTS: Dictionary = {
 	&"ruby": "73999b15622028930ea28c3ea77cb32c933ad07c",
 	&"sapphire": "73999b15622028930ea28c3ea77cb32c933ad07c",
@@ -605,13 +606,11 @@ func _map_grids() -> void:
 	_r.digest_matches("gen3_map_grids", lines, GRID_DIGESTS[data.id])
 
 
-## Per map, `GetMapConnectionAtPos` from one cell outside the backup map and
-## `CanCameraMoveInDirection` from the layout's edge cells; then every step,
-## diagonals included, that `CameraMove` takes off that edge into another map,
-## from the map freshly loaded with its view rewritten through the `MapGridSet*`s
-## (Ruby and Sapphire lack the impassability one). Unicorn runs of the pret
-## builds agree, `LoadMapFromCameraTransition` reduced to `InitMapLayoutData`;
-## `null` is a step whose connection the cartridge reads from address 0.
+## Per map, `GetMapConnectionAtPos` from one cell outside the backup map and `CanCameraMoveInDirection` from
+## the layout's edge cells; then every step, diagonals included, that `CameraMove` takes off that edge into
+## another map, from the map freshly loaded with its view rewritten through the `MapGridSet*`s (Ruby and
+## Sapphire lack the impassability one). Unicorn runs of the pret builds agree, `LoadMapFromCameraTransition`
+## reduced to `InitMapLayoutData`; `null` is a step whose connection the cartridge reads from address 0.
 const CAMERA_DIGESTS: Dictionary = {
 	&"ruby": "ec5ee5d414055c5028ec98dd9b5012c7c6f13ce5",
 	&"sapphire": "ec5ee5d414055c5028ec98dd9b5012c7c6f13ce5",
@@ -677,8 +676,7 @@ func _edge_cells(header: Dictionary) -> Array[Vector2i]:
 	return out
 
 
-## Distinct ids with collision over the whole view, one whole word, and one
-## cell's collision cleared.
+## Distinct ids with collision over the whole view, one whole word, and one cell's collision cleared.
 func _mark_view(camera: Gen3FieldCamera) -> void:
 	for y: int in Gen3FieldCamera.VIEW_HEIGHT:
 		for x: int in Gen3FieldCamera.VIEW_WIDTH:
@@ -687,13 +685,12 @@ func _mark_view(camera: Gen3FieldCamera) -> void:
 	camera.grid.set_impassable(camera.pos.x + 7, camera.pos.y + 7, false)
 
 
-## Per map: a snake over every fourth layout position spawning and removing
-## objects; `GetCollisionAtCoords` and `ObjectEventUpdateElevation` for a probe
-## varied by cell over the whole backup map, and for each object left around it;
-## every fourth straight crossing from a fresh spawn. Flags divisible by three
-## below 0x900 are set; graphics var v holds 7v + 1. Unicorn runs of the pret
-## builds agree, spawning reduced to `InitObjectEventStateFromTemplate` and the
-## camera transition to the header, location, templates, temporary clear and grid.
+## Per map: a snake over every fourth layout position spawning and removing objects; `GetCollisionAtCoords`
+## and `ObjectEventUpdateElevation` for a probe varied by cell over the whole backup map, and for each object
+## left around it; every fourth straight crossing from a fresh spawn. Flags divisible by three below 0x900 are
+## set; graphics var v holds 7v + 1. Unicorn runs of the pret builds agree, spawning reduced to
+## `InitObjectEventStateFromTemplate` and the camera transition to the header, location, templates, temporary
+## clear and grid.
 const OBJECT_DIGESTS: Dictionary = {
 	&"ruby": "28e50c92a767aba32f76a40356e08d6f29690f93",
 	&"sapphire": "28e50c92a767aba32f76a40356e08d6f29690f93",
@@ -781,8 +778,8 @@ func _objects_state(objects: Gen3ObjectEvents) -> String:
 	return "/".join(out)
 
 
-## One probe step onto every cell from one outside the backup map: the
-## collision, then the elevations `ObjectEventUpdateElevation` leaves.
+## One probe step onto every cell from one outside the backup map: the collision, then the elevations
+## `ObjectEventUpdateElevation` leaves.
 func _probe_sweep(objects: Gen3ObjectEvents) -> PackedByteArray:
 	var grid: Gen3MapGrid = objects.camera.grid
 	var out := PackedByteArray()
@@ -817,9 +814,9 @@ func _object_sweep(objects: Gen3ObjectEvents) -> PackedByteArray:
 	return out
 
 
-## `InitPlayerAvatar`, graphics/state queries and player collisions on every
-## backup-map cell. The cartridge oracle stubs sprite creation, movement tasks,
-## statistics and rotating gates; it records the collision and requested effect.
+## `InitPlayerAvatar`, graphics/state queries and player collisions on every backup-map cell. The cartridge
+## oracle stubs sprite creation, movement tasks, statistics and rotating gates; it records the collision and
+## requested effect.
 const AVATAR_DIGESTS: Dictionary = {
 	&"ruby": "70c026c1da56b0013580db93ddbe0d392350c547",
 	&"sapphire": "70c026c1da56b0013580db93ddbe0d392350c547",
@@ -857,8 +854,8 @@ func _player_avatars() -> void:
 	_r.digest_matches("gen3_player_avatars", lines, AVATAR_DIGESTS[data.id])
 
 
-## ARM held-dispatcher traces over cached lists on a uniform synthetic grid.
-## Reset at actions [method arm_traced] leaves out; this checks supported runs, not execution.
+## ARM held-dispatcher traces over cached lists on a uniform synthetic grid. Reset at actions [method
+## arm_traced] leaves out; this checks supported runs, not execution.
 const MOVEMENT_ORIGIN := Vector2i(256, 256)
 const MOVEMENT_DIGESTS: Dictionary = {
 	&"ruby": "a8839e8a87ce4510556789871dc4eec714ff61fc",
@@ -893,6 +890,73 @@ func _step_anim_rows() -> void:
 	_r.check(counts == STEP_ANIM_ROWS[data.id], "step anim rows %s (want %s)" % [counts, STEP_ANIM_ROWS[data.id]])
 
 
+## Sprite rows, subsprites, frames, berry pics and palette tables; a scratch oracle over pret's sources agrees.
+const SPRITE_DIGESTS: Dictionary = {
+	&"ruby": "e4d02be8fce5837b763cb3df4f18daee76eea074",
+	&"sapphire": "1b3eeb077d91f05010cd89a12a46b32bb4237b70",
+	&"firered": "081ed149a755103cd26b8b2f05c2fa27c19f77fd",
+	&"leafgreen": "081ed149a755103cd26b8b2f05c2fa27c19f77fd",
+	&"emerald": "ace9716dcdc239d5428a0dc15f0fbbf196323427",
+}
+const SPRITE_FIELDS: Array[String] = ["palette_tag", "reflection_palette_tag", "size", "width", "height",
+	"palette_slot", "shadow_size", "inanimate", "disable_reflection_palette_load", "tracks"]
+
+
+func _object_sprites() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray(["object sprites"])
+	for mauville: bool in [false, true]:
+		var index: int = 0
+		while not data.world_object_graphics(index, mauville).is_empty():
+			var info: Dictionary = data.world_object_graphics(index, mauville)
+			var fields := PackedStringArray()
+			for field: String in SPRITE_FIELDS:
+				fields.append(str(int(info[field])))
+			lines.append("%d|%s|%s|%s|%s" % [index, ",".join(fields), JSON.stringify(info["oam"]),
+				JSON.stringify(info["subsprite_tables"]), _frames_hash(data, info["images"])])
+			index += 1
+	for berry: int in range(1, 45):
+		var row: Dictionary = data.world_berry(berry)
+		if row.has("berry_images"):
+			lines.append("berry %d|%s" % [berry, _frames_hash(data, data.world_sprite_images(int(row["berry_images"])))])
+	var sets: Dictionary = data.world_object_palette_sets()
+	for row: Array in sets["rows"]:
+		lines.append("palette %d|%s" % [int(row[0]), data.world_object_palette(int(row[0])).hex_encode()])
+	for key: String in ["tag_sets", "player_reflections", "special_reflections"]:
+		lines.append("%s|%s" % [key, JSON.stringify(sets[key])])
+	_r.digest_matches("gen3_object_sprites", lines, SPRITE_DIGESTS[data.id])
+
+
+func _frames_hash(data: GameData, images: Array) -> String:
+	var frames := PackedStringArray()
+	for frame: Array in images:
+		frames.append("%d,%d,%s" % [int(frame[0]) - int(images[0][0]), int(frame[1]),
+			data.world_sprite_image(int(frame[0]), int(frame[1])).hex_encode().sha1_text()])
+	return "\n".join(frames).sha1_text()
+
+
+## Every visible object along each map's snake walk has copied a frame after one step, inanimate ones included.
+func _object_sprite_frames() -> void:
+	var data: GameData = _r.data
+	var camera: Gen3FieldCamera = null
+	var drawn: int = 0
+	for header: Dictionary in data.world_map_headers():
+		camera = _camera_at(camera, data, int(header["group"]), int(header["number"]), Vector2i.ZERO)
+		var objects: Gen3ObjectEvents = _fresh_objects(camera)
+		for at: Vector2i in _snake(header):
+			camera.pos = at
+			objects.spawn_in_view()
+			objects.remove_outside_view()
+			objects.step_movements()
+			for object: Gen3ObjectEvents.ObjectEvent in objects.objects:
+				if not object.active or object.sprite_invisible:
+					continue
+				drawn += 1
+				_r.check(not object.anim.tiles.is_empty(), "%d:%d object %d (graphics %d) at %s copied no frame" % [
+					header["group"], header["number"], object.local_id, object.graphics_id, object.current])
+	_r.check(drawn > 0, "no object was drawn")
+
+
 func _held_movements() -> void:
 	var data: GameData = _r.data
 	var camera := Gen3FieldCamera.new()
@@ -919,10 +983,9 @@ func _held_movements() -> void:
 
 
 const STEP_END: int = 0xFE
-## Frame a hold finishes on, worked out from pret's anims, `sprite.c` and the action's
-## steps: the bow's 8+32+8 cells end on 50, Rock Smash and Cut blink 32 frames after their
-## cells, the head shake loops its 80 frames once, a raised hand hops twice and holds 81.
-## [action, graphics, frame, invisible at the end].
+## Frame a hold finishes on, worked out from pret's anims, `sprite.c` and the action's steps: the bow's 8+32+8
+## cells end on 50, Rock Smash and Cut blink 32 frames after their cells, the head shake loops its 80 frames
+## once, a raised hand hops twice and holds 81. [action, graphics, frame, invisible at the end].
 const HOENN_HELD_FINISHES: Array = [[0x4F, 58, 50, false], [0x5A, 86, 67, true],
 	[0x5B, 82, 59, true], [0x39, 3, 26, false]]
 const FRLG_HELD_FINISHES: Array = [[0x5B, 64, 50, false], [0x68, 96, 67, true],
@@ -952,9 +1015,9 @@ func _held_anim_finishes(objects: Gen3ObjectEvents) -> void:
 			"held action %02X on graphics %d finishes on frame %d (got %d)" % [int(row[0]), int(row[1]), int(row[2]), frame])
 
 
-## The actions the ARM held traces ran. Rows added after them (those with options,
-## the obstacle and affine kinds, the inanimate and reflection flags) and
-## FLDEFF_SHADOW, whose routines those builds stubbed, stay out of their streams.
+## The actions the ARM held traces ran. Rows added after them (those with options, the obstacle and affine
+## kinds, the inanimate and reflection flags) and FLDEFF_SHADOW, whose routines those builds stubbed, stay out
+## of their streams.
 static func arm_traced(objects: Gen3ObjectEvents, action: int) -> bool:
 	var row: Array = objects._motions.get(action, [])
 	if row.is_empty() or (row.size() > 3 and row[3] is Dictionary):
@@ -1116,8 +1179,8 @@ func _graphics_hash(record: Dictionary) -> String:
 	return context.finish().hex_encode()
 
 
-## Exact bytecode streams from pret handlers, with operand boundaries checked
-## by executing the matching ARM builds; all map, standard and trainer roots.
+## Exact bytecode streams from pret handlers, with operand boundaries checked by executing the matching ARM
+## builds; all map, standard and trainer roots.
 const SCRIPT_DIGESTS: Dictionary = {
 	&"ruby": "35573e1d144659df9b18056080b7d67609816c34",
 	&"sapphire": "33448c15566cb87985d2e473344feb23aced588d",
@@ -1167,8 +1230,8 @@ func _script_data_operands(data: GameData, offset: int, row: Dictionary) -> void
 				"script %d names an uncached %s record." % [offset, pointer[0]])
 
 
-## Every record starts on a label of the byte-matching pret build and ends where
-## its source list or string does; movements and marts reassembled from source.
+## Every record starts on a label of the byte-matching pret build and ends where its source list or string
+## does; movements and marts reassembled from source.
 const SCRIPT_DATA_DIGESTS: Dictionary = {
 	&"ruby": "adf843177e3fc84a9e67199835af88391b0052eb",
 	&"sapphire": "cbf6d27dddc0ea9a396d63d1bafeeffc75d522ce",
@@ -1246,8 +1309,8 @@ func _gate_probe(avatar: Gen3PlayerAvatar, count: int, prefix: Array) -> String:
 	return _script_numbers(values)
 
 
-## ARM callbacks over every supported map template on a uniform grid, 512
-## frames each. The oracle reads template bytes and direction tables from ROM.
+## ARM callbacks over every supported map template on a uniform grid, 512 frames each. The oracle reads
+## template bytes and direction tables from ROM.
 const RANDOM_MOVEMENT_DIGESTS: Dictionary = {
 	&"ruby": "5a72f767d20ea9774a84e40b4c16358225ce8e1f",
 	&"sapphire": "5a72f767d20ea9774a84e40b4c16358225ce8e1f",
@@ -1446,11 +1509,10 @@ func _disguise_frames(objects: Gen3ObjectEvents, header: Dictionary, template: D
 const DISGUISE_REVEAL_DIGEST: String = "6ea54dfb378843c69af71ca7d3857b72b9d5cae4"
 
 
-## Every seeing trainer template, FRLG clones resolved. One with sight opens
-## its script with `trainerbattle`, sees the player two cells (or one) ahead,
-## never one past its range, and not once beaten; its approach ends beside the
-## player with the script resumed. Sight 0 (Emerald's Space Center grunt runs
-## `lock` first) never sees. The uniform grid's elevation is the trainer's.
+## Every seeing trainer template, FRLG clones resolved. One with sight opens its script with `trainerbattle`,
+## sees the player two cells (or one) ahead, never one past its range, and not once beaten; its approach ends
+## beside the player with the script resumed. Sight 0 (Emerald's Space Center grunt runs `lock` first) never
+## sees. The uniform grid's elevation is the trainer's.
 func _trainer_sight() -> void:
 	var data: GameData = _r.data
 	var objects: Gen3ObjectEvents = _movement_field(data)
@@ -1532,8 +1594,8 @@ func _approach_finishes(see: Gen3TrainerSee) -> bool:
 	return false
 
 
-## `gBerries` fields agree with berry.c; stage selections come from each
-## byte-matching build's graphics and palette pointer tables.
+## `gBerries` fields agree with berry.c; stage selections come from each byte-matching build's graphics and
+## palette pointer tables.
 func _berries() -> void:
 	var data: GameData = _r.data
 	var lines := PackedStringArray()
@@ -1550,16 +1612,18 @@ func _berries() -> void:
 		else "d0c8182d600f64f5fcc3f523198fafed04691c8c")
 	if frlg:
 		return
-	_r.check(data.world_berry(44) == {"berry_graphics": [61, 61, 62, 62, 62],
-		"berry_palettes": [61, 61, 62, 62, 62]}, "reserved berry graphics preserve the palette overread")
+	var reserved: Dictionary = data.world_berry(44)
+	_r.check([reserved["berry_graphics"], reserved["berry_palettes"]] == [[61, 61, 62, 62, 62], [61, 61, 62, 62, 62]]
+		and data.world_sprite_images(int(reserved["berry_images"])).is_empty(),
+		"reserved berry graphics preserve the palette overread, and its pics point into EWRAM")
 	lines.clear()
 	for berry: int in range(1, 44):
 		lines.append_array(_berry_growth_frames(data, berry))
 	_r.digest_matches("gen3_berry_growth", lines, "3c71d97347d67067d19dca6917c8a519e1e608c5")
 
 
-## Original ARM records and shared LCG over every berry and watering mask,
-## ten regrowths, long batches and trees frozen until seen.
+## Original ARM records and shared LCG over every berry and watering mask, ten regrowths, long batches and
+## trees frozen until seen.
 func _berry_growth_frames(data: GameData, berry: int) -> PackedStringArray:
 	var lines := PackedStringArray()
 	for scenario: int in 18:
@@ -1614,7 +1678,7 @@ func _berry_object_frames(objects: Gen3ObjectEvents, template: Dictionary) -> vo
 		lines.append(",".join([frame, object.graphics_id, int(object.invisible),
 			int(object.single_movement_active), object.movement_action & 255, object.movement_state,
 			object.movement_delay, 1 + int(objects.berry_tree_sparkling(object.local_id, object.map_number, object.map_group)) * 2,
-			object.anim.anim_num, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
+			object.anim.anim_num, object.palette_num, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
 	_r.check(("\n".join(lines) + "\n").sha1_text() == "6385b0a01e1037c39ebbf2f45ea8b41d9530498e",
 		"berry template %d matches original ARM callbacks and animation clocks" % object.local_id)
 	object.active = false

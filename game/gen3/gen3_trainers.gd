@@ -1,8 +1,8 @@
 class_name Gen3Trainers
 extends RefCounted
 
-## `gTrainers` holds individuals, not classes. `CreateNPCTrainerParty` selects
-## one of four padded structs; species convert to national numbers at import.
+## `gTrainers` holds individuals, not classes. `CreateNPCTrainerParty` selects one of four padded structs;
+## species convert to national numbers at import.
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not rom.in_bounds(int(layout["trainers"]), int(layout["trainer_count"]) * Gen3Layout.TRAINER_SIZE):
 		return _fail("gTrainers leaves the dump.")

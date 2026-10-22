@@ -1,10 +1,9 @@
 class_name Gen3MapGrid
 extends RefCounted
 
-## The field's backup map (`fieldmap.c`): the layout's blocks inside a ring of
-## [constant MAP_OFFSET] cells that the connected maps' edges fill, and the
-## border pattern past it. Coordinates are the cartridge's backup-map ones, so
-## the layout's own (0, 0) is ([constant MAP_OFFSET], [constant MAP_OFFSET]).
+## The field's backup map (`fieldmap.c`): the layout's blocks inside a ring of [constant MAP_OFFSET] cells
+## that the connected maps' edges fill, and the border pattern past it. Coordinates are the cartridge's
+## backup-map ones, so the layout's own (0, 0) is ([constant MAP_OFFSET], [constant MAP_OFFSET]).
 
 const MAP_OFFSET: int = 7
 const OFFSET_W: int = MAP_OFFSET * 2 + 1
@@ -25,8 +24,8 @@ var layout_height: int = 0
 var blocks := PackedInt32Array()
 var primary: Dictionary = {}
 var secondary: Dictionary = {}
-## FireRed and LeafGreen tile the layout's own border size from the layout's
-## origin; Ruby, Sapphire and Emerald read a 2x2 by coordinate parity.
+## FireRed and LeafGreen tile the layout's own border size from the layout's origin; Ruby, Sapphire and
+## Emerald read a 2x2 by coordinate parity.
 var _sized_border: bool = false
 var _border := PackedByteArray()
 var _border_width: int = 2
@@ -38,10 +37,9 @@ var _behaviors := PackedInt32Array()
 var _layer_types := PackedInt32Array()
 
 
-## `InitMapLayoutData` for one map, or null when the cache lacks it. No map
-## reaches `MAX_MAP_DATA_SIZE`. Emerald returns before clearing the connection
-## flags for a map with no connections, so they stay [param previous]'s, which
-## only [method border_id_at] past the buffer reads.
+## `InitMapLayoutData` for one map, or null when the cache lacks it. No map reaches `MAX_MAP_DATA_SIZE`.
+## Emerald returns before clearing the connection flags for a map with no connections, so they stay [param
+## previous]'s, which only [method border_id_at] past the buffer reads.
 static func open(data: GameData, group: int, number: int, previous: Gen3MapGrid = null) -> Gen3MapGrid:
 	var header: Dictionary = data.world_map_header(group, number)
 	var layout: Dictionary = data.world_map_layout(group, number)
@@ -178,8 +176,7 @@ func elevation_at(x: int, y: int) -> int:
 	return 0 if block == UNDEFINED else block >> ELEVATION_SHIFT
 
 
-## The tileset row a metatile id draws and reads its attributes from, empty
-## past the tileset's own rows.
+## The tileset row a metatile id draws and reads its attributes from, empty past the tileset's own rows.
 func metatile(id: int) -> Dictionary:
 	return Gen3World.metatile(secondary if id >= _split else primary, id)
 

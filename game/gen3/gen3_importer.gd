@@ -118,8 +118,8 @@ static func _verify_dex_numbers(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return _ok()
 
 
-## National number to internal species; the unused Unown slots drop out, and
-## a number claimed twice empties the answer.
+## National number to internal species; the unused Unown slots drop out, and a number claimed twice empties
+## the answer.
 static func _species_by_national(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for species: int in range(1, Gen3Layout.SPECIES_COUNT):
@@ -477,8 +477,8 @@ static func _import_species(rom: RomFile, layout: Dictionary, on_progress: Calla
 	return out
 
 
-## Abilities, items, egg groups and growth rate keep cartridge numbers;
-## Generation 3 reorders Generation 2's growth rates.
+## Abilities, items, egg groups and growth rate keep cartridge numbers; Generation 3 reorders Generation 2's
+## growth rates.
 static func _species_info(rom: RomFile, at: int) -> Dictionary:
 	var ev_word: int = rom.u16le(at + Gen3Layout.INFO_EV_YIELD)
 	var ev_yield: Dictionary = {}

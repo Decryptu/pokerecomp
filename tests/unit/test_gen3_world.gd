@@ -1089,6 +1089,55 @@ func test_regular_jumps_start_one_shadow_and_clear_it_on_landing() -> void:
 		assert_eq(objects.step_movements().size(), 0)
 
 
+## `UpdateObjectEventElevationAndPriority` returns before `ObjectEventUpdateElevation` under a
+## fixed priority, so a fixed object keeps its elevation and OAM priority across a step onto
+## another level while a free one takes the cell's.
+func test_fixed_priority_skips_the_ground_elevation_and_priority_update() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		for fixed: bool in [false, true]:
+			var objects: Gen3ObjectEvents = _field_objects(id)
+			objects.camera.grid.blocks[12 * 32 + 13] = 0x4000
+			var object := Gen3ObjectEvents.ObjectEvent.new()
+			object.active = true
+			object.current = Vector2i(12, 12)
+			object.previous = object.current
+			object.current_elevation = 3
+			object.previous_elevation = 3
+			object.fixed_priority = fixed
+			objects.objects[0] = object
+			var walk: int = 0x10 if id == RomRegistry.FIRERED else 0x08
+			objects.set_held_movement(object, Gen3ObjectEvents.direction_action(walk, Gen3ObjectEvents.Direction.EAST))
+			while not object.held_movement_finished:
+				objects.step_movements()
+			assert_eq([object.current, object.current_elevation, object.previous_elevation, object.priority],
+				[Vector2i(13, 12), 3 if fixed else 4, 3 if fixed else 4, 2 if fixed else 1], "%s %s" % [id, fixed])
+
+
+## The OBJ layer takes each pixel from the first OAM entry with one there and only then
+## weighs that entry's priority against the BG, so a later entry with the better priority
+## stays behind it. Composing the layer by priority would draw the later one in front.
+func test_first_oam_entry_owns_a_pixel_whatever_the_priorities() -> void:
+	var grid: Gen3MapGrid = _field_objects(RomRegistry.EMERALD).camera.grid
+	grid._layer_types.resize(1024)
+	grid._layer_types.fill(Gen3FieldVram.LAYER_TYPES)
+	var vram := Gen3FieldVram.new()
+	vram.palettes.resize(512)
+	var palettes := PackedByteArray()
+	palettes.resize(512)
+	palettes.encode_u16(2, 0x001F)
+	palettes.encode_u16(4, 0x7C00)
+	var oam: Array = []
+	for entry: Array in [[0, 3, 0x11], [4, 0, 0x22]]:
+		var tiles := PackedByteArray()
+		tiles.resize(GbaTiles.TILE_BYTES)
+		tiles.fill(entry[2])
+		oam.append({"x": entry[0], "y": entry[0], "size": Vector2i(8, 8), "flip": Vector2i.ZERO,
+			"priority": entry[1], "palette": 0, "tiles": tiles})
+	var image: Image = vram.draw_screen(grid, Vector2i.ZERO, Vector2i(16, 16), oam, palettes)
+	assert_eq([image.get_pixel(5, 5), image.get_pixel(10, 10), image.get_pixel(14, 2)],
+		[PokePalette.from_packed(0x001F), PokePalette.from_packed(0x7C00), PokePalette.from_packed(0)])
+
+
 ## State actions must survive hold clearing without freeing an invisible NPC's
 ## collision cells; emotes identify it once rather than repeating on each frame.
 ## Isolated frame traces reset state before every action and use identity zero.
@@ -1852,7 +1901,7 @@ func _berry_field_trace(id: StringName, stage: int, scenario: int) -> PackedStri
 		lines.append(",".join([stage, scenario, frame, object.graphics_id, int(object.invisible),
 			int(object.single_movement_active), object.movement_action & 255, object.movement_state,
 			1 + int(object.berry_sparkling) * 2 + int(object.berry_just_picked) * 4,
-			object.anim.anim_num, object.berry_palette, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
+			object.anim.anim_num, object.palette_num, -1 if effects.is_empty() else int(effects[-1]["effect_id"])]))
 	return lines
 
 
@@ -1981,4 +2030,4 @@ func test_berry_graphics_keep_the_cartridge_overread_boundary() -> void:
 				objects.objects[0] = object
 				objects.step_movements()
 				assert_eq(object.graphics_id, 61 if stage < 3 else 62)
-				assert_eq(object.berry_palette, int(([13, 13, 14, 14, 14] if berry == 44 else [3, 4, 4, 4, 4])[stage - 1]))
+				assert_eq(object.palette_num, int(([13, 13, 14, 14, 14] if berry == 44 else [3, 4, 4, 4, 4])[stage - 1]))
