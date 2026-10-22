@@ -731,16 +731,18 @@ func test_player_water_query_reads_each_engines_source_of_water() -> void:
 const GEN3_TABLES = preload("res://tools/checks/gen3_tables.gd")
 
 
-## The weather's palette pipeline on each engine: rain, fog, shade and downpour fading in from black, changing
-## weather, a sprite palette load, a lightning ramp, preserved palettes and fades out and back in. The digests
-## are original pret C (`field_weather.c`, `palette.c` and the palette weathers' callbacks) compiled in scratch.
-## Ruby's kept RGB(31, 12, 11), FireRed's untouched BG palette 13 or palette.c's two-call fade step all change
-## them, and no other suite runs the weather without a cartridge.
+## The weather on each engine: thunderstorm, fog, shade and downpour fading in from black, changing weather, a
+## sprite palette load, a lightning ramp, preserved palettes and fades out and back in, with every raindrop, the
+## thunder and the RNG. The digests are original pret C (`field_weather.c`, `palette.c`, the palette and rain
+## weathers' callbacks and `sprite.c`'s anim interpreter) compiled in scratch. Ruby's kept RGB(31, 12, 11),
+## FireRed's untouched BG palette 13, palette.c's two-call fade step, a rain Finish that let the change through
+## at once or a raindrop that skipped its splash all change them, and no other suite runs the weather without a
+## cartridge.
 func test_weather_palettes_match_each_cartridge_engine() -> void:
 	var digests: Dictionary = {
-		RomRegistry.RUBY: "bd7d6b7577134ae6ae53a8137ee509aba23afe4c",
-		RomRegistry.FIRERED: "ea9a51b67797a8ee6c8008ca52e7bf88c4e72d73",
-		RomRegistry.EMERALD: "be7dfb5cdd4adf35ae770cc7918a35d4a0b9962f",
+		RomRegistry.RUBY: "a651ea3cc3daf5446d4abd1edb007144193bb992",
+		RomRegistry.FIRERED: "d2d05788092f321158daf5b29bbd8d1bfb9ef811",
+		RomRegistry.EMERALD: "0fcec32d91948e02d82ddfe1b2d8d8c2b4e270ed",
 	}
 	for id: StringName in digests:
 		var data := GameData.new()
@@ -1440,7 +1442,7 @@ func _random_trace(objects: Gen3ObjectEvents, type: int, scenario: int) -> Packe
 	object.trainer_type = 1 if scenario == 5 else 3 if scenario == 6 else 2 if scenario == 7 else 0
 	object.trainer_range = 4
 	objects.objects[0] = object
-	objects.random_seed = 0x1234 + scenario
+	objects.events.random.value = 0x1234 + scenario
 	objects.camera.grid.set_metatile_entry(13, 12, 0x3400 if scenario == 1 else 0x3000)
 	var player := Gen3ObjectEvents.ObjectEvent.new()
 	player.active = true
@@ -1470,7 +1472,7 @@ func _random_trace(objects: Gen3ObjectEvents, type: int, scenario: int) -> Packe
 			object.movement_direction, object.previous_movement_direction, object.movement_state,
 			object.movement_action, int(object.single_movement_active), int(object.held_movement_active),
 			int(object.held_movement_finished), int(object.frozen), object.movement_delay if waiting else 0,
-			objects.random_seed]))
+			objects.events.random.value]))
 	return lines
 
 
@@ -2053,7 +2055,7 @@ func _berry_growth_trace(data: GameData, berry: int) -> PackedStringArray:
 	for scenario: int in 18:
 		var trees := Gen3BerryTrees.new(data)
 		trees.plant(0, berry, 5 if scenario == 16 else 1, scenario != 17)
-		trees.random_seed = 0x12345678
+		trees.random.value = 0x12345678
 		var duration: int = int(trees.record(0)["minutes"]) / (4 if scenario == 16 else 1)
 		for turn: int in 101:
 			var stage: int = int(trees.record(0)["stage"])
@@ -2064,7 +2066,7 @@ func _berry_growth_trace(data: GameData, berry: int) -> PackedStringArray:
 			trees.advance_minutes(minutes)
 			var values: Array = [berry, scenario, turn]
 			values.append_array(Array(trees._records.slice(0, 6)))
-			values.append(trees.random_seed)
+			values.append(trees.random.value)
 			lines.append(",".join(values))
 	return lines
 

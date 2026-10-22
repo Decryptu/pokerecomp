@@ -1,16 +1,14 @@
 class_name Gen1WorldImporter
 extends RefCounted
 
-## Decodes every Generation 1 map, tileset, SGB palette, overworld sprite and
-## wild encounter table into the shared world sections of the cache, the
-## counterpart of [Gen2WorldImporter]. A map is named by one flat id, so a
-## record's group is zero and its number is that id. A script is machine code
-## here, so the header keeps its address and its text pointer is followed.
+## Decodes every Generation 1 map, tileset, SGB palette, overworld sprite and wild encounter table into the
+## shared world sections of the cache, the counterpart of [Gen2WorldImporter]. A map is named by one flat id,
+## so a record's group is zero and its number is that id. A script is machine code here, so the header keeps
+## its address and its text pointer is followed.
 
 const LIST_END: int = Gen1Layout.TILESET_LIST_END
 
-## The two gifts whose carry the branch behind them reads: `AddItemToInventory`'s
-## and `_GivePokemon`'s.
+## The two gifts whose carry the branch behind them reads: `AddItemToInventory`'s and `_GivePokemon`'s.
 const GIFT_OPS: Array[String] = ["give_item", "give_pokemon"]
 
 ## `EnterMap` sets both bits; a script's own `set` asks for one bit's body.
@@ -19,8 +17,7 @@ const MAP_LOAD_MASKS: Array[int] = [
 ]
 ## Where a map header keeps its script pointer.
 const MAP_SCRIPT_AT: int = 7
-## `jr nz, .fellDownHoleTo1F` hops the one `ld a, n` behind it, and how far past
-## the call the pick may sit.
+## `jr nz, .fellDownHoleTo1F` hops the one `ld a, n` behind it, and how far past the call the pick may sit.
 const DUNGEON_PICK_BRANCH: int = 0x20
 const DUNGEON_PICK_HOP: int = 2
 const DUNGEON_PICK_WINDOW: int = 32
@@ -163,8 +160,8 @@ static func read_world(
 
 
 ## `PikachuEmotionTable` as command rows, with `PikachuMoodLookupTable` and
-## `PikaPicAnimationScriptPointerLookupTable` beside it: Yellow alone has them.
-## The happiness table's own end is the 255 row.
+## `PikaPicAnimationScriptPointerLookupTable` beside it: Yellow alone has them. The happiness table's own end
+## is the 255 row.
 static func read_pikachu(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if not layout.has("pikachu_emotion_table"):
 		return {}
@@ -208,9 +205,9 @@ static func read_nurse_movements(rom: RomFile, layout: Dictionary) -> Array:
 	return out
 
 
-## `PikaPicAnimPointers`' scripts, `PikaPicAnimBGFramesPointers`' frame sets,
-## `PikaPicTilemapPointers`' tilemaps, each graphic's reserved tile count and
-## `PikaPicAnimThunderboltPals`. A jump names the row it lands on.
+## `PikaPicAnimPointers`' scripts, `PikaPicAnimBGFramesPointers`' frame sets, `PikaPicTilemapPointers`'
+## tilemaps, each graphic's reserved tile count and `PikaPicAnimThunderboltPals`. A jump names the row it
+## lands on.
 static func _read_pikapic(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var bank: int = Gen1Layout.PIKACHU_BANK
 	var scripts: Array = []
@@ -256,8 +253,8 @@ static func _banked_pointer(rom: RomFile, bank: int, table: int, index: int) -> 
 	return Gen1Layout.banked(bank, rom.u16le(table + index * Gen1Layout.POINTER_SIZE))
 
 
-## One script to its `ret` or its first backward jump, which every other one
-## ends on: `pikapic_looptofinish` waits on the frame and jumps back to itself.
+## One script to its `ret` or its first backward jump, which every other one ends on: `pikapic_looptofinish`
+## waits on the frame and jumps back to itself.
 static func _pikapic_script(rom: RomFile, start: int) -> Array:
 	var out: Array = []
 	var offsets: Dictionary = {}
@@ -287,8 +284,8 @@ static func _pikapic_script(rom: RomFile, start: int) -> Array:
 	return out
 
 
-## `DoStarterPikachuEmotions`' commands to the `$ff`: the two nops and the
-## debug-only one are dropped, and a `$ff` clip is no clip.
+## `DoStarterPikachuEmotions`' commands to the `$ff`: the two nops and the debug-only one are dropped, and a
+## `$ff` clip is no clip.
 static func _pikachu_emotion(ctx: Dictionary, at: int) -> Array:
 	var rom: RomFile = ctx["rom"]
 	var out: Array = []
@@ -314,9 +311,9 @@ static func _pikachu_emotion(ctx: Dictionary, at: int) -> Array:
 	return out
 
 
-## `TradeMons` in the shared `world_trade` shape. A row stores no DVs and no OT
-## id: `AddPartyMon` and `InGameTrade_PrepareTradeData` roll them, which -1 asks
-## for, and the trainer name is the one string every row shares.
+## `TradeMons` in the shared `world_trade` shape. A row stores no DVs and no OT id: `AddPartyMon` and
+## `InGameTrade_PrepareTradeData` roll them, which -1 asks for, and the trainer name is the one string every
+## row shares.
 static func read_trades(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout["trade_mons"])
 	var out: Array = []
@@ -341,8 +338,8 @@ static func read_trades(rom: RomFile, layout: Dictionary) -> Array:
 	return out
 
 
-## `LoadMonPartySpriteGfx`: every row into one strip, read back as each icon's
-## two frames. `MonPartyData` names one icon per dex number, two nybbles a byte.
+## `LoadMonPartySpriteGfx`: every row into one strip, read back as each icon's two frames. `MonPartyData`
+## names one icon per dex number, two nybbles a byte.
 static func _read_mon_icons(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var bank := PackedByteArray()
 	var width: int = Gen1Layout.MON_ICON_VRAM_TILES * PokeTiles.TILE_WIDTH
@@ -384,9 +381,9 @@ static func _copy_icon_tile(
 			into[write + column] = from[read + column]
 
 
-## The strip split back into icons, and the species table beside it. An icon is
-## kept only when both of its frames carry the tiles its own OAM writer reads,
-## which is what leaves the nybbles no cartridge names out of the cache.
+## The strip split back into icons, and the species table beside it. An icon is kept only when both of its
+## frames carry the tiles its own OAM writer reads, which is what leaves the nybbles no cartridge names out of
+## the cache.
 static func _slice_mon_icons(
 	rom: RomFile, layout: Dictionary, bank: PackedByteArray, filled: PackedByteArray
 ) -> Dictionary:
@@ -426,8 +423,8 @@ static func _slice_mon_icons(
 	return {"ok": true, "icons": icons, "icon_species": species}
 
 
-## `PokeCenterFlashingMonitorAndHealBall` with `PokeCenterOAMData` behind it, and
-## `ShockEmote`: the two sheets Generation 1 draws over the map.
+## `PokeCenterFlashingMonitorAndHealBall` with `PokeCenterOAMData` behind it, and `ShockEmote`: the two sheets
+## Generation 1 draws over the map.
 static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var machine: Dictionary = _read_pinned_sheet(
 		rom, int(layout.get("heal_machine_gfx", -1)),
@@ -453,8 +450,8 @@ static func _read_overworld_effects(rom: RomFile, layout: Dictionary) -> Diction
 	if not bool(smoke.get("ok", false)):
 		return smoke
 	var effects: Array = [machine["effect"], shock["effect"], smoke["effect"]]
-	## The rows behind `ShockEmote`, by Generation 2's names for the same
-	## bubbles: Red and Blue stop at HappyEmote, Yellow runs to FishEmote.
+	## The rows behind `ShockEmote`, by Generation 2's names for the same bubbles: Red and Blue stop at
+	## HappyEmote, Yellow runs to FishEmote.
 	for index: int in range(1, int(layout.get("emote_sheets", 1))):
 		var at: int = int(layout["shock_emote_gfx"]) + index * Gen1Layout.SHOCK_EMOTE_BYTES.size()
 		effects.append({
@@ -489,8 +486,8 @@ static func _check_heal_machine_oam(rom: RomFile, at: int) -> Dictionary:
 		var pinned: Array = Gen1Layout.HEAL_MACHINE_OAM[row]
 		if not rom.in_bounds(entry, Gen1Layout.HEAL_MACHINE_OAM_SIZE):
 			return _error("Heal machine OAM row %d is outside the cartridge." % row)
-		## The attribute byte carries a Game Boy Color palette on Yellow and not
-		## on Red or Blue, so only the flip is compared.
+		## The attribute byte carries a Game Boy Color palette on Yellow and not on Red or Blue, so only the
+		## flip is compared.
 		var flipped: bool = (rom.u8(entry + 3) & Gen1Layout.HEAL_MACHINE_OAM_XFLIP) != 0
 		if [rom.u8(entry), rom.u8(entry + 1), rom.u8(entry + 2), flipped] != pinned:
 			return _error("Heal machine OAM row %d is not %s." % [row, pinned])
@@ -510,8 +507,8 @@ static func _read_list(rom: RomFile, at: int, limit: int = 256) -> PackedByteArr
 	return out
 
 
-## `WildDataPointers` and the rod tables behind it. Grass and water take the
-## shared sections' shape under group zero; fishing keeps the Super Rod's index.
+## `WildDataPointers` and the rod tables behind it. Grass and water take the shared sections' shape under
+## group zero; fishing keeps the Super Rod's index.
 static func _read_encounters(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var table: int = int(layout["wild_data"])
 	var count: int = Gen1Layout.map_count(rom.id)
@@ -543,8 +540,8 @@ static func _read_encounters(rom: RomFile, layout: Dictionary) -> Dictionary:
 	}}
 
 
-## One `def_grass_wildmons` or `def_water_wildmons` block: a rate byte, and ten
-## (level, species) pairs behind it unless the rate is zero, which ends it.
+## One `def_grass_wildmons` or `def_water_wildmons` block: a rate byte, and ten (level, species) pairs behind
+## it unless the rate is zero, which ends it.
 static func _read_wild_block(
 	rom: RomFile, layout: Dictionary, at: int, map_id: int
 ) -> Dictionary:
@@ -571,8 +568,8 @@ static func _read_wild_block(
 	}
 
 
-## `SuperRodData`'s map index, or Yellow's `SuperRodFishingSlots`, whose row is
-## its own group. An entry is the group [method GameData.world_fishing_map] reads.
+## `SuperRodData`'s map index, or Yellow's `SuperRodFishingSlots`, whose row is its own group. An entry is the
+## group [method GameData.world_fishing_map] reads.
 static func _read_super_rod(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var at: int = int(layout["super_rod"])
 	var bank: int = RomFile.bank_of(at)
@@ -600,8 +597,8 @@ static func _read_super_rod(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "fishing": {"maps": maps, "groups": groups}}
 
 
-## One group: a count and that many (level, species) rows, or Yellow's four
-## (species, level) rows with the byte `GenerateRandomFishingEncounter` reads.
+## One group: a count and that many (level, species) rows, or Yellow's four (species, level) rows with the
+## byte `GenerateRandomFishingEncounter` reads.
 static func _read_rod_group(
 	rom: RomFile, layout: Dictionary, at: int, flat: bool, map_id: int
 ) -> Dictionary:
@@ -627,8 +624,8 @@ static func _read_rod_group(
 	return {"ok": true, "group": {"slots": slots}}
 
 
-## The palette table the hardware reads. `SetPal_Overworld` names one row a map
-## and the `BlkPacket_WholeScreen` behind it gives that row art and objects alike.
+## The palette table the hardware reads. `SetPal_Overworld` names one row a map and the
+## `BlkPacket_WholeScreen` behind it gives that row art and objects alike.
 static func _read_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = Gen1Layout.super_palette_count(rom.id)
 	var at: int = Gen1Layout.color_palette_offset(layout, 0)
@@ -648,9 +645,9 @@ static func _read_palettes(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "palettes": out}
 
 
-## `SpriteSheetPointerTable` and the strips behind it. A walking sprite's row
-## names half its graphics and `LoadMapSpriteTilePatterns` copies that many
-## bytes twice, which `GetUsedSprite` also does: [Gen2WorldSprite] reads both.
+## `SpriteSheetPointerTable` and the strips behind it. A walking sprite's row names half its graphics and
+## `LoadMapSpriteTilePatterns` copies that many bytes twice, which `GetUsedSprite` also does:
+## [Gen2WorldSprite] reads both.
 static func _read_sprites(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var count: int = Gen1Layout.sprite_count(rom.id)
 	var still_first: int = Gen1Layout.first_still_sprite(rom.id)
@@ -694,8 +691,8 @@ static func _read_sprites(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"ok": true, "sprites": sprites, "graphics": graphics}
 
 
-## `RedBikeSprite`, which the table names no row for. See [constant
-## Gen1Layout.SPRITE_BIKE_BYTES] for where it stands and why it is derived.
+## `RedBikeSprite`, which the table names no row for. See [constant Gen1Layout.SPRITE_BIKE_BYTES] for where it
+## stands and why it is derived.
 static func _read_bike_sprite(rom: RomFile, sprites: Array) -> Dictionary:
 	var player: Dictionary = sprites[Gen2WorldSprite.SPRITE_PLAYER - 1]
 	var address: int = int(player["address"]) - Gen1Layout.SPRITE_BIKE_BYTES
@@ -722,9 +719,9 @@ static func _read_bike_sprite(rom: RomFile, sprites: Array) -> Dictionary:
 	}
 
 
-## One row of `Tilesets`, its blockset, its graphics and the list of tiles
-## `_IsTilePassable` walks. The blockset's length is the one thing no cartridge
-## byte records; see [constant Gen1Layout.TILESET_BLOCKS_RED_BLUE].
+## One row of `Tilesets`, its blockset, its graphics and the list of tiles `_IsTilePassable` walks. The
+## blockset's length is the one thing no cartridge byte records; see [constant
+## Gen1Layout.TILESET_BLOCKS_RED_BLUE].
 static func _read_tileset(
 	rom: RomFile, layout: Dictionary, number: int, water: PackedByteArray
 ) -> Dictionary:
@@ -772,8 +769,8 @@ static func _read_tileset(
 	}
 
 
-## `BookshelfTileIDs`: the tile a tileset draws a bookshelf with and the box
-## `PrintBookshelfText` answers with, read in that routine's own bank.
+## `BookshelfTileIDs`: the tile a tileset draws a bookshelf with and the box `PrintBookshelfText` answers
+## with, read in that routine's own bank.
 static func _read_bookshelves(rom: RomFile, layout: Dictionary, number: int) -> Dictionary:
 	var at: int = int(layout["bookshelf_tiles"])
 	var bank: int = RomFile.bank_of(at)
@@ -787,9 +784,8 @@ static func _read_bookshelves(rom: RomFile, layout: Dictionary, number: int) -> 
 	return out
 
 
-## The other end of the pinned block counts: the assembler lays each tileset's
-## graphics behind the last one's blocks, so a pin one block too long runs into
-## the next row's graphics.
+## The other end of the pinned block counts: the assembler lays each tileset's graphics behind the last one's
+## blocks, so a pin one block too long runs into the next row's graphics.
 static func _verify_block_counts(rom: RomFile, layout: Dictionary, count: int) -> Dictionary:
 	var rows: Array = []
 	for number: int in count:
@@ -812,9 +808,9 @@ static func _verify_block_counts(rom: RomFile, layout: Dictionary, count: int) -
 	return {"ok": true}
 
 
-## The 96 tiles `LoadTilesetTilePatternData` copies to VRAM, blockset tail and
-## all. Where that would run off the end of the bank the strip is left blank:
-## the cartridge is reading past its own window and no block names a tile there.
+## The 96 tiles `LoadTilesetTilePatternData` copies to VRAM, blockset tail and all. Where that would run off
+## the end of the bank the strip is left blank: the cartridge is reading past its own window and no block
+## names a tile there.
 static func _tileset_strip(rom: RomFile, bank: int, graphics_address: int) -> PackedByteArray:
 	var at: int = RomFile.linear(bank, graphics_address)
 	var wanted: int = Gen1Layout.TILESET_TILE_COUNT * PokeTiles.TILE_BYTES
@@ -880,8 +876,8 @@ static func _read_map(
 	if not bool(events.get("ok", false)):
 		return events
 
-	## `wAudioROMBank` holds the map's own music bank while a row runs, which
-	## the captain's back rub compares before it plays its jingle.
+	## `wAudioROMBank` holds the map's own music bank while a row runs, which the captain's back rub compares
+	## before it plays its jingle.
 	var known: Dictionary = {"mem": {
 		int(layout["audio_rom_bank"]): rom.u8(Gen1Layout.map_song_offset(layout, map_id) + 1),
 	}}
@@ -893,14 +889,14 @@ static func _read_map(
 	var states: Dictionary = _read_map_states(
 		rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts, outside
 	)
-	## A hidden event's row can sit past every object's, as the Mansion's four
-	## switches do, so the hidden rows are read before the table is grown.
+	## A hidden event's row can sit past every object's, as the Mansion's four switches do, so the hidden rows
+	## are read before the table is grown.
 	var hidden: Array = _read_hidden_events(
 		rom, layout, map_id, bank, rom.u16le(header + MAP_SCRIPT_AT)
 	)
 	events["hidden_events"] = hidden
-	## A row the table grew by may reach one higher still, which is how the
-	## Safari Zone gate's own six are read rather than its first four.
+	## A row the table grew by may reach one higher still, which is how the Safari Zone gate's own six are
+	## read rather than its first four.
 	while _extend_texts(rom, layout, bank, rom.u16le(header + 5), texts, events, states, known):
 		states = _read_map_states(
 			rom, layout, bank, rom.u16le(header + MAP_SCRIPT_AT), texts, outside
@@ -955,8 +951,8 @@ static func _read_map(
 	}
 
 
-## A swapped-in table is read as far as the objects name it, the primary as far
-## as the scripts index it; `ViridianMart_TextPointers2` lacks two clerk rows.
+## A swapped-in table is read as far as the objects name it, the primary as far as the scripts index it;
+## `ViridianMart_TextPointers2` lacks two clerk rows.
 static func _alternate_texts(
 	rom: RomFile, layout: Dictionary, bank: int, states: Dictionary, events: Dictionary,
 	known: Dictionary, primary: int, rows: int
@@ -980,8 +976,8 @@ static func _text_tables(nodes: Array) -> Array[int]:
 	return out
 
 
-## `DecodeRLEList` fills the player's buffer from its low end and
-## `GetSimulatedInput` spends it from the high one, so those legs are reversed.
+## `DecodeRLEList` fills the player's buffer from its low end and `GetSimulatedInput` spends it from the high
+## one, so those legs are reversed.
 static func _movement_scripts(rom: RomFile, layout: Dictionary, map_id: int) -> Dictionary:
 	var out: Dictionary = {}
 	var tables: Dictionary = Gen1Layout.MOVEMENT_SCRIPT_LISTS.get(map_id, {})
@@ -1034,8 +1030,8 @@ static func _rle_pairs(rom: RomFile, at: int) -> Array:
 	return pairs
 
 
-## Where each map's script stops: the next script start in the same bank, or the
-## bank's end. A map's own tables sit behind its script in the file they share.
+## Where each map's script stops: the next script start in the same bank, or the bank's end. A map's own
+## tables sit behind its script in the file they share.
 static func _script_ends(rom: RomFile, layout: Dictionary, map_count: int) -> Dictionary:
 	var banks: Dictionary = {}
 	for map_id: int in map_count:
@@ -1058,8 +1054,8 @@ static func _script_ends(rom: RomFile, layout: Dictionary, map_count: int) -> Di
 	return out
 
 
-## `AgathasRoomAgathaEndBattleScript` writes `wChampionsRoomCurScript`: a map
-## whose byte another map's script writes reads its states again, seeded.
+## `AgathasRoomAgathaEndBattleScript` writes `wChampionsRoomCurScript`: a map whose byte another map's script
+## writes reads its states again, seeded.
 static func _reach_states_set_elsewhere(rom: RomFile, layout: Dictionary, maps: Array) -> void:
 	var written: Dictionary = {}
 	for map: Dictionary in maps:
@@ -1118,8 +1114,8 @@ static func _states_written_by_engine(map_id: int) -> Array:
 	return []
 
 
-## `RunMapScript` jumps to the map's own script every frame. No row records the
-## state table's length, so the states kept are the ones a store reaches.
+## `RunMapScript` jumps to the map's own script every frame. No row records the state table's length, so the
+## states kept are the ones a store reaches.
 static func _read_map_states(
 	rom: RomFile, layout: Dictionary, bank: int, script: int, texts: Array, seeds: Array = []
 ) -> Dictionary:
@@ -1133,8 +1129,8 @@ static func _read_map_states(
 	var bodies: Array = _map_script_bodies(rom, layout, bank, int(dispatch["table"]))
 	_bind_map_script_byte(entry, byte)
 	var pending: Array[int] = _map_script_successors(entry, byte)
-	## `CheckFightingMapTrainers` and `StartTrainerBattle` step the byte by one;
-	## without a trainer the words past a short table are junk.
+	## `CheckFightingMapTrainers` and `StartTrainerBattle` step the byte by one; without a trainer the words
+	## past a short table are junk.
 	pending.append_array(seeds)
 	pending.append(0)
 	for row: Dictionary in texts:
@@ -1178,8 +1174,8 @@ static func _map_load_walks(
 	return out
 
 
-## Every body of one `<Map>_ScriptPointers` table, read while the word addresses
-## the cartridge; null is a body the walk did not get whole.
+## Every body of one `<Map>_ScriptPointers` table, read while the word addresses the cartridge; null is a body
+## the walk did not get whole.
 static func _map_script_bodies(
 	rom: RomFile, layout: Dictionary, bank: int, table: int
 ) -> Array:
@@ -1234,8 +1230,8 @@ static func _map_script_successors(nodes: Array, byte: int) -> Array[int]:
 	return out
 
 
-## `IsPlayerOnDungeonWarp` and Pokemon Mansion 3F's copy of it both open
-## `xor a` / `ld [wWhichDungeonWarp], a`, which the `ld hl, <coords>` is found by.
+## `IsPlayerOnDungeonWarp` and Pokemon Mansion 3F's copy of it both open `xor a` / `ld [wWhichDungeonWarp],
+## a`, which the `ld hl, <coords>` is found by.
 static func _read_dungeon_holes(
 	rom: RomFile, layout: Dictionary, bank: int, script: int, script_end: int
 ) -> Array:
@@ -1277,9 +1273,9 @@ static func _dungeon_holes(
 	return out
 
 
-## Which map each hole index falls to. Five maps write one in front of the block,
-## which is key 0; Pokemon Mansion 3F picks by index behind the call, which is
-## `.fellDownHoleTo1F`'s `cp n` / `ld a, m1` / `jr nz, +2` / `ld a, m2`.
+## Which map each hole index falls to. Five maps write one in front of the block, which is key 0; Pokemon
+## Mansion 3F picks by index behind the call, which is `.fellDownHoleTo1F`'s `cp n` / `ld a, m1` / `jr nz, +2`
+## / `ld a, m2`.
 static func _dungeon_destinations(
 	rom: RomFile, layout: Dictionary, bank: int, block: int, behind: int
 ) -> Dictionary:
@@ -1304,9 +1300,8 @@ static func _dungeon_destinations(
 	return {}
 
 
-## One card key door per gate coordinate: the block the callback puts back while
-## the door's own flag is clear, in the order
-## `<Map>_UnlockedDoorEventScript` numbers them.
+## One card key door per gate coordinate: the block the callback puts back while the door's own flag is clear,
+## in the order `<Map>_UnlockedDoorEventScript` numbers them.
 static func _card_key_doors(callbacks: Array) -> Array:
 	var coordinates: Array = []
 	for callback: Dictionary in callbacks:
@@ -1349,8 +1344,8 @@ static func _card_key_walk(nodes: Array, doors: Array) -> void:
 		_card_key_walk(node["else"] as Array, doors)
 
 
-## The tile every walk cell's passability is decided by; Generation 2's grid
-## holds a permission byte in the same place.
+## The tile every walk cell's passability is decided by; Generation 2's grid holds a permission byte in the
+## same place.
 static func _collision_grid(
 	tileset: Dictionary, blocks: PackedByteArray, width: int, height: int
 ) -> Array:
@@ -1366,10 +1361,9 @@ static func _collision_grid(
 	return out
 
 
-## Connection records come north, south, west then east. `.checkNorthMap` writes
-## the y alignment into `wYCoord` and adds the x one to `wXCoord`, which is
-## `EnterMapConnection`'s own arithmetic, so the two bytes ride as Generation 2's
-## `y_offset` and `x_offset` and every reader of a connection takes either.
+## Connection records come north, south, west then east. `.checkNorthMap` writes the y alignment into
+## `wYCoord` and adds the x one to `wXCoord`, which is `EnterMapConnection`'s own arithmetic, so the two bytes
+## ride as Generation 2's `y_offset` and `x_offset` and every reader of a connection takes either.
 static func _read_connections(rom: RomFile, at: int, connection_flags: int) -> Array:
 	var directions: Array = [
 		["north", Gen1Layout.MAP_CONNECTION_FLAG_NORTH],
@@ -1399,8 +1393,7 @@ static func _read_connections(rom: RomFile, at: int, connection_flags: int) -> A
 	return out
 
 
-## `<Map>_Object`: the border block, then warps, signs and objects, each a count
-## and its rows.
+## `<Map>_Object`: the border block, then warps, signs and objects, each a count and its rows.
 static func _read_events(
 	rom: RomFile, layout: Dictionary, bank: int, address: int, map_id: int,
 	width: int, height: int, block_count: int
@@ -1469,8 +1462,7 @@ static func _read_warps(
 	return {"ok": true, "events": out, "at": at}
 
 
-## A sign is Generation 2's background event with a text id where that one keeps
-## a script pointer.
+## A sign is Generation 2's background event with a text id where that one keeps a script pointer.
 static func _read_signs(
 	rom: RomFile, at: int, map_id: int, cell_width: int, cell_height: int
 ) -> Dictionary:
@@ -1493,9 +1485,9 @@ static func _read_signs(
 	return {"ok": true, "events": out, "at": at}
 
 
-## An object's coordinates may sit in the runtime's own border padding, so unlike
-## a warp or a sign they are not bounded by the map. The TRAINER bit covers a
-## standing wild Pokemon too; [constant Gen1Layout.OPPONENT_ID_OFFSET] splits them.
+## An object's coordinates may sit in the runtime's own border padding, so unlike a warp or a sign they are
+## not bounded by the map. The TRAINER bit covers a standing wild Pokemon too; [constant
+## Gen1Layout.OPPONENT_ID_OFFSET] splits them.
 static func _read_objects(
 	rom: RomFile, layout: Dictionary, at: int, map_id: int
 ) -> Dictionary:
@@ -1534,8 +1526,7 @@ static func _read_objects(
 	return {"ok": true, "events": out, "at": at}
 
 
-## The header an object's text row carries, copied onto the object so a flag
-## read reaches it without the text.
+## The header an object's text row carries, copied onto the object so a flag read reaches it without the text.
 static func _carry_trainer_headers(objects: Array, texts: Array) -> void:
 	for object: Dictionary in objects:
 		var id: int = int(object.get("text", 0))
@@ -1546,14 +1537,13 @@ static func _carry_trainer_headers(objects: Array, texts: Array) -> void:
 			continue
 		object["object_type"] = Gen2WorldObject.OBJECTTYPE_TRAINER
 		object["sight_range"] = int((header as Dictionary)["sight_range"])
-		## `CheckForEngagingTrainers` walks a trainer and a standing wild alike,
-		## and so does `TrainerFlagAction`; only `EndTrainerBattle`'s
-		## `predef HideObject` tells the two apart.
+		## `CheckForEngagingTrainers` walks a trainer and a standing wild alike, and so does
+		## `TrainerFlagAction`; only `EndTrainerBattle`'s `predef HideObject` tells the two apart.
 		object["trainer"] = {"event_flag": int((header as Dictionary)["event_flag"])}
 
 
-## `wToggleableObjectList`: the map's own run of `ToggleableObjectStates`. Three
-## rows of the corpus name an object their map does not have.
+## `wToggleableObjectList`: the map's own run of `ToggleableObjectStates`. Three rows of the corpus name an
+## object their map does not have.
 static func read_toggleable_rows(rom: RomFile, layout: Dictionary, map_id: int) -> Array:
 	var table: int = int(layout["toggleable_states"])
 	var at: int = Gen1Layout.banked(RomFile.bank_of(table), rom.u16le(
@@ -1585,9 +1575,9 @@ static func _carry_toggleable_objects(
 		object["toggle_on"] = bool(row["on"])
 
 
-## `<Map>_TextPointers`, which `DisplayTextID` indexes with a text id. A row is
-## machine code; only `text_far` and `text_start` are a text, and the rest keep
-## the byte naming them. The table has no end, so the map's own events bound it.
+## `<Map>_TextPointers`, which `DisplayTextID` indexes with a text id. A row is machine code; only `text_far`
+## and `text_start` are a text, and the rest keep the byte naming them. The table has no end, so the map's own
+## events bound it.
 static func _read_texts(
 	rom: RomFile, layout: Dictionary, bank: int, address: int, events: Dictionary,
 	rows: int = 0, known: Dictionary = {}
@@ -1599,8 +1589,8 @@ static func _read_texts(
 	return out
 
 
-## A `TX_SCRIPT_*` row keeps its own inventory where it has one, so nothing
-## downstream has to read the cartridge again to open the shop.
+## A `TX_SCRIPT_*` row keeps its own inventory where it has one, so nothing downstream has to read the
+## cartridge again to open the shop.
 static func _read_text(
 	rom: RomFile, layout: Dictionary, bank: int, pointer: int, text_id: int = 0,
 	known: Dictionary = {}
@@ -1619,8 +1609,8 @@ static func _read_text(
 	if header >= 0:
 		row["trainer"] = _read_trainer_header(rom, layout, bank, header)
 		return row
-	## The corpus's other row the world owns whole: a party list and `MoveMon`
-	## both ways are no more readable here than `TalkToTrainer` is.
+	## The corpus's other row the world owns whole: a party list and `MoveMon` both ways are no more readable
+	## here than `TalkToTrainer` is.
 	if at == int(layout["day_care_script"]):
 		row["script"] = [{"op": "day_care"}]
 		return row
@@ -1642,14 +1632,13 @@ static func _read_text(
 	return row
 
 
-## Where a text's own machine code begins, or -1. `text_asm` is the one command
-## the stream stops on rather than reads past.
+## Where a text's own machine code begins, or -1. `text_asm` is the one command the stream stops on rather
+## than reads past.
 static func _text_code_at(decoded: Dictionary) -> int:
 	return int(decoded.get("bytes", -1)) if bool(decoded.get("stop", false)) else -1
 
 
-## `CheckForHiddenEvent`: the rows the A button walks before it looks for a sign
-## or a sprite.
+## `CheckForHiddenEvent`: the rows the A button walks before it looks for a sign or a sprite.
 static func _read_hidden_events(
 	rom: RomFile, layout: Dictionary, map_id: int, script_bank: int, script: int
 ) -> Array:
@@ -1677,9 +1666,8 @@ static func _read_hidden_rows(
 	return out
 
 
-## The gym's own city and leader names, which its map script hands
-## `LoadGymLeaderAndCityName` and `_GymStatueText1` reads back out of RAM. Red
-## and Blue tail-call it and Yellow calls and returns.
+## The gym's own city and leader names, which its map script hands `LoadGymLeaderAndCityName` and
+## `_GymStatueText1` reads back out of RAM. Red and Blue tail-call it and Yellow calls and returns.
 static func _gym_names(rom: RomFile, layout: Dictionary, bank: int, script: int) -> Array:
 	var at: int = Gen1Layout.banked(bank, script)
 	for step: int in Gen1Layout.GYM_NAME_SEARCH:
@@ -1697,8 +1685,8 @@ static func _gym_names(rom: RomFile, layout: Dictionary, bank: int, script: int)
 	return []
 
 
-## One `hidden_event`: the faced cell, then the routine behind it. Four walk a
-## table of their own; the rest are machine code, read with the argument in `a`.
+## One `hidden_event`: the faced cell, then the routine behind it. Four walk a table of their own; the rest
+## are machine code, read with the argument in `a`.
 static func _read_hidden_row(
 	rom: RomFile, layout: Dictionary, at: int, map_id: int, names: Array, index: int
 ) -> Dictionary:
@@ -1740,9 +1728,9 @@ static func _hidden_table_nodes(
 	return []
 
 
-## `StartSlotMachine`: a refusal argument prints its `tx_pre_id` row, and
-## `AbleToPlaySlotsCheck` wants the player side on, a COIN CASE and a coin. The
-## machine is lucky when `wHiddenEventIndex + 1` is the byte the map's load rolled.
+## `StartSlotMachine`: a refusal argument prints its `tx_pre_id` row, and `AbleToPlaySlotsCheck` wants the
+## player side on, a COIN CASE and a coin. The machine is lucky when `wHiddenEventIndex + 1` is the byte the
+## map's load rolled.
 static func _slot_machine_nodes(
 	rom: RomFile, layout: Dictionary, bank: int, argument: int, index: int
 ) -> Array:
@@ -1806,9 +1794,9 @@ static func _hidden_coord_index(
 	return -1
 
 
-## `HiddenItems`: the argument is the item, and `GetItemName` runs in front of
-## the box, so the receipt reads even when the bag turns the item away.
-## `FoundHiddenItemText`'s `text_asm` plays `SFX_GET_ITEM_2` and waits it out.
+## `HiddenItems`: the argument is the item, and `GetItemName` runs in front of the box, so the receipt reads
+## even when the bag turns the item away. `FoundHiddenItemText`'s `text_asm` plays `SFX_GET_ITEM_2` and waits
+## it out.
 static func _hidden_item_nodes(
 	rom: RomFile, layout: Dictionary, bank: int, map_id: int, item: int, row: Dictionary
 ) -> Array:
@@ -1837,8 +1825,8 @@ static func _hidden_item_nodes(
 	]}]
 
 
-## `HiddenCoins`: no coin case answers nothing, and the box behind the sum is
-## `AddBCD`'s ceiling being reached rather than the sum overflowing.
+## `HiddenCoins`: no coin case answers nothing, and the box behind the sum is `AddBCD`'s ceiling being reached
+## rather than the sum overflowing.
 static func _hidden_coin_nodes(
 	rom: RomFile, layout: Dictionary, bank: int, map_id: int, argument: int, row: Dictionary
 ) -> Array:
@@ -1871,9 +1859,8 @@ static func _hidden_coin_nodes(
 	]}]
 
 
-## `BenchGuyTextPointers`: the map, the side he is spoken to from and his own
-## `tx_pre` id. Any other side walks the source's own misaligned loop, which
-## reads past the table and says nothing here.
+## `BenchGuyTextPointers`: the map, the side he is spoken to from and his own `tx_pre` id. Any other side
+## walks the source's own misaligned loop, which reads past the table and says nothing here.
 static func _bench_guy_nodes(
 	rom: RomFile, layout: Dictionary, bank: int, map_id: int
 ) -> Array:
@@ -1888,8 +1875,8 @@ static func _bench_guy_nodes(
 	return []
 
 
-## `GymStatues`: `MapBadgeFlags` names one badge per gym, and its second box is
-## the one a player wearing it reads.
+## `GymStatues`: `MapBadgeFlags` names one badge per gym, and its second box is the one a player wearing it
+## reads.
 static func _gym_statue_nodes(
 	rom: RomFile, layout: Dictionary, bank: int, map_id: int, names: Array
 ) -> Array:
@@ -1916,8 +1903,7 @@ static func _bit_index(mask: int) -> int:
 	return -1
 
 
-## `text_ram`'s markers filled in the order the boxes read them, which is the
-## city and then the leader.
+## `text_ram`'s markers filled in the order the boxes read them, which is the city and then the leader.
 static func _named_nodes(nodes: Array, names: Array) -> Array:
 	for node: Dictionary in nodes:
 		if String(node["op"]) != "text":
@@ -1966,9 +1952,9 @@ static func predef_text(
 	return String(decoded["text"]) if bool(decoded.get("ok", false)) else ""
 
 
-## Where a `text_asm` row's `ld hl` points when the code behind it calls
-## [param target], or -1 for any other machine code. `TalkToTrainer` is 322 of
-## the corpus's 626 such rows; a map sharing one landing `jr`s onto it.
+## Where a `text_asm` row's `ld hl` points when the code behind it calls [param target], or -1 for any other
+## machine code. `TalkToTrainer` is 322 of the corpus's 626 such rows; a map sharing one landing `jr`s onto
+## it.
 static func _asm_operand(rom: RomFile, bank: int, at: int, target: int) -> int:
 	if rom.u8(at) != Gen1Layout.TEXT_ASM \
 		or rom.u8(at + 1) != Gen1Layout.SCRIPT_LD_HL:
@@ -1989,8 +1975,8 @@ const TRAINER_STATES: Array = [1, 2]
 ## What one walk may read, and how deep its branches may nest.
 const SCRIPT_BUDGET: int = 4096
 const SCRIPT_DEPTH: int = 16
-## [Gen2WorldCatalog]'s site nodes, each stamped `at` its instruction's linear
-## address so the copies a branch walk makes of one routine stay one site.
+## [Gen2WorldCatalog]'s site nodes, each stamped `at` its instruction's linear address so the copies a branch
+## walk makes of one routine stay one site.
 const SITE_OPS: Array[String] = [
 	"give_pokemon", "give_item", "wild_battle", "trade", "set_starter", "picture",
 	"has_money", "spend_money", "flag",
@@ -2007,13 +1993,12 @@ const SCRIPT_TESTS_COINS: int = -6
 ## `cp` against the faced direction and the species count the dex holds.
 const SCRIPT_TESTS_FACING: int = -7
 const SCRIPT_TESTS_DEX: int = -8
-## `cp` against the map's tileset and against one `lda_coord` screen position,
-## which is how a bookshelf tells a sculpture apart.
+## `cp` against the map's tileset and against one `lda_coord` screen position, which is how a bookshelf tells
+## a sculpture apart.
 const SCRIPT_TESTS_TILESET: int = -9
 const SCRIPT_TESTS_TILE: int = -10
 const SCRIPT_TESTS_COORD: int = -11
-## `ArePlayerCoordsInArray`, whose carry is the player standing on one row of a
-## `db y, x` list.
+## `ArePlayerCoordsInArray`, whose carry is the player standing on one row of a `db y, x` list.
 const SCRIPT_TESTS_COORD_ARRAY: int = -12
 ## `wStatusFlags5`'s own two bits, and `wCoordIndex`, the row that list matched.
 const SCRIPT_TESTS_MOVEMENT: int = -13
@@ -2041,8 +2026,7 @@ const SCRIPT_TESTS_MENU_CANCEL: int = -30
 const SCRIPT_TESTS_MENU_ROW: int = -31
 const SCRIPT_TESTS_MENU_ITEM: int = -32
 const SCRIPT_TESTS_SAFARI_ADMISSION: int = -33
-## `wDestinationWarpID`, which the dock reads to tell the ship's gangway from
-## the town's own door.
+## `wDestinationWarpID`, which the dock reads to tell the ship's gangway from the town's own door.
 const SCRIPT_TESTS_WARP_ID: int = -39
 const SCRIPT_TESTS_ANY_MONEY: int = -34
 const SCRIPT_TESTS_PARTY_MENU: int = -35
@@ -2055,15 +2039,14 @@ const SCRIPT_TESTS_PIKACHU: int = -40
 const SCRIPT_TESTS_SERIAL: int = -41
 const SCRIPT_AIDE: int = -3
 const SCRIPT_WALKED: int = -4
-## What `push af` saves and `pop af` puts back, which is how
-## `CheckEventAfterBranchReuseA` still reads the event byte a block write
-## clobbered.
+## What `push af` saves and `pop af` puts back, which is how `CheckEventAfterBranchReuseA` still reads the
+## event byte a block write clobbered.
 const SCRIPT_AF_KEYS: Array[String] = [
 	"a", "source", "rotated", "tests", "tests_in_carry", "tests_engine",
 	"tests_and_a", "a_runtime", "a_symbolic", "tests_snapshot", "tests_all",
 ]
-## The stores a row is read for that are `a` under another name. `hSpriteIndex`
-## shares `hTextID`'s byte, so the routine behind a store says which was meant.
+## The stores a row is read for that are `a` under another name. `hSpriteIndex` shares `hTextID`'s byte, so
+## the routine behind a store says which was meant.
 const SCRIPT_STORED_REGISTERS: Dictionary = {
 	"text_box_id": "text_box", "text_id_hram": "map_text",
 	"toggleable_index": "toggle", "new_tile_block": "new_block",
@@ -2071,12 +2054,12 @@ const SCRIPT_STORED_REGISTERS: Dictionary = {
 }
 
 
-## While an [Array], each instruction a walk gave up on is appended as
-## `{map, row, at, op}`; a row that read to nothing has [constant SCRIPT_EMPTY].
+## While an [Array], each instruction a walk gave up on is appended as `{map, row, at, op}`; a row that read
+## to nothing has [constant SCRIPT_EMPTY].
 static var refusals: Variant = null
 const SCRIPT_EMPTY: int = 0x100
-## Likewise each routine a walk passed over as spending nothing, as
-## `{map, row, at, routine, how}`, and in [member waited] each one it made a wait.
+## Likewise each routine a walk passed over as spending nothing, as `{map, row, at, routine, how}`, and in
+## [member waited] each one it made a wait.
 static var skipped: Variant = null
 static var waited: Variant = null
 static var _site_map: int = -1
@@ -2084,9 +2067,9 @@ static var _site_row: String = ""
 static var _body_refusals: Array = []
 
 
-## One `text_asm` row's machine code, as the boxes it prints and the branches
-## choosing between them; a path reaching anything unread is dropped whole.
-## [param known] is the argument byte a hidden event's own routine is handed.
+## One `text_asm` row's machine code, as the boxes it prints and the branches choosing between them; a path
+## reaching anything unread is dropped whole. [param known] is the argument byte a hidden event's own routine
+## is handed.
 static func decode_script(
 	rom: RomFile, layout: Dictionary, bank: int, at: int, known: Dictionary = {},
 	load_mask: int = 0
@@ -2099,8 +2082,7 @@ static func decode_script(
 	return walked as Array if walked is Array else []
 
 
-## One straight run and the branch that ends it, or null for a path that does
-## not reach `TextScriptEnd`.
+## One straight run and the branch that ends it, or null for a path that does not reach `TextScriptEnd`.
 static func _walk_script(
 	ctx: Dictionary, pc: int, state: Dictionary, depth: int
 ) -> Variant:
@@ -2116,9 +2098,9 @@ static func _walk_script(
 static func _walk_script_in(
 	ctx: Dictionary, pc: int, state: Dictionary, depth: int
 ) -> Variant:
-	## A `jp nc, CheckFightingMapTrainers` lands here rather than on a call, and
-	## a `<Map>_ScriptPointers` row may stand at a routine outright, so a routine
-	## that spends nothing is answered before its machine code is walked at all.
+	## A `jp nc, CheckFightingMapTrainers` lands here rather than on a call, and a `<Map>_ScriptPointers` row
+	## may stand at a routine outright, so a routine that spends nothing is answered before its machine code
+	## is walked at all.
 	var silent: String = _script_routine(ctx["layout"], pc)
 	if silent in Gen1Layout.SCRIPT_SILENT_CALLS:
 		_script_noted(skipped, ctx, pc, silent, "entry")
@@ -2232,8 +2214,8 @@ static func _script_domain_learn(
 	match_side["domains"] = {"fixed": fixed, "excluded": known.get("excluded", {})}
 
 
-## `AfterDisplayingTextID` reads `wDoNotWaitForButtonPress...` once the row is
-## done, so the flag belongs to the last box and not to each.
+## `AfterDisplayingTextID` reads `wDoNotWaitForButtonPress...` once the row is done, so the flag belongs to
+## the last box and not to each.
 static func _script_ended(state: Dictionary, out: Array) -> Variant:
 	if state.has("pending_move"):
 		return null
@@ -2242,8 +2224,8 @@ static func _script_ended(state: Dictionary, out: Array) -> Variant:
 	return out
 
 
-## A `text_bcd` over a buffer the walk wrote every byte of prints that number,
-## which is how Yellow's Safari gate says ¥500 where Red's text spells it.
+## A `text_bcd` over a buffer the walk wrote every byte of prints that number, which is how Yellow's Safari
+## gate says ¥500 where Red's text spells it.
 static func _script_printed(ctx: Dictionary, state: Dictionary, out: Array, box: Dictionary) -> void:
 	var layout: Dictionary = ctx["layout"]
 	for name: String in Gen1Layout.SCRIPT_BCD_BUFFERS:
@@ -2254,16 +2236,16 @@ static func _script_printed(ctx: Dictionary, state: Dictionary, out: Array, box:
 	state["last_box"] = box
 
 
-## `PrintBCDNumber` with LEADING_ZEROES | LEFT_ALIGN, which every map text's
-## `text_bcd` passes: the digits alone.
+## `PrintBCDNumber` with LEADING_ZEROES | LEFT_ALIGN, which every map text's `text_bcd` passes: the digits
+## alone.
 static func _number_filled(text: String, address: int, value: int) -> String:
 	return Gen2TextStream.fill_all_markers(
 		text, "%s%04X>" % [Gen2TextStream.NUMBER_MARKER, address], str(value)
 	)
 
 
-## One instruction: the next address, [constant SCRIPT_END] or SCRIPT_UNREAD.
-## The register writes are here and [method _script_flow] has the rest.
+## One instruction: the next address, [constant SCRIPT_END] or SCRIPT_UNREAD. The register writes are here and
+## [method _script_flow] has the rest.
 static func _script_step(
 	ctx: Dictionary, pc: int, state: Dictionary, out: Array, depth: int
 ) -> int:
@@ -2309,15 +2291,15 @@ static func _script_step(
 			state["a"] = rom.u8(at + 1)
 			return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 		Gen1Layout.SCRIPT_XOR_A:
-			## Zero and a Z the `ld a, 0` above does not raise, so whatever a
-			## branch behind it was reading is gone.
+			## Zero and a Z the `ld a, 0` above does not raise, so whatever a branch behind it was reading is
+			## gone.
 			_script_wrote_a(state)
 			state["a"] = 0
 			state.erase("tests")
 			return pc + 1
 		Gen1Layout.SCRIPT_DEC_A, Gen1Layout.SCRIPT_INC_A:
-			## `dec a` is what takes `DecodeRLEList`'s own sentinel back off its
-			## count, and `inc a` how a row spells PLAYER_DIR_RIGHT over `xor a`.
+			## `dec a` is what takes `DecodeRLEList`'s own sentinel back off its count, and `inc a` how a row
+			## spells PLAYER_DIR_RIGHT over `xor a`.
 			if not state.has("a"):
 				return _script_counted_down(ctx, pc, state)
 			var step: int = 1 if rom.u8(at) == Gen1Layout.SCRIPT_INC_A else -1
@@ -2334,9 +2316,9 @@ static func _script_step(
 	return _script_step_more(ctx, pc, at, state, out, depth)
 
 
-## `dec a` over a byte the run holds: the filtered bag's count, or
-## `wSavedCoordIndex`, which Yellow's Oak reads three ways with `and a` and then
-## `dec a` and `jr nz` behind each other, so each `dec` tests one index higher.
+## `dec a` over a byte the run holds: the filtered bag's count, or `wSavedCoordIndex`, which Yellow's Oak
+## reads three ways with `and a` and then `dec a` and `jr nz` behind each other, so each `dec` tests one index
+## higher.
 static func _script_counted_down(ctx: Dictionary, pc: int, state: Dictionary) -> int:
 	var layout: Dictionary = ctx["layout"]
 	var source: int = int(state.get("source", -1))
@@ -2491,8 +2473,8 @@ static func _script_added_b(ctx: Dictionary, pc: int, state: Dictionary) -> int:
 	return pc + 1
 
 
-## `ld a, [hli] / or [hl] / inc hl / or [hl]` over `wPlayerMoney`: Z is raised
-## only by three zero bytes, so the `jr nz` behind it is a balance of one or more.
+## `ld a, [hli] / or [hl] / inc hl / or [hl]` over `wPlayerMoney`: Z is raised only by three zero bytes, so
+## the `jr nz` behind it is a balance of one or more.
 const SCRIPT_NOT_FOLDED: int = -3
 const SCRIPT_MONEY_FOLD: Array[int] = [0xB6, Gen1Layout.SCRIPT_INC_HL, 0xB6]
 static func _script_money_fold(ctx: Dictionary, pc: int, state: Dictionary) -> int:
@@ -2727,8 +2709,7 @@ static func _script_and_a(ctx: Dictionary, pc: int, state: Dictionary) -> int:
 	return pc + 1
 
 
-## What leaves this instruction for another, and the two register pairs a row
-## saves over one.
+## What leaves this instruction for another, and the two register pairs a row saves over one.
 static func _script_jumped(
 	ctx: Dictionary, pc: int, at: int, state: Dictionary, out: Array, depth: int
 ) -> int:
@@ -2769,8 +2750,8 @@ static func _script_jumped(
 	return SCRIPT_UNREAD
 
 
-## A conditional `call`, which only a routine spending nothing here may be: both
-## sides of `call z, WaitForTextScrollButtonPress` print the same boxes.
+## A conditional `call`, which only a routine spending nothing here may be: both sides of `call z,
+## WaitForTextScrollButtonPress` print the same boxes.
 static func _script_call_if(
 	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array, depth: int
 ) -> int:
@@ -2858,8 +2839,8 @@ static func _script_tested(
 	state.erase("known_zero")
 
 
-## One rotation of `CheckEvent flag, 1`'s run, or `add a` standing for all eight
-## of them: the bit that has just landed in carry is the flag being asked about.
+## One rotation of `CheckEvent flag, 1`'s run, or `add a` standing for all eight of them: the bit that has
+## just landed in carry is the flag being asked about.
 static func _script_rotated(
 	ctx: Dictionary, pc: int, state: Dictionary, rotated: int
 ) -> int:
@@ -2872,17 +2853,16 @@ static func _script_hop(operand: int) -> int:
 	return RomFile.signed_byte(operand)
 
 
-## Anything that writes `a` leaves `CheckEvent`'s rotation and the answer
-## `and a` gave about the register behind it.
+## Anything that writes `a` leaves `CheckEvent`'s rotation and the answer `and a` gave about the register
+## behind it.
 static func _script_loaded_register(state: Dictionary, register: String, value: int) -> void:
 	state[register] = value
 	state.erase(register + "_source")
 	state.erase(register + "_runtime")
 
 
-## `ld b, a` and `ld c, a`: a register handed a value the walk does not know
-## carries where it was read from, which is what says `DecodeArrowMovementRLE`'s
-## b and c are the player's own coordinates.
+## `ld b, a` and `ld c, a`: a register handed a value the walk does not know carries where it was read from,
+## which is what says `DecodeArrowMovementRLE`'s b and c are the player's own coordinates.
 static func _script_moved_a(state: Dictionary, register: String) -> bool:
 	if state.has("a"):
 		_script_loaded_register(state, register, int(state["a"]))
@@ -2917,8 +2897,8 @@ const SCRIPT_LOADED_STATE: Array = [
 ]
 
 
-## `ld a, [nn]`. `ShowPokedexDataInternal` leaves `wPokedexNum` in
-## `wCurPartySpecies`, and `wHiddenEventFunctionArgument` is `wWhichTrade`'s byte.
+## `ld a, [nn]`. `ShowPokedexDataInternal` leaves `wPokedexNum` in `wCurPartySpecies`, and
+## `wHiddenEventFunctionArgument` is `wWhichTrade`'s byte.
 static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary, out: Array) -> void:
 	## `ld a, [wChannelSoundIDs]` is only ever spun on until a jingle ends.
 	if address == int((ctx["layout"] as Dictionary).get("channel_sound_ids", -1)):
@@ -2943,8 +2923,8 @@ static func _script_loaded(ctx: Dictionary, address: int, state: Dictionary, out
 	_script_loaded_known(layout, address, state)
 
 
-## The reads the row itself answers. `hOaksAideResult` shares `hGymGateIndex`'s
-## byte, and `wChannelSoundIDs` is spun on until a jingle ends, silence here.
+## The reads the row itself answers. `hOaksAideResult` shares `hGymGateIndex`'s byte, and `wChannelSoundIDs`
+## is spun on until a jingle ends, silence here.
 static func _script_loaded_known(layout: Dictionary, address: int, state: Dictionary) -> void:
 	var temps: Dictionary = state.get("mem", {})
 	if temps.has(address):
@@ -2968,8 +2948,8 @@ static func _script_loaded_known(layout: Dictionary, address: int, state: Dictio
 		state.erase("source")
 
 
-## `jp` reaching `TextScriptEnd`, a routine the layout names, or an address in
-## the same bank. A tail call returns where the row's own `ret` would.
+## `jp` reaching `TextScriptEnd`, a routine the layout names, or an address in the same bank. A tail call
+## returns where the row's own `ret` would.
 static func _script_jump(
 	ctx: Dictionary, pc: int, target: int, state: Dictionary, out: Array, depth: int
 ) -> int:
@@ -2991,8 +2971,8 @@ static func _script_jump(
 	return _script_returned(ctx, state)
 
 
-## Which flags `and n` is asking about: the bits of the byte `ld a, [wEventFlags
-## + n]` just read, which is what `CheckEitherEventSet` compiles to.
+## Which flags `and n` is asking about: the bits of the byte `ld a, [wEventFlags + n]` just read, which is
+## what `CheckEitherEventSet` compiles to.
 static func _script_mask(ctx: Dictionary, state: Dictionary, mask: int) -> Variant:
 	var flags: Array[int] = []
 	for bit: int in 8:
@@ -3007,9 +2987,8 @@ static func _script_mask(ctx: Dictionary, state: Dictionary, mask: int) -> Varia
 	return flags
 
 
-## `DisableWaitingAfterTextDisplay` by hand, `RemoveItemByID`'s own item, and
-## the map script index a row leaves behind it, which the next frame's
-## `CallFunctionInTable` dispatches on.
+## `DisableWaitingAfterTextDisplay` by hand, `RemoveItemByID`'s own item, and the map script index a row
+## leaves behind it, which the next frame's `CallFunctionInTable` dispatches on.
 static func _script_stored(
 	ctx: Dictionary, address: int, state: Dictionary, out: Array
 ) -> bool:
@@ -3120,8 +3099,8 @@ static func _script_stored_byte(
 	return STORE_OK
 
 
-## The held buttons, the automatic box, `wJoyIgnore`, a redraw gate and the list
-## `LoadItemList` already left behind: nothing here reads any of them.
+## The held buttons, the automatic box, `wJoyIgnore`, a redraw gate and the list `LoadItemList` already left
+## behind: nothing here reads any of them.
 static func _script_stored_silently(layout: Dictionary, address: int) -> bool:
 	for silent: String in Gen1Layout.SCRIPT_SILENT_STORES:
 		if address == int(layout.get(silent, -1)):
@@ -3273,8 +3252,8 @@ static func _script_stored_named_more(
 		"pikachu_spawn_state":
 			out.append({"op": "pikachu", "what": "spawn_state", "value": a})
 		"gym_leader_no":
-			## `wLoneAttackNo` is the same byte: a gym leader's fight, which
-			## `InitBattle` tells the follower about and a map load clears.
+			## `wLoneAttackNo` is the same byte: a gym leader's fight, which `InitBattle` tells the follower
+			## about and a map load clears.
 			out.append({"op": "volatile", "name": "gym_leader", "set": a != 0, "value": a})
 	return STORE_OK
 
@@ -3322,8 +3301,7 @@ static func _script_starter_stored(
 	return STORE_OK
 
 
-## `wWhichTrade` is also the trade's own index and a price buffer, so the
-## store is handed on.
+## `wWhichTrade` is also the trade's own index and a price buffer, so the store is handed on.
 static func _script_stored_scratch(
 	layout: Dictionary, address: int, state: Dictionary, out: Array
 ) -> int:
@@ -3400,8 +3378,7 @@ static func _script_trainer_number(state: Dictionary, out: Array, number: int) -
 	return STORE_OK
 
 
-## `SPRITESTATEDATA2_MAPY` and `_MAPX` are each four above the cell; the pixel
-## fields are the renderer's.
+## `SPRITESTATEDATA2_MAPY` and `_MAPX` are each four above the cell; the pixel fields are the renderer's.
 static func _script_stored_sprite(
 	_ctx: Dictionary, layout: Dictionary, address: int, state: Dictionary, out: Array
 ) -> int:
@@ -3493,8 +3470,8 @@ static func _script_stored_more(
 	return true
 
 
-## `wSavedCoordIndex` and the `hSavedCoordIndex` sharing `hItemToRemoveID`'s
-## byte: only the index is ever written out of `wCoordIndex`, and -1 is it.
+## `wSavedCoordIndex` and the `hSavedCoordIndex` sharing `hItemToRemoveID`'s byte: only the index is ever
+## written out of `wCoordIndex`, and -1 is it.
 static func _script_saved_index(
 	layout: Dictionary, address: int, state: Dictionary, out: Array
 ) -> bool:
@@ -3508,9 +3485,9 @@ static func _script_saved_index(
 	return true
 
 
-## `wCurOpponent` and `wCurEnemyLevel`, which `OverworldLoop` fights once the
-## script returns. The register holds an internal index and the cache speaks dex
-## numbers; at or above `OPP_ID_OFFSET` it is a trainer, which has no level.
+## `wCurOpponent` and `wCurEnemyLevel`, which `OverworldLoop` fights once the script returns. The register
+## holds an internal index and the cache speaks dex numbers; at or above `OPP_ID_OFFSET` it is a trainer,
+## which has no level.
 static func _script_opponent(ctx: Dictionary, state: Dictionary) -> bool:
 	var index: int = int(state.get("a", -1))
 	if index >= Gen1Layout.OPPONENT_ID_OFFSET:
@@ -3543,8 +3520,7 @@ static func _script_wild_battle(state: Dictionary, out: Array, required: bool = 
 	return true
 
 
-## `wPlayerMovingDirection`, which the comment beside it says a map script
-## writes to turn the player.
+## `wPlayerMovingDirection`, which the comment beside it says a map script writes to turn the player.
 static func _script_player_facing(state: Dictionary, out: Array) -> bool:
 	if not state.has("a"):
 		return false
@@ -3554,9 +3530,8 @@ static func _script_player_facing(state: Dictionary, out: Array) -> bool:
 	return true
 
 
-## `wSimulatedJoypadStatesIndex` is how many entries are left to spend and
-## `wSimulatedJoypadStatesEnd` the buffer, which Yellow's Oak's Lab writes two
-## bytes of by hand.
+## `wSimulatedJoypadStatesIndex` is how many entries are left to spend and `wSimulatedJoypadStatesEnd` the
+## buffer, which Yellow's Oak's Lab writes two bytes of by hand.
 static func _script_joypad_stored(
 	layout: Dictionary, address: int, state: Dictionary, out: Array
 ) -> bool:
@@ -3600,9 +3575,9 @@ static func _script_stored_hli(
 	return pc + 1
 
 
-## What the flags hold, as the index and whether it is one of Generation 1's own
-## engine flags rather than a `wEventFlags` bit. [param bit] is -1 for `and a`,
-## which only asks whether the whole byte is zero and so names no flag.
+## What the flags hold, as the index and whether it is one of Generation 1's own engine flags rather than a
+## `wEventFlags` bit. [param bit] is -1 for `and a`, which only asks whether the whole byte is zero and so
+## names no flag.
 static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array:
 	var layout: Dictionary = ctx["layout"]
 	var source: int = int(state.get("source", -1))
@@ -3642,8 +3617,8 @@ static func _script_tests(ctx: Dictionary, state: Dictionary, bit: int) -> Array
 	return [SCRIPT_TESTS_NOTHING, false]
 
 
-## `bit n` over a byte that is not a flag run: a roll's bit, or one of
-## `wPikachuSpawnStateFlags`' two party bits.
+## `bit n` over a byte that is not a flag run: a roll's bit, or one of `wPikachuSpawnStateFlags`' two party
+## bits.
 static func _script_tests_bit(
 	layout: Dictionary, source: int, bit: int, state: Dictionary
 ) -> Array:
@@ -3707,8 +3682,7 @@ static func _script_test_bit(
 	_script_tested(state, tested[0], in_carry, bool(tested[1]))
 
 
-## An address in `wEventFlags` and a bit as one flag index, the way
-## [method _read_trainer_header] counts one.
+## An address in `wEventFlags` and a bit as one flag index, the way [method _read_trainer_header] counts one.
 static func _script_flag(ctx: Dictionary, address: int, bit: int) -> int:
 	var base: int = int((ctx["layout"] as Dictionary)["event_flags"])
 	if address < base or address >= base + Gen1Layout.EVENT_FLAG_BYTES:
@@ -3716,8 +3690,8 @@ static func _script_flag(ctx: Dictionary, address: int, bit: int) -> int:
 	return (address - base) * 8 + bit
 
 
-## The same for one of [constant Gen1Layout.ENGINE_FLAG_BYTES], the saved bytes
-## outside `wEventFlags` a row reads.
+## The same for one of [constant Gen1Layout.ENGINE_FLAG_BYTES], the saved bytes outside `wEventFlags` a row
+## reads.
 static func _script_engine_flag(ctx: Dictionary, address: int, bit: int) -> int:
 	var layout: Dictionary = ctx["layout"]
 	var alias: int = Gen1Layout.script_flag_alias(layout, address, bit)
@@ -3804,9 +3778,8 @@ static func _script_swapped(pc: int, state: Dictionary) -> int:
 	return pc + Gen1Layout.SCRIPT_SHORT_SIZE
 
 
-## `set BIT_SCRIPTED_MOVEMENT_STATE, [hl]` by hand is
-## `StartSimulatingJoypadStates` without the call: the dock and the gates push
-## the player a step this way.
+## `set BIT_SCRIPTED_MOVEMENT_STATE, [hl]` by hand is `StartSimulatingJoypadStates` without the call: the dock
+## and the gates push the player a step this way.
 static func _script_walks_by_hand(
 	ctx: Dictionary, code: int, bit: int, state: Dictionary
 ) -> bool:
@@ -3872,8 +3845,8 @@ static func _script_volatile_bit(layout: Dictionary, address: int, bit: int) -> 
 	return ""
 
 
-## A conditional `call` to a routine that spends something is a branch whose
-## calling side walks the routine first.
+## A conditional `call` to a routine that spends something is a branch whose calling side walks the routine
+## first.
 static func _script_call_branch(
 	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
@@ -3932,17 +3905,17 @@ static func _script_first_box_row(ctx: Dictionary, pc: int) -> bool:
 	return false
 
 
-## `PewterPokecenterJigglypuffText` past its box: the song and the spin are one
-## node, and Yellow walks on from `jigglypuff_tail` to put the follower to sleep.
+## `PewterPokecenterJigglypuffText` past its box: the song and the spin are one node, and Yellow walks on from
+## `jigglypuff_tail` to put the follower to sleep.
 static func _script_song(ctx: Dictionary, out: Array) -> int:
 	ctx.erase("first_box")
 	out.append({"op": "jigglypuff", "object": Gen1Layout.JIGGLYPUFF_OBJECT})
 	return int((ctx["layout"] as Dictionary).get("jigglypuff_tail", SCRIPT_END))
 
 
-## `OaksAideScript` answers in `hOaksAideResult`, and a Game Boy Printer routine
-## in `hCanceledPrinting`, which is the same byte, so the rest of the row is
-## walked once each way. The aide's gift is a catalog site `at` its call.
+## `OaksAideScript` answers in `hOaksAideResult`, and a Game Boy Printer routine in `hCanceledPrinting`, which
+## is the same byte, so the rest of the row is walked once each way. The aide's gift is a catalog site `at`
+## its call.
 static func _script_aide_branch(
 	ctx: Dictionary, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
@@ -3965,8 +3938,7 @@ static func _script_aide_branch(
 	return out
 
 
-## `Route23DefaultScript`: the guard on the player's row and the check flag
-## `c` counts down to.
+## `Route23DefaultScript`: the guard on the player's row and the check flag `c` counts down to.
 static func _script_special_body(ctx: Dictionary, pc: int, state: Dictionary = {}) -> Variant:
 	var layout: Dictionary = ctx["layout"]
 	var rom: RomFile = ctx["rom"]
@@ -3974,9 +3946,8 @@ static func _script_special_body(ctx: Dictionary, pc: int, state: Dictionary = {
 	if pc == int(layout.get("update_gym_gates", -1)) \
 		or at == int(layout.get("update_gym_gates_far", -1)):
 		return _script_gym_gates(ctx)
-	## `SetEventForceReuseHL` on the flag the script's own `CheckEventHL` loaded,
-	## then the smoke, the horn and `dec [wNumberOfWarps]`, which takes the
-	## gangway off the dock.
+	## `SetEventForceReuseHL` on the flag the script's own `CheckEventHL` loaded, then the smoke, the horn and
+	## `dec [wNumberOfWarps]`, which takes the gangway off the dock.
 	if at == int(layout.get("ss_anne_leaves", -1)):
 		var flag: int = _script_flag(ctx, int(state.get("hl", -1)), (rom.u8(at + 1) >> 3) & 7)
 		if flag < 0:
@@ -4014,9 +3985,8 @@ static func _script_special_body(ctx: Dictionary, pc: int, state: Dictionary = {
 	return [{"op": "badge_guards", "rows": rows, "past_y": compares[0], "past_x": compares[1]}]
 
 
-## `ResetButtonPressedAndMapScript` behind `EndTrainerBattle` zeroes
-## `wCurMapScript`, so an end-battle state that calls it and prints on, as the
-## Elite Four's do, ends on the default state rather than itself.
+## `ResetButtonPressedAndMapScript` behind `EndTrainerBattle` zeroes `wCurMapScript`, so an end-battle state
+## that calls it and prints on, as the Elite Four's do, ends on the default state rather than itself.
 static func _script_silent_call(routine: String, state: Dictionary, out: Array, next: int) -> int:
 	if routine == "end_trainer_battle":
 		state["a"] = 0
@@ -4032,8 +4002,7 @@ static func _script_delay(
 		_script_loaded_register(state, "c", 3)
 	if not state.has("c") or state.has("c_source") or state.has("c_runtime"):
 		return SCRIPT_UNREAD
-	## `HallOfFamePC` ends on `THE END`, and `Gen1Credits` holds that screen for
-	## the delays behind it.
+	## `HallOfFamePC` ends on `THE END`, and `Gen1Credits` holds that screen for the delays behind it.
 	if state.has("credits_hold"):
 		_script_noted(skipped, ctx, next - Gen1Layout.SCRIPT_LONG_SIZE, routine, "credits")
 	else:
@@ -4042,8 +4011,8 @@ static func _script_delay(
 	return next
 
 
-## The routines that wait on frames: `DelayFrames` and `Delay3` through `c`, the
-## fixed ones, and the palette fades. Every one but `DelayFrame` leaves `c` zero.
+## The routines that wait on frames: `DelayFrames` and `Delay3` through `c`, the fixed ones, and the palette
+## fades. Every one but `DelayFrame` leaves `c` zero.
 static func _script_frames(
 	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int
 ) -> int:
@@ -4062,8 +4031,8 @@ static func _script_frames(
 	return SCRIPT_NOT_SHAPED
 
 
-## A wait between the `push af` over a menu's carry and the `pop af` that brings
-## it back runs behind the menu, so [method _script_node] moves it there.
+## A wait between the `push af` over a menu's carry and the `pop af` that brings it back runs behind the menu,
+## so [method _script_node] moves it there.
 static func _script_wait_node(
 	ctx: Dictionary, routine: String, state: Dictionary, out: Array, next: int, node: Dictionary
 ) -> void:
@@ -4135,8 +4104,8 @@ static func _script_call(
 ) -> int:
 	var layout: Dictionary = ctx["layout"]
 	var next: int = pc + Gen1Layout.SCRIPT_LONG_SIZE
-	## A routine returns with flags of its own, so a `jr z` behind a call is
-	## reading them rather than whatever set them before it.
+	## A routine returns with flags of its own, so a `jr z` behind a call is reading them rather than whatever
+	## set them before it.
 	_script_untested(state)
 	var routine: String = _script_routine(layout, target)
 	var spent: int = _script_spent_call(ctx, routine, state, out, next)
@@ -4152,8 +4121,8 @@ static func _script_call(
 			out.append_array(_script_gym_gates(ctx))
 			return next
 		"print_text":
-			## `TextCommand_ASM` runs the code a text carries in the middle of
-			## it, which is how the captain's back rub sets its own flag.
+			## `TextCommand_ASM` runs the code a text carries in the middle of it, which is how the captain's
+			## back rub sets its own flag.
 			if not _script_text_row(ctx, int(state.get("hl", 0)), state, out, depth):
 				return SCRIPT_UNREAD
 			return _script_song(ctx, out) if bool(ctx.get("first_box", false)) else next
@@ -4334,8 +4303,8 @@ static func _script_name_species(
 	return next
 
 
-## `AddPartyMon` for the starter: the party is empty, so nothing asks about
-## room, and it prints no `GotMonText` of its own, only `AskName`'s question.
+## `AddPartyMon` for the starter: the party is empty, so nothing asks about room, and it prints no
+## `GotMonText` of its own, only `AskName`'s question.
 static func _script_party_mon(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int
 ) -> int:
@@ -4352,8 +4321,7 @@ static func _script_party_mon(
 	return next
 
 
-## `wNPCMovementDirections2` filled `c` times, a scratch byte's worth on the
-## lab rival's second walk.
+## `wNPCMovementDirections2` filled `c` times, a scratch byte's worth on the lab rival's second walk.
 static func _script_fill_moves(state: Dictionary, count: int, next: int) -> int:
 	if int(state["a"]) & Gen1Layout.NPC_MOVEMENT_LOW_BITS != 0:
 		return SCRIPT_UNREAD
@@ -4400,8 +4368,8 @@ static func _script_fill_memory(
 	return next
 
 
-## `UpdateCinnabarGymGateTileBlocks_` counts gates six through one; Yellow's
-## writes through `CinnabarGym_ReplaceTileBlock` and redraws once after the six.
+## `UpdateCinnabarGymGateTileBlocks_` counts gates six through one; Yellow's writes through
+## `CinnabarGym_ReplaceTileBlock` and redraws once after the six.
 static func _script_gym_gates(ctx: Dictionary) -> Array:
 	var rom: RomFile = ctx["rom"]
 	var layout: Dictionary = ctx["layout"]
@@ -4496,8 +4464,7 @@ static func _script_sprite_position(state: Dictionary, out: Array, next: int) ->
 	return next
 
 
-## The four routines a script moves an object with, and the buffer the fifth
-## fills for the player.
+## The four routines a script moves an object with, and the buffer the fifth fills for the player.
 static func _script_sprite_called(
 	ctx: Dictionary, routine: String, target: int, state: Dictionary, out: Array,
 	next: int, depth: int
@@ -4561,8 +4528,8 @@ static func _script_object_node(node: Dictionary, object: Dictionary) -> Diction
 	return node
 
 
-## `SetSpriteMovementBytesToFF` puts STAY over the map's own template: the
-## object stops walking and turns where it stands.
+## `SetSpriteMovementBytesToFF` puts STAY over the map's own template: the object stops walking and turns
+## where it stands.
 static func _script_object_stay(state: Dictionary, out: Array, next: int) -> int:
 	var object: Dictionary = _script_sprite_object(state)
 	if object.is_empty():
@@ -4681,8 +4648,8 @@ static func _script_rle_list(ctx: Dictionary, address: int) -> Variant:
 	return null
 
 
-## `DecodeArrowMovementRLE`: the `map_coord_movement` row the player stands on
-## fills the joypad buffer from its own list, and `a` is $FF when none does.
+## `DecodeArrowMovementRLE`: the `map_coord_movement` row the player stands on fills the joypad buffer from
+## its own list, and `a` is $FF when none does.
 static func _script_arrow_movement(ctx: Dictionary, state: Dictionary, next: int) -> int:
 	var rom: RomFile = ctx["rom"]
 	var layout: Dictionary = ctx["layout"]
@@ -4743,8 +4710,8 @@ static func _script_walk(state: Dictionary, out: Array, next: int) -> int:
 	return next
 
 
-## `GetSimulatedInput` counts the index down before it reads the buffer at what
-## is left, so the entries are spent back to front; a run of one pad is a leg.
+## `GetSimulatedInput` counts the index down before it reads the buffer at what is left, so the entries are
+## spent back to front; a run of one pad is a leg.
 static func _script_walk_moves(state: Dictionary) -> Array:
 	var buffer: Array = state.get("walk_buffer", [])
 	var count: int = int(state.get("walk_steps", 0))
@@ -4764,8 +4731,8 @@ static func _script_walk_moves(state: Dictionary) -> Array:
 	return moves
 
 
-## `ArePlayerCoordsInArray`: the `db y, x` list `hl` names, terminated by $FF,
-## and carry for the player standing on one of its rows.
+## `ArePlayerCoordsInArray`: the `db y, x` list `hl` names, terminated by $FF, and carry for the player
+## standing on one of its rows.
 static func _script_coord_array(ctx: Dictionary, state: Dictionary, next: int) -> int:
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), int(state.get("hl", -1)))
@@ -4782,8 +4749,8 @@ static func _script_coord_array(ctx: Dictionary, state: Dictionary, next: int) -
 	return next
 
 
-## `CallFunctionInTable` and `ExecuteCurMapScriptInTable`: the table is in `hl`
-## or `de`, the index the `w<Map>CurScript` byte read above, answered back in `a`.
+## `CallFunctionInTable` and `ExecuteCurMapScriptInTable`: the table is in `hl` or `de`, the index the
+## `w<Map>CurScript` byte read above, answered back in `a`.
 static func _script_map_script_table(
 	ctx: Dictionary, state: Dictionary, out: Array, table: int, next: int
 ) -> int:
@@ -4807,9 +4774,9 @@ static func _script_map_script_table(
 	return next
 
 
-## `<Map>_Script` copies `wCurMapScript` into the map's own byte on the next
-## frame, and Viridian Gym and the two Rocket Hideout floors write nothing else.
-## The dispatch names that byte, so [method _bind_map_script_byte] fills it in.
+## `<Map>_Script` copies `wCurMapScript` into the map's own byte on the next frame, and Viridian Gym and the
+## two Rocket Hideout floors write nothing else. The dispatch names that byte, so [method
+## _bind_map_script_byte] fills it in.
 static func _script_map_script_mirror(state: Dictionary, out: Array) -> bool:
 	if not state.has("a"):
 		return false
@@ -4839,10 +4806,9 @@ static func _map_script_byte(layout: Dictionary, address: int) -> int:
 	return address - base
 
 
-## A `call` to a routine the layout does not name, walked in [param bank] and
-## returned from: `MtMoonB2FReceivedFossilText` is an `ld hl` and a tail
-## `jp PrintText`, and Yellow keeps 22 rows behind a `callfar`.
-## The printer routines branch the row on `hCanceledPrinting`.
+## A `call` to a routine the layout does not name, walked in [param bank] and returned from:
+## `MtMoonB2FReceivedFossilText` is an `ld hl` and a tail `jp PrintText`, and Yellow keeps 22 rows behind a
+## `callfar`. The printer routines branch the row on `hCanceledPrinting`.
 const SCRIPT_BANKED_NODES: Dictionary = {
 	"schedule_pikachu_spawn": {"op": "pikachu", "what": "schedule_spawn"},
 	"surfing_minigame": {"op": "surfing_minigame"},
@@ -4919,9 +4885,8 @@ static func _script_routine_call(
 	return SCRIPT_WALKED
 
 
-## The movement data at `hl`, read to its `$3f` the way
-## `LoadPikachuMovementCommandData` reads it: a row whose parameter is `$80`
-## takes the next byte. The two gated routines name a facing in `b`, and
+## The movement data at `hl`, read to its `$3f` the way `LoadPikachuMovementCommandData` reads it: a row whose
+## parameter is `$80` takes the next byte. The two gated routines name a facing in `b`, and
 ## `TryApplyPikachuMovementData` alone refreshes the follow behind the script.
 static func _script_pikachu_movement(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int, gated: bool, refresh: bool
@@ -4961,9 +4926,8 @@ static func _pikachu_movement_bytes(rom: RomFile, at: int) -> Array:
 	return []
 
 
-## `Func_f1ea2`: `dw threshold, text` rows walked until the happiness is below
-## one, the last row's threshold being zero. The routine answers in `hl` and the
-## `call PrintText` behind it prints the node instead.
+## `Func_f1ea2`: `dw threshold, text` rows walked until the happiness is below one, the last row's threshold
+## being zero. The routine answers in `hl` and the `call PrintText` behind it prints the node instead.
 static func _script_happiness_texts(ctx: Dictionary, routine: int) -> Dictionary:
 	var rom: RomFile = ctx["rom"]
 	var at: int = Gen1Layout.banked(int(ctx["bank"]), rom.u16le(routine + 1))
@@ -5015,9 +4979,9 @@ static func _script_banked_routine(layout: Dictionary, bank: int, target: int) -
 	return ""
 
 
-## `DisplayPokedex` writes `a` to `wPokedexNum` and opens that page, which is the
-## eight Safari Zone signs. The register holds an internal index and the cache
-## speaks dex numbers, so it is translated the way an evolution's target is.
+## `DisplayPokedex` writes `a` to `wPokedexNum` and opens that page, which is the eight Safari Zone signs. The
+## register holds an internal index and the cache speaks dex numbers, so it is translated the way an
+## evolution's target is.
 static func _script_pokedex(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int
 ) -> int:
@@ -5050,9 +5014,9 @@ static func _script_picture(
 	return next
 
 
-## `GivePokemon` reads the species in b and the level in c and answers in carry,
-## which `_GivePokemon` clears only when the party and the box are both full.
-## The register holds an internal index; the cache speaks dex numbers.
+## `GivePokemon` reads the species in b and the level in c and answers in carry, which `_GivePokemon` clears
+## only when the party and the box are both full. The register holds an internal index; the cache speaks dex
+## numbers.
 static func _script_gift_pokemon(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int
 ) -> int:
@@ -5098,8 +5062,8 @@ static func _script_asked(state: Dictionary, next: int) -> int:
 	return next
 
 
-## `farcall` is `ld b, BANK`, `ld hl, target`, `call Bankswitch`, and `callfar`
-## the same two the other way about.
+## `farcall` is `ld b, BANK`, `ld hl, target`, `call Bankswitch`, and `callfar` the same two the other way
+## about.
 static func _script_far(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int, depth: int
 ) -> int:
@@ -5129,8 +5093,8 @@ static func _script_far(
 	return next
 
 
-## `GuardDrinksList`, off `RemoveGuardDrink`'s own opening `ld hl`. The routine
-## spends the first row the bag holds, so the list and its test are one node.
+## `GuardDrinksList`, off `RemoveGuardDrink`'s own opening `ld hl`. The routine spends the first row the bag
+## holds, so the list and its test are one node.
 static func _script_guard_drinks(ctx: Dictionary, bank: int, target: int) -> Array:
 	var rom: RomFile = ctx["rom"]
 	var list: int = rom.u16le(Gen1Layout.banked(bank, target) + 1)
@@ -5143,8 +5107,8 @@ static func _script_guard_drinks(ctx: Dictionary, bank: int, target: int) -> Arr
 	return out
 
 
-## One byte of `hMoney` or `wPriceTemp`, whose first byte is `wWhichTrade`'s
-## own, so a store there is kept as both.
+## One byte of `hMoney` or `wPriceTemp`, whose first byte is `wWhichTrade`'s own, so a store there is kept as
+## both.
 static func _script_bcd_stored(
 	ctx: Dictionary, address: int, state: Dictionary
 ) -> bool:
@@ -5180,8 +5144,8 @@ static func _script_bcd_value(
 	return value
 
 
-## Yellow's two admission routines, each printing its lines, deciding a ball
-## count and answering carry when it hands nothing over.
+## Yellow's two admission routines, each printing its lines, deciding a ball count and answering carry when it
+## hands nothing over.
 static func _script_safari_admission(state: Dictionary, routine: String, next: int) -> int:
 	## Both return `ld hl, 502` with the count in `a`, so only the count is here.
 	state.erase("a")
@@ -5191,8 +5155,8 @@ static func _script_safari_admission(state: Dictionary, routine: String, next: i
 	return next
 
 
-## `HasEnoughMoney` compares `hMoney` with the player's own three bytes through
-## `StringCmp`, which sets carry when the player is short.
+## `HasEnoughMoney` compares `hMoney` with the player's own three bytes through `StringCmp`, which sets carry
+## when the player is short.
 static func _script_money_asked(state: Dictionary, next: int) -> int:
 	var price: int = _script_bcd_value(state, Gen1Layout.SCRIPT_BCD_BUFFERS[0])
 	if price < 1:
@@ -5202,8 +5166,8 @@ static func _script_money_asked(state: Dictionary, next: int) -> int:
 	return next
 
 
-## `HasEnoughCoins` is `StringCmp` over `hCoins`: `Has9990Coins` behind a `jr nc` is a full coin
-## case, and `GameCornerGentlemanText`'s `jr z` an exact 9990.
+## `HasEnoughCoins` is `StringCmp` over `hCoins`: `Has9990Coins` behind a `jr nc` is a full coin case, and
+## `GameCornerGentlemanText`'s `jr z` an exact 9990.
 static func _script_coins_asked(state: Dictionary, next: int) -> int:
 	var coins: int = _script_bcd_value(
 		state, Gen1Layout.SCRIPT_BCD_BUFFERS[0],
@@ -5216,8 +5180,8 @@ static func _script_coins_asked(state: Dictionary, next: int) -> int:
 	return next
 
 
-## `DisplayMoneyBox` draws the balance over the map and returns, and MONEY_BOX
-## is the only `wTextBoxID` a text row writes.
+## `DisplayMoneyBox` draws the balance over the map and returns, and MONEY_BOX is the only `wTextBoxID` a text
+## row writes.
 static func _script_money_box(state: Dictionary, out: Array, next: int) -> int:
 	if int(state.get("text_box", -1)) != Gen1Layout.MONEY_BOX_ID:
 		return SCRIPT_UNREAD
@@ -5263,9 +5227,8 @@ static func _script_add_coins(
 	return next
 
 
-## `predef` is `ld a, id` and `call Predef`; `PredefPointers` is the bank and
-## address that id names. `ShowObject2` shares `ShowObject`'s address, so
-## resolving the address rather than the id reads both.
+## `predef` is `ld a, id` and `call Predef`; `PredefPointers` is the bank and address that id names.
+## `ShowObject2` shares `ShowObject`'s address, so resolving the address rather than the id reads both.
 static func _script_predef(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int
 ) -> int:
@@ -5406,9 +5369,8 @@ static func _script_predef_name(layout: Dictionary, target: int) -> String:
 	return ""
 
 
-## `DisplayElevatorFloorMenu`, reached with `LoadItemList`'s floor names behind
-## it and `hl` on `.UpdateWarp`'s own warp table, whose bytes are already the
-## 0-based index `warp_event`'s `\4 - 1` stores.
+## `DisplayElevatorFloorMenu`, reached with `LoadItemList`'s floor names behind it and `hl` on `.UpdateWarp`'s
+## own warp table, whose bytes are already the 0-based index `warp_event`'s `\4 - 1` stores.
 static func _script_elevator(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int
 ) -> int:
@@ -5439,10 +5401,9 @@ const SCRIPT_SHAPE_READ: int = 1
 const SCRIPT_SHAPE_REFUSED: int = 2
 
 
-## Three loops a walk cannot step through, each read by the bytes it opens with
-## rather than by an address: `<Map>Script_Get*InBag` filters a `db` run through
-## `GetQuantityOfItemInBag`, `Print*InBag` draws what is left, and
-## `OaksLabScript_RemoveParcel` spends one bag row.
+## Three loops a walk cannot step through, each read by the bytes it opens with rather than by an address:
+## `<Map>Script_Get*InBag` filters a `db` run through `GetQuantityOfItemInBag`, `Print*InBag` draws what is
+## left, and `OaksLabScript_RemoveParcel` spends one bag row.
 static func _script_shaped_routine(
 	ctx: Dictionary, target: int, state: Dictionary, out: Array
 ) -> int:
@@ -5504,8 +5465,8 @@ static func _script_opens_with(rom: RomFile, at: int, bytes: Array) -> bool:
 	return true
 
 
-## `PokemonTower7FRocketLeaveMovementScript`: `(wSpriteIndex - 1) << 4` picks the
-## rocket's four rows and the player's cell one of them.
+## `PokemonTower7FRocketLeaveMovementScript`: `(wSpriteIndex - 1) << 4` picks the rocket's four rows and the
+## player's cell one of them.
 static func _script_object_coord_move(ctx: Dictionary, table: int, out: Array) -> int:
 	var rom: RomFile = ctx["rom"]
 	var rows: Array = []
@@ -5560,9 +5521,8 @@ static func _script_filter_printed(ctx: Dictionary, at: int, state: Dictionary) 
 	return SCRIPT_SHAPE_REFUSED
 
 
-## `CeruleanBadgeHouseMiddleAgedManText`, the one `SPECIALLISTMENU` outside an
-## elevator: badges, a text table the row indexes, and a `jr .loop` onto the
-## list, which is one node because a walk cannot return to itself.
+## `CeruleanBadgeHouseMiddleAgedManText`, the one `SPECIALLISTMENU` outside an elevator: badges, a text table
+## the row indexes, and a `jr .loop` onto the list, which is one node because a walk cannot return to itself.
 static func _script_list_menu(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int, depth: int
 ) -> int:
@@ -5603,8 +5563,8 @@ static func _script_list_menu(
 	return SCRIPT_END
 
 
-## `TextBoxBorder`: `hl` is the corner, `b` and `c` the interior; a box sized off
-## the filtered count has no readable `b` and counts two rows an entry.
+## `TextBoxBorder`: `hl` is the corner, `b` and `c` the interior; a box sized off the filtered count has no
+## readable `b` and counts two rows an entry.
 static func _script_menu_box(ctx: Dictionary, state: Dictionary, next: int) -> int:
 	var layout: Dictionary = ctx["layout"]
 	var corner: int = _script_screen_cell(layout, int(state.get("hl", -1)))
@@ -5674,8 +5634,7 @@ static func _script_menu(state: Dictionary, out: Array, next: int) -> int:
 	return next
 
 
-## `ReplaceTileBlock`, which is how a map draws a door, a gate or an exit its
-## own block data has none of.
+## `ReplaceTileBlock`, which is how a map draws a door, a gate or an exit its own block data has none of.
 static func _script_replace_block(state: Dictionary, out: Array, next: int) -> int:
 	if not state.has("new_block") or not state.has("b") or not state.has("c"):
 		return SCRIPT_UNREAD
@@ -5697,8 +5656,8 @@ static func _script_box(ctx: Dictionary, pointer: int) -> Dictionary:
 	return {"op": "text", "text": String(decoded["text"])}
 
 
-## A conditional, walked both ways. A side reaching machine code this decoder
-## does not read becomes an `unknown` node the runtime can do nothing with.
+## A conditional, walked both ways. A side reaching machine code this decoder does not read becomes an
+## `unknown` node the runtime can do nothing with.
 static func _script_branch(
 	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
@@ -5722,8 +5681,8 @@ static func _script_branch(
 	var jumped_state: Dictionary = state.duplicate()
 	var fell_state: Dictionary = state.duplicate()
 	if bool(state.get("tests_and_a", false)):
-		## `and a` leaves `a` where it was and raises Z only when it is zero, so
-		## the side a `jp nz` does not take knows the register is zero.
+		## `and a` leaves `a` where it was and raises Z only when it is zero, so the side a `jp nz` does not
+		## take knows the register is zero.
 		var zero: Dictionary = fell_state if bool(table[op]) else jumped_state
 		zero["a"] = 0
 	if not carry:
@@ -5764,8 +5723,8 @@ static func _script_logged(at: int, op: int) -> void:
 		(refusals as Array).append({"map": _site_map, "row": _site_row, "at": at, "op": op})
 
 
-## A branch whose zero flag the walk already knows: only the side taken is
-## walked, and it carries on in front of whatever the caller has read already.
+## A branch whose zero flag the walk already knows: only the side taken is walked, and it carries on in front
+## of whatever the caller has read already.
 static func _script_known_branch(
 	ctx: Dictionary, op: int, pc: int, state: Dictionary, depth: int, out: Array
 ) -> Variant:
@@ -5839,9 +5798,8 @@ static func _script_walked_on(
 	return out
 
 
-## `cp n` against the faced direction, the species count `CountSetBits` left,
-## the map's tileset, one screen position or where the player stands; anything
-## else ends the path.
+## `cp n` against the faced direction, the species count `CountSetBits` left, the map's tileset, one screen
+## position or where the player stands; anything else ends the path.
 static func _script_compared(
 	ctx: Dictionary, pc: int, state: Dictionary, value: int
 ) -> int:
@@ -5850,8 +5808,8 @@ static func _script_compared(
 	var next: int = pc + Gen1Layout.SCRIPT_SHORT_SIZE
 	if _script_compared_byte(layout, state, source, value):
 		return next
-	## `CheckBothEventsSet` is `and mask` with `cp mask` behind it: every flag.
-	## `SilphCo11FScript5`'s `cp 1` under the mask is one set and one clear.
+	## `CheckBothEventsSet` is `and mask` with `cp mask` behind it: every flag. `SilphCo11FScript5`'s `cp 1`
+	## under the mask is one set and one clear.
 	if state.get("tests") is Array and value == int(state.get("mask", -1)):
 		state["tests_all"] = true
 		return next
@@ -5983,8 +5941,8 @@ static func _script_compared_byte(
 	return false
 
 
-## `PrintPredefTextID`: `TextPredefs` counts from 1 and a row is read in the
-## bank the routine that named it runs in.
+## `PrintPredefTextID`: `TextPredefs` counts from 1 and a row is read in the bank the routine that named it
+## runs in.
 static func _script_predef_text(
 	ctx: Dictionary, state: Dictionary, out: Array, next: int, depth: int
 ) -> int:
@@ -6000,8 +5958,8 @@ static func _script_predef_text(
 	return next if _script_text_row(ctx, pointer, state, out, depth) else SCRIPT_UNREAD
 
 
-## One text pointer in the walk's own bank: the box it prints, the facility it
-## opens instead, and the machine code a `text_asm` behind it runs.
+## One text pointer in the walk's own bank: the box it prints, the facility it opens instead, and the machine
+## code a `text_asm` behind it runs.
 static func _script_text_row(
 	ctx: Dictionary, pointer: int, state: Dictionary, out: Array, depth: int
 ) -> bool:
@@ -6022,9 +5980,8 @@ static func _script_text_row(
 	var code: int = _text_code_at(decoded)
 	if code < 0:
 		return true
-	## The third row the world owns whole. `TownMapText`'s own code clears
-	## `BIT_NO_TEXT_DELAY` and pushes a return address behind `CloseTextDisplay`,
-	## and none of that is the screen it opens.
+	## The third row the world owns whole. `TownMapText`'s own code clears `BIT_NO_TEXT_DELAY` and pushes a
+	## return address behind `CloseTextDisplay`, and none of that is the screen it opens.
 	if at == int((ctx["layout"] as Dictionary).get("town_map_text", -1)):
 		out.append({"op": "town_map"})
 		return true
@@ -6128,9 +6085,8 @@ static func _script_reads_flag(state: Dictionary, tests: Variant, carry: bool) -
 	)
 
 
-## `wCurrentMenuItem` is 0 for YES, so the branch taken when it is not zero is
-## NO. Every other test reads the other way about: the taken side is the set
-## one, a set carry or an item the bag holds.
+## `wCurrentMenuItem` is 0 for YES, so the branch taken when it is not zero is NO. Every other test reads the
+## other way about: the taken side is the set one, a set carry or an item the bag holds.
 static func _script_node(
 	tests: Variant, branches: Array, state: Dictionary, out: Array, carry: bool
 ) -> Variant:
@@ -6174,8 +6130,8 @@ static func _script_node_of(
 			return {"op": "has_item", "item": int(state["asked"]),
 				"then": taken, "else": fell}
 		SCRIPT_TESTS_MONEY:
-			## Carry is set when the player is short, so the taken side of a
-			## `jr c` is the refusal and the other one is the sale.
+			## Carry is set when the player is short, so the taken side of a `jr c` is the refusal and the
+			## other one is the sale.
 			return {"op": "has_money", "price": int(state["price"]),
 				"then": fell, "else": taken}
 		SCRIPT_TESTS_COINS:
@@ -6219,9 +6175,9 @@ static func _script_node_exact(
 		"then": fell, "else": taken}
 
 
-## `cp` against one byte the run answers, as the node, its key and the walk's
-## own name for the value. Z is the match, so the taken side is the mismatch;
-## the dex count's carry is set below it, so that taken side owns fewer.
+## `cp` against one byte the run answers, as the node, its key and the walk's own name for the value. Z is the
+## match, so the taken side is the mismatch; the dex count's carry is set below it, so that taken side owns
+## fewer.
 const SCRIPT_MATCH_NODES: Dictionary = {
 	SCRIPT_TESTS_FACING: ["facing", "facing", "facing"],
 	SCRIPT_TESTS_DEX: ["dex_count", "count", "dex_count"],
@@ -6317,8 +6273,8 @@ static func _script_node_state(
 	return _script_node_menu(tests, taken, fell, state)
 
 
-## `CheckPikachuFollowingPlayer` answers Z when the follower walks; the party
-## bits, the two carries and `cp` under the happiness all take the set side.
+## `CheckPikachuFollowingPlayer` answers Z when the follower walks; the party bits, the two carries and `cp`
+## under the happiness all take the set side.
 static func _script_node_pikachu(state: Dictionary, taken: Array, fell: Array) -> Dictionary:
 	var what: String = String(state["pikachu_test"])
 	var node: Dictionary = {"op": "pikachu_test", "what": what, "then": taken, "else": fell}
@@ -6371,9 +6327,8 @@ static func _script_receipt(out: Array, taken: Array, fell: Array) -> Variant:
 	return gift
 
 
-## One `trainer` row. `TrainerFlagAction` counts the bit off the address two
-## bytes in, so the flag is that address's distance from `wEventFlags` in bits
-## plus the stored bit.
+## One `trainer` row. `TrainerFlagAction` counts the bit off the address two bytes in, so the flag is that
+## address's distance from `wEventFlags` in bits plus the stored bit.
 static func _read_trainer_header(
 	rom: RomFile, layout: Dictionary, bank: int, at: int
 ) -> Dictionary:
@@ -6384,8 +6339,8 @@ static func _read_trainer_header(
 			+ rom.u8(at + int(offsets["flag_bit"])),
 		"sight_range": rom.u8(at + int(offsets["range"])) >> Gen1Layout.TRAINER_RANGE_SHIFT,
 	}
-	## The LIFT KEY's `ShowObject` is machine code in a header text, Red's
-	## after-battle one and Yellow's end-battle one.
+	## The LIFT KEY's `ShowObject` is machine code in a header text, Red's after-battle one and Yellow's
+	## end-battle one.
 	for name: String in ["before", "after", "end"]:
 		var pointer: int = rom.u16le(at + int(offsets[name]))
 		_site_row = "trainer %s" % name
@@ -6414,8 +6369,8 @@ static func _read_trainer_text(
 	return String(decoded["text"]) if bool(decoded.get("ok", false)) else ""
 
 
-## `script_mart`'s inline list, which `LoadItemList` copies straight out of the
-## text pointer. A count past `wItemList` is not a shop at all.
+## `script_mart`'s inline list, which `LoadItemList` copies straight out of the text pointer. A count past
+## `wItemList` is not a shop at all.
 static func _read_mart_items(rom: RomFile, at: int) -> Array:
 	var count: int = rom.u8(at + Gen1Layout.MART_COUNT_AT)
 	if count < 1 or count > Gen1Layout.MART_MAX_ITEMS:
@@ -6429,9 +6384,9 @@ static func _read_mart_items(rom: RomFile, at: int) -> Array:
 	return out
 
 
-## A row only a map script reaches stands above every id the map's events name,
-## and those are what bound the table: Mt. Moon B2F's tenth row is the super
-## nerd's line. True when the table grew and the states want reading again.
+## A row only a map script reaches stands above every id the map's events name, and those are what bound the
+## table: Mt. Moon B2F's tenth row is the super nerd's line. True when the table grew and the states want
+## reading again.
 static func _extend_texts(
 	rom: RomFile, layout: Dictionary, bank: int, address: int, texts: Array,
 	events: Dictionary, states: Dictionary, known: Dictionary = {}

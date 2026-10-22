@@ -39,8 +39,15 @@ const SHADOW_Y_OFFSETS: Array[int] = [4, 4, 4, 16]
 
 var data: GameData
 var palette: Gen3Palette
-## The field's weather, which `UpdateSpritePaletteWithWeather` asks after each reflection palette load.
-var weather: Gen3FieldWeather
+## The field's weather, which `UpdateSpritePaletteWithWeather` asks after each reflection palette load and whose
+## raindrops take sprite slots beside the objects' effects.
+var weather: Gen3FieldWeather:
+	set(value):
+		weather = value
+		if value != null:
+			value.sprites.taken_slots = taken_slots
+## The objects' field-effect sprites: [Gen3ObjectEvents]' own array.
+var effects: Array[Dictionary] = []
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
 var reflections: Array[Dictionary] = []
@@ -119,6 +126,8 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 	for reflection: Dictionary in reflections:
 		var entry: Dictionary = _reflection_entry(objects, reflection, origin)
 		entries[int(reflection["sprite_slot"])] = entry
+	if weather != null:
+		entries.merge(weather.sprites.oam_entries(-origin, weather.contrast_slot))
 	_sort(entries)
 	var out: Array = []
 	for slot: int in _order:
@@ -132,20 +141,32 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 	return out
 
 
-static func effect_slot(effects: Array[Dictionary], reverse: bool = true) -> int:
+## The first free sprite slot past the objects', from the end as `CreateSpriteAtEnd` looks or from the start.
+func effect_slot(reverse: bool = true) -> int:
 	# `CreateReflectionEffectSprites` reserves the final two sprites for the shared distortion matrices.
 	var slots: Array = range(SPRITE_COUNT - 3, Gen3ObjectEvents.COUNT - 1, -1) if reverse \
 		else range(Gen3ObjectEvents.COUNT, SPRITE_COUNT - 2)
+	var taken: Array = taken_slots()
+	if weather != null:
+		taken.append_array(weather.sprites.slots())
 	for slot: int in slots:
-		if not effects.any(func(effect: Dictionary) -> bool: return effect.get("sprite_slot", -1) == slot):
+		if not slot in taken:
 			return slot
 	return -1
 
 
+## The slots the objects, their effects and the reflections hold.
+func taken_slots() -> Array:
+	var out: Array = range(Gen3ObjectEvents.COUNT)
+	for row: Dictionary in effects + reflections:
+		out.append(int(row.get("sprite_slot", -1)))
+	return out
+
+
 ## `SetUpReflection` keeps the object slot/local ID and the initial bridge offset, not its map identity.
 func start_reflection(objects: Gen3ObjectEvents, object: Gen3ObjectEvents.ObjectEvent, slot: int,
-		still: bool, effects: Array[Dictionary]) -> void:
-	var sprite_slot: int = effect_slot(effects + reflections, false)
+		still: bool) -> void:
+	var sprite_slot: int = effect_slot(false)
 	if sprite_slot < 0:
 		return
 	var info: Dictionary = objects.graphics_info(object.graphics_id)

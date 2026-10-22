@@ -20,6 +20,8 @@ const CLEARED_SYSTEM_FLAGS: Dictionary = {
 }
 
 var berries: Gen3BerryTrees
+## The field's `gRngValue`, which is not saved.
+var random := Gen3Random.new()
 var game: StringName
 ## `gSaveBlock1Ptr->weather` and `weatherCycleStage`.
 var weather: int = 0
