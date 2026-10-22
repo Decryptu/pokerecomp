@@ -2,19 +2,19 @@ class_name Gen3BerryTrees
 extends RefCounted
 
 ## `berry.c`: six-byte save records; Ruby's growthSparkle bit is Emerald's stopGrowth bit. The field host
-## supplies elapsed minutes and a shared RNG.
+## supplies elapsed minutes; yields draw from [member random].
 const COUNT: int = 128
 const RECORD_SIZE: int = 6
 enum Stage { EMPTY, PLANTED, SPROUTED, TALLER, FLOWERING, BERRIES }
 
 var data: GameData
-var random_seed: int = 0
-var random_word: Callable = _random
+var random: Gen3Random
 var _records := PackedByteArray()
 
 
-func _init(game_data: GameData) -> void:
+func _init(game_data: GameData, rng: Gen3Random = null) -> void:
 	data = game_data
+	random = rng if rng != null else Gen3Random.new()
 	_records.resize(COUNT * RECORD_SIZE)
 
 
@@ -125,10 +125,5 @@ func _yield(id: int) -> int:
 	if water_count == 0:
 		return minimum
 	var difference: int = int(info.get("max_yield", 0)) - minimum
-	var roll: int = difference * (water_count - 1) + int(random_word.call()) % (difference + 1)
+	var roll: int = difference * (water_count - 1) + random.next() % (difference + 1)
 	return minimum + roll / 4 + int(roll % 4 >= 2)
-
-
-func _random() -> int:
-	random_seed = (random_seed * 0x41C64E6D + 0x6073) & 0xFFFFFFFF
-	return random_seed >> 16

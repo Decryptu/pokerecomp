@@ -440,9 +440,9 @@ func world_object_palette(tag: int) -> PackedByteArray:
 	return PackedByteArray()
 
 
-## StartWeather's sprite palette and the six drought tables, [code]summed[/code] on Emerald, where they are
-## the colours themselves, and not on Ruby and Sapphire, whose deltas the field sums as it loads them. FireRed
-## and LeafGreen have no tables.
+## StartWeather's sprite palette, the rain sprite sheet and the six drought tables, [code]summed[/code] on
+## Emerald, where they are the colours themselves, and not on Ruby and Sapphire, whose deltas the field sums as
+## it loads them. FireRed and LeafGreen have no tables.
 func world_weather() -> Dictionary:
 	var row: Dictionary = _scripts().get("weather", {}) if generation == RomRegistry.GEN3 else {}
 	if row.is_empty():
@@ -451,7 +451,8 @@ func world_weather() -> Dictionary:
 	for offset: Variant in row.get("drought", []):
 		drought.append(_gba_graphics_record("weather", int(offset)).get("bytes", PackedByteArray()))
 	return {"palette": _gba_graphics_record("weather", int(row["palette"])).get("bytes", PackedByteArray()),
-		"drought": drought, "summed": bool(row.get("summed", false))}
+		"drought": drought, "summed": bool(row.get("summed", false)),
+		"rain": _gba_graphics_record("weather", int(row.get("rain", -1))).get("bytes", PackedByteArray())}
 
 
 func world_object_palette_sets() -> Dictionary:

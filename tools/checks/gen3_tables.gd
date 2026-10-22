@@ -1008,17 +1008,19 @@ func _reflections() -> void:
 	_r.digest_matches("gen3_reflection_palettes", lines, REFLECTION_DIGESTS[data.id])
 
 
-## The weather's sprite palette and drought tables against pret's `.pal` and `.bin` files, then a palette
-## stream: every weather from a map header through the warp's fade in, a change of weather, a sprite palette
-## load and a lightning-style ramp, preserved palettes, and fades out and back in. Original `field_weather.c`,
-## `palette.c`, `trig.c` and the palette weathers' `field_weather_effect.c` callbacks, compiled in scratch with
-## the sprite weathers reduced to their colour-map targets, give the same stream frame for frame.
+## The weather's sprite palette, rain sheet and drought tables against pret's `.pal`, `.png` and `.bin` files,
+## then a stream: every weather from a map header through the warp's fade in, a change of weather, a sprite
+## palette load and a lightning-style ramp, preserved palettes, and fades out and back in, with every raindrop,
+## the thunder and the RNG each frame under a moving sprite offset. Original `field_weather.c`, `palette.c`,
+## `trig.c`, the palette and rain weathers' `field_weather_effect.c` callbacks and `sprite.c`'s anim
+## interpreter, compiled in scratch with the other sprite weathers reduced to their colour-map targets, give the
+## same stream frame for frame.
 const WEATHER_DIGESTS: Dictionary = {
-	&"ruby": ["a5e75adb3430187a63422c4997f9b6ce62661056", "815c665b4386d630231f5723cff633e99d773f14"],
-	&"sapphire": ["a5e75adb3430187a63422c4997f9b6ce62661056", "815c665b4386d630231f5723cff633e99d773f14"],
-	&"firered": ["6d5db417b3f140ccea94970ac817425da485697d", "dffaa6b0aeba69eda7ec743c889b8799e361f3c0"],
-	&"leafgreen": ["6d5db417b3f140ccea94970ac817425da485697d", "dffaa6b0aeba69eda7ec743c889b8799e361f3c0"],
-	&"emerald": ["2c9657d88a865d29b3fdf30f4e255b180f1b5afc", "e57f9731b83ac3366ddc8e5d354764eee17c07e0"],
+	&"ruby": ["b0ccb1578796a90c086bf3ba221a31ff520f3e39", "f44a3a05d5c780b7543c8a4d571009eaa8a5adeb"],
+	&"sapphire": ["b0ccb1578796a90c086bf3ba221a31ff520f3e39", "f44a3a05d5c780b7543c8a4d571009eaa8a5adeb"],
+	&"firered": ["32365ce37c6575ffadb11b77eb42c9c3c60bbd43", "833d02ac22e31a11285b7d76f946ba6efc6bc6c2"],
+	&"leafgreen": ["32365ce37c6575ffadb11b77eb42c9c3c60bbd43", "833d02ac22e31a11285b7d76f946ba6efc6bc6c2"],
+	&"emerald": ["290d0144569a630738de246ed43d515edd71f414", "63d8bb6eacb3797d8690175706b3d2b174ec0d16"],
 }
 const WEATHER_CHANGES: Array[int] = [3, 11, 0, 12, 2, 6]
 ## Frames after each of the stream's phases.
@@ -1029,7 +1031,8 @@ func _weather() -> void:
 	var data: GameData = _r.data
 	var imported: Dictionary = data.world_weather()
 	var colors: PackedByteArray = imported.get("palette", PackedByteArray())
-	var lines := PackedStringArray(["palette|" + colors.hex_encode()])
+	var lines := PackedStringArray(["palette|" + colors.hex_encode(),
+		"rain|" + _graphics_hash({"bytes": imported.get("rain", PackedByteArray())})])
 	var tables: Array = imported.get("drought", [])
 	for index: int in tables.size():
 		lines.append("drought|%d|%s" % [index, _graphics_hash({"bytes": tables[index]})])
@@ -1047,6 +1050,11 @@ static func weather_stream(data: GameData, pass_index: int, span: int = 1) -> Pa
 	var events := Gen3EventData.new(data.id)
 	var weather := Gen3FieldWeather.new(data, palette, events)
 	events.weather_cycle_stage = pass_index % 4
+	events.random.value = 0x5EED0000 + pass_index
+	var thunder: Array[int] = [0, 0]
+	weather.sprites.thunder.connect(func(second: bool) -> void:
+		thunder[0] += 1
+		thunder[1] = int(second))
 	var x: int = 0x1234 + pass_index
 	for index: int in Gen3Palette.COLORS:
 		x = (x * 1103515245 + 12345) & 0xFFFFFFFF
@@ -1061,7 +1069,7 @@ static func weather_stream(data: GameData, pass_index: int, span: int = 1) -> Pa
 	weather.run_tasks()
 	if weather.locked:
 		return PackedStringArray(["%d|hang" % pass_index])
-	var lines := PackedStringArray([_weather_frame(weather, pass_index, 0, false)])
+	var lines := PackedStringArray([_weather_frame(weather, pass_index, 0, thunder, false)])
 	var phases: Array[Callable] = [
 		func() -> void: weather.set_weather(WEATHER_CHANGES[pass_index % WEATHER_CHANGES.size()]),
 		func() -> void:
@@ -1083,31 +1091,53 @@ static func weather_stream(data: GameData, pass_index: int, span: int = 1) -> Pa
 			weather.fade_screen(Gen3FieldWeather.Fade.FROM_BLACK, 1)
 			weather.update_sprite_palette(2),
 	]
-	lines.append_array(_weather_frames(weather, pass_index, 90 / span - 1, 1))
+	lines.append_array(_weather_frames(weather, pass_index, 90 / span - 1, thunder, 1))
 	for phase: int in phases.size():
 		phases[phase].call()
-		lines.append_array(_weather_frames(weather, pass_index, WEATHER_PHASES[phase] / span))
+		lines.append_array(_weather_frames(weather, pass_index, WEATHER_PHASES[phase] / span, thunder))
 	weather.update_per_day(pass_index + 1)
 	lines.append("%d|end|%d|%d|%d" % [pass_index, events.weather, events.weather_cycle_stage,
 		int(events.stats.get(Gen3FieldWeather.GAME_STAT_GOT_RAINED_ON, 0))])
 	return lines
 
 
-static func _weather_frames(weather: Gen3FieldWeather, pass_index: int, count: int, first: int = 0) -> PackedStringArray:
+static func _weather_frames(weather: Gen3FieldWeather, pass_index: int, count: int, thunder: Array[int],
+		first: int = 0) -> PackedStringArray:
 	var lines := PackedStringArray()
 	for index: int in count:
-		lines.append(_weather_frame(weather, pass_index, first + index))
+		lines.append(_weather_frame(weather, pass_index, first + index, thunder))
 	return lines
 
 
-## One field frame's weather task, palette fade and VBlank transfer, and the faded colours after it.
-static func _weather_frame(weather: Gen3FieldWeather, pass_index: int, index: int, tasks: bool = true) -> String:
+## One field frame's weather task, raindrops, palette fade and VBlank transfer; the faded colours and the rain
+## after it.
+static func _weather_frame(weather: Gen3FieldWeather, pass_index: int, index: int, thunder: Array[int],
+		tasks: bool = true) -> String:
 	if tasks:
 		weather.run_tasks()
+	weather.sprites.animate(Vector2i(index * 7 % 41 - 20, index * 3 % 29 - 14))
 	weather.palette.update_fade()
 	weather.palette.transfer()
-	return "%d|%d|%d|%d|%d|%d|%s" % [pass_index, index, weather.current, weather.state, weather.color_map_index,
-		weather.bldalpha, weather.palette.faded.hex_encode()]
+	return "%d|%d|%d|%d|%d|%d|%s|%s" % [pass_index, index, weather.current, weather.state, weather.color_map_index,
+		weather.bldalpha, weather.palette.faded.hex_encode(), _rain_state(weather, thunder)]
+
+
+static func _rain_state(weather: Gen3FieldWeather, thunder: Array[int]) -> String:
+	var rain: Gen3WeatherSprites = weather.sprites
+	var out: String = "r|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|" % [weather.init_step, weather.finish_step,
+		rain.rain_sprite_count, rain.current_rain_index, rain.target_rain_count, rain.visible_counter,
+		rain.visible_delay, int(rain.downpour), weather.events.random.value, rain.thunder_timer, rain.thunder_se_timer,
+		int(rain.thunder_allow_end), int(rain.thunder_long_bolt), rain.thunder_short_bolts,
+		int(rain.thunder_enqueued), thunder[0], thunder[1]]
+	for index: int in rain.rain_sprite_count:
+		var drop: Gen3WeatherSprites.Raindrop = rain.raindrops[index]
+		if drop == null:
+			out += "-;"
+			continue
+		out += "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d;" % [drop.slot, drop.x, drop.y, int(drop.invisible),
+			int(drop.coord_offset), drop.anim.image, int(drop.anim.ended), drop.callback, drop.counter, drop.random,
+			drop.pos_x, drop.pos_y, int(drop.splashing), int(drop.active), int(drop.waiting)]
+	return out
 
 
 func _reflection_palette_trace(objects: Gen3ObjectEvents, row: int) -> PackedStringArray:
@@ -1123,7 +1153,7 @@ func _reflection_palette_trace(objects: Gen3ObjectEvents, row: int) -> PackedStr
 				sprites.reflections.clear()
 				object.current_behavior = 0 if previous else behavior
 				object.previous_behavior = behavior if previous else 0
-				sprites.start_reflection(objects, object, 0, false, [])
+				sprites.start_reflection(objects, object, 0, false)
 				var slot: int = Gen3ObjectSprites.REFLECTION_SLOTS[object.palette_num]
 				var at: int = (Gen3Palette.OBJ_OFFSET + slot * 16) * 2
 				lines.append("%d|%d|%d|%d|%d|%d|%s|%d" % [row, type, int(previous), behavior,
@@ -1577,7 +1607,7 @@ func _object_movements(random_movement: bool) -> void:
 			object.pixel_position = object.current * 16
 			object.current_elevation = 3
 			object.previous_elevation = 3
-			objects.random_seed = 0x1234 + index
+			objects.events.random.value = 0x1234 + index
 			lines.append_array(_autonomous_frames(objects, index, random_movement))
 	_r.digest_matches("gen3_object_random_movements" if random_movement else "gen3_object_patrols", lines,
 		RANDOM_MOVEMENT_DIGESTS[data.id] if random_movement else PATROL_DIGESTS[data.id])
@@ -1598,7 +1628,7 @@ func _autonomous_frames(objects: Gen3ObjectEvents, index: int, random_movement: 
 			int(object.held_movement_active), int(object.held_movement_finished), int(object.frozen), int(object.invisible)]
 		if random_movement:
 			var waiting: bool = object.movement_state == (2 if object.movement_type >= 0x17 else 3)
-			values.append_array([object.movement_delay if waiting else 0, objects.random_seed])
+			values.append_array([object.movement_delay if waiting else 0, objects.events.random.value])
 		lines.append(",".join(values))
 	return lines
 
@@ -1834,7 +1864,7 @@ func _berry_growth_frames(data: GameData, berry: int) -> PackedStringArray:
 	for scenario: int in 18:
 		var trees := Gen3BerryTrees.new(data)
 		trees.plant(0, berry, 5 if scenario == 16 else 1, scenario != 17)
-		trees.random_seed = 0x12345678
+		trees.random.value = 0x12345678
 		var duration: int = int(trees.record(0)["minutes"]) / (4 if scenario == 16 else 1)
 		for turn: int in 101:
 			var stage: int = int(trees.record(0)["stage"])
@@ -1845,7 +1875,7 @@ func _berry_growth_frames(data: GameData, berry: int) -> PackedStringArray:
 			trees.advance_minutes(minutes)
 			var values: Array = [berry, scenario, turn]
 			values.append_array(Array(trees._records.slice(0, 6)))
-			values.append(trees.random_seed)
+			values.append(trees.random.value)
 			lines.append(",".join(values))
 	return lines
 

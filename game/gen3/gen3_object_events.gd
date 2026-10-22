@@ -321,8 +321,6 @@ class ObjectEvent:
 	var disguise_ready: bool = false
 
 
-var random_seed: int = 0
-var random_word: Callable = _random
 var _player_dashing: bool = false
 var _player_tile_center: bool = false
 var camera: Gen3FieldCamera
@@ -355,7 +353,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	camera = field_camera
 	events = event_data
 	if events.berries == null:
-		events.berries = Gen3BerryTrees.new(camera.data)
+		events.berries = Gen3BerryTrees.new(camera.data, events.random)
 	var id: StringName = camera.data.id
 	_frlg = id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
 	for type: int in 256:
@@ -370,6 +368,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	for slot: int in COUNT:
 		objects.append(ObjectEvent.new())
 	sprites = Gen3ObjectSprites.new(camera.data, palettes)
+	sprites.effects = _effect_sprites
 	sprites.init_palettes(0)
 	load_templates()
 
@@ -934,7 +933,7 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
 	if effect == FLDEFF_SHADOW:
 		var info: Dictionary = graphics_info(object.graphics_id)
-		sprite["sprite_slot"] = Gen3ObjectSprites.effect_slot(_effect_sprites + sprites.reflections)
+		sprite["sprite_slot"] = sprites.effect_slot()
 		if int(sprite["sprite_slot"]) < 0:
 			return {}
 		sprite["shadow_size"] = int(info.get("shadow_size", 0))
@@ -1535,7 +1534,7 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 func _update_reflection(object: ObjectEvent, slot: int) -> void:
 	var type: int = nearby_reflection_type(object)
 	if type != 0 and not object.has_reflection:
-		sprites.start_reflection(self, object, slot, type == 1, _effect_sprites)
+		sprites.start_reflection(self, object, slot, type == 1)
 	object.has_reflection = type != 0
 
 
@@ -1894,19 +1893,13 @@ func _choose_sequence(object: ObjectEvent) -> void:
 	object.direction_sequence_index = index
 
 
-## `random.c`'s LCG; [member random_word] also accepts a shared host stream.
-func _random() -> int:
-	random_seed = (random_seed * 0x41C64E6D + 0x6073) & 0xFFFFFFFF
-	return random_seed >> 16
-
-
 func _start_facing(object: ObjectEvent) -> void:
 	_set_single_movement(object, direction_action(0, object.facing))
 	object.movement_state = 2
 
 
 func _choose_delay(object: ObjectEvent) -> void:
-	var index: int = int(random_word.call()) & 3
+	var index: int = events.random.next() & 3
 	object.movement_delay = 32 + index * (16 if object.movement_type >= 0xF else 32)
 	object.movement_state = 3
 
@@ -1933,7 +1926,7 @@ func _step_wander(object: ObjectEvent, slot: int, requests: Array) -> void:
 		object.movement_state = 4
 	if object.movement_state == 4:
 		var directions: Array = RANDOM_DIRECTIONS[object.movement_type]
-		var direction: int = int(directions[int(random_word.call()) & (directions.size() - 1)])
+		var direction: int = int(directions[events.random.next() & (directions.size() - 1)])
 		set_direction(object, direction)
 		if _collision_in_direction(object) != Collision.NONE:
 			object.movement_state = 1
@@ -1966,7 +1959,7 @@ func _step_random_facing(object: ObjectEvent, slot: int, requests: Array) -> voi
 	var directions: Array = RANDOM_DIRECTIONS[object.movement_type]
 	var direction: int = _trainer_direction(object, directions)
 	if direction == Direction.NONE:
-		direction = int(directions[int(random_word.call()) & (directions.size() - 1)])
+		direction = int(directions[events.random.next() & (directions.size() - 1)])
 	set_direction(object, direction)
 	object.movement_state = 1
 	_step_random_facing(object, slot, requests)
