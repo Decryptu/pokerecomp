@@ -2,8 +2,9 @@ class_name Gen3FieldVram
 extends RefCounted
 
 ## The field's background tiles and palettes: `CopyMapTilesetsToVram` and `LoadMapTilesetPalettes` for a map's
-## tileset pair, the copies `UpdateTilesetAnimations` queues each frame, and the three background layers
-## `DrawMetatile` fills, composed into pixels with the object sprites between them.
+## tileset pair into VRAM and [member palette], the copies `UpdateTilesetAnimations` queues each frame, and the
+## three background layers `DrawMetatile` fills, composed into pixels from the faded colours with the object
+## sprites between them.
 
 const TILE_COUNT: int = 1024
 const PALETTE_COUNT: int = 16
@@ -13,39 +14,45 @@ const NORMAL_UNDERLAY: int = 0x3014
 const LAYER_TYPES: int = 3
 
 var tiles := PackedByteArray()
-var palettes := PackedByteArray()
+var palette: Gen3Palette
 var _frames: Array = []
 var _animation: Dictionary = {}
 
 
-static func load(primary: Dictionary, secondary: Dictionary) -> Gen3FieldVram:
+## [param palettes] is the field's palette RAM, which the object sprites and the weather share.
+static func load(primary: Dictionary, secondary: Dictionary, palettes: Gen3Palette = null) -> Gen3FieldVram:
 	var vram := Gen3FieldVram.new()
+	vram.palette = palettes if palettes != null else Gen3Palette.new()
 	vram.tiles.resize(TILE_COUNT * GbaTiles.TILE_BYTES)
-	vram.palettes.resize(PALETTE_COUNT * 32)
 	for tileset: Dictionary in [primary, secondary]:
 		_copy(vram.tiles, int(tileset["tile_offset"]) * GbaTiles.TILE_BYTES, tileset["tiles"]["bytes"])
-		_copy(vram.palettes, int(tileset["palette_offset"]) * 32, tileset["palettes"]["bytes"])
+		var colors: PackedByteArray = tileset["palettes"]["bytes"]
+		vram.palette.load(colors.slice(0, (PALETTE_COUNT - int(tileset["palette_offset"])) * 32),
+			int(tileset["palette_offset"]) * 16)
 		vram._frames.append(tileset["animation"].get("frames", {}))
 	# LoadTilesetPalette writes RGB_BLACK over the primary's first colour, the backdrop.
-	vram.palettes.encode_u16(0, 0)
+	vram.palette.load(PackedByteArray([0, 0]), 0)
 	vram._animation = Gen3TilesetAnims.start(primary["animation"], secondary["animation"])
 	return vram
 
 
-## One `UpdateTilesetAnimations` frame's copies.
+## One `UpdateTilesetAnimations` frame's copies. Battle Dome's palette goes into the unfaded colours and is
+## blended with the running fade (`BlendAnimPalette_BattleDome_FloorLights`).
 func step() -> void:
 	for copy: Dictionary in Gen3TilesetAnims.step(_animation):
 		var key: String = str(copy["frame"])
 		var frames: Dictionary = _frames[0] if _frames[0].has(key) else _frames[1]
 		var bytes: PackedByteArray = frames[key]["bytes"].slice(0, int(copy["bytes"]))
 		if copy.has("palette"):
-			_copy(palettes, int(copy["palette"]) * 32, bytes)
+			var at: int = int(copy["palette"]) * 16
+			_copy(palette.unfaded, at * 2, bytes)
+			palette.blend(at, 16, palette.fade_y, palette.fade_color & 0x7FFF)
 		else:
 			_copy(tiles, int(copy["tile"]) * GbaTiles.TILE_BYTES, bytes)
 
 
 func _color(index: int) -> Color:
-	return PokePalette.from_packed(palettes.decode_u16(index * 2))
+	return PokePalette.from_packed(palette.faded_color(index))
 
 
 ## Every cell of [param cells] (backup-map coordinates) as pixels, 16 per cell.
@@ -56,8 +63,7 @@ func draw(grid: Gen3MapGrid, cells: Rect2i) -> Image:
 ## [param size] pixels from backup pixel [param origin]: BG3, BG2 and BG1 (priorities 3 to 1) and the
 ## [Gen3ObjectSprites] [param oam]. The first entry with a pixel owns it, over each layer at its priority or
 ## below.
-func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array = [],
-		obj_palettes := PackedByteArray()) -> Image:
+func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array = []) -> Image:
 	var layers: Array[Image] = []
 	for layer: int in 3:
 		layers.append(Image.create(size.x, size.y, false, Image.FORMAT_RGBA8))
@@ -68,7 +74,7 @@ func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array
 			var layer_type: int = grid.layer_type_at(x, y)
 			if layer_type < LAYER_TYPES:
 				_draw_metatile(layers, Vector2i(x, y) * 16 - origin, grid.metatile(grid.metatile_id_at(x, y)), layer_type)
-	var sprites: Array[Image] = _draw_oam(oam, size, obj_palettes)
+	var sprites: Array[Image] = _draw_oam(oam, size, palette)
 	var image: Image = Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
 	image.fill(_color(0))
 	var whole := Rect2i(Vector2i.ZERO, size)
@@ -105,18 +111,18 @@ func _draw_tile(image: Image, origin: Vector2i, word: int) -> void:
 	if not bounds.intersects(Rect2i(origin, Vector2i(8, 8))):
 		return
 	var at: int = (word & 0x3FF) * GbaTiles.TILE_BYTES
-	var palette: int = (word >> 12) * 16
+	var bank: int = (word >> 12) * 16
 	for y: int in 8:
 		for x: int in 8:
 			var from_x: int = 7 - x if word & 0x400 else x
 			var from_y: int = 7 - y if word & 0x800 else y
 			var index: int = (tiles[at + from_y * 4 + from_x / 2] >> ((from_x % 2) * 4)) & 15
 			if index != 0 and bounds.has_point(origin + Vector2i(x, y)):
-				image.set_pixel(origin.x + x, origin.y + y, _color(palette + index))
+				image.set_pixel(origin.x + x, origin.y + y, _color(bank + index))
 
 
 ## The OBJ layer by priority, drawn last entry first; OAM coordinates wrap at 512 across and 256 down.
-static func _draw_oam(oam: Array, size: Vector2i, obj_palettes: PackedByteArray) -> Array[Image]:
+static func _draw_oam(oam: Array, size: Vector2i, colors: Gen3Palette) -> Array[Image]:
 	var out: Array[Image] = []
 	for priority: int in 4:
 		out.append(Image.create(size.x, size.y, false, Image.FORMAT_RGBA8))
@@ -140,7 +146,7 @@ static func _draw_oam(oam: Array, size: Vector2i, obj_palettes: PackedByteArray)
 				if owner[pixel] >= 0:
 					out[owner[pixel]].set_pixel(screen_x, screen_y, Color(0, 0, 0, 0))
 				owner[pixel] = int(sprite["priority"])
-				var word: int = obj_palettes.decode_u16((int(sprite["palette"]) * 16 + color) * 2)
+				var word: int = colors.faded_color(Gen3Palette.OBJ_OFFSET + int(sprite["palette"]) * 16 + color)
 				out[owner[pixel]].set_pixel(screen_x, screen_y, PokePalette.from_packed(word))
 	return out
 

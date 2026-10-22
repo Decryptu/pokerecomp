@@ -350,7 +350,8 @@ var _levitating: Array[Dictionary] = []
 var _graphics: Dictionary = {}
 
 
-func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
+## [param palettes] is the field's palette RAM, shared with the background and the weather.
+func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: Gen3Palette = null) -> void:
 	camera = field_camera
 	events = event_data
 	if events.berries == null:
@@ -368,7 +369,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData) -> void:
 	_build_motions()
 	for slot: int in COUNT:
 		objects.append(ObjectEvent.new())
-	sprites = Gen3ObjectSprites.new(camera.data)
+	sprites = Gen3ObjectSprites.new(camera.data, palettes)
 	sprites.init_palettes(0)
 	load_templates()
 

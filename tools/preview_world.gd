@@ -4,7 +4,8 @@ extends SceneTree
 ## [constant KIND_HELP], which is every kind and what its two numbers mean.
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
 ## A GBA map draws its whole backup map after an optional count of animation frames, or with a layout cell
-## after the count the field screen around the player there (`emerald 0 9 out.png 30 5 8`).
+## after the count the field screen around the player there, the frames counted from the warp's fade in from
+## black under the map's weather (`emerald 0 9 out.png 30 5 8`).
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
 ##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]
 
@@ -1885,13 +1886,25 @@ func _preview_gba(data: GameData, group: int, number: int, path: String, frames:
 func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3FieldVram, frames: int,
 		at: Vector2i) -> Image:
 	var camera: Gen3FieldCamera = Gen3FieldCamera.open(data, group, number, at)
-	var objects := Gen3ObjectEvents.new(camera, Gen3EventData.new(data.id))
+	var events := Gen3EventData.new(data.id)
+	var objects := Gen3ObjectEvents.new(camera, events, vram.palette)
+	var weather := Gen3FieldWeather.new(data, vram.palette, events)
+	objects.sprites.weather = weather
+	weather.set_saved_from_header(camera.header)
+	weather.start()
+	weather.resume_paused()
 	if Gen3PlayerAvatar.open(objects, at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET, 1, 0) == null:
 		push_error("The player could not be placed at %s." % at)
 		return null
 	objects.spawn_in_view()
+	# WarpFadeInScreen: FillPalBufferBlack, then FadeScreen(FADE_FROM_BLACK, 0).
+	vram.palette.faded.fill(0)
+	weather.fade_screen(Gen3FieldWeather.Fade.FROM_BLACK, 0)
 	for frame: int in frames:
-		vram.step()
+		weather.run_tasks()
 		objects.step_movements()
+		vram.palette.update_fade()
+		vram.step()
+		vram.palette.transfer()
 	return vram.draw_screen(camera.grid, camera.screen_origin(), Vector2i(240, 160),
-		objects.sprites.oam(objects, camera.screen_origin()), objects.sprites.palettes)
+		objects.sprites.oam(objects, camera.screen_origin()))

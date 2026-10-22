@@ -731,6 +731,33 @@ func test_player_water_query_reads_each_engines_source_of_water() -> void:
 const GEN3_TABLES = preload("res://tools/checks/gen3_tables.gd")
 
 
+## The weather's palette pipeline on each engine: rain, fog, shade and downpour fading in from black, changing
+## weather, a sprite palette load, a lightning ramp, preserved palettes and fades out and back in. The digests
+## are original pret C (`field_weather.c`, `palette.c` and the palette weathers' callbacks) compiled in scratch.
+## Ruby's kept RGB(31, 12, 11), FireRed's untouched BG palette 13 or palette.c's two-call fade step all change
+## them, and no other suite runs the weather without a cartridge.
+func test_weather_palettes_match_each_cartridge_engine() -> void:
+	var digests: Dictionary = {
+		RomRegistry.RUBY: "bd7d6b7577134ae6ae53a8137ee509aba23afe4c",
+		RomRegistry.FIRERED: "ea9a51b67797a8ee6c8008ca52e7bf88c4e72d73",
+		RomRegistry.EMERALD: "be7dfb5cdd4adf35ae770cc7918a35d4a0b9962f",
+	}
+	for id: StringName in digests:
+		var data := GameData.new()
+		data.id = id
+		data.generation = RomRegistry.GEN3
+		data._sections = {"scripts": true, "gba_graphics": true}
+		data._world_scripts = {"weather": {"palette": 0, "drought": [], "summed": false}}
+		var blank := PackedByteArray()
+		blank.resize(32)
+		data._world_tilesets = {"weather": {"0": {"bytes": blank}}}
+		data._indices["blob/tilesets"] = PackedByteArray()
+		var lines := PackedStringArray()
+		for run: int in [5, 6, 11, 13]:
+			lines.append_array(GEN3_TABLES.weather_stream(data, run, 5))
+		assert_eq(("\n".join(lines) + "\n").sha1_text(), digests[id], str(id))
+
+
 ## ARM-handler traces protect destination reservation, slow-walk cadence,
 ## midpoint jumps, locked/contextual facings, persistent flags and emote requests.
 ## Substituting a generic tween or Hoenn action ids on FRLG changes this stream.
@@ -1210,11 +1237,8 @@ func test_first_oam_entry_owns_a_pixel_whatever_the_priorities() -> void:
 	grid._layer_types.resize(1024)
 	grid._layer_types.fill(Gen3FieldVram.LAYER_TYPES)
 	var vram := Gen3FieldVram.new()
-	vram.palettes.resize(512)
-	var palettes := PackedByteArray()
-	palettes.resize(512)
-	palettes.encode_u16(2, 0x001F)
-	palettes.encode_u16(4, 0x7C00)
+	vram.palette = Gen3Palette.new()
+	vram.palette.load(PackedByteArray([0, 0, 0x1F, 0, 0, 0x7C]), Gen3Palette.OBJ_OFFSET)
 	var oam: Array = []
 	for entry: Array in [[0, 3, 0x11], [4, 0, 0x22]]:
 		var tiles := PackedByteArray()
@@ -1222,7 +1246,7 @@ func test_first_oam_entry_owns_a_pixel_whatever_the_priorities() -> void:
 		tiles.fill(entry[2])
 		oam.append({"x": entry[0], "y": entry[0], "size": Vector2i(8, 8), "flip": Vector2i.ZERO,
 			"priority": entry[1], "palette": 0, "tiles": tiles})
-	var image: Image = vram.draw_screen(grid, Vector2i.ZERO, Vector2i(16, 16), oam, palettes)
+	var image: Image = vram.draw_screen(grid, Vector2i.ZERO, Vector2i(16, 16), oam)
 	assert_eq([image.get_pixel(5, 5), image.get_pixel(10, 10), image.get_pixel(14, 2)],
 		[PokePalette.from_packed(0x001F), PokePalette.from_packed(0x7C00), PokePalette.from_packed(0)])
 
@@ -2260,7 +2284,7 @@ func test_reflections_follow_ground_lifetime_and_sprite_visibility() -> void:
 		var reflection: Dictionary = entries[-1]
 		assert_eq([reflection["x"], reflection["y"], reflection["priority"], reflection["palette"]],
 			[83, 72 + (0 if objects._frlg else 28), 3, 6])
-		assert_eq(objects.sprites.palettes[6 * 32], 7 if objects._frlg else 16)
+		assert_eq(objects.sprites.palette.unfaded[(Gen3Palette.OBJ_OFFSET + 6 * 16) * 2], 7 if objects._frlg else 16)
 		objects.camera.grid.set_metatile_entry(12, 13, 0x23 if objects._frlg else 0x20)
 		objects.set_held_movement(object, 0x10 if objects._frlg else 8)
 		objects.step_movements()
@@ -2318,11 +2342,13 @@ func test_water_reflection_matrices_and_affine_pixels_match_the_hardware() -> vo
 	tiles.resize(32)
 	tiles[0] = 0x21
 	tiles[4] = 0x43
-	var palette := PackedByteArray()
-	palette.resize(32)
-	palette.encode_u16(2, 31)
-	palette.encode_u16(4, 31 << 5)
-	palette.encode_u16(6, 31 << 10)
+	var colors := PackedByteArray()
+	colors.resize(32)
+	colors.encode_u16(2, 31)
+	colors.encode_u16(4, 31 << 5)
+	colors.encode_u16(6, 31 << 10)
+	var palette := Gen3Palette.new()
+	palette.load(colors, Gen3Palette.OBJ_OFFSET)
 	var sprite: Dictionary = {"x": 0, "y": 0, "priority": 3, "palette": 0, "tiles": tiles,
 		"size": Vector2i(8, 8), "flip": Vector2i.ONE, "matrix": Vector4i(256, 0, 0, -256)}
 	var image: Image = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)[3]

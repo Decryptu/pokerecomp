@@ -17,7 +17,7 @@ const STEP_ANIMS_LIMIT: int = 16
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if read(rom, layout).is_empty():
-		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data, movement types, berries, object graphics or wild encounters did not decode."}
+		return {"ok": false, "message": "Map layouts, tilesets, events, script bytecode, script data, movement types, berries, object graphics, weather palettes or wild encounters did not decode."}
 	return {"ok": true, "message": ""}
 
 
@@ -40,6 +40,10 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	if layout.has("shadow_templates") and not _shadow_templates(rom, layout, object_graphics, graphics):
 		return {}
+	var weather: Dictionary = _weather(rom, layout, graphics)
+	if layout.has("weather_palette") and weather.is_empty():
+		return {}
+	scripts["weather"] = weather
 	scripts["movement_types"] = movement_types
 	scripts["berries"] = berries
 	scripts.merge(object_graphics)
@@ -154,6 +158,35 @@ static func _shadow_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 		rows.append({"images": images, "width": size.x, "height": size.y})
 	out["shadow_templates"] = rows
 	return true
+
+
+## StartWeather's sprite palette and the drought colour tables: Emerald's six as they are, Hoenn's six LZ delta
+## blobs decoded but not yet summed, which `LoadDroughtWeatherPalette` does a table a call. FireRed and LeafGreen
+## have none.
+static func _weather(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> Dictionary:
+	if not layout.has("weather_palette") or not rom.in_bounds(int(layout["weather_palette"]), Gen3Layout.PALETTE_BYTES):
+		return {}
+	graphics["weather"] = {}
+	var palette: int = int(layout["weather_palette"])
+	graphics["weather"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
+	var drought: Array = []
+	for index: int in Gen3FieldWeather.DROUGHT_TABLES:
+		var at: int = -1
+		var bytes := PackedByteArray()
+		if layout.has("drought_colors"):
+			at = int(layout["drought_colors"]) + index * Gen3FieldWeather.DROUGHT_BYTES
+			bytes = rom.slice(at, Gen3FieldWeather.DROUGHT_BYTES) if rom.in_bounds(at, Gen3FieldWeather.DROUGHT_BYTES) \
+				else bytes
+		elif layout.has("drought_palette_pointers"):
+			at = Gen3Layout.read_pointer(rom, int(layout["drought_palette_pointers"]) + index * 4, 4, 1)
+			bytes = GbaLz.decompress(rom.bytes(), at).slice(0, Gen3FieldWeather.DROUGHT_BYTES)
+		else:
+			break
+		if bytes.size() != Gen3FieldWeather.DROUGHT_BYTES:
+			return {}
+		graphics["weather"][str(at)] = {"bytes": Array(bytes)}
+		drought.append(at)
+	return {"palette": palette, "drought": drought, "summed": layout.has("drought_colors")}
 
 
 static func _graphics_info(rom: RomFile, info: int, anims: Array, out: Dictionary, graphics: Dictionary) -> Dictionary:
