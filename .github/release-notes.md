@@ -8,6 +8,7 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 - Generation 3 jump shadows now draw from cartridge graphics, follow objects at ground level and stop on landing or unsuitable terrain.
 - Generation 3 maps now take on their weather's colours: rain and shade darken the screen, fog lightens it, drought glares, and warps fade in and out the way each cartridge does.
 - Generation 3 rain, thunderstorms and downpours now fall and splash on the map, with lightning flashes, and the rain tapers off before the weather changes.
+- Generation 3 clouds, snow, fog, volcanic ash, sandstorms and underwater bubbles now drift over the map, fading in and out when the weather changes.
 - Generation 3 cartridges remain unplayable while field integration continues.
 
 ## Fixed

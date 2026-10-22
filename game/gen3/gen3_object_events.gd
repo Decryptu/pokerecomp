@@ -93,7 +93,8 @@ const FIGURE_8_Y: Array[int] = [
 ## Emerald's NINJA_BOY. Emerald's bard reads the current Mauville man.
 const GRAPHICS_FALLBACK: Dictionary = {&"ruby": 5, &"sapphire": 5, &"firered": 16, &"leafgreen": 16, &"emerald": 5}
 const OBJ_EVENT_GFX_BARD: int = 69
-## `gSineTable`: sin(i * pi / 128) in Q8.8, truncated toward zero, as pret's `trig.c` lists it.
+## `gSineTable`: sin(i * pi / 128) in Q8.8, truncated toward zero, as pret's `trig.c` lists it; its 320 entries
+## run a quarter turn past the circle so that index + 64 reads the cosine.
 static var SINE: PackedInt32Array = _sine_table()
 ## `MOVEMENT_ACTION_*`: [Hoenn id, FRLG id, motion, parameter].
 const MOTION_FAMILIES: Array = [
@@ -714,7 +715,7 @@ func _build_more_motions() -> void:
 
 static func _sine_table() -> PackedInt32Array:
 	var out := PackedInt32Array()
-	for index: int in 256:
+	for index: int in 320:
 		out.append(int(sin(index * PI / 128.0) * 256.0))
 	return out
 

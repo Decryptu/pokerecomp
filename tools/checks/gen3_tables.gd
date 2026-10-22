@@ -1008,21 +1008,21 @@ func _reflections() -> void:
 	_r.digest_matches("gen3_reflection_palettes", lines, REFLECTION_DIGESTS[data.id])
 
 
-## The weather's sprite palette, rain sheet and drought tables against pret's `.pal`, `.png` and `.bin` files,
-## then a stream: every weather from a map header through the warp's fade in, a change of weather, a sprite
-## palette load and a lightning-style ramp, preserved palettes, and fades out and back in, with every raindrop,
-## the thunder and the RNG each frame under a moving sprite offset. Original `field_weather.c`, `palette.c`,
-## `trig.c`, the palette and rain weathers' `field_weather_effect.c` callbacks and `sprite.c`'s anim
-## interpreter, compiled in scratch with the other sprite weathers reduced to their colour-map targets, give the
-## same stream frame for frame.
+## The weather's sprite palette, the sprite weathers' palettes and sheets and the drought tables against pret's
+## `.pal`, `.png` and `.bin` files, then a stream: every weather from a map header through the warp's fade in, a
+## change of weather, a sprite palette load and a lightning-style ramp, preserved palettes, and fades out and back
+## in, with every raindrop, the thunder, the RNG, the sprite weathers' state and every weather sprite each frame
+## under a moving sprite offset. Original `field_weather.c`, `palette.c`, `trig.c`, every weather's
+## `field_weather_effect.c` callbacks and `sprite.c`'s anim interpreter, compiled in scratch, give the same stream
+## frame for frame.
 const WEATHER_DIGESTS: Dictionary = {
-	&"ruby": ["b0ccb1578796a90c086bf3ba221a31ff520f3e39", "f44a3a05d5c780b7543c8a4d571009eaa8a5adeb"],
-	&"sapphire": ["b0ccb1578796a90c086bf3ba221a31ff520f3e39", "f44a3a05d5c780b7543c8a4d571009eaa8a5adeb"],
-	&"firered": ["32365ce37c6575ffadb11b77eb42c9c3c60bbd43", "833d02ac22e31a11285b7d76f946ba6efc6bc6c2"],
-	&"leafgreen": ["32365ce37c6575ffadb11b77eb42c9c3c60bbd43", "833d02ac22e31a11285b7d76f946ba6efc6bc6c2"],
-	&"emerald": ["290d0144569a630738de246ed43d515edd71f414", "63d8bb6eacb3797d8690175706b3d2b174ec0d16"],
+	&"ruby": ["451db68862eb639d489c9ac4f325e5b0f76b4fe9", "f8880944a4e3d45540579cecb45847ae5c5c92be"],
+	&"sapphire": ["451db68862eb639d489c9ac4f325e5b0f76b4fe9", "f8880944a4e3d45540579cecb45847ae5c5c92be"],
+	&"firered": ["266f595863f57cc508d5e83c5c1dd5c5e05e81ff", "f18719b7765177eabb2f0504cf4507002f61ce63"],
+	&"leafgreen": ["266f595863f57cc508d5e83c5c1dd5c5e05e81ff", "f18719b7765177eabb2f0504cf4507002f61ce63"],
+	&"emerald": ["9dcd8dcb8c841874512f3e5e95e6008da9a02b46", "1f3c2ac64293ce874409b63ac2e72878c7b37232"],
 }
-const WEATHER_CHANGES: Array[int] = [3, 11, 0, 12, 2, 6]
+const WEATHER_CHANGES: Array[int] = [3, 11, 1, 12, 8, 6, 4, 9, 14, 7, 10]
 ## Frames after each of the stream's phases.
 const WEATHER_PHASES: Array[int] = [150, 100, 10, 30, 60, 20, 40]
 
@@ -1031,8 +1031,10 @@ func _weather() -> void:
 	var data: GameData = _r.data
 	var imported: Dictionary = data.world_weather()
 	var colors: PackedByteArray = imported.get("palette", PackedByteArray())
-	var lines := PackedStringArray(["palette|" + colors.hex_encode(),
-		"rain|" + _graphics_hash({"bytes": imported.get("rain", PackedByteArray())})])
+	var lines := PackedStringArray(["palette|" + colors.hex_encode()])
+	var sheets: Dictionary = imported.get("sheets", {})
+	for sheet: Array in Gen3WeatherSprites.SHEETS:
+		lines.append("%s|%s" % [sheet[0], _graphics_hash({"bytes": sheets.get(sheet[0], PackedByteArray())})])
 	var tables: Array = imported.get("drought", [])
 	for index: int in tables.size():
 		lines.append("drought|%d|%s" % [index, _graphics_hash({"bytes": tables[index]})])
@@ -1044,11 +1046,17 @@ func _weather() -> void:
 	_r.digest_matches("gen3_weather_palettes", stream, WEATHER_DIGESTS[data.id][1])
 
 
-## One run of the weather stream for map weather [param run], every phase [param span] times shorter.
+## One run of the weather stream for map weather [param run], every phase [param span] times shorter. The
+## camera the clouds are placed against moves with the run.
 static func weather_stream(data: GameData, pass_index: int, span: int = 1) -> PackedStringArray:
 	var palette := Gen3Palette.new()
 	var events := Gen3EventData.new(data.id)
 	var weather := Gen3FieldWeather.new(data, palette, events)
+	var camera := Gen3FieldCamera.new()
+	camera.pos = Vector2i(3 + pass_index % 5, 60 + pass_index % 7)
+	camera.scroll = Vector2i((pass_index % 3 - 1) * 4, (pass_index % 4 - 2) * 2)
+	camera.pixel_offset = Vector2i(pass_index * 37 & 0xFFFF, (0x10000 - pass_index * 11) & 0xFFFF)
+	weather.sprites.camera = camera
 	events.weather_cycle_stage = pass_index % 4
 	events.random.value = 0x5EED0000 + pass_index
 	var thunder: Array[int] = [0, 0]
@@ -1109,8 +1117,8 @@ static func _weather_frames(weather: Gen3FieldWeather, pass_index: int, count: i
 	return lines
 
 
-## One field frame's weather task, raindrops, palette fade and VBlank transfer; the faded colours and the rain
-## after it.
+## One field frame's weather task, weather sprites, palette fade and VBlank transfer; the faded colours, the
+## rain, the sprite weathers and every weather sprite after it.
 static func _weather_frame(weather: Gen3FieldWeather, pass_index: int, index: int, thunder: Array[int],
 		tasks: bool = true) -> String:
 	if tasks:
@@ -1118,8 +1126,9 @@ static func _weather_frame(weather: Gen3FieldWeather, pass_index: int, index: in
 	weather.sprites.animate(Vector2i(index * 7 % 41 - 20, index * 3 % 29 - 14))
 	weather.palette.update_fade()
 	weather.palette.transfer()
-	return "%d|%d|%d|%d|%d|%d|%s|%s" % [pass_index, index, weather.current, weather.state, weather.color_map_index,
-		weather.bldalpha, weather.palette.faded.hex_encode(), _rain_state(weather, thunder)]
+	return "%d|%d|%d|%d|%d|%d|%s|%s|w|%s|s|%s" % [pass_index, index, weather.current, weather.state,
+		weather.color_map_index, weather.bldalpha, weather.palette.faded.hex_encode(), _rain_state(weather, thunder),
+		_sprite_weather_state(weather), _weather_sprite_dump(weather)]
 
 
 static func _rain_state(weather: Gen3FieldWeather, thunder: Array[int]) -> String:
@@ -1137,6 +1146,47 @@ static func _rain_state(weather: Gen3FieldWeather, thunder: Array[int]) -> Strin
 		out += "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d;" % [drop.slot, drop.x, drop.y, int(drop.invisible),
 			int(drop.coord_offset), drop.anim.image, int(drop.anim.ended), drop.callback, drop.counter, drop.random,
 			drop.pos_x, drop.pos_y, int(drop.splashing), int(drop.active), int(drop.waiting)]
+	return out
+
+
+static func _sprite_weather_state(weather: Gen3FieldWeather) -> String:
+	var w: Gen3WeatherSprites = weather.sprites
+	var fields: Array = [int(w.clouds_created), w.snowflakes.size(), w.target_snowflakes, w.snow_visible_counter,
+		w.fog_horizontal_pos_x, w.fog_horizontal_counter, w.fog_horizontal_offset, int(w.fog_horizontal_created),
+		w.ash_base_x, int(w.ash_created), w.sandstorm_x_offset, w.sandstorm_y_offset, w.sandstorm_base_x,
+		w.sandstorm_pos_y, w.sandstorm_wave_index, w.sandstorm_wave_counter, int(w.sandstorm_created),
+		int(w.swirls_created), w.fog_diagonal_base_x, w.fog_diagonal_pos_y, w.fog_diagonal_x_counter,
+		w.fog_diagonal_y_counter, w.fog_diagonal_x_offset, w.fog_diagonal_y_offset, int(w.fog_diagonal_created),
+		w.bubble_delay_counter, w.bubble_delay_index, w.bubble_coords_index, w.bubble_count, weather.blend_eva,
+		weather.blend_evb, weather.target_eva, weather.target_evb, weather.blend_update_counter,
+		weather.blend_frame_counter, weather.blend_delay]
+	var out: String = ""
+	for field: int in fields:
+		out += "%d," % field
+	return out
+
+
+## Every weather sprite as `struct Sprite` holds it: slot, callback, position, offsets, visibility, centre, OAM
+## shape, size, priority and palette, subpriority, anim state and sheet tile, and `data[]`.
+static func _weather_sprite_dump(weather: Gen3FieldWeather) -> String:
+	var out: String = ""
+	for sprite: Gen3WeatherSprites.WeatherSprite in weather.sprites.all_sprites():
+		var shape: int = 0
+		var size: int = 0
+		for row: int in Gen3ObjectSprites.OAM_SIZES.size():
+			var column: int = Gen3ObjectSprites.OAM_SIZES[row].find(sprite.size)
+			if column >= 0:
+				shape = row
+				size = column
+				break
+		var anim: Gen3SpriteAnim = sprite.anim
+		var fields: Array = [sprite.slot, sprite.callback, sprite.x, sprite.y, sprite.x2, sprite.y2,
+			int(sprite.invisible), int(sprite.coord_offset), -(sprite.size.x >> 1), -(sprite.size.y >> 1), shape, size,
+			sprite.priority, weather.picture_slot if sprite.second_palette else weather.contrast_slot,
+			sprite.subpriority, anim.anim_num, anim.cmd_index, anim.delay, int(anim.ended),
+			anim.image if sprite.sheet_tiles else -1]
+		fields.append_array(Array(sprite.words()))
+		out += ",".join(fields.map(func(field: int) -> String: return str(field))) + ";"
 	return out
 
 

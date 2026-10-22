@@ -4,8 +4,8 @@ extends RefCounted
 ## `field_weather.c`'s palette half over a [Gen3Palette]: `BuildColorMaps`' two map sets, the weather task
 ## (`Task_WeatherInit`, `Task_WeatherMain`), the four palette states, `FadeScreen`, the drought cycle and the
 ## BLDALPHA coefficients; the saved weather and its translation (`field_weather_effect.c`); and Emerald's
-## alternating Groudon/Kyogre weather. Each weather's colour-map target is modeled, and the rain weathers through
-## [Gen3WeatherSprites]; the other sprite weathers' sprites and blend ramps are not, so they finish at once.
+## alternating Groudon/Kyogre weather. Each weather's colour-map target is modeled here and the sprite weathers'
+## sprites and blend ramps through [Gen3WeatherSprites].
 
 enum Weather {
 	NONE, SUNNY_CLOUDS, SUNNY, RAIN, SNOW, RAIN_THUNDERSTORM, FOG_HORIZONTAL, VOLCANIC_ASH, SANDSTORM,
@@ -112,6 +112,7 @@ func _init(game: GameData, palettes: Gen3Palette, event_data: Gen3EventData) -> 
 	_frlg = game.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
 	_emerald = game.id == RomRegistry.EMERALD
 	sprites = Gen3WeatherSprites.new(game)
+	sprites.events = event_data
 	var weather: Dictionary = game.world_weather()
 	_sprite_palette = weather.get("palette", PackedByteArray())
 	_drought_source = weather.get("drought", [])
@@ -235,14 +236,19 @@ func _run_main() -> void:
 			_fade_in_with_weather()
 
 
-## Each weather's InitVars, as far as the palettes and the rain go.
+## Each weather's InitVars: the colour-map target, and for the sprite weathers their own state. Neither the
+## clear and sunny weathers nor the shade reset the graphics flag, and the first two not the init step either.
 func _init_vars(weather: int) -> void:
-	init_step = 0
-	gfx_loaded = false
 	target_index = 3 if weather in DARK_WEATHERS else 0
 	step_delay = 0 if weather in [Weather.NONE, Weather.DROUGHT] else 20
-	if Gen3WeatherSprites.is_rain(weather):
-		sprites.init_vars(weather)
+	if weather in [Weather.NONE, Weather.SUNNY]:
+		return
+	init_step = 0
+	if weather == Weather.SHADE:
+		return
+	gfx_loaded = false
+	if Gen3WeatherSprites.has_sprites(weather):
+		sprites.init_vars(self, weather)
 
 
 func _init_all(weather: int) -> void:
@@ -251,22 +257,21 @@ func _init_all(weather: int) -> void:
 		while not gfx_loaded and not locked:
 			_drought_main()
 			locked = _frlg and init_step == 2
-	elif Gen3WeatherSprites.is_rain(weather):
-		while not gfx_loaded:
-			sprites.main(self)
+	elif Gen3WeatherSprites.has_sprites(weather):
+		sprites.init_all(self)
 
 
 func _main(weather: int) -> void:
 	if weather == Weather.DROUGHT:
 		_drought_main()
-	elif Gen3WeatherSprites.is_rain(weather):
+	elif Gen3WeatherSprites.has_sprites(weather):
 		sprites.main(self)
 
 
-## The rain weathers' Finish holds the change until their raindrops are gone; every other modeled weather's
-## returns FALSE at once.
+## The sprite weathers' Finish holds the change until their sprites are gone; every other weather's returns
+## FALSE at once.
 func _finish(weather: int) -> bool:
-	return sprites.finish(self) if Gen3WeatherSprites.is_rain(weather) else false
+	return sprites.finish(self) if Gen3WeatherSprites.has_sprites(weather) else false
 
 
 ## `UpdateWeatherColorMap`: one map a step toward the target, every [member step_delay] frames.

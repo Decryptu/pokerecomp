@@ -1893,6 +1893,7 @@ func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3Fiel
 	var objects := Gen3ObjectEvents.new(camera, events, vram.palette)
 	var weather := Gen3FieldWeather.new(data, vram.palette, events)
 	objects.sprites.weather = weather
+	weather.sprites.camera = camera
 	if override < 0:
 		weather.set_saved_from_header(camera.header)
 	else:
@@ -1909,9 +1910,9 @@ func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3Fiel
 	for frame: int in frames:
 		weather.run_tasks()
 		objects.step_movements()
-		weather.sprites.animate(-camera.screen_origin())
+		weather.sprites.animate(camera.sprite_coord_offset())
 		vram.palette.update_fade()
 		vram.step()
 		vram.palette.transfer()
 	return vram.draw_screen(camera.grid, camera.screen_origin(), Vector2i(240, 160),
-		objects.sprites.oam(objects, camera.screen_origin()))
+		objects.sprites.oam(objects, camera.screen_origin()), weather.bldalpha)

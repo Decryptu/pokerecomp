@@ -160,9 +160,9 @@ static func _shadow_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 	return true
 
 
-## StartWeather's sprite palette, the rain sheet and the drought colour tables: Emerald's six as they are,
-## Hoenn's six LZ delta blobs decoded but not yet summed, which `LoadDroughtWeatherPalette` does a table a call.
-## FireRed and LeafGreen have none.
+## StartWeather's sprite palette, the sprite weathers' palettes and sheets, and the drought colour tables:
+## Emerald's six as they are, Hoenn's six LZ delta blobs decoded but not yet summed, which
+## `LoadDroughtWeatherPalette` does a table a call. FireRed and LeafGreen have none.
 static func _weather(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> Dictionary:
 	if not layout.has("weather_palette") or not rom.in_bounds(int(layout["weather_palette"]), Gen3Layout.PALETTE_BYTES):
 		return {}
@@ -186,11 +186,15 @@ static func _weather(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> 
 			return {}
 		graphics["weather"][str(at)] = {"bytes": Array(bytes)}
 		drought.append(at)
-	var rain: int = int(layout.get("weather_rain_tiles", -1))
-	if not rom.in_bounds(rain, Gen3WeatherSprites.RAIN_TILE_BYTES):
-		return {}
-	graphics["weather"][str(rain)] = {"bytes": Array(rom.slice(rain, Gen3WeatherSprites.RAIN_TILE_BYTES))}
-	return {"palette": palette, "drought": drought, "summed": layout.has("drought_colors"), "rain": rain}
+	var sheets: Dictionary = {}
+	var start: int = int(layout.get("weather_sheets", -1))
+	for sheet: Array in Gen3WeatherSprites.SHEETS:
+		if not rom.in_bounds(start, int(sheet[1])):
+			return {}
+		graphics["weather"][str(start)] = {"bytes": Array(rom.slice(start, int(sheet[1])))}
+		sheets[sheet[0]] = start
+		start += int(sheet[1])
+	return {"palette": palette, "drought": drought, "summed": layout.has("drought_colors"), "sheets": sheets}
 
 
 static func _graphics_info(rom: RomFile, info: int, anims: Array, out: Dictionary, graphics: Dictionary) -> Dictionary:

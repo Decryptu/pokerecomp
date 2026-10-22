@@ -26,13 +26,32 @@ var crossed: bool = false
 var shift := Vector2i.ZERO
 ## `mapView`: the 15x14 words [method save_view] copied, empty once cleared.
 var view := PackedInt32Array()
-## The screen's offset from its resting place mid-step, which the field host keeps.
+## The screen's offset from its resting place mid-step (`gFieldCamera`), which the field host keeps.
 var scroll := Vector2i.ZERO
+## `gTotalCameraPixelOffsetX`/`Y` (u16): `InitObjectEventsLocal` zeroes it at a warp and each `CameraUpdate`
+## takes its pixel step off it, so it runs on across connections.
+var pixel_offset := Vector2i.ZERO
 
 
 ## The backup-map pixel at the screen's top-left: the BG and sprite offsets add 8 to [constant PAN_Y], `InstallCameraPanAheadCallback`'s pan.
 func screen_origin() -> Vector2i:
 	return pos * 16 + scroll + Vector2i(0, PAN_Y + 8)
+
+
+## `UpdateCameraPanning`'s `gSpriteCoordOffsetX`/`Y`, which every sprite with `coordOffsetEnabled` adds.
+func sprite_coord_offset() -> Vector2i:
+	return Vector2i(_s16(pixel_offset.x), _s16(pixel_offset.y - PAN_Y - 8))
+
+
+## `SetSpritePosToMapCoords` for backup-map [param cell]: with [method sprite_coord_offset] added, the cell's
+## corner on the screen.
+func sprite_position(cell: Vector2i) -> Vector2i:
+	var delta: Vector2i = -pixel_offset - scroll + Vector2i(signi(scroll.x), signi(scroll.y)) * 16
+	return Vector2i(_s16(((cell.x - pos.x) << 4) + _s16(delta.x)), _s16(((cell.y - pos.y) << 4) + _s16(delta.y)))
+
+
+static func _s16(value: int) -> int:
+	return ((value & 0xFFFF) ^ 0x8000) - 0x8000
 
 
 static func open(game: GameData, map_group: int, map_number: int, at: Vector2i) -> Gen3FieldCamera:
