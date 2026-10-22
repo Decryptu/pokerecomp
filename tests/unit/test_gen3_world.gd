@@ -2120,3 +2120,48 @@ func test_berry_graphics_keep_the_cartridge_overread_boundary() -> void:
 				objects.step_movements()
 				assert_eq(object.graphics_id, 61 if stage < 3 else 62)
 				assert_eq(object.palette_num, int(([13, 13, 14, 14, 14] if berry == 44 else [3, 4, 4, 4, 4])[stage - 1]))
+
+
+## A bridge reflection reads its own tag, even for an ordinary NPC. Spawn-only palette validation missed
+## this lookup; disabled bridge loads and the NONE sentinel accept an absent palette. Both palette table
+## kinds must terminate inside the dump instead of silently accepting a truncated list.
+func test_bridge_reflection_palette_lookup_is_validated_for_every_graphics_table() -> void:
+	var bytes := PackedByteArray()
+	bytes.resize(512)
+	bytes.encode_u32(0x20, 0x08000180)
+	bytes.encode_u16(0x24, 0x1100)
+	bytes.encode_u16(0x80, 0x1100)
+	bytes.encode_u32(0x84, 0x08000120)
+	bytes.encode_u16(0x88, Gen3ObjectSprites.PALETTE_TAG_NONE)
+	for index: int in 4:
+		bytes.encode_u32(0x40 + index * 4, 0x08000100)
+		bytes.encode_u16(0x120 + index * 2, 0x1100)
+	for slot: int in 10:
+		bytes.encode_u16(0x100 + slot * 2, 0x1100)
+	var layout: Dictionary = {"object_palettes": 0x20, "object_palette_tags": 0x40,
+		"player_reflection_palettes": 0x80, "special_reflection_palettes": 0x80}
+	for field: String in ["object_palettes", "player_reflection_palettes", "special_reflection_palettes"]:
+		var truncated: Dictionary = layout.duplicate()
+		truncated[field] = 0x1F8
+		var broken: PackedByteArray = bytes.duplicate()
+		if field == "object_palettes":
+			broken.encode_u32(0x1F8, 0x08000180)
+			broken.encode_u16(0x1FC, 0x1100)
+		else:
+			broken.encode_u16(0x1F8, 0x1100)
+			broken.encode_u32(0x1FC, 0x08000120)
+		assert_true(Gen3World._object_palettes(RomFile.from_bytes(broken, RomRegistry.EMERALD),
+			truncated, {"object_graphics": []}, {}).is_empty(), field)
+	for table: String in ["object_graphics", "mauville_graphics"]:
+		var row: Dictionary = {"palette_slot": 2, "reflection_palette_tag": 0x1101,
+			"disable_reflection_palette_load": false}
+		var graphics: Dictionary = {table: [row]}
+		var rom: RomFile = RomFile.from_bytes(bytes, RomRegistry.EMERALD)
+		assert_true(Gen3World._object_palettes(rom, layout, graphics, {}).is_empty(), table)
+		row["disable_reflection_palette_load"] = true
+		assert_false(Gen3World._object_palettes(rom, layout, graphics, {}).is_empty(), table)
+		row["disable_reflection_palette_load"] = false
+		row["reflection_palette_tag"] = Gen3ObjectSprites.PALETTE_TAG_NONE
+		assert_false(Gen3World._object_palettes(rom, layout, graphics, {}).is_empty(), table)
+		row["reflection_palette_tag"] = 0x1100
+		assert_false(Gen3World._object_palettes(rom, layout, graphics, {}).is_empty(), table)

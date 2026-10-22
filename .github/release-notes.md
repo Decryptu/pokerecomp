@@ -8,6 +8,10 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 - Generation 3 jump shadows now draw from cartridge graphics, follow objects at ground level and stop on landing or unsuitable terrain.
 - Generation 3 cartridges remain unplayable while field integration continues.
 
+## Fixed
+
+- Generation 3 imports reject missing bridge reflection palettes and unterminated object palette tables.
+
 ## Updating this release
 
 - Cartridges must be reimported for the updated cache format. Saves are preserved.

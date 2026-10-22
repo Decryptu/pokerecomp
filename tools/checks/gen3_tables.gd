@@ -906,10 +906,12 @@ const SPRITE_FIELDS: Array[String] = ["palette_tag", "reflection_palette_tag", "
 func _object_sprites() -> void:
 	var data: GameData = _r.data
 	var lines := PackedStringArray(["object sprites"])
+	var graphics: Dictionary = {"object_graphics": [], "mauville_graphics": []}
 	for mauville: bool in [false, true]:
 		var index: int = 0
 		while not data.world_object_graphics(index, mauville).is_empty():
 			var info: Dictionary = data.world_object_graphics(index, mauville)
+			graphics["mauville_graphics" if mauville else "object_graphics"].append(info)
 			var fields := PackedStringArray()
 			for field: String in SPRITE_FIELDS:
 				fields.append(str(int(info[field])))
@@ -921,6 +923,8 @@ func _object_sprites() -> void:
 		if row.has("berry_images"):
 			lines.append("berry %d|%s" % [berry, _frames_hash(data, data.world_sprite_images(int(row["berry_images"])))])
 	var sets: Dictionary = data.world_object_palette_sets()
+	if not Gen3World._palette_tags_found(sets, graphics):
+		_r.fail("object or reflection palette lookup has no palette")
 	for row: Array in sets["rows"]:
 		lines.append("palette %d|%s" % [int(row[0]), data.world_object_palette(int(row[0])).hex_encode()])
 	for key: String in ["tag_sets", "player_reflections", "special_reflections"]:

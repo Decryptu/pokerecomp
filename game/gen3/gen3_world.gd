@@ -251,6 +251,8 @@ static func _object_palettes(rom: RomFile, layout: Dictionary, object_graphics: 
 		rows.append([rom.u16le(at + 4), colors])
 		graphics["object_palettes"][str(colors)] = {"bytes": Array(rom.slice(colors, Gen3Layout.PALETTE_BYTES))}
 		at += 8
+	if not rom.in_bounds(at, 4) or rom.u32le(at) != 0:
+		return {}
 	var out: Dictionary = {"rows": rows, "tag_sets": [],
 		"player_reflections": _reflection_sets(rom, int(layout["player_reflection_palettes"])),
 		"special_reflections": _reflection_sets(rom, int(layout["special_reflection_palettes"]))}
@@ -277,6 +279,9 @@ static func _palette_tags_found(palettes: Dictionary, object_graphics: Dictionar
 		Gen3ObjectSprites.PALSLOT_NPC_SPECIAL: "special_reflections"}
 	for row: Dictionary in object_graphics.get("object_graphics", []) + object_graphics.get("mauville_graphics", []):
 		var slot: int = int(row["palette_slot"])
+		var reflection_tag: int = int(row.get("reflection_palette_tag", Gen3ObjectSprites.PALETTE_TAG_NONE))
+		if reflection_tag != Gen3ObjectSprites.PALETTE_TAG_NONE and not row.get("disable_reflection_palette_load", false):
+			needed.append(reflection_tag)
 		if sets.has(slot):
 			needed.append(int(row["palette_tag"]))
 			var reflections: Array = palettes[sets[slot]].get(str(int(row["palette_tag"])), [])
@@ -298,7 +303,7 @@ static func _reflection_sets(rom: RomFile, at: int) -> Dictionary:
 			out[str(rom.u16le(at))] = range(Gen3ObjectSprites.REFLECTION_TYPES).map(
 				func(type: int) -> int: return rom.u16le(data + type * 2))
 		at += 8
-	return out
+	return out if rom.in_bounds(at, 2) and rom.u16le(at) == Gen3ObjectSprites.PALETTE_TAG_NONE else {}
 
 
 ## `GetStepAnimTable`'s `animPos` by anims table; Ruby's `sub_805FE28` steps every table.
