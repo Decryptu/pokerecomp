@@ -133,11 +133,7 @@ static func _draw_oam(oam: Array, size: Vector2i, obj_palettes: PackedByteArray)
 				var screen_x: int = (int(sprite["x"]) + x) & 0x1FF
 				if screen_x >= size.x or screen_y >= size.y:
 					continue
-				var from_x: int = dims.x - 1 - x if sprite["flip"].x else x
-				var from_y: int = dims.y - 1 - y if sprite["flip"].y else y
-				var at: int = ((from_y / 8) * (dims.x / 8) + from_x / 8) * GbaTiles.TILE_BYTES \
-					+ (from_y % 8) * 4 + (from_x % 8) / 2
-				var color: int = (data[at] >> ((from_x % 2) * 4)) & 15 if at < data.size() else 0
+				var color: int = _sprite_color(sprite, Vector2i(x, y), data)
 				if color == 0:
 					continue
 				var pixel: int = screen_y * size.x + screen_x
@@ -147,6 +143,22 @@ static func _draw_oam(oam: Array, size: Vector2i, obj_palettes: PackedByteArray)
 				var word: int = obj_palettes.decode_u16((int(sprite["palette"]) * 16 + color) * 2)
 				out[owner[pixel]].set_pixel(screen_x, screen_y, PokePalette.from_packed(word))
 	return out
+
+
+static func _sprite_color(sprite: Dictionary, pixel: Vector2i, data: PackedByteArray) -> int:
+	var dims: Vector2i = sprite["size"]
+	var from := Vector2i(dims.x - 1 - pixel.x if sprite["flip"].x else pixel.x,
+		dims.y - 1 - pixel.y if sprite["flip"].y else pixel.y)
+	if sprite.has("matrix"):
+		var matrix: Vector4i = sprite["matrix"]
+		var center: Vector2i = pixel - dims / 2
+		from = Vector2i((matrix.x * center.x + matrix.y * center.y) >> 8,
+			(matrix.z * center.x + matrix.w * center.y) >> 8) + dims / 2
+	if not Rect2i(Vector2i.ZERO, dims).has_point(from):
+		return 0
+	var at: int = ((from.y / 8) * (dims.x / 8) + from.x / 8) * GbaTiles.TILE_BYTES \
+		+ (from.y % 8) * 4 + (from.x % 8) / 2
+	return (data[at] >> ((from.x % 2) * 4)) & 15 if at < data.size() else 0
 
 
 static func _copy(target: PackedByteArray, at: int, bytes: PackedByteArray) -> void:

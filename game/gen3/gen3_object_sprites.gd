@@ -32,12 +32,17 @@ const LONG_GRASS_TABLE_HIGH: int = 5
 const DISPLAY_HEIGHT: int = 160
 const SPRITE_COUNT: int = 64
 const SHADOW_SIZES: Array[Vector2i] = [Vector2i(8, 8), Vector2i(16, 8), Vector2i(32, 8), Vector2i(64, 32)]
+## `sAffineAnim_ReflectionDistortion_0`: relative X deltas, four/eight frames each.
+const REFLECTION_DELTAS: Array[int] = [1, 0, -1, 0, -1, 0, 1, 0]
 const SHADOW_Y_OFFSETS: Array[int] = [4, 4, 4, 16]
 
 var data: GameData
 var palettes := PackedByteArray()
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
+var reflections: Array[Dictionary] = []
+var _reflection_frame: int = 0
+var _reflection_scale: int = -256
 var _ruby: bool = false
 var _order: Array[int] = []
 
@@ -98,7 +103,7 @@ static func subpriority(object: Gen3ObjectEvents.ObjectEvent, elevation: int, or
 	return (ELEVATION_SUBPRIORITY[elevation] + ((16 - row) << 1) + add) & 0xFF
 
 
-## Objects and shadows sorted together, front first; `tiles` is 4bpp in 1D order.
+## Objects, reflections and shadows sorted together, front first; `tiles` is 4bpp in 1D order.
 func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 	var entries: Dictionary = {}
 	for slot: int in Gen3ObjectEvents.COUNT:
@@ -109,23 +114,116 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 		var entry: Dictionary = _shadow_entry(objects, shadow, origin)
 		if not entry.is_empty():
 			entries[int(shadow["sprite_slot"])] = entry
+	for reflection: Dictionary in reflections:
+		var entry: Dictionary = _reflection_entry(objects, reflection, origin)
+		entries[int(reflection["sprite_slot"])] = entry
 	_sort(entries)
 	var out: Array = []
 	for slot: int in _order:
 		if not entries.has(slot):
 			continue
 		if slot >= Gen3ObjectEvents.COUNT:
-			out.append(entries[slot]["part"])
+			if not entries[slot].get("invisible", false):
+				out.append(entries[slot]["part"])
 		elif not objects.objects[slot].sprite_invisible:
 			out.append_array(_parts(objects.objects[slot], entries[slot]))
 	return out
 
 
-static func effect_slot(effects: Array[Dictionary]) -> int:
-	for slot: int in range(SPRITE_COUNT - 1, Gen3ObjectEvents.COUNT - 1, -1):
+static func effect_slot(effects: Array[Dictionary], reverse: bool = true) -> int:
+	# `CreateReflectionEffectSprites` reserves the final two sprites for the shared distortion matrices.
+	var slots: Array = range(SPRITE_COUNT - 3, Gen3ObjectEvents.COUNT - 1, -1) if reverse \
+		else range(Gen3ObjectEvents.COUNT, SPRITE_COUNT - 2)
+	for slot: int in slots:
 		if not effects.any(func(effect: Dictionary) -> bool: return effect.get("sprite_slot", -1) == slot):
 			return slot
 	return -1
+
+
+## `SetUpReflection` keeps the object slot/local ID and the initial bridge offset, not its map identity.
+func start_reflection(objects: Gen3ObjectEvents, object: Gen3ObjectEvents.ObjectEvent, slot: int,
+		still: bool, effects: Array[Dictionary]) -> void:
+	var sprite_slot: int = effect_slot(effects + reflections, false)
+	if sprite_slot < 0:
+		return
+	var info: Dictionary = objects.graphics_info(object.graphics_id)
+	var bridge: int = 0
+	if not info.get("disable_reflection_palette_load", false):
+		bridge = _bridge_type(object.previous_behavior)
+		if bridge == 0:
+			bridge = _bridge_type(object.current_behavior)
+	reflections.append({"object_slot": slot, "local_id": object.local_id, "sprite_slot": sprite_slot,
+		"still": still, "offset": 0 if bridge == 0 else 12 + (bridge - 1) * 16})
+	_load_reflection_palette(info, REFLECTION_SLOTS[object.palette_num], bridge != 0)
+
+
+func _bridge_type(behavior: int) -> int:
+	if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		return 0
+	if behavior >= 0x70 and behavior <= 0x73:
+		return behavior - 0x70
+	if not _ruby:
+		if behavior in [0x7A, 0x7B]:
+			return 2
+		if behavior in [0x7C, 0x7D]:
+			return 3
+	return 0
+
+
+func _load_reflection_palette(info: Dictionary, slot: int, bridge: bool) -> void:
+	var tag: int = int(info.get("reflection_palette_tag", PALETTE_TAG_NONE))
+	if tag == PALETTE_TAG_NONE:
+		return
+	var main_slot: int = int(info.get("palette_slot", -1))
+	if bridge:
+		patch(tag, slot)
+	elif main_slot in [PALSLOT_PLAYER, PALSLOT_NPC_SPECIAL]:
+		patch(int(info["palette_tag"]), slot)
+		if main_slot == PALSLOT_NPC_SPECIAL:
+			special_tag = int(info["palette_tag"])
+		_patch_reflection("player_reflections" if main_slot == PALSLOT_PLAYER else "special_reflections",
+			int(info["palette_tag"]), slot)
+	else:
+		patch(palette_tag(slot), slot)
+
+
+## `GetObjectPaletteTag` uses the last special object's tag for every slot above the regular bank.
+func palette_tag(slot: int) -> int:
+	var sets: Dictionary = data.world_object_palette_sets()
+	if slot < PALETTE_SLOTS:
+		return int(sets["tag_sets"][reflection_type][slot])
+	var tags: Array = sets.get("special_reflections", {}).get(str(special_tag), [])
+	return int(tags[reflection_type]) if not tags.is_empty() else PALETTE_TAG_NONE
+
+
+## `UpdateObjectReflectionSprite` and the two invisible distortion sprites' affine clocks.
+func step_reflections(objects: Gen3ObjectEvents) -> void:
+	for index: int in range(reflections.size() - 1, -1, -1):
+		var reflection: Dictionary = reflections[index]
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[int(reflection["object_slot"])]
+		if not object.active or not object.has_reflection or object.local_id != int(reflection["local_id"]):
+			reflections.remove_at(index)
+	if _reflection_frame > 0:
+		var phase: int = (_reflection_frame - 1) % 48
+		var command: int = phase / 12 * 2 + int(phase % 12 >= 4)
+		_reflection_scale += REFLECTION_DELTAS[command]
+	_reflection_frame += 1
+
+
+func _reflection_entry(objects: Gen3ObjectEvents, reflection: Dictionary, origin: Vector2i) -> Dictionary:
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[int(reflection["object_slot"])]
+	var entry: Dictionary = _entry(objects, object, origin)
+	var info: Dictionary = entry["info"]
+	var y: int = (int(entry["y"]) + int(info["height"]) - 2 + int(reflection["offset"]) - 2 * object.jump_y) & 0xFF
+	var part: Dictionary = {"x": entry["x"], "y": y, "priority": 3,
+		"palette": REFLECTION_SLOTS[object.palette_num], "tiles": entry["tiles"],
+		"size": OAM_SIZES[int(info["oam"]["shape"])][int(info["oam"]["size"])],
+		"flip": Vector2i(int(object.anim.h_flip), 1)}
+	if not reflection["still"]:
+		var a: int = -(65536 / _reflection_scale)
+		part["matrix"] = Vector4i(-a if object.anim.h_flip else a, 0, 0, -256)
+	return {"y": y, "key": (3 << 8) | 152, "part": part,
+		"invisible": object.sprite_invisible or object.hide_reflection}
 
 
 func _shadow_entry(objects: Gen3ObjectEvents, shadow: Dictionary, origin: Vector2i) -> Dictionary:

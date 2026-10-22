@@ -87,6 +87,7 @@ func _one_game() -> void:
 	_step_anim_rows()
 	_object_sprites()
 	_shadows()
+	_reflections()
 	_object_sprite_frames()
 	_held_movements()
 	_object_movements(false)
@@ -974,6 +975,57 @@ func _shadows() -> void:
 		"c5e1aa6d98c902bc44bfc063531a1574a6eb0c6f" if frlg else (
 			"ccf3a9ad0aa72adb76b88e67bcd67ef4c8740273" if data.id == RomRegistry.EMERALD else
 			"4661fbb9e10ddc159c17ea1456349ff3c9a36629"))
+
+
+## Original `LoadObjectReflectionPalette` plus both paired-palette loaders, compiled in scratch against
+## every imported graphics row and the cartridge's palette tables; weather processing is not run here.
+const REFLECTION_DIGESTS: Dictionary = {
+	&"ruby": "d351a1d98be77430ccdfaea35f9cb4d33fb36818",
+	&"sapphire": "d351a1d98be77430ccdfaea35f9cb4d33fb36818",
+	&"firered": "37371d78035ae6aabdccde382ca9a96be6a57db2",
+	&"leafgreen": "37371d78035ae6aabdccde382ca9a96be6a57db2",
+	&"emerald": "42b64dcc0a39d5475548ea68e4f87233a5d5aa8e",
+}
+
+
+func _reflections() -> void:
+	var data: GameData = _r.data
+	var objects: Gen3ObjectEvents = _fresh_objects(_camera_at(null, data, 0, 0, Vector2i.ZERO))
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	objects.objects[0] = object
+	var lines := PackedStringArray()
+	var row: int = 0
+	for mauville: bool in [false, true]:
+		var index: int = 0
+		while not data.world_object_graphics(index, mauville).is_empty():
+			var info: Dictionary = data.world_object_graphics(index, mauville)
+			objects._graphics[0] = info
+			object.palette_num = int(info["palette_slot"])
+			lines.append_array(_reflection_palette_trace(objects, row))
+			index += 1
+			row += 1
+	_r.digest_matches("gen3_reflection_palettes", lines, REFLECTION_DIGESTS[data.id])
+
+
+func _reflection_palette_trace(objects: Gen3ObjectEvents, row: int) -> PackedStringArray:
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+	var sprites: Gen3ObjectSprites = objects.sprites
+	var lines := PackedStringArray()
+	for type: int in Gen3ObjectSprites.USED_REFLECTION_TYPES:
+		sprites.reflection_type = type
+		for previous: bool in [false, true]:
+			for behavior: int in [0, 0x70, 0x71, 0x72, 0x73, 0x7A, 0x7B, 0x7C, 0x7D]:
+				sprites.palettes.fill(0)
+				sprites.special_tag = Gen3ObjectSprites.PALETTE_TAG_NONE
+				sprites.reflections.clear()
+				object.current_behavior = 0 if previous else behavior
+				object.previous_behavior = behavior if previous else 0
+				sprites.start_reflection(objects, object, 0, false, [])
+				var slot: int = Gen3ObjectSprites.REFLECTION_SLOTS[object.palette_num]
+				lines.append("%d|%d|%d|%d|%d|%d|%s|%d" % [row, type, int(previous), behavior,
+					sprites.reflections[0]["offset"], slot, sprites.palettes.slice(slot * 32, (slot + 1) * 32).hex_encode(),
+					sprites.special_tag])
+	return lines
 
 
 func _frames_hash(data: GameData, images: Array) -> String:
