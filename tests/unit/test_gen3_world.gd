@@ -2165,3 +2165,170 @@ func test_bridge_reflection_palette_lookup_is_validated_for_every_graphics_table
 		assert_false(Gen3World._object_palettes(rom, layout, graphics, {}).is_empty(), table)
 		row["reflection_palette_tag"] = 0x1100
 		assert_false(Gen3World._object_palettes(rom, layout, graphics, {}).is_empty(), table)
+
+
+## Original C terrain readers cover probe order, sprite dimensions and all 512 raw behavior values. The movement
+## streams stub ground effects, so changing this scan can leave them green while reflections disappear.
+func test_reflection_terrain_matches_each_original_engine() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _reflection_objects(id)
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		object.current = Vector2i(12, 12)
+		object.previous = Vector2i(10, 10)
+		var lines := PackedStringArray()
+		for size: int in 3:
+			object.graphics_id = size
+			for behavior: int in 512:
+				for probe: int in 5:
+					objects.camera.grid.blocks.fill(0)
+					var at: Vector2i = [Vector2i(12, 13), Vector2i(10, 11), Vector2i(11, 13),
+						Vector2i(12, 16), Vector2i(13, 13)][probe]
+					objects.camera.grid.set_metatile_entry(at.x, at.y, behavior)
+					if probe == 4:
+						objects.camera.grid.set_metatile_entry(11, 13, 0x23 if objects._frlg else 0x20)
+						objects.camera.grid.set_metatile_entry(11, 11, 0x10)
+						objects.camera.grid.set_metatile_entry(13, 13, 0)
+					lines.append("%d|%d|%d|%d" % [size, behavior, probe, objects.nearby_reflection_type(object)])
+		for behavior: int in 256:
+			lines.append("bridge|%d|%d" % [behavior, objects.sprites._bridge_type(behavior)])
+		var expected: String = "81ea147e096f396fe829874ae578b429f6e49f63"
+		if objects._frlg:
+			expected = "8480181db24f104ad99eebb3cce3099c3669beb1"
+		elif id == RomRegistry.EMERALD:
+			expected = "49adc2b666be42f8d1177b899be375cb02e1c8c3"
+		assert_eq(("\n".join(lines) + "\n").sha1_text(), expected, str(id))
+
+
+func _reflection_objects(id: StringName) -> Gen3ObjectEvents:
+	var objects: Gen3ObjectEvents = _field_objects(id)
+	var data: GameData = objects.camera.data
+	data._sections["gba_graphics"] = true
+	var tiles := PackedByteArray()
+	tiles.resize(256)
+	tiles.fill(0x21)
+	data._world_tilesets = {"sprite_images": {"1": {"bytes": tiles}}, "object_palettes": {}}
+	data._world_scripts["sprite_anims"] = {}
+	data._world_scripts["object_graphics"] = []
+	for size: Vector2i in [Vector2i(16, 32), Vector2i(48, 64), Vector2i(8, 8)]:
+		data._world_scripts["object_graphics"].append({"width": size.x, "height": size.y, "anims": 0,
+			"oam": {"shape": 2, "size": 2}, "palette_slot": 2, "palette_tag": 0x1102,
+			"reflection_palette_tag": 0x110F})
+	var tags: Array = []
+	var rows: Array = []
+	for index: int in 16:
+		tags.append(0x1100 + index)
+		rows.append([0x1100 + index, index])
+		var palette := PackedByteArray()
+		palette.resize(32)
+		palette.fill(index + 1)
+		data._world_tilesets["object_palettes"][str(index)] = {"bytes": palette}
+	data._world_scripts["object_palettes"] = {"rows": rows, "tag_sets": [tags, tags],
+		"player_reflections": {"4354": [0x1104, 0x1105]}, "special_reflections": {"4354": [0x1108, 0x1109]}}
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+	object.active = true
+	object.local_id = 3
+	object.current = Vector2i(12, 12)
+	object.previous = object.current
+	object.pixel_position = Vector2i(80, 48)
+	object.palette_num = 2
+	object.anim.tiles = [1, 256]
+	object.frozen = true
+	return objects
+
+
+## Drive spawn and held walks through the field model. This protects persistent water/ice type, bridge
+## geometry, inverted jump offsets, hide/show and slot reuse, none of which the terrain reader observes.
+func test_reflections_follow_ground_lifetime_and_sprite_visibility() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _reflection_objects(id)
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.camera.grid.set_metatile_entry(12, 13, 0x10)
+		objects.camera.grid.set_metatile_entry(12, 12, 0x72)
+		object.jump_y = -10
+		object.x2 = 3
+		objects.step_movements()
+		assert_true(object.has_reflection, str(id))
+		assert_eq(objects.sprites.reflections.size(), 1)
+		assert_eq(objects.sprites.reflections[0]["sprite_slot"], 16)
+		var requests: Array = []
+		objects.start_effect_sprite(object, 0, Gen3ObjectEvents.FLDEFF_SHADOW, -1, true, requests)
+		assert_eq(objects.shadow_sprites()[0]["sprite_slot"], 61, "distortion sprites reserve slots 62 and 63")
+		objects.step_movements()
+		var entries: Array = objects.sprites.oam(objects, Vector2i.ZERO)
+		var reflection: Dictionary = entries[-1]
+		assert_eq([reflection["x"], reflection["y"], reflection["priority"], reflection["palette"]],
+			[83, 72 + (0 if objects._frlg else 28), 3, 6])
+		assert_eq(objects.sprites.palettes[6 * 32], 7 if objects._frlg else 16)
+		objects.camera.grid.set_metatile_entry(12, 13, 0x23 if objects._frlg else 0x20)
+		objects.set_held_movement(object, 0x10 if objects._frlg else 8)
+		objects.step_movements()
+		assert_false(objects.sprites.reflections[0]["still"], "a continuous reflection keeps its type")
+		object.hide_reflection = true
+		objects.step_movements()
+		assert_eq(objects.sprites.oam(objects, Vector2i.ZERO).size(), 1)
+		object.hide_reflection = false
+		object.invisible = true
+		objects.step_movements()
+		assert_true(objects.sprites.oam(objects, Vector2i.ZERO).is_empty())
+		object.invisible = false
+		object.local_id += 1
+		objects.step_movements()
+		assert_true(objects.sprites.reflections.is_empty(), "a reused object slot retires its old reflection")
+		while not object.held_movement_finished:
+			objects.step_movements()
+		Gen3ObjectEvents.clear_held_movement(object)
+		objects.camera.grid.blocks.fill(0)
+		objects.set_held_movement(object, 0x10 if objects._frlg else 8)
+		objects.step_movements()
+		assert_false(object.has_reflection)
+		Gen3ObjectEvents.clear_held_movement(object)
+		object.jump_y = -10
+		object.anim.h_flip = true
+		object.anim.v_flip = true
+		objects.camera.grid.set_metatile_entry(object.current.x, object.current.y + 1, 0x23 if objects._frlg else 0x20)
+		object.ground_on_spawn = true
+		objects.step_movements()
+		reflection = objects.sprites.oam(objects, Vector2i.ZERO)[-1]
+		assert_false(reflection.has("matrix"), "ice uses the unscaled sprite")
+		assert_eq(reflection["flip"], Vector2i.ONE, "the reflected vertical flip is forced, not toggled")
+		object.active = false
+		objects.step_movements()
+		assert_true(objects.sprites.reflections.is_empty())
+
+
+## Compile-and-run pins from sprite.c's original affine interpreter, including four complete wave cycles.
+## The raster assertion catches a draw path that ignores the matrix or rounds negative coordinates to zero.
+func test_water_reflection_matrices_and_affine_pixels_match_the_hardware() -> void:
+	var objects: Gen3ObjectEvents = _reflection_objects(RomRegistry.EMERALD)
+	objects.camera.grid.set_metatile_entry(12, 13, 0x10)
+	var lines := PackedStringArray()
+	for frame: int in range(1, 194):
+		objects.step_movements()
+		var reflection: Dictionary = objects.sprites.oam(objects, Vector2i.ZERO)[-1]
+		var matrix: Vector4i = reflection["matrix"]
+		lines.append("%d|%d|%d" % [frame, matrix.x, matrix.w])
+		objects.objects[0].anim.h_flip = true
+		var flipped: Vector4i = objects.sprites.oam(objects, Vector2i.ZERO)[-1]["matrix"]
+		assert_eq(flipped, Vector4i(-matrix.x, 0, 0, matrix.w))
+		objects.objects[0].anim.h_flip = false
+	assert_eq(("\n".join(lines) + "\n").sha1_text(), "146385de541aca2423f975b565b643a122ecbf09")
+	var tiles := PackedByteArray()
+	tiles.resize(32)
+	tiles[0] = 0x21
+	tiles[4] = 0x43
+	var palette := PackedByteArray()
+	palette.resize(32)
+	palette.encode_u16(2, 31)
+	palette.encode_u16(4, 31 << 5)
+	palette.encode_u16(6, 31 << 10)
+	var sprite: Dictionary = {"x": 0, "y": 0, "priority": 3, "palette": 0, "tiles": tiles,
+		"size": Vector2i(8, 8), "flip": Vector2i.ONE, "matrix": Vector4i(256, 0, 0, -256)}
+	var image: Image = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)[3]
+	assert_eq(image.get_pixel(0, 0).a, 0.0)
+	assert_eq(image.get_pixel(0, 7), Color.BLUE)
+	assert_eq(image.get_pixel(0, 1).a, 0.0)
+	sprite["matrix"] = Vector4i(260, 0, 0, -256)
+	image = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)[3]
+	assert_eq(image.get_pixel(0, 7).a, 0.0, "negative fractional source coordinates stay outside the texture")

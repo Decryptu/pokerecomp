@@ -277,6 +277,7 @@ class ObjectEvent:
 	var enable_anim: bool = false
 	var hide_reflection: bool = false
 	var has_shadow: bool = false
+	var has_reflection: bool = false
 	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a walk started and the pause
 	## flags `FreezeObjectEvent` backs up.
 	var anim := Gen3SpriteAnim.new()
@@ -895,6 +896,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
 	_step_effect_sprites(requests)
+	sprites.step_reflections(self)
 	return requests
 
 
@@ -931,7 +933,7 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
 	if effect == FLDEFF_SHADOW:
 		var info: Dictionary = graphics_info(object.graphics_id)
-		sprite["sprite_slot"] = Gen3ObjectSprites.effect_slot(_effect_sprites)
+		sprite["sprite_slot"] = Gen3ObjectSprites.effect_slot(_effect_sprites + sprites.reflections)
 		if int(sprite["sprite_slot"]) < 0:
 			return {}
 		sprite["shadow_size"] = int(info.get("shadow_size", 0))
@@ -970,9 +972,8 @@ func _shadow_allowed(object: ObjectEvent) -> bool:
 	if object == null or not object.has_shadow:
 		return false
 	var grass: Array = [2, 0xD1] if _frlg else [2, 3]
-	var reflective: Array = [0x10, 0x16, 0x1A, 0x1B, 0x23] if _frlg else [0x10, 0x14, 0x16, 0x1A, 0x20, 0x2B]
-	return object.current_behavior not in grass and object.current_behavior not in reflective \
-		and object.previous_behavior not in reflective and not camera.data.world_surfable(object.current_behavior) \
+	return object.current_behavior not in grass and reflection_type(object.current_behavior, _frlg) == 0 \
+		and reflection_type(object.previous_behavior, _frlg) == 0 and not camera.data.world_surfable(object.current_behavior) \
 		and not camera.data.world_surfable(object.previous_behavior)
 
 
@@ -1525,7 +1526,39 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 	if covering and not _frlg and object.current_behavior == MB_LONG_GRASS and object.previous_behavior == MB_LONG_GRASS:
 		object.subsprite_table = Gen3ObjectSprites.LONG_GRASS_TABLE_HIGH \
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
+	if kind != "finish_step":
+		_update_reflection(object, slot)
 	requests.append({"kind": kind, "object_id": slot})
+
+
+func _update_reflection(object: ObjectEvent, slot: int) -> void:
+	var type: int = nearby_reflection_type(object)
+	if type != 0 and not object.has_reflection:
+		sprites.start_reflection(self, object, slot, type == 1, _effect_sprites)
+	object.has_reflection = type != 0
+
+
+## `ObjectEventGetNearbyReflectionType`: FRLG probes 1x2 cells; each engine reads the behavior as u8.
+func nearby_reflection_type(object: ObjectEvent) -> int:
+	var info: Dictionary = graphics_info(object.graphics_id)
+	var width: int = 1 if _frlg else (int(info.get("width", 0)) + 8) >> 4
+	var height: int = 2 if _frlg else (int(info.get("height", 0)) + 8) >> 4
+	for y: int in range(1, height + 1):
+		for x: int in range(maxi(width, 1)):
+			for at: Vector2i in [object.current, object.previous]:
+				for offset: int in ([0] if x == 0 else [x, -x]):
+					var type: int = reflection_type(camera.grid.behavior_at(at.x + offset, at.y + y), _frlg)
+					if type != 0:
+						return type
+	return 0
+
+
+static func reflection_type(behavior: int, frlg: bool) -> int:
+	behavior &= 0xFF
+	if behavior == (0x23 if frlg else 0x20):
+		return 1
+	var water: Array = [0x10, 0x16, 0x1A, 0x1B] if frlg else [0x10, 0x14, 0x16, 0x1A, 0x2B]
+	return 2 if behavior in water else 0
 
 
 func _step_autonomous(object: ObjectEvent, slot: int, requests: Array) -> void:

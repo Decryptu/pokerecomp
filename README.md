@@ -111,8 +111,8 @@ the border around it; a frame count after the path renders the map that many
 tileset animation frames in, and a layout cell after the count draws the
 240x160 field screen with the player standing there and the objects in view
 ([Gen3ObjectSprites](game/gen3/gen3_object_sprites.gd): OBJ palettes, priority
-by elevation, subsprite splits, shadows and shared `SortSprites` order). The field's camera steps across map connections
-as the cartridge's does, spawning and removing the map's objects as they enter
+by elevation, subsprite splits, shadows, reflections and shared `SortSprites`
+order). The field's camera steps across map connections as the cartridge's does, spawning and removing the map's objects as they enter
 and leave the view, and its collision test answers as the cartridge's. Every
 held object movement runs frame by frame through
 [Gen3ObjectEvents](game/gen3/gen3_object_events.gd),
@@ -131,9 +131,11 @@ and regrowth; their objects run growth animations and request sparkles.
 sight path, show the exclamation mark, reveal disguises or climb out of ash,
 walk up and turn the player; FireRed and LeafGreen scroll the camera to a
 trainer above the view. Jump shadows follow each object at ground level and
-stop on landing, grass, water or reflective ground. Reflections, affine sprite
-animations, other field effects and gate rendering await the field host. Script bytecode and its data are
-decoded and cached; script execution awaits the rest of the GBA world model.
+stop on landing, grass, water or reflective ground. Water and ice reflections
+follow the object's current frame, visibility and jump offsets, with bridge
+palettes and the shared water distortion clock. Weather palette processing,
+other affine sprite animations, field effects and gate rendering await the field
+host. Script bytecode and its data are decoded and cached; script execution awaits the rest of the GBA world model.
 
 | Game | SHA-1 |
 |---|---|
