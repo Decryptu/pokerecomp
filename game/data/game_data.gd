@@ -440,7 +440,8 @@ func world_object_palette(tag: int) -> PackedByteArray:
 	return PackedByteArray()
 
 
-## StartWeather's sprite palette, the rain sprite sheet and the six drought tables, [code]summed[/code] on
+## StartWeather's sprite palette, the sprite weathers' palettes and sheets by [constant Gen3WeatherSprites.SHEETS]
+## name, and the six drought tables, [code]summed[/code] on
 ## Emerald, where they are the colours themselves, and not on Ruby and Sapphire, whose deltas the field sums as
 ## it loads them. FireRed and LeafGreen have no tables.
 func world_weather() -> Dictionary:
@@ -450,9 +451,12 @@ func world_weather() -> Dictionary:
 	var drought: Array = []
 	for offset: Variant in row.get("drought", []):
 		drought.append(_gba_graphics_record("weather", int(offset)).get("bytes", PackedByteArray()))
+	var sheets: Dictionary = {}
+	var offsets: Dictionary = row.get("sheets", {})
+	for sheet: String in offsets:
+		sheets[sheet] = _gba_graphics_record("weather", int(offsets[sheet])).get("bytes", PackedByteArray())
 	return {"palette": _gba_graphics_record("weather", int(row["palette"])).get("bytes", PackedByteArray()),
-		"drought": drought, "summed": bool(row.get("summed", false)),
-		"rain": _gba_graphics_record("weather", int(row.get("rain", -1))).get("bytes", PackedByteArray())}
+		"drought": drought, "summed": bool(row.get("summed", false)), "sheets": sheets}
 
 
 func world_object_palette_sets() -> Dictionary:

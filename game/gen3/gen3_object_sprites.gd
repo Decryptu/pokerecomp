@@ -40,7 +40,7 @@ const SHADOW_Y_OFFSETS: Array[int] = [4, 4, 4, 16]
 var data: GameData
 var palette: Gen3Palette
 ## The field's weather, which `UpdateSpritePaletteWithWeather` asks after each reflection palette load and whose
-## raindrops take sprite slots beside the objects' effects.
+## sprites take slots beside the objects' effects.
 var weather: Gen3FieldWeather:
 	set(value):
 		weather = value
@@ -127,7 +127,7 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 		var entry: Dictionary = _reflection_entry(objects, reflection, origin)
 		entries[int(reflection["sprite_slot"])] = entry
 	if weather != null:
-		entries.merge(weather.sprites.oam_entries(-origin, weather.contrast_slot))
+		entries.merge(weather.sprites.oam_entries(weather.contrast_slot, weather.picture_slot))
 	_sort(entries)
 	var out: Array = []
 	for slot: int in _order:

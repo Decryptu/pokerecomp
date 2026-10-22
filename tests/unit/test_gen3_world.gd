@@ -731,31 +731,35 @@ func test_player_water_query_reads_each_engines_source_of_water() -> void:
 const GEN3_TABLES = preload("res://tools/checks/gen3_tables.gd")
 
 
-## The weather on each engine: thunderstorm, fog, shade and downpour fading in from black, changing weather, a
-## sprite palette load, a lightning ramp, preserved palettes and fades out and back in, with every raindrop, the
-## thunder and the RNG. The digests are original pret C (`field_weather.c`, `palette.c`, the palette and rain
-## weathers' callbacks and `sprite.c`'s anim interpreter) compiled in scratch. Ruby's kept RGB(31, 12, 11),
-## FireRed's untouched BG palette 13, palette.c's two-call fade step, a rain Finish that let the change through
-## at once or a raindrop that skipped its splash all change them, and no other suite runs the weather without a
+## The weather on each engine: clouds, snow, thunderstorm, horizontal fog, ash, sandstorm, diagonal fog, downpour
+## and bubbles fading in from black, changing weather, a sprite palette load, a lightning ramp, preserved palettes
+## and fades out and back in, with every raindrop, the thunder, the RNG, each sprite weather's state and every
+## weather sprite. The digests are original pret C (`field_weather.c`, `palette.c`, every weather's callbacks and
+## `sprite.c`'s anim interpreter) compiled in scratch. Ruby's kept RGB(31, 12, 11), FireRed's untouched BG palette
+## 13, palette.c's two-call fade step, a Finish that let the change through at once, a raindrop that skipped its
+## splash or a sprite weather's blend, sway or wrap all change them, and no other suite runs the weather without a
 ## cartridge.
 func test_weather_palettes_match_each_cartridge_engine() -> void:
 	var digests: Dictionary = {
-		RomRegistry.RUBY: "a651ea3cc3daf5446d4abd1edb007144193bb992",
-		RomRegistry.FIRERED: "d2d05788092f321158daf5b29bbd8d1bfb9ef811",
-		RomRegistry.EMERALD: "0fcec32d91948e02d82ddfe1b2d8d8c2b4e270ed",
+		RomRegistry.RUBY: "2759fb608d9875bea601c5f72335553ce05cebe3",
+		RomRegistry.FIRERED: "cfb68b4c323f1231979fb259545661e53aa09aab",
+		RomRegistry.EMERALD: "2ef8182ae800d799d40311c01afb46c86f354c71",
 	}
 	for id: StringName in digests:
 		var data := GameData.new()
 		data.id = id
 		data.generation = RomRegistry.GEN3
 		data._sections = {"scripts": true, "gba_graphics": true}
-		data._world_scripts = {"weather": {"palette": 0, "drought": [], "summed": false}}
+		data._world_scripts = {"weather": {"palette": 0, "drought": [1, 1, 1, 1, 1, 1],
+			"summed": data.id == RomRegistry.EMERALD, "sheets": {"cloud_palette": 0, "sandstorm_palette": 0}}}
 		var blank := PackedByteArray()
 		blank.resize(32)
-		data._world_tilesets = {"weather": {"0": {"bytes": blank}}}
+		var tables := PackedByteArray()
+		tables.resize(Gen3FieldWeather.DROUGHT_BYTES)
+		data._world_tilesets = {"weather": {"0": {"bytes": blank}, "1": {"bytes": tables}}}
 		data._indices["blob/tilesets"] = PackedByteArray()
 		var lines := PackedStringArray()
-		for run: int in [5, 6, 11, 13]:
+		for run: int in [1, 4, 5, 6, 7, 8, 9, 13, 14]:
 			lines.append_array(GEN3_TABLES.weather_stream(data, run, 5))
 		assert_eq(("\n".join(lines) + "\n").sha1_text(), digests[id], str(id))
 
@@ -1251,6 +1255,41 @@ func test_first_oam_entry_owns_a_pixel_whatever_the_priorities() -> void:
 	var image: Image = vram.draw_screen(grid, Vector2i.ZERO, Vector2i(16, 16), oam)
 	assert_eq([image.get_pixel(5, 5), image.get_pixel(10, 10), image.get_pixel(14, 2)],
 		[PokePalette.from_packed(0x001F), PokePalette.from_packed(0x7C00), PokePalette.from_packed(0)])
+
+
+## The field's BLDCNT names the BG layers and OBJ as second targets and nothing as first, so only a
+## semi-transparent sprite (the fogs, clouds, ash and sandstorm) blends, by BLDALPHA with each coefficient held
+## at 16, and over the backdrop it draws as it is. No other test composes one: dropping the blend, blending over
+## the backdrop or reading the ash's BLDALPHA_BLEND(64, 63) as 31 sixteenths would each pass the rest.
+func test_semi_transparent_sprites_blend_with_the_bg_layer_under_them() -> void:
+	var grid: Gen3MapGrid = _field_objects(RomRegistry.EMERALD).camera.grid
+	grid.blocks[1] = 0x3001
+	grid._layer_types.resize(1024)
+	grid._layer_types.fill(Gen3FieldVram.LAYER_TYPES)
+	grid._layer_types[0] = 1
+	var metatiles := PackedByteArray()
+	metatiles.resize(32)
+	grid.primary = {"metatile_count": 2, "metatiles": {"bytes": metatiles},
+		"attributes": {"bytes": PackedByteArray([0, 0, 0, 0])}, "attribute_size": 2}
+	var vram := Gen3FieldVram.new()
+	vram.palette = Gen3Palette.new()
+	vram.palette.load(PackedByteArray([0, 0, 0, 0x28]), 0)
+	vram.palette.load(PackedByteArray([0, 0, 0x1F, 0]), Gen3Palette.OBJ_OFFSET)
+	vram.tiles.resize(Gen3FieldVram.TILE_COUNT * GbaTiles.TILE_BYTES)
+	vram.tiles.fill(0x11)
+	var oam: Array = []
+	for entry: Array in [[0, 0, true], [16, 0, true], [8, 8, false]]:
+		var tiles := PackedByteArray()
+		tiles.resize(GbaTiles.TILE_BYTES)
+		tiles.fill(0x11)
+		oam.append({"x": entry[0], "y": entry[1], "size": Vector2i(8, 8), "flip": Vector2i.ZERO, "priority": 1,
+			"palette": 0, "tiles": tiles, "blend": entry[2]})
+	var fog: Image = vram.draw_screen(grid, Vector2i.ZERO, Vector2i(32, 16), oam, 12 | 8 << 8)
+	var ash: Image = vram.draw_screen(grid, Vector2i.ZERO, Vector2i(32, 16), oam, 63 << 8 | 64)
+	var drawn: Array = [fog.get_pixel(2, 2), fog.get_pixel(18, 2), fog.get_pixel(10, 10), ash.get_pixel(2, 2)]
+	var wanted: Array = [23 | 5 << 10, 0x001F, 0x001F, 10 << 10]
+	assert_eq(drawn.map(func(color: Color) -> int: return color.to_rgba32()),
+		wanted.map(func(color: int) -> int: return PokePalette.from_packed(color).to_rgba32()))
 
 
 ## State actions must survive hold clearing without freeing an invisible NPC's
@@ -2353,10 +2392,9 @@ func test_water_reflection_matrices_and_affine_pixels_match_the_hardware() -> vo
 	palette.load(colors, Gen3Palette.OBJ_OFFSET)
 	var sprite: Dictionary = {"x": 0, "y": 0, "priority": 3, "palette": 0, "tiles": tiles,
 		"size": Vector2i(8, 8), "flip": Vector2i.ONE, "matrix": Vector4i(256, 0, 0, -256)}
-	var image: Image = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)[3]
-	assert_eq(image.get_pixel(0, 0).a, 0.0)
-	assert_eq(image.get_pixel(0, 7), Color.BLUE)
-	assert_eq(image.get_pixel(0, 1).a, 0.0)
+	var layer: Dictionary = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)
+	assert_eq([layer["priority"][0], layer["priority"][8], layer["priority"][56], layer["color"][56]],
+		[-1, -1, 3, 31 << 10])
 	sprite["matrix"] = Vector4i(260, 0, 0, -256)
-	image = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)[3]
-	assert_eq(image.get_pixel(0, 7).a, 0.0, "negative fractional source coordinates stay outside the texture")
+	layer = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)
+	assert_eq(layer["priority"][56], -1, "negative fractional source coordinates stay outside the texture")

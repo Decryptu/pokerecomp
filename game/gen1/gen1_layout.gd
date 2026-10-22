@@ -7,9 +7,8 @@ extends RefCounted
 ## and Blue share every table here: the 668 symbols that move between them are
 ## all bank $1D's map scripts. An uncharacterised ROM is refused, not guessed at.
 
-## 151 dex entries over 190 cartridge slots. `MonsterNames`, `PokedexEntryPointers`,
-## `EvosMovesPointerTable` and `CryData` are indexed by the slot; `BaseStats` and
-## `MonsterPalettes` by dex number.
+## 151 dex entries over 190 cartridge slots. `MonsterNames`, `PokedexEntryPointers`, `EvosMovesPointerTable`
+## and `CryData` are indexed by the slot; `BaseStats` and `MonsterPalettes` by dex number.
 const SPECIES_COUNT: int = 151
 const INDEX_COUNT: int = 190
 const NAME_LENGTH: int = 10
@@ -55,9 +54,8 @@ const TYPE_UNUSED_FIRST: int = 0x09
 const TYPE_UNUSED_LAST: int = 0x13
 const TYPE_SPECIAL_FIRST: int = 0x14
 
-## `TypeEffects`: attacker, defender, multiplier, ending in $FF. The multiplier
-## is in tenths, the same encoding Generation 2 kept, so the cached chart needs
-## no conversion between the two.
+## `TypeEffects`: attacker, defender, multiplier, ending in $FF. The multiplier is in tenths, the same
+## encoding Generation 2 kept, so the cached chart needs no conversion between the two.
 const TYPE_EFFECT_SIZE: int = 3
 const TYPE_EFFECT_END: int = 0xFF
 const TYPE_EFFECT_NEUTRAL: int = 10
@@ -75,9 +73,8 @@ const TM_COUNT: int = 50
 const HM_COUNT: int = 5
 const HM_FIRST_ITEM: int = 0xC4
 const TM_FIRST_ITEM: int = HM_FIRST_ITEM + HM_COUNT
-## `GetMachineName` spells the name rather than reading one, and
-## `GetMachinePrice` takes a nybble of `TechnicalMachinePrices` and multiplies by
-## a thousand. `ret c` above it leaves an HM priceless.
+## `GetMachineName` spells the name rather than reading one, and `GetMachinePrice` takes a nybble of
+## `TechnicalMachinePrices` and multiplies by a thousand. `ret c` above it leaves an HM priceless.
 const MACHINE_PRICE_UNIT: int = 1000
 
 ## A `PokedexEntry`: category, feet, inches, weight in tenths of a pound, then
@@ -101,8 +98,7 @@ const PAL_GRAYMON: int = 0x19
 ## `PalPacket_PartyMenu`'s first row, which `BlkPacket_PartyMenu` gives the two
 ## columns the party menu's icons stand in and nothing else.
 const PAL_MEWMON: int = 0x10
-## `PalPacket_Pokedex`, which is what `BlkPacket_Pokedex` gives every cell of the
-## dex outside the picture box.
+## `PalPacket_Pokedex`, which is what `BlkPacket_Pokedex` gives every cell of the dex outside the picture box.
 const PAL_BROWNMON: int = 0x15
 ## `PalPacket_TrainerCard`'s four, in its own order.
 const PAL_REDMON: int = 0x12
@@ -145,9 +141,8 @@ const SPECIAL_PICS: Dictionary = {0xB6: "fossil_kabutops", 0xB7: "fossil_aerodac
 const SPECIAL_PIC_TILES: Dictionary = {"fossil_kabutops": 6, "fossil_aerodactyl": 7, "ghost": 6}
 const PIC_BANK_FOSSIL_KABUTOPS: int = 0x0B
 
-## `FontGraphics` and `TextBoxGraphics`, copied to `vFont` and `vChars2 tile $60`
-## and indexed by character code. The box's six border tiles at $79 are inside
-## the second.
+## `FontGraphics` and `TextBoxGraphics`, copied to `vFont` and `vChars2 tile $60` and indexed by character
+## code. The box's six border tiles at $79 are inside the second.
 const FONT_TILES: int = 128
 const FONT_FIRST_CODE: int = 0x80
 const FONT_EXTRA_TILES: int = 32
@@ -174,11 +169,9 @@ const MOVE_EFFECTS: Array[int] = [
 	79, 80, 81, 82, 83, 84, 85, 86, # SUBSTITUTE to DISABLE
 ]
 
-## Those two entries split, `ChargeEffect`'s own `cp DIG`, the two damage
-## constants that come with the first (`SONICBOOM_DAMAGE` and
-## `DRAGON_RAGE_DAMAGE` sit in the routine here and in the power column there),
-## and COUNTER, which `HandleCounterMove` finds by move number under a zero
-## effect byte.
+## Those two entries split, `ChargeEffect`'s own `cp DIG`, the two damage constants that come with the first
+## (`SONICBOOM_DAMAGE` and `DRAGON_RAGE_DAMAGE` sit in the routine here and in the power column there), and
+## COUNTER, which `HandleCounterMove` finds by move number under a zero effect byte.
 const MOVE_EFFECT_BY_MOVE: Dictionary = {
 	49: 41, 68: 89, 69: 87, 82: 41, 91: 155, 92: 33, 101: 87, 149: 88,
 }
@@ -199,13 +192,11 @@ const CHARGE_EFFECT: int = 0x27
 const FLY_EFFECT: int = 0x2B
 
 
-## The side chance each `*_SIDE_EFFECT` routine compares `BattleRandom`
-## against, as `effect_chance`'s own byte: `20 percent + 1` and `40 percent + 1`
-## in `PoisonEffect`, 10 and 30 in `FreezeBurnParalyzeEffect` and
-## `FlinchSideEffect`, `33 percent + 1` in `StatModifierDownEffect`, `10 percent`
-## in `ConfusionSideEffect`, and Twineedle's own rewrite to POISON_SIDE_EFFECT1.
-## `HandlePoisonBurnLeechSeed_DecreaseOwnHP`'s four shifts: a sixteenth, where
-## Crystal's `GetEighthMaxHP` takes an eighth.
+## The side chance each `*_SIDE_EFFECT` routine compares `BattleRandom` against, as `effect_chance`'s own
+## byte: `20 percent + 1` and `40 percent + 1` in `PoisonEffect`, 10 and 30 in `FreezeBurnParalyzeEffect` and
+## `FlinchSideEffect`, `33 percent + 1` in `StatModifierDownEffect`, `10 percent` in `ConfusionSideEffect`,
+## and Twineedle's own rewrite to POISON_SIDE_EFFECT1. `HandlePoisonBurnLeechSeed_DecreaseOwnHP`'s four
+## shifts: a sixteenth, where Crystal's `GetEighthMaxHP` takes an eighth.
 const RESIDUAL_SHIFT: int = 4
 
 const SIDE_EFFECT_CHANCES: Dictionary = {
@@ -227,9 +218,8 @@ static func move_power(number: int, power: int) -> int:
 	return int(MOVE_POWER_BY_MOVE.get(number, power))
 
 
-## What a battle loads over the middle of that box: `HpBarAndStatusGraphics` at
-## $62 as 2bpp, `BattleHudTiles1` at $6d and `BattleHudTiles2` with
-## `BattleHudTiles3` contiguous behind it at $73, both doubled from 1bpp.
+## What a battle loads over the middle of that box: `HpBarAndStatusGraphics` at $62 as 2bpp, `BattleHudTiles1`
+## at $6d and `BattleHudTiles2` with `BattleHudTiles3` contiguous behind it at $73, both doubled from 1bpp.
 const BATTLE_FONT_TILES: int = 30
 ## `PTile`, the bold P `StatusScreen2` copies to $72 for "PP".
 const STATS_P_TILES: int = 1
@@ -244,8 +234,7 @@ const BATTLE_HUD_1_FIRST_CODE: int = 0x6D
 const BATTLE_HUD_2_TILES: int = 6
 const BATTLE_HUD_2_FIRST_CODE: int = 0x73
 
-## The battle animation layer, all of it in bank $1E with its data interleaved,
-## so the cache holds one region.
+## The battle animation layer, all of it in bank $1E with its data interleaved, so the cache holds one region.
 const ANIM_COUNT_RED_BLUE: int = 203
 ## Yellow drops `ZigZagScreenAnim`, the one entry past `NUM_ATTACK_ANIMS`.
 const ANIM_COUNT_YELLOW: int = 202
@@ -257,10 +246,9 @@ const SUBANIM_ROW_SIZE: int = 3
 const FRAME_BLOCK_SPRITE_SIZE: int = 4
 const SPECIAL_EFFECT_ROW_SIZE: int = 3
 
-## One `battle_anim` row. A byte at or above `FIRST_SE_ID` names a special
-## effect and takes a sound after it; anything below is a subanimation's tileset
-## in the top two bits and its frame delay in the low six, then a sound and a
-## subanimation id.
+## One `battle_anim` row. A byte at or above `FIRST_SE_ID` names a special effect and takes a sound after it;
+## anything below is a subanimation's tileset in the top two bits and its frame delay in the low six, then a
+## sound and a subanimation id.
 const ANIM_FIRST_SE_ID: int = 0xC0
 const ANIM_END: int = 0xFF
 ## `NO_MOVE - 1`, the sound byte that plays nothing.
@@ -270,8 +258,7 @@ const ANIM_TILESET_SHIFT: int = 6
 const ANIM_SE_SIZE: int = 2
 const ANIM_SUBANIM_SIZE: int = 3
 
-## One `subanim` header: the count in the low five bits, the type in the top
-## three.
+## One `subanim` header: the count in the low five bits, the type in the top three.
 const SUBANIM_COUNT_MASK: int = 0x1F
 const SUBANIM_TYPE_SHIFT: int = 5
 const SUBANIMTYPE_NORMAL: int = 0
@@ -289,8 +276,7 @@ const FRAMEBLOCKMODE_KEEP_NO_DELAY: int = 2
 const FRAMEBLOCKMODE_KEEP: int = 3
 const FRAMEBLOCKMODE_HOLD: int = 4
 
-## What `DrawFrameBlock` flips a coordinate about, and the offset
-## `SUBANIMTYPE_HFLIP` translates down by.
+## What `DrawFrameBlock` flips a coordinate about, and the offset `SUBANIMTYPE_HFLIP` translates down by.
 const ANIM_FLIP_Y: int = 136
 const ANIM_FLIP_X: int = 168
 const ANIM_HFLIP_DROP: int = 40
@@ -308,9 +294,8 @@ const ANIM_TILESET_ROW_SIZE: int = 4
 const ANIM_TILESET_TILES: int = 0
 const ANIM_TILESET_POINTER: int = 1
 
-## The bank every table above lives in, and `vSprites tile $31`, which
-## `DrawFrameBlock` adds to a frame block's tile so the id is an index into the
-## loaded tileset.
+## The bank every table above lives in, and `vSprites tile $31`, which `DrawFrameBlock` adds to a frame
+## block's tile so the id is an index into the loaded tileset.
 const ANIM_BANK: int = 0x1E
 const ANIM_BASE_TILE: int = 0x31
 ## `MoveSoundTable`: a sound id, `wFrequencyModifier` and `wTempoModifier` per
@@ -324,8 +309,7 @@ const CRY_MOVES: Array[int] = [0x2D, 0x2E]
 ## draws is `wAnimPalette`, $F0, and `rOBP1` is $6C throughout.
 const ANIM_OBP0: int = 0xF0
 const ANIM_OBP1: int = 0x6C
-## The DMG palette bit of an OAM attribute byte, where Generation 2 keeps a
-## three-bit Game Boy Color palette.
+## The DMG palette bit of an OAM attribute byte, where Generation 2 keeps a three-bit Game Boy Color palette.
 const ANIM_OAM_OBP1: int = 0x10
 
 ## `constants/move_constants.asm`: moves do double duty as animation ids, and
@@ -411,9 +395,8 @@ const ITEM_X_SUBSTATUSES: Dictionary = {
 	0x3A: Gen2Substatus.FOCUS_ENERGY,
 }
 
-## `ItemUseEvoStone`'s five rows of `ItemUsePtrTable`. Crystal numbers its own
-## six differently, and [method Gen2Evolution.stone_items] is the one seam that
-## tells the two apart.
+## `ItemUseEvoStone`'s five rows of `ItemUsePtrTable`. Crystal numbers its own six differently, and [method
+## Gen2Evolution.stone_items] is the one seam that tells the two apart.
 const STONE_ITEMS: Array[int] = [ITEM_MOON_STONE, 0x20, 0x21, 0x22, 0x2F]
 
 ## `.addHealAmount`'s ladder; FULL_RESTORE and MAX_POTION heal past
@@ -467,15 +450,13 @@ const BALL_ROLL_OTHER: Array[int] = [150, 12, 150]
 const BALL_STATUS_SUBTRACT: Array[int] = [12, 25]
 const BALL_STATUS_ADD: Array[int] = [5, 10]
 
-## `.setAnimData`'s ladder over Z: under ten the ball misses, and each threshold
-## passed is one more rock.
+## `.setAnimData`'s ladder over Z: under ten the ball misses, and each threshold passed is one more rock.
 const BALL_SHAKE_THRESHOLDS: Array[int] = [10, 30, 70]
 
 
-## `ItemUsePtrTable`'s own answer inside a battle, as the nibble [Gen2WorldPack]
-## branches on: `ItemUseMedicine` and `ItemUsePPRestore` open the party list, the
-## balls, X items, Poke Doll and Poke Flute are spent on whoever is out, and
-## every other row jumps to `ItemUseNotTime` there.
+## `ItemUsePtrTable`'s own answer inside a battle, as the nibble [Gen2WorldPack] branches on:
+## `ItemUseMedicine` and `ItemUsePPRestore` open the party list, the balls, X items, Poke Doll and Poke Flute
+## are spent on whoever is out, and every other row jumps to `ItemUseNotTime` there.
 static func item_battle_menu(item: int) -> int:
 	if item in BALL_ITEMS or ITEM_X_STATS.has(item) or ITEM_X_SUBSTATUSES.has(item) \
 		or item == ITEM_POKE_DOLL or item == ITEM_POKE_FLUTE:
@@ -493,9 +474,8 @@ const HUD_BOTTOM_ROWS: Array[int] = [0, 0, 0, 0xFF, 0xFF, 0, 0, 0]
 const HP_BAR_EMPTY_CODE: int = 0x63
 const HP_BAR_EMPTY_ROWS: Array[int] = [0, 0, 0xFF, 0, 0, 0xFF, 0, 0]
 
-## What checks the two offsets: every code [Gen1Text] draws has ink, the hole
-## between "'v" and "'" has none, the space is the text box's only blank tile,
-## and the border's column is eight rows of one pattern.
+## What checks the two offsets: every code [Gen1Text] draws has ink, the hole between "'v" and "'" has none,
+## the space is the text box's only blank tile, and the border's column is eight rows of one pattern.
 const FONT_INK_RUNS: Array = [[0x80, 0xBF], [0xE0, 0xFF]]
 const FONT_BLANK_RUNS: Array = [[0xC0, 0xDF]]
 const SPACE_CODE: int = 0x7F
@@ -532,9 +512,8 @@ const SHOCK_EMOTE_BYTES: Array[int] = [
 	0xFC, 0xF8, 0xF8, 0xC0, 0xC0, 0x80, 0x80, 0x00,
 ]
 
-## `PokeCenterOAMData`'s seven rows as the cartridge stores them: y, x, tile and
-## whether the attribute byte flips it. Yellow sets a Game Boy Color palette in
-## that byte too, so only bit 5 is read.
+## `PokeCenterOAMData`'s seven rows as the cartridge stores them: y, x, tile and whether the attribute byte
+## flips it. Yellow sets a Game Boy Color palette in that byte too, so only bit 5 is read.
 const HEAL_MACHINE_OAM_SIZE: int = 4
 const HEAL_MACHINE_OAM: Array = [
 	[0x24, 0x34, 0x7C, false],
@@ -544,8 +523,7 @@ const HEAL_MACHINE_OAM: Array = [
 ]
 const HEAL_MACHINE_OAM_XFLIP: int = 0x20
 
-## `rOBP1` as `AnimateHealingMachine` writes it, and the $28 `FlashSprite8Times`
-## xors into it.
+## `rOBP1` as `AnimateHealingMachine` writes it, and the $28 `FlashSprite8Times` xors into it.
 const HEAL_MACHINE_OBP1: int = 0xE0
 const HEAL_MACHINE_OBP1_FLASH: int = 0x28
 
@@ -618,11 +596,10 @@ const FLY_EXIT_COORDS_2: Array[Vector2i] = [
 	Vector2i(0x12, 0x50), Vector2i(0x0F, 0x40), Vector2i(0x0C, 0x30), Vector2i(0x09, 0x20),
 	Vector2i(0x05, 0x10), Vector2i(0x00, 0x00), Vector2i(0xF0, 0x00),
 ]
-## `VermilionDockSSAnneLeavesScript`: `ld c, 120` and `Delay3` in front of the
-## horn, eight columns of sixteen drifts of eight frames, `EraseSSAnne`'s two
-## frames of `CopyVideoData`, the horn again and `ld c, 120`. A puff opens at
-## `wSSAnneSmokeX` less sixteen, OAM y 100, and every puff drifts two pixels
-## right per drift; the band `SyncScrollWithLY` scrolls is lines $50 to $7F.
+## `VermilionDockSSAnneLeavesScript`: `ld c, 120` and `Delay3` in front of the horn, eight columns of sixteen
+## drifts of eight frames, `EraseSSAnne`'s two frames of `CopyVideoData`, the horn again and `ld c, 120`. A
+## puff opens at `wSSAnneSmokeX` less sixteen, OAM y 100, and every puff drifts two pixels right per drift;
+## the band `SyncScrollWithLY` scrolls is lines $50 to $7F.
 const SS_ANNE_LEAD_FRAMES: int = 120 + 3
 const SS_ANNE_COLUMNS: int = 8
 const SS_ANNE_DRIFTS: int = 16
@@ -641,10 +618,9 @@ const SS_ANNE_ERASE_AT: Vector2i = Vector2i(5, 2)
 const SS_ANNE_ERASE_BLOCKS: int = 5
 const SS_ANNE_WATER_BLOCK: int = 0x0D
 const SS_ANNE_WATER_TILE: int = 0x14
-## `LoadSpinnerArrowTiles`: `FacilitySpinnerArrows` and `GymSpinnerArrows` as
-## the tileset tile each row rewrites and the `SpinnerArrowAnimTiles` tile it
-## takes on an odd `wSimulatedJoypadStatesIndex`; `SpinnerPlayerFacingDirections`
-## is the facing after each, indexed by the facing before.
+## `LoadSpinnerArrowTiles`: `FacilitySpinnerArrows` and `GymSpinnerArrows` as the tileset tile each row
+## rewrites and the `SpinnerArrowAnimTiles` tile it takes on an odd `wSimulatedJoypadStatesIndex`;
+## `SpinnerPlayerFacingDirections` is the facing after each, indexed by the facing before.
 const SPINNER_ARROW_TILES: Dictionary = {
 	TILESET_FACILITY: [[0x20, 0], [0x21, 1], [0x30, 2], [0x31, 3]],
 	TILESET_GYM: [[0x3C, 1], [0x3D, 3], [0x4C, 0], [0x4D, 2]],
@@ -693,9 +669,8 @@ const PRIZE_POINTER_PAIR: int = 4
 const PRIZE_MON_LEVELS: int = 6
 const PRIZE_MON_LEVEL_SIZE: int = 2
 
-## `engine/events/vending_machine.asm` from `VendingMachineText1`: the greeting,
-## the two strings the box draws, `VendingPrices` and the four stubs behind them,
-## at the same deltas on all three cartridges.
+## `engine/events/vending_machine.asm` from `VendingMachineText1`: the greeting, the two strings the box
+## draws, `VendingPrices` and the four stubs behind them, at the same deltas on all three cartridges.
 const VENDING_TEXT_AT: Dictionary = {
 	"greeting": 0x00, "no_money": 0x3A, "here_you_go": 0x3F,
 	"bag_full": 0x44, "not_thirsty": 0x49,
@@ -778,8 +753,7 @@ const CUP_REFUSALS: Array = [
 ## `CableClub_DoBattleOrTrade`'s `ld c, 80` and the internal clock's `ld c, 66`.
 const CABLE_CLUB_RUN_FRAMES: int = 80
 const CABLE_CLUB_EXCHANGE_FRAMES: int = 66
-## `TradeCenter_Trade`'s `ld c, 100`s, `PrintWaitingText`'s 50, and the 40 and
-## 50 around "Trade completed!".
+## `TradeCenter_Trade`'s `ld c, 100`s, `PrintWaitingText`'s 50, and the 40 and 50 around "Trade completed!".
 const TRADE_CENTER_DELAY_FRAMES: int = 100
 const TRADE_CANCELED_FRAMES: int = 100
 const TRADE_WAITING_FRAMES: int = 50
@@ -952,9 +926,8 @@ const SAFARI_NAG_LINES: int = 5
 const SAFARI_NAG_GIFT_VISIT: int = 3
 const SAFARI_NAG_BALLS: int = 1
 
-## `CannotGetOffHereText`, which `.useOrTossItem` prints in front of `UseItem`
-## rather than through `ItemUseFailed`. `CannotUseItemsHereText` above it is the
-## Colosseum's and no screen here reaches it.
+## `CannotGetOffHereText`, which `.useOrTossItem` prints in front of `UseItem` rather than through
+## `ItemUseFailed`. `CannotUseItemsHereText` above it is the Colosseum's and no screen here reaches it.
 const START_MENU_TEXT_AT: Dictionary = {"cannot_use_items": 0x00, "cannot_get_off": 0x05}
 ## `start_sub_menus.asm`'s own six in file order, and `field_move_messages.asm`'s
 ## four. Yellow keeps each run whole and moves the second away from the first.
@@ -982,16 +955,14 @@ const TOSS_TEXT_AT: Dictionary = {
 	"threw_away": 0x00, "ok_to_toss": 0x05, "too_important": 0x0A,
 }
 
-## `engine/menus/pc.asm`'s four, which `ActivatePC` prints around the machine's
-## own top menu.
+## `engine/menus/pc.asm`'s four, which `ActivatePC` prints around the machine's own top menu.
 const PC_TEXT_AT: Dictionary = {
 	"turned_on": 0x00, "accessed_bills": 0x05, "accessed_someones": 0x0A,
 	"accessed_mine": 0x0F,
 }
 
-## `engine/menus/players_pc.asm`'s fourteen in file order: `PlayerPC` reached
-## from a text script has no generic PC in front of it, so it prints its own
-## boot line.
+## `engine/menus/players_pc.asm`'s fourteen in file order: `PlayerPC` reached from a text script has no
+## generic PC in front of it, so it prints its own boot line.
 const PLAYERS_PC_TEXT_AT: Dictionary = {
 	"turned_on": 0x00, "what_do_you_want": 0x05, "what_to_deposit": 0x0A,
 	"deposit_how_many": 0x0F, "item_was_stored": 0x14, "nothing_to_deposit": 0x19,
@@ -1032,19 +1003,17 @@ const INTRO_TEXT_AT: Dictionary = {
 }
 const INTRO_NAME_TEXT_AT: Dictionary = {"your_name_is": 0x00, "his_name_is": 0x48}
 
-## `special_warp_spec REDS_HOUSE_2F, 3, 6, REDS_HOUSE_2`: a map byte, a
-## `fly_warp` and the destination's tileset. `fly_warp` writes `db y, x` for
-## arguments given as x then y, so the cell `LoadSpecialWarpData` copies onto
-## `wYCoord` is (6, 3) read the other way round.
+## `special_warp_spec REDS_HOUSE_2F, 3, 6, REDS_HOUSE_2`: a map byte, a `fly_warp` and the destination's
+## tileset. `fly_warp` writes `db y, x` for arguments given as x then y, so the cell `LoadSpecialWarpData`
+## copies onto `wYCoord` is (6, 3) read the other way round.
 const NEW_GAME_WARP_RECORD_AT: int = 1
 const NEW_GAME_WARP_TILESET_AT: int = 7
 
 const INTRO_NAME_ROWS: int = 4
 const INTRO_NAME_MAX: int = 16
 
-## `LowerCaseAlphabet` with `UpperCaseAlphabet` behind it: five rows of nine and
-## the case-switch label. `<ED>` is the last cell of the last row, and its tile
-## is `ED_Tile` rather than the font's own $F0.
+## `LowerCaseAlphabet` with `UpperCaseAlphabet` behind it: five rows of nine and the case-switch label. `<ED>`
+## is the last cell of the last row, and its tile is `ED_Tile` rather than the font's own $F0.
 const ALPHABET_ROWS: int = 5
 const ALPHABET_COLUMNS: int = 9
 const ALPHABET_LABEL_LENGTH: int = 11
@@ -1212,9 +1181,8 @@ const POKEDEX_SIDE_ROWS_YELLOW: Array[String] = ["DATA", "CRY", "AREA", "PRNT", 
 const POKEDEX_COLUMN: Dictionary = {"rule": 8, "seen": 2, "own": 5, "menu": 10}
 const POKEDEX_COLUMN_YELLOW: Dictionary = {"rule": 6, "seen": 1, "own": 4, "menu": 8}
 
-## `LoadTownMap`: `WorldMapTileGraphics` at `vChars2 tile $60` over the text box
-## sheet, and `CompressedMap`'s runs, each byte a tile nybble from that base and
-## a count, filling the whole screen.
+## `LoadTownMap`: `WorldMapTileGraphics` at `vChars2 tile $60` over the text box sheet, and `CompressedMap`'s
+## runs, each byte a tile nybble from that base and a count, filling the whole screen.
 const WORLD_MAP_TILES: int = 16
 const WORLD_MAP_FIRST_CODE: int = 0x60
 const WORLD_MAP_CELLS: int = 360
@@ -1224,8 +1192,7 @@ const TOWN_MAP_CURSOR_TILES: int = 4
 const TOWN_MAP_NEST_TILES: int = 1
 const TOWN_MAP_ARROW_TILES: int = 1
 const TOWN_MAP_BIRD_TILES: int = 12
-## `PalPacket_TownMap` under a `BlkPacket_WholeScreen`, so one row colours every
-## cell of the screen.
+## `PalPacket_TownMap` under a `BlkPacket_WholeScreen`, so one row colours every cell of the screen.
 const PAL_TOWNMAP: int = 0x0C
 ## `TownMapOrder`, the ids `DisplayTownMap`'s own cursor walks.
 const TOWN_MAP_ORDER_COUNT: int = 47
@@ -1237,9 +1204,8 @@ const INTERNAL_MAP_ENTRY_SIZE: int = 4
 ## `MarkTownVisitedAndLoadToggleableObjects` sets a bit for any map under this,
 ## and `BuildFlyLocationsList` walks the [constant NUM_CITY_MAPS] under that.
 const FIRST_ROUTE_MAP: int = 0x0C
-## `TownMapCoordsToOAMCoords` gives (x * 8 + 24, y * 8 + 24) and
-## `WriteTownMapSpriteOAM` takes 4 off x and, the borrow out of x costing one of
-## the two, 3 off y. Stored is the 16x16 icon's own centre.
+## `TownMapCoordsToOAMCoords` gives (x * 8 + 24, y * 8 + 24) and `WriteTownMapSpriteOAM` takes 4 off x and,
+## the borrow out of x costing one of the two, 3 off y. Stored is the 16x16 icon's own centre.
 const TOWN_MAP_ICON_CENTRE: Vector2i = Vector2i(20, 13)
 ## `.nestloop` writes that pair with no adjustment, so its 8x8 icon hangs a
 ## pixel below the centre the borrow gave the bigger one.
@@ -1297,8 +1263,7 @@ const SNORLAX_FLUTES: Array[Dictionary] = [
 	{"map": ROUTE_16, "fight": 1224, "beat": 1225, "count": 2},
 ]
 
-## `.outOfBattleMovePointers`' own `bit` on `wObtainedBadges`. Dig, Teleport and
-## Softboiled test none.
+## `.outOfBattleMovePointers`' own `bit` on `wObtainedBadges`. Dig, Teleport and Softboiled test none.
 const BOULDERBADGE: int = 0
 const CASCADEBADGE: int = 1
 const RAINBOWBADGE: int = 3
@@ -1326,8 +1291,7 @@ const CUT_BLOCK_SWAPS: Dictionary = {
 const CUT_BLOCK_SWAP_SIZE: int = 2
 const CUT_BLOCK_SWAP_END: int = 0xFF
 
-## `IsNextTileShoreOrWater`'s two shore tiles, which its `cp SHIP_PORT` skips on
-## the Vermilion dock.
+## `IsNextTileShoreOrWater`'s two shore tiles, which its `cp SHIP_PORT` skips on the Vermilion dock.
 const SHORE_TILES: Array[int] = [0x48, 0x32]
 ## Yellow's `cp GYM` and `cp DOJO` beside it.
 const TILESET_DOJO: int = 5
@@ -1346,8 +1310,7 @@ const BOULDER_STAIRS_TILE: int = 0x15
 ## that floor and B1F are the whole of Generation 1's darkness.
 const ROCK_TUNNEL_1F: int = 0x52
 const MAP_PAL_OFFSET_DARK: int = 6
-## `FadePal1` to `FadePal8` as the byte run `LoadGBPal` indexes: rBGP, rOBP0 and
-## rOBP1 a row, `dc`-packed.
+## `FadePal1` to `FadePal8` as the byte run `LoadGBPal` indexes: rBGP, rOBP0 and rOBP1 a row, `dc`-packed.
 const FADE_PALS: Array[int] = [
 	0xFF, 0xFF, 0xFF, 0xFE, 0xFE, 0xF8, 0xF9, 0xE4, 0xE4, 0xE4, 0xD0, 0xE0,
 	0xE4, 0xD0, 0xE0, 0x90, 0x80, 0x90, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00,
@@ -1362,10 +1325,9 @@ const FADE_PAL_OBJECT: int = 1
 const TOWN_MAP_NOT_VISITED: int = 0xFE
 const TOWN_MAP_FLY_DELAY: int = 15
 
-## `DrawTrainerInfo`'s own four sheets and where each lands. `BlankLeaderNames`
-## runs straight on into `CircleTile`, which is why its `$17` is one longer than
-## the file: `$76` is the circle "●BADGES●" is written with, and the sixteen
-## under it are the leader names the international ROMs erased.
+## `DrawTrainerInfo`'s own four sheets and where each lands. `BlankLeaderNames` runs straight on into
+## `CircleTile`, which is why its `$17` is one longer than the file: `$76` is the circle "●BADGES●" is written
+## with, and the sixteen under it are the leader names the international ROMs erased.
 const TRAINER_CARD_BOX_TILES: int = 9
 const TRAINER_CARD_BOX_CODE: int = 0x77
 ## The ninth tile, which goes to `vChars1 tile $57` rather than beside the
@@ -1387,15 +1349,13 @@ const BADGE_FACE_BADGE_AT: int = 4
 const TRAINER_CARD_COLON_TILE: int = 13
 const TRAINER_CARD_COLON_CODE: int = 0xD6
 
-## `NUM_BOXES` and `MONS_PER_BOX`, which `BOX_NUM_MASK` bounds `wCurrentBoxNum`
-## to.
+## `NUM_BOXES` and `MONS_PER_BOX`, which `BOX_NUM_MASK` bounds `wCurrentBoxNum` to.
 const BOX_COUNT: int = 12
 const BOX_CAPACITY: int = 20
 
-## `EVENT_MET_BILL`, which puts BILL's PC on the machine's top menu where
-## SOMEONE's PC otherwise stands. Yellow's unused `EVENT_54F` sits below it and
-## its `const_next $550 - 1` re-anchors the run, so all three number it alike;
-## `pc_met_bill` pins `DisplayPCMainMenu`'s own read of it.
+## `EVENT_MET_BILL`, which puts BILL's PC on the machine's top menu where SOMEONE's PC otherwise stands.
+## Yellow's unused `EVENT_54F` sits below it and its `const_next $550 - 1` re-anchors the run, so all three
+## number it alike; `pc_met_bill` pins `DisplayPCMainMenu`'s own read of it.
 const MET_BILL_EVENT: int = 1360
 const OPCODE_LD_A_FAR: int = 0xFA
 const OPCODE_CB_PREFIX: int = 0xCB
@@ -1407,9 +1367,8 @@ const OPCODE_BIT_A: int = 0x47
 const MAP_COUNT_RED_BLUE: int = 248
 const MAP_COUNT_YELLOW: int = 249
 
-## `map_header`: tileset, height, width, the blocks, text and script pointers,
-## then the connection byte; `end_map_header` puts the object pointer behind
-## whatever connection records were emitted.
+## `map_header`: tileset, height, width, the blocks, text and script pointers, then the connection byte;
+## `end_map_header` puts the object pointer behind whatever connection records were emitted.
 const MAP_HEADER_SIZE: int = 10
 const MAP_CONNECTION_RECORD_SIZE: int = 11
 const MAP_OBJECT_POINTER_SIZE: int = 2
@@ -1457,9 +1416,8 @@ const PREDEF_SIZE: int = 3
 ## `PickUpItemText`'s two boxes, a `text_far` stub and a `sound_get_item_1` apart.
 const PICK_UP_TEXT_AT: Dictionary = {"found": 0x00, "no_room": 0x06}
 
-## `TradeMons`: `npctrade`'s give and get species, its `TRADE_DIALOGSET_*` and a
-## nickname. `ConnectCableText` and `TradedForText` sit behind the last of
-## `InGameTradeTextPointers`' three tables.
+## `TradeMons`: `npctrade`'s give and get species, its `TRADE_DIALOGSET_*` and a nickname. `ConnectCableText`
+## and `TradedForText` sit behind the last of `InGameTradeTextPointers`' three tables.
 const TRADE_COUNT: int = 10
 const TRADE_RECORD_SIZE: int = 14
 const TRADE_NAME_LENGTH: int = 11
@@ -1478,10 +1436,9 @@ static func trade_evolves(id: StringName, dex: int, name: String) -> bool:
 		return TRADE_EVOLUTION_DEX.has(dex)
 	return name.begins_with("G") or name.begins_with("SP")
 
-## `object_event`'s two movement bytes as one shared template. Byte 1 is WALK or
-## STAY; byte 2 is a fixed direction, the axis a random walk keeps to, or
-## `BOULDER_MOVEMENT_BYTE_2`. A STAY sprite still turns, because `TryWalking`
-## writes the facing before `CanWalkOntoTile` refuses its step.
+## `object_event`'s two movement bytes as one shared template. Byte 1 is WALK or STAY; byte 2 is a fixed
+## direction, the axis a random walk keeps to, or `BOULDER_MOVEMENT_BYTE_2`. A STAY sprite still turns,
+## because `TryWalking` writes the facing before `CanWalkOntoTile` refuses its step.
 const OBJECT_MOVEMENT_STAY: int = 0xFF
 const OBJECT_MOVEMENT_NONE: int = 0xFF
 const OBJECT_STANDING_MOVEMENTS: Dictionary = {
@@ -1495,9 +1452,8 @@ const OBJECT_WALKING_MOVEMENTS: Dictionary = {
 	0x01: Gen2WorldObject.MOVEMENT_WALK_UP_DOWN,
 	0x02: Gen2WorldObject.MOVEMENT_WALK_LEFT_RIGHT,
 }
-## `CanWalkOntoTile`'s two displacement counters, $8 apiece at map load: down
-## and right are never refused, up stops at 0, and the vertical test also stands
-## in front of a sideways step.
+## `CanWalkOntoTile`'s two displacement counters, $8 apiece at map load: down and right are never refused, up
+## stops at 0, and the vertical test also stands in front of a sideways step.
 const OBJECT_WALK_ORIGIN: int = 8
 const OBJECT_WALK_FLOOR: int = 5
 ## `InitBattleEnemyParameters`' `cp OPP_ID_OFFSET`: the extra byte is this plus
@@ -1672,9 +1628,8 @@ const SCRIPT_CALLS: Array[String] = [
 	"init_battle_enemy", "set_sprite_position", "get_sprite_position",
 	"fade_out_white", "fade_in_white", "fade_out_black", "fade_in_black", "init",
 ]
-## The flag bits a `set` or `res` spends nothing on: BIT_SPINNING is an
-## animation this port does not draw, `wStatusFlags5`'s two are the queued
-## walk's own state, and BIT_FORCED_WARP is `OverworldLoop`'s alone.
+## The flag bits a `set` or `res` spends nothing on: BIT_SPINNING is an animation this port does not draw,
+## `wStatusFlags5`'s two are the queued walk's own state, and BIT_FORCED_WARP is `OverworldLoop`'s alone.
 const SPINNING_BIT: int = 7
 const FORCED_WARP_BIT: int = 2
 ## BIT_NO_MAP_MUSIC is a script's hold on the map's music, which no node here
@@ -1718,9 +1673,8 @@ const MENU_ROW_BREAK: String = "<NEXT>"
 const FLAG_ACTION_RESET: int = 0
 const FLAG_ACTION_SET: int = 1
 const FLAG_ACTION_TEST: int = 2
-## `PewterPokecenterJigglypuffText`, whose song loop is one node behind its
-## box; `wSprite03StateData1` is the singer. Yellow's `jigglypuff_tail` is the
-## code past `PlayDefaultMusic`, in the routine's own bank.
+## `PewterPokecenterJigglypuffText`, whose song loop is one node behind its box; `wSprite03StateData1` is the
+## singer. Yellow's `jigglypuff_tail` is the code past `PlayDefaultMusic`, in the routine's own bank.
 const SCRIPT_FIRST_BOX_ROWS: Array[String] = ["jigglypuff_text"]
 const JIGGLYPUFF_OBJECT: int = 2
 const JIGGLYPUFF_HUSH_FRAMES: int = 32
@@ -1781,10 +1735,9 @@ const PIKACHU_EMOTION_COMMANDS: Dictionary = {
 }
 const PIKACHU_EMOTION_SIZES: Dictionary = {1: 2, 2: 1, 3: 1, 4: 2, 5: 1, 6: 1, 7: 1}
 const PIKACHU_HAPPINESS_ROW: int = 6
-## `PikaPicAnimPointers`' 30 rows, `PikaPicAnimBGFramesPointers`' 36,
-## `PikaPicTilemapPointers`' 43 and `PikaPicAnimGFXHeaders`' 63 of four bytes,
-## a compressed one reserving `5 * 5` tiles. The setup commands and their
-## argument widths are `RunPikaPicAnimSetupScript.Jumptable`'s.
+## `PikaPicAnimPointers`' 30 rows, `PikaPicAnimBGFramesPointers`' 36, `PikaPicTilemapPointers`' 43 and
+## `PikaPicAnimGFXHeaders`' 63 of four bytes, a compressed one reserving `5 * 5` tiles. The setup commands and
+## their argument widths are `RunPikaPicAnimSetupScript.Jumptable`'s.
 const PIKAPIC_SCRIPTS: int = 30
 const PIKAPIC_FRAMESETS: int = 36
 const PIKAPIC_TILEMAPS: int = 43
@@ -1923,8 +1876,7 @@ const SCRIPT_BANKED_CALLS: Array[String] = [
 	"print_diploma", "print_high_score", "print_portrait",
 	"celadon_elevator_warps", "rocket_elevator_warps", "silph_elevator_warps",
 ]
-## The ones a call spends nothing on; `Gen1ScriptNodes._gen1_seed_warp_entry`
-## stores the elevators' warps.
+## The ones a call spends nothing on; `Gen1ScriptNodes._gen1_seed_warp_entry` stores the elevators' warps.
 const SCRIPT_SILENT_BANKED_CALLS: Array[String] = [
 	"load_spinner_arrow_tiles", "convert_npc_directions", "pewter_guys",
 	"celadon_elevator_warps", "rocket_elevator_warps", "silph_elevator_warps",
@@ -1940,9 +1892,8 @@ const SCRIPT_SOUND_CALLS: Dictionary = {
 	"play_music": "music", "stop_all_music": "stop_all", "wait_for_sound": "wait",
 	"play_default_music": "map_music", "force_bike_or_surf": "map_music",
 }
-## The routines that spend nothing here. A press already ends every box and the
-## printer's preview, as the Hall of Fame's ends `Gen1Credits.END_HOLD_FRAMES`;
-## `wAutoTextBoxDrawingControl` has no counterpart.
+## The routines that spend nothing here. A press already ends every box and the printer's preview, as the Hall
+## of Fame's ends `Gen1Credits.END_HOLD_FRAMES`; `wAutoTextBoxDrawingControl` has no counterpart.
 const SCRIPT_SILENT_CALLS: Array[String] = [
 	"wait_for_button", "auto_textbox_on", "auto_textbox_off",
 	## Answers the walk reads from RAM, or tables a node carries: `wNumSetBits`,
@@ -2038,8 +1989,7 @@ const SCRIPT_SILENT_STORES: Array[String] = [
 	## A forced walk writes the pad bit over the player's own facing byte, and
 	## the `walk` node behind it carries the direction anyway.
 	"facing_direction",
-	## `hJoyPressed` beside `hJoyHeld`, and `wNewSoundID`, which `PlaySound`
-	## takes out of `a` again.
+	## `hJoyPressed` beside `hJoyHeld`, and `wNewSoundID`, which `PlaySound` takes out of `a` again.
 	"joy_pressed", "new_sound_id",
 	## The captain's back rub swaps the audio bank around its jingle.
 	"audio_rom_bank", "audio_saved_rom_bank",
@@ -2086,17 +2036,15 @@ const TEXT_PREDEFS_YELLOW: Dictionary = {
 	"reset": 0x40, "slots_out_of_order": 0x2A, "slots_out_to_lunch": 0x2B,
 	"slots_someones_keys": 0x2C, "slots_no_coins": 0x34, "slots_coin_case": 0x35,
 }
-## `PrintCardKeyText`: a Silph Co. door draws either of two tiles, the top
-## floor's own a third, and the block that opens one is $0E under it and $03
-## there. SILPH_CO_11F is the one floor the routine names by number.
+## `PrintCardKeyText`: a Silph Co. door draws either of two tiles, the top floor's own a third, and the block
+## that opens one is $0E under it and $03 there. SILPH_CO_11F is the one floor the routine names by number.
 const CARD_KEY_DOOR_TILES: Array[int] = [0x18, 0x24]
 const CARD_KEY_TOP_FLOOR_TILE: int = 0x5E
 const CARD_KEY_OPEN_BLOCK: int = 0x0E
 const CARD_KEY_TOP_FLOOR_BLOCK: int = 0x03
 const SILPH_CO_TOP_FLOOR: int = 0xEB
-## `SilphCoMapList`, ten floors under a terminator.
-## The two packed-decimal buffers a price is written into, most significant
-## byte first. `wPriceTemp` stands at `wWhichTrade`'s own address.
+## `SilphCoMapList`, ten floors under a terminator. The two packed-decimal buffers a price is written into,
+## most significant byte first. `wPriceTemp` stands at `wWhichTrade`'s own address.
 const SCRIPT_BCD_BUFFERS: Array[String] = ["money_hram", "which_trade"]
 const MONEY_BYTES: int = 3
 ## `hCoins` unions `hMoney`'s last two bytes and `hUnusedCoinsByte` its first, so one buffer
@@ -2126,8 +2074,7 @@ const ENGINE_FLAG_BYTES: Dictionary = {
 	"obtained_hidden_items": HIDDEN_ITEM_FLAG_BYTES,
 	"obtained_hidden_coins": HIDDEN_COIN_FLAG_BYTES,
 	"town_visited": TOWN_VISITED_FLAG_BYTES,
-	## Appended, because a run's base is its position here and a saved index
-	## may not move.
+	## Appended, because a run's base is its position here and a saved index may not move.
 	"status_flags_1": 1,
 	"elite_4_flags": 1,
 	"beat_gym_flags": 1,
@@ -2145,17 +2092,15 @@ const TOWN_VISITED_FLAG_BYTES: int = 2
 const BAG_ITEM_CAPACITY: int = 20  ## `BAG_ITEM_CAPACITY`: one list of slots, not four pockets.
 ## `VendingMachineMenu`'s `HasEnoughMoney` test, `hMoney` written as ¥200 for every row.
 const VENDING_MONEY_CHECK: int = 200
-## The one type byte every Generation 1 item wears, so the shared pack draws the
-## bag as the single `DisplayListMenuID` list `engine/menus/start_sub_menus.asm`
-## opens.
+## The one type byte every Generation 1 item wears, so the shared pack draws the bag as the single
+## `DisplayListMenuID` list `engine/menus/start_sub_menus.asm` opens.
 const BAG_POCKET: int = Gen2Layout.ITEM_POCKET_ITEM
 
 ## `KeyItemFlags` (`data/items/key_items.asm`): `dbit` writes item `n + 1` into
 ## bit `n % 8` of byte `n / 8`, `(NUM_ITEMS + 7) / 8` bytes in all.
 const KEY_ITEM_FLAG_BYTES: int = 11
-## `UsableItems_PartyMenu` and `UsableItems_CloseMenu`, each a run of item
-## numbers ending in `-1`. The guard is the whole item table: a longer run means
-## the offset is wrong.
+## `UsableItems_PartyMenu` and `UsableItems_CloseMenu`, each a run of item numbers ending in `-1`. The guard
+## is the whole item table: a longer run means the offset is wrong.
 const USABLE_ITEMS_END: int = 0xFF
 const USABLE_ITEMS_MAX: int = ITEM_COUNT
 ## `MAX_WARP_EVENTS`, `MAX_BG_EVENTS` and `MAX_OBJECT_EVENTS`.
@@ -2163,9 +2108,8 @@ const MAX_WARP_EVENTS: int = 32
 const MAX_SIGN_EVENTS: int = 16
 const MAX_OBJECT_EVENTS: int = 16
 
-## `hidden_event`: y, x, the routine's own argument, then its bank and address.
-## Red and Blue keep the map ids and the pointers in two tables; Yellow writes
-## the pointer beside each id.
+## `hidden_event`: y, x, the routine's own argument, then its bank and address. Red and Blue keep the map ids
+## and the pointers in two tables; Yellow writes the pointer beside each id.
 const HIDDEN_EVENT_SIZE: int = 6
 const HIDDEN_EVENT_MAP_SIZE: int = 3
 const HIDDEN_EVENT_END: int = 0xFF
@@ -2265,9 +2209,8 @@ const SLOTS_TEXT_AT: Dictionary = {
 const TRASH_CAN_MASK: int = 0x0F
 const TRASH_THREE_THIRD: int = 0xFF / 3
 const TRASH_TEXTS: Array[String] = ["trash", "first_lock", "second_lock", "reset"]
-## `bookshelf_tile` is a tileset, a tile and a `tx_pre` id; `MapBadgeFlags` a
-## map and its `wBeatGymFlags` mask; `BenchGuyTextPointers` a map, a facing and
-## a `tx_pre` id.
+## `bookshelf_tile` is a tileset, a tile and a `tx_pre` id; `MapBadgeFlags` a map and its `wBeatGymFlags`
+## mask; `BenchGuyTextPointers` a map, a facing and a `tx_pre` id.
 const BOOKSHELF_ROW_SIZE: int = 3
 const BADGE_ROW_SIZE: int = 2
 ## `GYM_CITY_LENGTH` and `NAME_LENGTH`, the two runs a gym's own map script
@@ -2286,9 +2229,8 @@ const SCREEN_HEIGHT_TILES: int = 18
 const SCREEN_PLAYER_COLUMN: int = 8
 const SCREEN_PLAYER_ROW: int = 9
 
-## `wStatusFlags5`'s two scripted-movement bits: one stands while the walk a
-## `MoveSprite` started is drawn, the other while the player spends
-## `wSimulatedJoypadStatesIndex`, which a body may read instead.
+## `wStatusFlags5`'s two scripted-movement bits: one stands while the walk a `MoveSprite` started is drawn,
+## the other while the player spends `wSimulatedJoypadStatesIndex`, which a body may read instead.
 const SCRIPTED_NPC_MOVEMENT_BIT: int = 0
 const SCRIPTED_MOVEMENT_STATE_BIT: int = 7
 const MOVEMENT_TEST_OBJECT: String = "object"
@@ -2306,9 +2248,8 @@ const FACING_STEPS: Dictionary = {
 ## `AbleToPlaySlotsCheck` reads bit 3 of the player's image index, which is set
 ## facing LEFT ($8) and RIGHT ($C) alone.
 const SLOTS_FACINGS: Array[int] = [FACING_LEFT, FACING_RIGHT]
-## `PLAYER_DIR_*` as `UpdatePlayerSprite` reads them, one `bit` per row in this
-## order, so a byte with two set takes the first and zero reaches `.notMoving`,
-## which leaves the facing byte alone.
+## `PLAYER_DIR_*` as `UpdatePlayerSprite` reads them, one `bit` per row in this order, so a byte with two set
+## takes the first and zero reaches `.notMoving`, which leaves the facing byte alone.
 const PLAYER_DIR_FACINGS: Array = [
 	[0x04, FACING_DOWN], [0x08, FACING_UP], [0x02, FACING_LEFT], [0x01, FACING_RIGHT],
 ]
@@ -2333,17 +2274,15 @@ const COLOSSEUM: int = 0xF0
 const LORELEIS_ROOM: int = 0xF5
 const BRUNOS_ROOM: int = 0xF6
 
-## `GetBattleTransitionID_IsDungeonMap`: `DungeonMaps1`'s four ids and
-## `DungeonMaps2`'s four inclusive ranges. The file's own comment lists the
-## dungeons the pair misses, Victory Road 2F and Diglett's Cave among them.
+## `GetBattleTransitionID_IsDungeonMap`: `DungeonMaps1`'s four ids and `DungeonMaps2`'s four inclusive ranges.
+## The file's own comment lists the dungeons the pair misses, Victory Road 2F and Diglett's Cave among them.
 const DUNGEON_MAPS: Array[int] = [0x33, 0x52, 0xC0, 0xE8]
 const DUNGEON_MAP_RANGES: Array = [
 	[0x3B, 0x3D], [0x5F, 0x76], [0x8D, 0x97], [0xCF, 0xE4],
 ]
 
-## The `tileset` macro: the bank holding both graphics and blocks, the three
-## pointers, three counter tiles, the grass tile and the animation kind, with
-## $FF for "none" in all four tile columns.
+## The `tileset` macro: the bank holding both graphics and blocks, the three pointers, three counter tiles,
+## the grass tile and the animation kind, with $FF for "none" in all four tile columns.
 const TILESET_RECORD_SIZE: int = 12
 ## `constants/tileset_constants.asm`, from 0; Yellow adds BEACH_HOUSE last.
 const TILESET_NAMES: Array[StringName] = [
@@ -2359,8 +2298,7 @@ static func tileset_name(id: StringName, number: int) -> StringName:
 	if number >= 0 and number < TILESET_NAMES.size():
 		return TILESET_NAMES[number]
 	return TILESET_NAME_BEACH_HOUSE if id == RomRegistry.YELLOW and number == TILESET_NAMES.size() else &""
-## pokered's `constants/map_constants.asm` from 0. pokeyellow renames one house and
-## adds its beach house last.
+## pokered's `constants/map_constants.asm` from 0. pokeyellow renames one house and adds its beach house last.
 const MAP_NAMES: Array[StringName] = [
 	&"PALLET_TOWN", &"VIRIDIAN_CITY", &"PEWTER_CITY", &"CERULEAN_CITY", &"LAVENDER_TOWN",
 	&"VERMILION_CITY", &"CELADON_CITY", &"FUCHSIA_CITY", &"CINNABAR_ISLAND", &"INDIGO_PLATEAU",
@@ -2435,9 +2373,8 @@ const TILESET_COUNT_RED_BLUE: int = 24
 const TILESET_COUNT_YELLOW: int = 25
 const TILESET_COUNTER_TILES: int = 3
 const TILESET_NO_TILE: int = 0xFF
-## `MAP_TILESET_SIZE`: `LoadTilesetTilePatternData` copies this many tiles to
-## `vTileset` whatever the tileset holds, so a short one's tail is whatever
-## follows it in the bank.
+## `MAP_TILESET_SIZE`: `LoadTilesetTilePatternData` copies this many tiles to `vTileset` whatever the tileset
+## holds, so a short one's tail is whatever follows it in the bank.
 const TILESET_TILE_COUNT: int = 96
 const TILESET_BLOCK_TILES: int = MAP_BLOCK_TILE_WIDTH * MAP_BLOCK_TILE_WIDTH
 
@@ -2453,17 +2390,15 @@ const TILESET_BLOCKS_YELLOW: Array[int] = [
 	128, 62, 23, 110, 58, 128, 79, 72, 58, 36, 128, 73, 20,
 ]
 
-## `WaterTilesets`, a $FF-terminated list, and the tile
-## `IsNextTileShoreOrWater` calls water on one of them.
+## `WaterTilesets`, a $FF-terminated list, and the tile `IsNextTileShoreOrWater` calls water on one of them.
 const TILESET_LIST_END: int = 0xFF
 const WATER_TILE: int = 0x14
 ## `EnterMap`'s `wNumberOfNoRandomBattleStepsLeft`, written only under the bit
 ## `EndOfBattle` sets and the third counted step clears.
 const WILD_ENCOUNTER_COOLDOWN_STEPS: int = 3
 
-## The two tilesets `SetPal_Overworld` tests before the map id, the two
-## `CheckIfInOutsideMap` calls a town or a route, and the two beside them that
-## `ExtraWarpCheck` reads a carpet on.
+## The two tilesets `SetPal_Overworld` tests before the map id, the two `CheckIfInOutsideMap` calls a town or
+## a route, and the two beside them that `ExtraWarpCheck` reads a carpet on.
 const TILESET_CEMETERY: int = 15
 const TILESET_INTERIOR: int = 16
 const TILESET_CAVERN: int = 17
@@ -2515,14 +2450,12 @@ const SPRITE_STILL_FIRST_RED_BLUE: int = 0x3D
 const SPRITE_STILL_FIRST_YELLOW: int = 0x47
 const SPRITE_WALKING_TILES: int = 12
 const SPRITE_STILL_TILES: int = 4
-## `RedBikeSprite`, which `LoadBikePlayerSpriteGraphics` loads by address and no
-## row names: the walking strip `INCBIN`'d in front of SPRITE_RED's, so its
-## address is that row's less both halves.
+## `RedBikeSprite`, which `LoadBikePlayerSpriteGraphics` loads by address and no row names: the walking strip
+## `INCBIN`'d in front of SPRITE_RED's, so its address is that row's less both halves.
 const SPRITE_BIKE_BYTES: int = SPRITE_WALKING_TILES * 2 * PokeTiles.TILE_BYTES
 
-## `MonPartySpritePointers`: a CPU address, the tiles to copy, the bank and the
-## `vSprites` address. An icon's two frames are four tiles at `ICON << 2` and
-## four more `ICONOFFSET` above them.
+## `MonPartySpritePointers`: a CPU address, the tiles to copy, the bank and the `vSprites` address. An icon's
+## two frames are four tiles at `ICON << 2` and four more `ICONOFFSET` above them.
 const MON_ICON_HEADER_SIZE: int = 6
 const MON_ICON_HEADER_COUNT_RED_BLUE: int = 28
 const MON_ICON_HEADER_COUNT_YELLOW: int = 30
@@ -2791,9 +2724,8 @@ const RED_BLUE: Dictionary = {
 	"found_item_text": 0x04E26,
 	"toggleable_pointers": 0x0C8F5,
 	"toggleable_states": 0x0CAEA,
-	## `DisplayPokemartDialogue`'s own greeting and the head of the two facility
-	## text runs [constant MART_TEXT_AT] and its neighbour walk. Every offset
-	## here is `pokered.sym`'s, which builds both dumps.
+	## `DisplayPokemartDialogue`'s own greeting and the head of the two facility text runs [constant
+	## MART_TEXT_AT] and its neighbour walk. Every offset here is `pokered.sym`'s, which builds both dumps.
 	"mart_greeting": 0x02A55,
 	"elevator_text": 0x89DAD,
 	"mart_text": 0x06E0C,
@@ -2964,8 +2896,7 @@ const RED_BLUE: Dictionary = {
 	"good_rod": 0x0E27F,
 	"old_rod": 0x0E252,
 	"super_rod": 0x0E919,
-	## `data/battle_anims`, every one of them in bank $1E and reached from
-	## `AttackAnimationPointers`.
+	## `data/battle_anims`, every one of them in bank $1E and reached from `AttackAnimationPointers`.
 	"attack_anims": 0x7A07D,
 	"subanims": 0x7A76D,
 	"frame_blocks": 0x7AF74,
@@ -3862,10 +3793,9 @@ const YELLOW: Dictionary = {
 }
 
 
-## What Blue moves, and by how many bytes. Bank $1D holds the 668 symbols that
-## shift: everything in it sits one byte later. `DefaultNamesRival` moves two,
-## because the player table in front of it spells BLUE, GARY and JOHN where Red
-## spells RED, ASH and JACK.
+## What Blue moves, and by how many bytes. Bank $1D holds the 668 symbols that shift: everything in it sits
+## one byte later. `DefaultNamesRival` moves two, because the player table in front of it spells BLUE, GARY
+## and JOHN where Red spells RED, ASH and JACK.
 const BLUE_SHIFT: Dictionary = {
 	"default_names_rival": 2,
 	"vending_text": 1,
@@ -3941,8 +3871,7 @@ static func move_offset(layout: Dictionary, move: int) -> int:
 	return int(layout["moves"]) + (move - 1) * MOVE_DATA_SIZE
 
 
-## `PokedexOrder` inverted: dex number to internal index, row 0 unused so a dex
-## number indexes it directly.
+## `PokedexOrder` inverted: dex number to internal index, row 0 unused so a dex number indexes it directly.
 static func index_of_dex(rom: RomFile, layout: Dictionary) -> PackedInt32Array:
 	var out: PackedInt32Array = PackedInt32Array()
 	out.resize(Gen1Layout.SPECIES_COUNT + 1)
@@ -3962,16 +3891,14 @@ static func dex_of_index(rom: RomFile, layout: Dictionary, index: int) -> int:
 	return rom.u8(int(layout["dex_order"]) + index - 1)
 
 
-## A `dw` or a `dab` inside a banked cartridge: below $4000 is home, whatever
-## bank is switched in, so a pointer that carries no bank of its own is resolved
-## against the one it was read from only above that line.
+## A `dw` or a `dab` inside a banked cartridge: below $4000 is home, whatever bank is switched in, so a
+## pointer that carries no bank of its own is resolved against the one it was read from only above that line.
 static func banked(bank: int, address: int) -> int:
 	return RomFile.linear(0 if address < RomFile.BANK_SIZE else bank, address)
 
 
-## One facility box's `text_far` stub: the run's own pinned head plus the slot's
-## delta. [param slots] is [constant MART_TEXT_AT] or its neighbour.
-## Answers -1 for a slot the table does not name.
+## One facility box's `text_far` stub: the run's own pinned head plus the slot's delta. [param slots] is
+## [constant MART_TEXT_AT] or its neighbour. Answers -1 for a slot the table does not name.
 static func facility_text_offset(
 	layout: Dictionary, run: String, slots: Dictionary, name: String
 ) -> int:
@@ -4021,8 +3948,7 @@ static func trainer_pic_offset(rom: RomFile, layout: Dictionary, trainer_class: 
 	return RomFile.linear(int(layout["trainer_pics_bank"]), rom.u16le(row))
 
 
-## The tile one character code draws from: `FontGraphics` is 1bpp from $80,
-## `TextBoxGraphics` 2bpp from $60.
+## The tile one character code draws from: `FontGraphics` is 1bpp from $80, `TextBoxGraphics` 2bpp from $60.
 static func font_glyph_offset(layout: Dictionary, code: int) -> int:
 	return int(layout["font"]) + (code - FONT_FIRST_CODE) * PokeTiles.TILE_1BPP_BYTES
 
@@ -4031,8 +3957,7 @@ static func text_box_glyph_offset(layout: Dictionary, code: int) -> int:
 	return int(layout["text_box"]) + (code - FONT_EXTRA_FIRST_CODE) * PokeTiles.TILE_BYTES
 
 
-## `NUM_POKEMON + 1` rows in dex order with MISSINGNO's first, so the dex number
-## is the row.
+## `NUM_POKEMON + 1` rows in dex order with MISSINGNO's first, so the dex number is the row.
 static func mon_palette_offset(layout: Dictionary, dex: int) -> int:
 	return int(layout["mon_palettes"]) + dex
 
@@ -4048,10 +3973,9 @@ static func on_cgb(id: StringName) -> bool:
 	return for_id(id).has("cgb_base_palettes")
 
 
-## `SetPal_Overworld`: the `SuperPalettes` row a map's four colours come from.
-## The two tilesets answer before the map id is read at all. A city's row is its
-## map id plus one and every route shares [constant PAL_ROUTE]; an indoor map no
-## branch names takes `wLastMap`'s, which is [param last_map].
+## `SetPal_Overworld`: the `SuperPalettes` row a map's four colours come from. The two tilesets answer before
+## the map id is read at all. A city's row is its map id plus one and every route shares [constant PAL_ROUTE];
+## an indoor map no branch names takes `wLastMap`'s, which is [param last_map].
 static func overworld_palette(
 	id: StringName, map_id: int, tileset: int, last_map: int = -1
 ) -> int:
@@ -4099,8 +4023,7 @@ static func pic_bank(layout: Dictionary, index: int) -> int:
 	return PIC_BANKS[PIC_BANKS.size() - 1]
 
 
-## How many map ids the flat table holds. Yellow added the Summer Beach House
-## behind Agatha's room.
+## How many map ids the flat table holds. Yellow added the Summer Beach House behind Agatha's room.
 static func map_count(id: StringName) -> int:
 	return MAP_COUNT_YELLOW if id == RomRegistry.YELLOW else MAP_COUNT_RED_BLUE
 
@@ -4315,9 +4238,8 @@ static func super_palette_count(id: StringName) -> int:
 		else SUPER_PALETTE_COUNT_RED_BLUE
 
 
-## Which of a frame's four tiles its OAM writer reads.
-## `WriteSymmetricMonPartySpriteOAM` reads tiles 0 and 2 and draws each twice,
-## X-flipping the second; the helix has no symmetry and reads all four.
+## Which of a frame's four tiles its OAM writer reads. `WriteSymmetricMonPartySpriteOAM` reads tiles 0 and 2
+## and draws each twice, X-flipping the second; the helix has no symmetry and reads all four.
 static func mon_icon_tiles_read(icon: int) -> Array[int]:
 	return [0, 1, 2, 3] if icon == MON_ICON_HELIX else [0, 2]
 
@@ -4467,9 +4389,8 @@ static func rod_slots(rod: StringName) -> Array:
 	return out
 
 
-## Whether the Super Rod is read as Yellow's flat slot table.
-## `wRivalStarter` and `wPlayerStarter` hold one of these and nothing else, so
-## `Route22GetRivalTrainerNoByStarterScript`'s unterminated table walk stops.
+## Whether the Super Rod is read as Yellow's flat slot table. `wRivalStarter` and `wPlayerStarter` hold one of
+## these and nothing else, so `Route22GetRivalTrainerNoByStarterScript`'s unterminated table walk stops.
 const SCRIPT_STARTERS: Dictionary = {
 	RomRegistry.RED: {"rival": [0xB0, 0xB1, 0x99], "player": [0xB0, 0xB1, 0x99]},
 	RomRegistry.BLUE: {"rival": [0xB0, 0xB1, 0x99], "player": [0xB0, 0xB1, 0x99]},
@@ -4497,9 +4418,8 @@ static func cell_encounter_tile_index(cell_x: int, cell_y: int) -> int:
 	return cell_tile_index(cell_x, cell_y) + 1
 
 
-## The four copies of the sound driver, as the ROM banks they and their data live
-## in. Yellow alone has a fourth; the other three are the same banks on all three
-## cartridges, and so is every sound id.
+## The four copies of the sound driver, as the ROM banks they and their data live in. Yellow alone has a
+## fourth; the other three are the same banks on all three cartridges, and so is every sound id.
 const AUDIO_BANK_ROM: Array[int] = [0x02, 0x08, 0x1F, 0x20]
 const AUDIO_BANK_COUNT_RED_BLUE: int = 3
 const AUDIO_BANK_COUNT_YELLOW: int = 4
@@ -4510,16 +4430,14 @@ const AUDIO_MAX_SFX_ID: Array[int] = [185, 233, 194, 152]
 ## Yellow keeps a single table and every copy of the driver reads it.
 const AUDIO_WAVE_POINTERS_RED_BLUE: int = 0x4361
 const AUDIO_WAVE_POINTERS_YELLOW: int = 0x5A16
-## Where a bank's header table starts, and how many ids the corpus walk finds in
-## each: an entry names its own channel count, so the walk steps by it and stops
-## where the first channel pointer begins.
+## Where a bank's header table starts, and how many ids the corpus walk finds in each: an entry names its own
+## channel count, so the walk steps by it and stops where the first channel pointer begins.
 const AUDIO_HEADER_TABLE: int = 0x4000
 const AUDIO_HEADER_ENTRY_SIZE: int = 3
 const AUDIO_RECORD_COUNT_RED_BLUE: Array[int] = [115, 126, 121]
 const AUDIO_RECORD_COUNT_YELLOW: Array[int] = [115, 126, 121, 74]
-## `CryData`'s first column counts cries rather than sound ids: the id is
-## `CRY_SFX_START` plus three times the index, every cry header being three
-## channels long.
+## `CryData`'s first column counts cries rather than sound ids: the id is `CRY_SFX_START` plus three times the
+## index, every cry header being three channels long.
 const AUDIO_CRY_COUNT: int = 38
 const AUDIO_CRY_FIRST_ID: int = 20
 
@@ -4541,11 +4459,10 @@ const MUSIC_DEFEATED_TRAINER: int = 246
 const MUSIC_DEFEATED_WILD_MON: int = 249
 const MUSIC_DEFEATED_GYM_LEADER: int = 252
 const VICTORY_MUSIC_BANK: int = 0x08
-## What `LoadMonFrontSprite` costs with the LCD on, measured on Red for eight
-## pictures: `UncompressMonSprite` runs 16 to 43 frames, a least-squares fit on
-## the picture's tiles and its compressed bytes within three frames of each, then
-## `LoadUncompressedSpriteData`, `InterlaceMergeSpriteBuffers` and
-## `CopyVideoData`'s seven frames for 7x7 tiles.
+## What `LoadMonFrontSprite` costs with the LCD on, measured on Red for eight pictures: `UncompressMonSprite`
+## runs 16 to 43 frames, a least-squares fit on the picture's tiles and its compressed bytes within three
+## frames of each, then `LoadUncompressedSpriteData`, `InterlaceMergeSpriteBuffers` and `CopyVideoData`'s
+## seven frames for 7x7 tiles.
 const PIC_UNCOMPRESS_TILE_THOUSANDTHS: int = 415
 const PIC_UNCOMPRESS_BYTE_THOUSANDTHS: int = 30
 const PIC_UNCOMPRESS_BASE_THOUSANDTHS: int = 2000
@@ -4600,9 +4517,8 @@ const SFX_ROLES: Dictionary = {
 	Gen2Sfx.SFX_HIT_END_OF_EXP_BAR: Gen1Sfx.SFX_TINK,
 }
 
-## The other half of the seam: a Crystal track number answered with the bank and
-## id that play the piece here. `MapSongBanks` carries both bytes itself, so only
-## the pieces a screen names by constant are listed.
+## The other half of the seam: a Crystal track number answered with the bank and id that play the piece here.
+## `MapSongBanks` carries both bytes itself, so only the pieces a screen names by constant are listed.
 const MUSIC_ROLES: Dictionary = {
 	0x01: [0x1F, 195], ## MUSIC_TITLE is Music_TitleScreen
 	0x06: [0x08, 234], ## MUSIC_KANTO_GYM_LEADER_BATTLE
@@ -4644,8 +4560,7 @@ static func audio_wave_pointers(id: StringName, index: int) -> int:
 	return AUDIO_WAVE_POINTERS_YELLOW if index == 0 else 0
 
 
-## The sound id a Crystal-numbered effect plays here, or -1 for a role no
-## Generation 1 cartridge has.
+## The sound id a Crystal-numbered effect plays here, or -1 for a role no Generation 1 cartridge has.
 static func sfx_role(crystal_number: int) -> int:
 	return int(SFX_ROLES.get(crystal_number, -1))
 

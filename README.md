@@ -101,7 +101,7 @@ step-animation positions, trainers, map headers,
 layouts, tilesets with their animation frames and timing, events, map script
 entry points, reachable
 bytecode and the texts, braille, movement lists and marts it names, the
-weather's sprite palette and drought colour tables, wild encounters and
+weather's palettes, sprite sheets and drought colour tables, wild encounters and
 front/back pictures with normal and shiny palettes. Picture
 frames and all 28 Unown forms are retained; none of these cartridges is
 playable. `tools/import_rom.gd` skips them unless given `--dev`. Static map
@@ -140,9 +140,11 @@ darkens, brightens and fades the field's colours through one
 [palette RAM](game/gen3/gen3_palette.gd) as each engine does: the colour maps
 rain and shade step through, Ruby, Sapphire and Emerald's drought tables, fog's
 lightened sprites, Emerald's alternating Groudon/Kyogre weather and the screen
-fades. Weather sprites and their timing (rain, snow, lightning, fog, ash and
-sand), other affine sprite animations, field effects and gate rendering await
-the field host. Script bytecode and its data are decoded and cached; script execution awaits the rest of the GBA world model.
+fades. [Weather sprites](game/gen3/gen3_weather_sprites.gd) (rain with its
+lightning and thunder, clouds, snow, both fogs, volcanic ash, the sandstorm and
+underwater bubbles) move on the cartridge's sprite clock, blend over the map
+through BLDALPHA, and hold a change of weather until they have faded out. Other
+affine sprite animations, field effects and gate rendering await the field host. Script bytecode and its data are decoded and cached; script execution awaits the rest of the GBA world model.
 
 | Game | SHA-1 |
 |---|---|
