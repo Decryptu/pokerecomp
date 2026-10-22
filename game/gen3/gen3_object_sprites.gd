@@ -30,13 +30,15 @@ const ELEVATION_SUBSPRITE_TABLE: Array[int] = [1, 1, 1, 1, 2, 1, 2, 1, 2, 1, 2, 
 const LONG_GRASS_TABLE: int = 4
 const LONG_GRASS_TABLE_HIGH: int = 5
 const DISPLAY_HEIGHT: int = 160
+const SPRITE_COUNT: int = 64
+const SHADOW_SIZES: Array[Vector2i] = [Vector2i(8, 8), Vector2i(16, 8), Vector2i(32, 8), Vector2i(64, 32)]
+const SHADOW_Y_OFFSETS: Array[int] = [4, 4, 4, 16]
 
 var data: GameData
 var palettes := PackedByteArray()
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
 var _ruby: bool = false
-## `sSpriteOrder` over object slots, kept between frames.
 var _order: Array[int] = []
 
 
@@ -44,7 +46,7 @@ func _init(game: GameData) -> void:
 	data = game
 	palettes.resize(16 * 32)
 	_ruby = game.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE]
-	for slot: int in Gen3ObjectEvents.COUNT:
+	for slot: int in SPRITE_COUNT:
 		_order.append(slot)
 
 
@@ -96,19 +98,51 @@ static func subpriority(object: Gen3ObjectEvents.ObjectEvent, elevation: int, or
 	return (ELEVATION_SUBPRIORITY[elevation] + ((16 - row) << 1) + add) & 0xFF
 
 
-## The objects' OAM front first, `tiles` 4bpp in 1D order; sprites other than objects are not sorted in.
+## Objects and shadows sorted together, front first; `tiles` is 4bpp in 1D order.
 func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 	var entries: Dictionary = {}
 	for slot: int in Gen3ObjectEvents.COUNT:
 		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[slot]
 		if object.active and objects.graphics_info(object.graphics_id).has("oam"):
 			entries[slot] = _entry(objects, object, origin)
+	for shadow: Dictionary in objects.shadow_sprites():
+		var entry: Dictionary = _shadow_entry(objects, shadow, origin)
+		if not entry.is_empty():
+			entries[int(shadow["sprite_slot"])] = entry
 	_sort(entries)
 	var out: Array = []
 	for slot: int in _order:
-		if entries.has(slot) and not objects.objects[slot].sprite_invisible:
+		if not entries.has(slot):
+			continue
+		if slot >= Gen3ObjectEvents.COUNT:
+			out.append(entries[slot]["part"])
+		elif not objects.objects[slot].sprite_invisible:
 			out.append_array(_parts(objects.objects[slot], entries[slot]))
 	return out
+
+
+static func effect_slot(effects: Array[Dictionary]) -> int:
+	for slot: int in range(SPRITE_COUNT - 1, Gen3ObjectEvents.COUNT - 1, -1):
+		if not effects.any(func(effect: Dictionary) -> bool: return effect.get("sprite_slot", -1) == slot):
+			return slot
+	return -1
+
+
+func _shadow_entry(objects: Gen3ObjectEvents, shadow: Dictionary, origin: Vector2i) -> Dictionary:
+	var request: Dictionary = shadow["request"]
+	var object: Gen3ObjectEvents.ObjectEvent = objects.by_identity(int(request["local_id"]),
+		int(request["map_number"]), int(request["map_group"]))
+	var info: Dictionary = data.world_shadow_graphics(int(shadow["shadow_size"]))
+	if object == null or info.is_empty():
+		return {}
+	var size := Vector2i(int(info["width"]), int(info["height"]))
+	var height: int = int(objects.graphics_info(object.graphics_id).get("height", 0))
+	var center: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1) + int(shadow["y_offset"])) - origin
+	var at: Vector2i = center - size / 2
+	var frame: Array = info["images"][0]
+	return {"y": at.y & 0xFF, "key": (object.priority << 8) | 148,
+		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i.ZERO, "priority": object.priority,
+			"palette": 0, "size": size, "tiles": data.world_sprite_image(int(frame[0]), int(frame[1]))}}
 
 
 func _entry(objects: Gen3ObjectEvents, object: Gen3ObjectEvents.ObjectEvent, origin: Vector2i) -> Dictionary:

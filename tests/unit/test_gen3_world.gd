@@ -549,7 +549,8 @@ func _field_objects(id: StringName) -> Gen3ObjectEvents:
 	var movement: Array = []
 	for type: int in 12:
 		movement.append({"ranged": false, "facing": 1})
-	data._world_scripts = {"movement_types": movement}
+	var surfable: Array = [0x6F] if id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.EMERALD] else []
+	data._world_scripts = {"movement_types": movement, "surfable_behaviors": surfable}
 	var camera := Gen3FieldCamera.new()
 	camera.data = data
 	camera.group = 0
@@ -1080,13 +1081,101 @@ func test_regular_jumps_start_one_shadow_and_clear_it_on_landing() -> void:
 			var shadowed: bool = false
 			while not object.held_movement_finished:
 				shadows.append_array(objects.step_movements().filter(func(request: Dictionary) -> bool:
-					return request.get("effect_id", -1) == Gen3ObjectEvents.FLDEFF_SHADOW))
+					return request["kind"] == "field_effect" and request.get("effect_id", -1) == Gen3ObjectEvents.FLDEFF_SHADOW))
 				shadowed = shadowed or object.has_shadow
 			var special: bool = action == 0x3D + 12 * int(frlg)
 			assert_eq(shadows.size(), 0 if special else 1, "%s %02X" % [id, action])
 			assert_eq(shadowed, not special)
 			assert_false(object.has_shadow)
 		assert_eq(objects.step_movements().size(), 0)
+
+
+## Follow the real jump input through the effect list: the request-only path never tracked or stopped a shadow.
+func test_jump_shadow_lifetime_follows_identity_and_terrain() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var object := Gen3ObjectEvents.ObjectEvent.new()
+		object.active = true
+		object.local_id = 3
+		object.current = Vector2i(12, 12)
+		object.previous = object.current
+		objects.objects[0] = object
+		objects.set_held_movement(object, 0x17 if id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 0x0F)
+		objects.step_movements()
+		assert_true(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_SHADOW), str(id))
+		while not object.held_movement_finished:
+			objects.step_movements()
+		assert_false(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_SHADOW), str(id))
+		for probe: Array in [[2, 0, false], [0, 2, true], [0, 0x16, false], [0x17, 0, true],
+				[0xD1, 0, id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.EMERALD]],
+				[0x6F, 0, id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]]]:
+			object.has_shadow = true
+			object.current_behavior = int(probe[0])
+			object.previous_behavior = int(probe[1])
+			var requests: Array = []
+			objects.start_effect_sprite(object, 0, Gen3ObjectEvents.FLDEFF_SHADOW, -1, true, requests)
+			objects.step_movements()
+			assert_eq(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_SHADOW), probe[2], "%s %s" % [id, probe])
+			object.active = false
+			objects.step_movements()
+			assert_false(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_SHADOW))
+			object.active = true
+
+
+## The shadow follows ground position without x2/y2 or visibility, keeps its spawn size, and sorts with objects.
+## Existing movement tests see requests only; the BG compositor test supplies OAM rather than building it.
+func test_shadow_oam_tracks_ground_and_keeps_spawn_geometry() -> void:
+	var objects: Gen3ObjectEvents = _field_objects(RomRegistry.EMERALD)
+	var data: GameData = objects.camera.data
+	data._sections["gba_graphics"] = true
+	var tiles := PackedByteArray()
+	tiles.resize(32)
+	tiles.fill(0x11)
+	data._world_tilesets = {"sprite_images": {"1": {"bytes": tiles}}}
+	data._world_scripts["sprite_images"] = {"5": [[1, 32]]}
+	data._world_scripts["shadow_templates"] = [{"width": 8, "height": 8, "images": 5}]
+	data._world_scripts["object_graphics"] = [{"width": 16, "height": 32, "shadow_size": 0,
+		"anims": 0, "oam": {"shape": 2, "size": 2}, "subsprite_tables": 0}]
+	data._world_scripts["sprite_anims"] = {}
+	var tall: Dictionary = data._world_scripts["object_graphics"][0].duplicate(true)
+	tall["height"] = 64
+	tall["shadow_size"] = 3
+	data._world_scripts["object_graphics"].append(tall)
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	object.active = true
+	object.local_id = 3
+	object.pixel_position = Vector2i(80, 80)
+	object.current = Vector2i(6, 5)
+	object.priority = 2
+	object.subpriority = 149
+	object.fixed_priority = true
+	object.has_shadow = true
+	object.ground_on_spawn = false
+	object.frozen = true
+	object.anim.tiles = [1, 32]
+	object.jump_y = -12
+	object.x2 = 7
+	objects.objects[0] = object
+	var requests: Array = []
+	objects.start_effect_sprite(object, 0, Gen3ObjectEvents.FLDEFF_SHADOW, -1, true, requests)
+	objects.step_movements()
+	var entries: Array = objects.sprites.oam(objects, Vector2i.ZERO)
+	assert_eq(entries.size(), 2)
+	assert_eq([entries[0]["x"], entries[0]["y"], entries[0]["size"], entries[0]["palette"], entries[0]["tiles"]],
+		[84, 88, Vector2i(8, 8), 0, tiles])
+	object.invisible = true
+	object.pixel_position += Vector2i(16, 8)
+	objects.step_movements()
+	entries = objects.sprites.oam(objects, Vector2i.ZERO)
+	assert_eq(entries.size(), 1)
+	assert_eq([entries[0]["x"], entries[0]["y"]], [100, 96])
+	objects.set_graphics_id(object, 1)
+	entries = objects.sprites.oam(objects, Vector2i.ZERO)
+	assert_eq([entries[0]["y"], entries[0]["size"]], [72, Vector2i(8, 8)])
+	objects.remove(object.local_id, object.map_number, object.map_group)
+	objects.step_movements()
+	assert_true(objects.sprites.oam(objects, Vector2i.ZERO).is_empty())
 
 
 ## `UpdateObjectEventElevationAndPriority` returns before `ObjectEventUpdateElevation` under a

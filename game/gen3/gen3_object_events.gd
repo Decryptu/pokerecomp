@@ -924,18 +924,23 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 		object.buried_initialized = true
 
 
-## `FieldEffectStart` for a sprite created after the objects, so it runs this frame. A followed effect is an
-## icon, stopped once its object is gone.
+## `FieldEffectStart`: effects run after objects this frame; followed effects stop when their object is gone.
 func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
 		requests: Array) -> Dictionary:
 	var request: Dictionary = _effect_request(object, slot, effect)
-	requests.append(request)
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
+	if effect == FLDEFF_SHADOW:
+		var info: Dictionary = graphics_info(object.graphics_id)
+		sprite["sprite_slot"] = Gen3ObjectSprites.effect_slot(_effect_sprites)
+		if int(sprite["sprite_slot"]) < 0:
+			return {}
+		sprite["shadow_size"] = int(info.get("shadow_size", 0))
+		sprite["y_offset"] = (int(info.get("height", 0)) >> 1) - Gen3ObjectSprites.SHADOW_Y_OFFSETS[sprite["shadow_size"]]
+	requests.append(request)
 	_effect_sprites.append(sprite)
 	return sprite
 
 
-## `FieldEffectActiveListContains` for the effects [method start_effect_sprite] runs.
 func field_effect_active(effect: int) -> bool:
 	return _effect_sprites.any(func(sprite: Dictionary) -> bool: return sprite["request"]["effect_id"] == effect)
 
@@ -943,8 +948,10 @@ func field_effect_active(effect: int) -> bool:
 func _step_effect_sprites(requests: Array) -> void:
 	for sprite: Dictionary in _effect_sprites.duplicate():
 		var request: Dictionary = sprite["request"]
-		if int(sprite["passes"]) >= int(sprite["end"]) or (sprite["follow"] and by_identity(
-				int(request["local_id"]), int(request["map_number"]), int(request["map_group"])) == null):
+		var object: ObjectEvent = by_identity(int(request["local_id"]), int(request["map_number"]), int(request["map_group"]))
+		var shadow: bool = int(request["effect_id"]) == FLDEFF_SHADOW
+		if (int(sprite["end"]) >= 0 and int(sprite["passes"]) >= int(sprite["end"])) \
+				or (sprite["follow"] and object == null) or (shadow and not _shadow_allowed(object)):
 			var stop: Dictionary = request.duplicate()
 			stop["kind"] = "stop_field_effect"
 			requests.append(stop)
@@ -953,7 +960,22 @@ func _step_effect_sprites(requests: Array) -> void:
 			sprite["passes"] = int(sprite["passes"]) + 1
 
 
-## `SetTrainerMovementType` restarts the new type's callback.
+func shadow_sprites() -> Array[Dictionary]:
+	return _effect_sprites.filter(func(sprite: Dictionary) -> bool:
+		return int(sprite["request"]["effect_id"]) == FLDEFF_SHADOW)
+
+
+## `UpdateShadowFieldEffect`: grass tests only the current cell; water and reflections test both.
+func _shadow_allowed(object: ObjectEvent) -> bool:
+	if object == null or not object.has_shadow:
+		return false
+	var grass: Array = [2, 0xD1] if _frlg else [2, 3]
+	var reflective: Array = [0x10, 0x16, 0x1A, 0x1B, 0x23] if _frlg else [0x10, 0x14, 0x16, 0x1A, 0x20, 0x2B]
+	return object.current_behavior not in grass and object.current_behavior not in reflective \
+		and object.previous_behavior not in reflective and not camera.data.world_surfable(object.current_behavior) \
+		and not camera.data.world_surfable(object.previous_behavior)
+
+
 static func set_trainer_movement_type(object: ObjectEvent, type: int) -> void:
 	object.movement_type = type
 	object.direction_sequence_index = 0
@@ -1452,7 +1474,7 @@ func _start_jump(object: ObjectEvent, direction: int, shape: Dictionary, slot: i
 		object.anim.start_if_different(ANIM_STD_COUNT + DIRECTION_ANIM_OFFSETS[direction])
 	if shape.get("shadow", false) and not object.has_shadow:
 		object.has_shadow = true
-		requests.append(_effect_request(object, slot, FLDEFF_SHADOW))
+		start_effect_sprite(object, slot, FLDEFF_SHADOW, -1, true, requests)
 	_ground(object, slot, "begin_step", requests, false)
 
 

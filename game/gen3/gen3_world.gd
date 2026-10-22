@@ -38,6 +38,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var palettes: Dictionary = _object_palettes(rom, layout, object_graphics, graphics)
 	if scripts.is_empty() or movement_types.is_empty() or berries.is_empty() or palettes.is_empty():
 		return {}
+	if layout.has("shadow_templates") and not _shadow_templates(rom, layout, object_graphics, graphics):
+		return {}
 	scripts["movement_types"] = movement_types
 	scripts["berries"] = berries
 	scripts.merge(object_graphics)
@@ -128,6 +130,32 @@ static func _object_graphics(rom: RomFile, layout: Dictionary, graphics: Diction
 	return out if _step_anims(rom, layout, tables, steps) else {}
 
 
+## The first four `gFieldEffectObjectTemplatePointers` entries; TAG_NONE leaves palette slot zero.
+static func _shadow_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var surfable: int = int(layout["surfable_behaviors"])
+	if not rom.in_bounds(surfable, 256):
+		return false
+	out["surfable_behaviors"] = []
+	var mask: int = 1 if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 2
+	for tile_behavior: int in 256:
+		if rom.u8(surfable + tile_behavior) & mask:
+			out["surfable_behaviors"].append(tile_behavior)
+	var rows: Array = []
+	for index: int in 4:
+		var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + index * 4, 24)
+		var oam: int = -1 if at < 0 else Gen3Layout.read_pointer(rom, at + 4, 8)
+		var images: int = -1 if at < 0 else Gen3Layout.read_pointer(rom, at + 12, 8)
+		if oam < 0 or images < 0 or rom.u32le(at) != 0xFFFFFFFF:
+			return false
+		_read_images(rom, images, 0, out, graphics)
+		var size: Vector2i = Gen3ObjectSprites.OAM_SIZES[rom.u16le(oam) >> 14][rom.u16le(oam + 2) >> 14]
+		if out["sprite_images"][str(images)].size() != 1 or size != Gen3ObjectSprites.SHADOW_SIZES[index]:
+			return false
+		rows.append({"images": images, "width": size.x, "height": size.y})
+	out["shadow_templates"] = rows
+	return true
+
+
 static func _graphics_info(rom: RomFile, info: int, anims: Array, out: Dictionary, graphics: Dictionary) -> Dictionary:
 	var oam: int = Gen3Layout.read_pointer(rom, info + 0x10, 8)
 	var images: int = Gen3Layout.read_pointer(rom, info + 0x1C, 8)
@@ -154,10 +182,9 @@ static func _graphics_info(rom: RomFile, info: int, anims: Array, out: Dictionar
 	return row
 
 
-## A table shared by several rows is read as far as any of their anims index it.
 static func _read_images(rom: RomFile, at: int, last: int, out: Dictionary, graphics: Dictionary) -> void:
-	var read: Array = out["sprite_images"].get(str(at), [])
-	if read.size() <= last:
+	var images: Array = out["sprite_images"].get(str(at), [])
+	if images.size() <= last:
 		out["sprite_images"][str(at)] = _image_table(rom, at, last, graphics["sprite_images"])
 
 

@@ -86,6 +86,7 @@ func _one_game() -> void:
 	_player_avatars()
 	_step_anim_rows()
 	_object_sprites()
+	_shadows()
 	_object_sprite_frames()
 	_held_movements()
 	_object_movements(false)
@@ -925,6 +926,50 @@ func _object_sprites() -> void:
 	for key: String in ["tag_sets", "player_reflections", "special_reflections"]:
 		lines.append("%s|%s" % [key, JSON.stringify(sets[key])])
 	_r.digest_matches("gen3_object_sprites", lines, SPRITE_DIGESTS[data.id])
+
+
+## Pins from pret's shadow PNG indices and `metatile_behavior.c`, independently encoded in scratch.
+func _shadows() -> void:
+	var data: GameData = _r.data
+	var pictures := PackedStringArray()
+	for size: int in 4:
+		var row: Dictionary = data.world_shadow_graphics(size)
+		if row.is_empty() or row["images"].size() != 1:
+			_r.fail("shadow %d has no frame" % size)
+			return
+		var frame: Array = row["images"][0]
+		var digest := HashingContext.new()
+		digest.start(HashingContext.HASH_SHA1)
+		digest.update(data.world_sprite_image(int(frame[0]), int(frame[1])))
+		pictures.append("%d|%d|%s" % [row["width"], row["height"], digest.finish().hex_encode()])
+	_r.digest_matches("gen3_shadow_graphics", pictures, "376e6dcd88c957b744a23552f8581c29ae33fc03")
+	var objects: Gen3ObjectEvents = _fresh_objects(_camera_at(null, data, 0, 0, Vector2i.ZERO))
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	object.active = true
+	object.local_id = 254
+	object.has_shadow = true
+	object.ground_on_spawn = false
+	object.frozen = true
+	objects.objects[0] = object
+	for slot: int in range(1, Gen3ObjectEvents.COUNT):
+		objects.objects[slot].active = false
+	var lines := PackedStringArray()
+	for behavior: int in 256:
+		for previous: bool in [false, true]:
+			object.current_behavior = 0 if previous else behavior
+			object.previous_behavior = behavior if previous else 0
+			var requests: Array = []
+			objects.start_effect_sprite(object, 0, Gen3ObjectEvents.FLDEFF_SHADOW, -1, true, requests)
+			objects.step_movements()
+			lines.append("%d|%d|%d" % [behavior, int(previous), int(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_SHADOW))])
+			object.has_shadow = false
+			objects.step_movements()
+			object.has_shadow = true
+	var frlg: bool = data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	_r.digest_matches("gen3_shadow_terrain", lines,
+		"c5e1aa6d98c902bc44bfc063531a1574a6eb0c6f" if frlg else (
+			"ccf3a9ad0aa72adb76b88e67bcd67ef4c8740273" if data.id == RomRegistry.EMERALD else
+			"4661fbb9e10ddc159c17ea1456349ff3c9a36629"))
 
 
 func _frames_hash(data: GameData, images: Array) -> String:
