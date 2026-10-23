@@ -385,7 +385,7 @@ func world_berry(berry: int) -> Dictionary:
 
 
 ## Row [param index] of `gObjectEventGraphicsInfoPointers` (Emerald's Mauville table when [param mauville]),
-## with its `anims`, `GetStepAnimTable` positions, `images` rows and six `subsprite_tables` resolved.
+## with its image and affine animations, `GetStepAnimTable` positions, `images` rows and six `subsprite_tables` resolved.
 func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
 	if generation != RomRegistry.GEN3 or index < 0:
 		return {}
@@ -395,6 +395,7 @@ func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
 	var row: Dictionary = (rows[index] as Dictionary).duplicate()
 	var anims: String = str(int(row["anims"]))
 	row["anims"] = _scripts()["sprite_anims"].get(anims, [])
+	row["affine_anims"] = _scripts().get("affine_anims", {}).get(str(int(row.get("affine_anims", -1))), [])
 	row["step_positions"] = _scripts().get("step_anims", {}).get(anims, [])
 	row["images"] = world_sprite_images(int(row.get("images", -1)))
 	row["subsprite_tables"] = _scripts().get("subsprite_tables", {}).get(str(int(row.get("subsprite_tables", 0))), [])

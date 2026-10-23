@@ -105,12 +105,11 @@ static func _berries(rom: RomFile, layout: Dictionary, object_graphics: Dictiona
 	return out
 
 
-## Each `ObjectEventGraphicsInfo` but its tile tag and affine anims, tables keyed by dump offset. An anims
-## table runs over every following sequence pointer, as the cartridge reads it, and images as far as it
-## indexes.
+## `ObjectEventGraphicsInfo` except tile tags, keyed by dump offset. Animation tables retain following
+## sequence pointers as the cartridge reads them, and images as far as they index.
 static func _object_graphics(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> Dictionary:
 	var tables: Dictionary = {}
-	var out: Dictionary = {"sprite_anims": tables, "sprite_images": {}, "subsprite_tables": {}}
+	var out: Dictionary = {"sprite_anims": tables, "sprite_images": {}, "subsprite_tables": {}, "affine_anims": {}}
 	graphics["sprite_images"] = {}
 	for key: String in ["object_graphics", "mauville_graphics"]:
 		if not layout.has(key):
@@ -203,6 +202,13 @@ static func _graphics_info(rom: RomFile, info: int, anims: Array, out: Dictionar
 	var subsprites: int = 0 if rom.u32le(info + 0x14) == 0 else Gen3Layout.read_pointer(rom, info + 0x14, 48)
 	if oam < 0 or images < 0 or subsprites < 0:
 		return {}
+	var affine: int = Gen3Layout.read_pointer(rom, info + 0x20, 4)
+	if affine < 0:
+		return {}
+	if not out["affine_anims"].has(str(affine)):
+		out["affine_anims"][str(affine)] = _affine_table(rom, affine)
+	if out["affine_anims"][str(affine)].is_empty():
+		return {}
 	var bits: int = rom.u8(info + 0x0C)
 	var row: Dictionary = {
 		"palette_tag": rom.u16le(info + 2), "reflection_palette_tag": rom.u16le(info + 4),
@@ -212,7 +218,7 @@ static func _graphics_info(rom: RomFile, info: int, anims: Array, out: Dictionar
 		"oam": {"affine_mode": (rom.u16le(oam) >> 8) & 3, "obj_mode": (rom.u16le(oam) >> 10) & 3,
 			"shape": rom.u16le(oam) >> 14, "size": rom.u16le(oam + 2) >> 14,
 			"priority": (rom.u16le(oam + 4) >> 10) & 3},
-		"images": images, "subsprite_tables": subsprites,
+		"images": images, "subsprite_tables": subsprites, "affine_anims": affine,
 	}
 	_read_images(rom, images, _last_image(anims), out, graphics)
 	if subsprites != 0 and not out["subsprite_tables"].has(str(subsprites)):
@@ -387,6 +393,36 @@ static func _anim_sequence(rom: RomFile, at: int) -> Array:
 			return out if (word >> 16) & 0x3F < out.size() else []
 		if word & 0xFFFF == Gen3SpriteAnim.END:
 			return out
+	return []
+
+
+static func _affine_table(rom: RomFile, at: int) -> Array:
+	var out: Array = []
+	while true:
+		var sequence: int = Gen3Layout.read_pointer(rom, at + out.size() * 4, 8)
+		var rows: Array = [] if sequence < 0 else _affine_sequence(rom, sequence)
+		if rows.is_empty():
+			return out
+		out.append(rows)
+	return out
+
+
+## `union AffineAnimCmd`: eight-byte stride, signed scales/rotation and two zero frame-padding bytes.
+static func _affine_sequence(rom: RomFile, at: int) -> Array:
+	var out: Array = []
+	while out.size() < 256 and rom.in_bounds(at + out.size() * 8, 8):
+		var p: int = at + out.size() * 8
+		var kind: int = rom.u16le(p)
+		if kind in [Gen3AffineAnim.LOOP, Gen3AffineAnim.JUMP, Gen3AffineAnim.END]:
+			out.append([kind, rom.u16le(p + 2)])
+			if kind == Gen3AffineAnim.END:
+				return out
+			if kind == Gen3AffineAnim.JUMP:
+				return out if rom.u16le(p + 2) < out.size() else []
+		else:
+			if rom.u16le(p + 6) != 0:
+				return []
+			out.append([rom.s16le(p), rom.s16le(p + 2), rom.s8(p + 4), rom.u8(p + 5)])
 	return []
 
 
