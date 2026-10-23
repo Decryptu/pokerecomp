@@ -8,7 +8,6 @@ extends RefCounted
 const VIEW_WIDTH: int = Gen3MapGrid.OFFSET_W
 const VIEW_HEIGHT: int = Gen3MapGrid.OFFSET_H
 const PAN_Y: int = 32
-## `gDirectionToVectors`, by `DIR_*`.
 const DIRECTIONS: Array[Vector2i] = [
 	Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(1, 0),
 	Vector2i(-1, 1), Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1),
@@ -26,8 +25,9 @@ var crossed: bool = false
 var shift := Vector2i.ZERO
 ## `mapView`: the 15x14 words [method save_view] copied, empty once cleared.
 var view := PackedInt32Array()
-## The screen's offset from its resting place mid-step (`gFieldCamera`), which the field host keeps.
 var scroll := Vector2i.ZERO
+## `gFieldCamera.x`/`y`: signed remainders, distinct from the screen offset.
+var movement_offset := Vector2i.ZERO
 ## `gTotalCameraPixelOffsetX`/`Y` (u16): `InitObjectEventsLocal` zeroes it at a warp and each `CameraUpdate`
 ## takes its pixel step off it, so it runs on across connections.
 var pixel_offset := Vector2i.ZERO
@@ -46,7 +46,7 @@ func sprite_coord_offset() -> Vector2i:
 ## `SetSpritePosToMapCoords` for backup-map [param cell]: with [method sprite_coord_offset] added, the cell's
 ## corner on the screen.
 func sprite_position(cell: Vector2i) -> Vector2i:
-	var delta: Vector2i = -pixel_offset - scroll + Vector2i(signi(scroll.x), signi(scroll.y)) * 16
+	var delta: Vector2i = -pixel_offset - movement_offset + Vector2i(signi(movement_offset.x), signi(movement_offset.y)) * 16
 	return Vector2i(_s16(((cell.x - pos.x) << 4) + _s16(delta.x)), _s16(((cell.y - pos.y) << 4) + _s16(delta.y)))
 
 
@@ -96,6 +96,24 @@ func move(step: Vector2i) -> bool:
 	return true
 
 
+## `CameraUpdate`, after its callback supplies the tracked sprite's pixel displacement. The vertical
+## reversal writes deltaX in all three engines. Return the cell step for the host's object update.
+func update(speed: Vector2i) -> Vector2i:
+	var step := Vector2i.ZERO
+	if speed.x != 0 and (movement_offset.x == 0 or movement_offset.x == -speed.x):
+		step.x = signi(speed.x)
+	if speed.y != 0 and movement_offset.y == 0:
+		step.y = signi(speed.y)
+	if movement_offset.y != 0 and movement_offset.y == -speed.y:
+		step.x = signi(speed.y)
+	movement_offset = Vector2i((movement_offset.x + speed.x) % 16, (movement_offset.y + speed.y) % 16)
+	if step != Vector2i.ZERO:
+		move(step)
+	scroll += speed - step * 16
+	pixel_offset = Vector2i((pixel_offset.x - speed.x) & 0xFFFF, (pixel_offset.y - speed.y) & 0xFFFF)
+	return step
+
+
 ## `GetIncomingConnection`. Every straight step off the layout finds one; a diagonal step off a corner can
 ## name a side whose connection does not span the old position, and the cartridge then reads a connection from
 ## address 0, the BIOS. [method move] refuses that step, keeping [member pos].
@@ -114,7 +132,6 @@ func _incoming(direction: int) -> Dictionary:
 	return {}
 
 
-## `SetPositionFromConnection`.
 func _position_from(connection: Dictionary, direction: int, step: Vector2i) -> void:
 	var other: Dictionary = data.world_map_header(int(connection["group"]), int(connection["number"]))
 	var offset: int = int(connection["offset"])
@@ -166,7 +183,6 @@ func _view_to_backup(direction: int) -> void:
 	view.clear()
 
 
-## `CanCameraMoveInDirection`.
 func can_move(direction: int) -> bool:
 	var at: Vector2i = pos + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET + DIRECTIONS[direction]
 	return grid.border_id_at(at.x, at.y) != Gen3MapGrid.Connection.INVALID
