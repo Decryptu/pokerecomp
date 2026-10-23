@@ -13,6 +13,8 @@ const SLOT_CHANCES: Array = [
 const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5, 10]}
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
+## Effect id: template index, frame count. `gFieldEffectObjectTemplatePointers`.
+const GRASS_TEMPLATES: Dictionary = {4: [4, 5], 12: [10, 4], 17: [15, 4], 18: [16, 6]}
 
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -41,6 +43,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	if layout.has("shadow_templates") and not _shadow_templates(rom, layout, object_graphics, graphics):
 		return {}
 	if layout.has("icon_template") and not _icon_templates(rom, layout, object_graphics, graphics):
+		return {}
+	if layout.has("grass_palette") and not _grass_templates(rom, layout, object_graphics, graphics):
 		return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
 	if layout.has("weather_palette") and weather.is_empty():
@@ -161,6 +165,25 @@ static func _shadow_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 	return true
 
 
+static func _grass_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var palette: int = int(layout["grass_palette"])
+	if not rom.in_bounds(palette, Gen3Layout.PALETTE_BYTES):
+		return false
+	graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
+	var rows: Dictionary = {}
+	for effect: int in GRASS_TEMPLATES:
+		var spec: Array = GRASS_TEMPLATES[effect]
+		var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + int(spec[0]) * 4, 24)
+		var size := Vector2i(16, 8 if effect == 12 else 16)
+		var row: Dictionary = _sprite_template(rom, at, 1, int(spec[1]), size, out, graphics)
+		if row.is_empty() or int(row["palette_tag"]) != 0x1005:
+			return false
+		row["palette_offset"] = palette
+		rows[str(effect)] = row
+	out["grass_templates"] = rows
+	return true
+
+
 static func _icon_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
 	var frlg: bool = rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
 	var effects: Array = [0, 33, 46, 66, 64] if frlg else [0, 33, 46]
@@ -171,7 +194,7 @@ static func _icon_templates(rom: RomFile, layout: Dictionary, out: Dictionary, g
 		var image_count: int = 15 if frlg else 2
 		if heart:
 			image_count = 1
-		var row: Dictionary = _icon_template(rom, at, 5 if frlg else 2, image_count, out, graphics)
+		var row: Dictionary = _sprite_template(rom, at, 5 if frlg else 2, image_count, Vector2i(16, 16), out, graphics)
 		if row.is_empty():
 			return false
 		row["anim"] = [0, 4, 2, 1, 3][index] if frlg else index % 2
@@ -187,7 +210,7 @@ static func _icon_templates(rom: RomFile, layout: Dictionary, out: Dictionary, g
 	return true
 
 
-static func _icon_template(rom: RomFile, at: int, anim_count: int, image_count: int,
+static func _sprite_template(rom: RomFile, at: int, anim_count: int, image_count: int, expected_size: Vector2i,
 		out: Dictionary, graphics: Dictionary) -> Dictionary:
 	if not rom.in_bounds(at, 24):
 		return {}
@@ -201,15 +224,14 @@ static func _icon_template(rom: RomFile, at: int, anim_count: int, image_count: 
 		return {}
 	_read_images(rom, images, image_count - 1, out, graphics)
 	var size: Vector2i = Gen3ObjectSprites.OAM_SIZES[rom.u16le(oam) >> 14][rom.u16le(oam + 2) >> 14]
-	if size != Vector2i(16, 16) or out["sprite_images"][str(images)].size() != image_count:
+	if size != expected_size or out["sprite_images"][str(images)].size() != image_count:
 		return {}
 	return {"images": images, "anims": sequences, "width": size.x, "height": size.y,
 		"palette_tag": rom.u16le(at + 2)}
 
 
-## StartWeather's sprite palette, the sprite weathers' palettes and sheets, and the drought colour tables:
-## Emerald's six as they are, Hoenn's six LZ delta blobs decoded but not yet summed, which
-## `LoadDroughtWeatherPalette` does a table a call. FireRed and LeafGreen have none.
+## Weather palettes/sheets and drought tables: Emerald stores six raw tables; Ruby/Sapphire's six LZ deltas
+## are summed one per `LoadDroughtWeatherPalette` call. FireRed/LeafGreen have none.
 static func _weather(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> Dictionary:
 	if not layout.has("weather_palette") or not rom.in_bounds(int(layout["weather_palette"]), Gen3Layout.PALETTE_BYTES):
 		return {}

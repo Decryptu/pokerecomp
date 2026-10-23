@@ -148,15 +148,18 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 ## pret builds, including Sapphire's shifted scripts. `gInitialMovementTypeFacingDirections` follows
 ## `gRangedMovementTypes` directly. `gObjectEventGraphicsInfoPointers` is the dump's pointer run of
 ## `NUM_OBJ_EVENT_GFX` graphics infos; Emerald's `gMauvilleOldManGraphicsInfoPointers` follows it.
+
 ## `shadow_templates`: `gFieldEffectObjectTemplatePointers`, found by matching pret's four tiled shadow PNGs
 ## to their dump bytes and pointer runs; surfability matches pret's 240-byte table, retaining its ROM tail.
 ## Weather palettes, `Gen3WeatherSprites.SHEETS` and drought tables each match one run of pret's bytes.
 ## `icon_template`: trainer_see.c's template, located through the unique tiled emotion PNGs and image pointers.
+## `grass_palette`: the unique run of general_1.pal (Ruby/Sapphire palettes/01.pal).
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
 	"object_palettes": 0x373794, "object_palette_tags": 0x3739B4,
 	"player_reflection_palettes": 0x37388C, "special_reflection_palettes": 0x3738FC,
-	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8, "icon_template": 0x39B528, "icon_palette": 0x3694A0,
+	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8, "icon_template": 0x39B528,
+	"icon_palette": 0x3694A0, "grass_palette": 0x3694C0,
 	"weather_palette": 0x397100, "weather_sheets": 0x397120, "drought_palette_pointers": 0x396FC0,
 	"object_graphics": 0x36DC70, "object_graphics_count": 218,
 	"berries": 0x3CD2E8,
@@ -209,7 +212,8 @@ const SAPPHIRE: Dictionary = {
 	"movement_types": 0x36DB64,
 	"object_palettes": 0x373724, "object_palette_tags": 0x373944,
 	"player_reflection_palettes": 0x37381C, "special_reflection_palettes": 0x37388C,
-	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68, "icon_template": 0x39B370, "icon_palette": 0x369430,
+	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68, "icon_template": 0x39B370,
+	"icon_palette": 0x369430, "grass_palette": 0x369450,
 	"weather_palette": 0x396F48, "weather_sheets": 0x396F68, "drought_palette_pointers": 0x396E08,
 	"object_graphics": 0x36DC00, "object_graphics_count": 218,
 	"berries": 0x3CD344,
@@ -262,7 +266,7 @@ const FIRERED: Dictionary = {
 	"movement_types": 0x39FD7C,
 	"object_palettes": 0x3A51C8, "object_palette_tags": 0x3A53A0,
 	"player_reflection_palettes": 0x3A5278, "special_reflection_palettes": 0x3A52E8,
-	"surfable_behaviors": 0x352FE8, "shadow_templates": 0x3A0080, "icon_template": 0x3C73F8,
+	"surfable_behaviors": 0x352FE8, "shadow_templates": 0x3A0080, "icon_template": 0x3C73F8, "grass_palette": 0x399038,
 	"weather_palette": 0x3C2D50, "weather_sheets": 0x3C2D70,
 	"object_graphics": 0x39FE20, "object_graphics_count": 152, "step_anims": 0x3A3708,
 	"berries": 0x3DF858,
@@ -314,7 +318,7 @@ const LEAFGREEN: Dictionary = {
 	"movement_types": 0x39FD5C,
 	"object_palettes": 0x3A51A8, "object_palette_tags": 0x3A5380,
 	"player_reflection_palettes": 0x3A5258, "special_reflection_palettes": 0x3A52C8,
-	"surfable_behaviors": 0x352FC8, "shadow_templates": 0x3A0060, "icon_template": 0x3C7234,
+	"surfable_behaviors": 0x352FC8, "shadow_templates": 0x3A0060, "icon_template": 0x3C7234, "grass_palette": 0x399018,
 	"weather_palette": 0x3C2B8C, "weather_sheets": 0x3C2BAC,
 	"object_graphics": 0x39FE00, "object_graphics_count": 152, "step_anims": 0x3A36E8,
 	"berries": 0x3DF694,
@@ -366,7 +370,8 @@ const EMERALD: Dictionary = {
 	"movement_types": 0x50557C,
 	"object_palettes": 0x50BBC8, "object_palette_tags": 0x50BE38,
 	"player_reflection_palettes": 0x50BD00, "special_reflection_palettes": 0x50BD78,
-	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8, "icon_template": 0x5507B4, "icon_palette": 0x4F77B8,
+	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8, "icon_template": 0x5507B4,
+	"icon_palette": 0x4F77B8, "grass_palette": 0x4F77D8,
 	"weather_palette": 0x54C270, "weather_sheets": 0x54C290, "drought_colors": 0x54014C,
 	"object_graphics": 0x505620, "object_graphics_count": 239, "step_anims": 0x5094AC,
 	"mauville_graphics": 0x5059DC, "mauville_graphics_count": 7,

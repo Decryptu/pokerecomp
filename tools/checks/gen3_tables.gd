@@ -88,6 +88,7 @@ func _one_game() -> void:
 	_object_sprites()
 	_shadows()
 	_icons()
+	_grass()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -947,6 +948,27 @@ func _object_sprites() -> void:
 	_r.digest_matches("gen3_object_affine", affine_lines, AFFINE_DIGESTS[data.id])
 
 
+## Independently encoded pret PNGs, palettes and AnimCmd macros; FRLG's final jump-long-grass frame
+## reads the first frame of the following unused-grass sheet, as its source image table specifies.
+func _grass() -> void:
+	var data: GameData = _r.data
+	var lines := PackedStringArray()
+	for effect: int in Gen3World.GRASS_TEMPLATES:
+		var row: Dictionary = data.world_grass_graphics(effect)
+		if not _r.check(not row.is_empty(), "grass %d has no template" % effect):
+			return
+		lines.append("%d|%d|%d|%s|%s" % [effect, row["width"], row["height"],
+			(row["palette_bytes"] as PackedByteArray).hex_encode(), JSON.stringify(row["anims"])])
+		for image: Array in row["images"]:
+			var digest := HashingContext.new()
+			digest.start(HashingContext.HASH_SHA1)
+			digest.update(data.world_sprite_image(int(image[0]), int(image[1])))
+			lines.append(digest.finish().hex_encode())
+	var expected: String = "b062a45916e2c097717fe7b3c41b8989410258da" \
+		if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "eb068e5d1e87ab14dbecf2516351c26c944912fa"
+	_r.digest_matches("gen3_grass", lines, expected)
+
+
 ## trainer_see.c's PNGs/macros and compiled original icon callbacks, independently encoded in scratch.
 func _icons() -> void:
 	var data: GameData = _r.data
@@ -1368,8 +1390,8 @@ func _held_anim_finishes(objects: Gen3ObjectEvents) -> void:
 
 
 ## The actions the ARM held traces ran. Rows added after them (those with options, the obstacle and affine
-## kinds, the inanimate and reflection flags) and FLDEFF_SHADOW, whose routines those builds stubbed, stay out
-## of their streams.
+## kinds, the inanimate and reflection flags) and ground effects, whose routines those builds stubbed, stay
+## out of their streams.
 static func arm_traced(objects: Gen3ObjectEvents, action: int) -> bool:
 	var row: Array = objects._motions.get(action, [])
 	if row.is_empty() or (row.size() > 3 and row[3] is Dictionary):
@@ -1381,7 +1403,7 @@ static func arm_traced(objects: Gen3ObjectEvents, action: int) -> bool:
 
 
 static func arm_traced_effect(request: Dictionary) -> bool:
-	return request["kind"] == "field_effect" and request["effect_id"] != Gen3ObjectEvents.FLDEFF_SHADOW
+	return request["kind"] == "field_effect" and request["effect_id"] not in [Gen3ObjectEvents.FLDEFF_SHADOW, 4, 12, 17, 18]
 
 
 func _held_action_trace(objects: Gen3ObjectEvents, action: int, offset: int, index: int) -> PackedStringArray:

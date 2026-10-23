@@ -1379,6 +1379,133 @@ func test_emote_movement_draws_and_releases_its_bouncing_sprite() -> void:
 		assert_eq(objects.sprites.effect_slot(), 61)
 
 
+## Grass remains on an occupied tile after its anim ends, then retires after departure or terrain change.
+## Request-only movement traces miss lifetime, palette allocation and the actual OAM image.
+func test_grass_keeps_its_last_image_until_departure_and_releases_shared_palette() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		for behavior: int in ([2, 0x1D1] if id == RomRegistry.FIRERED else [2, 3]):
+			var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			objects.step_movements()
+			assert_eq(objects.sprites.effects.size(), 1, str(id))
+			if objects.sprites.effects.is_empty():
+				continue
+			var effect: Dictionary = objects.sprites.effects[0]
+			var anim: Gen3SpriteAnim = effect["anim"]
+			assert_eq(anim.image, 0, "spawn seeks the settled image")
+			assert_eq(effect["palette"], 12, "grass allocates its tagged palette on every engine")
+			for frame: int in 60:
+				objects.step_movements()
+			assert_true(anim.ended)
+			assert_eq(objects.sprites.effects.size(), 1)
+			var out: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+			assert_eq(out.size(), 1)
+			assert_eq([out[0]["x"], out[0]["y"], out[0]["size"]], [192, 152, Vector2i(16, 16)])
+			object.current += Vector2i.RIGHT
+			objects.step_movements()
+			assert_eq(objects.sprites.effects.size(), 1, "previous cell still occupies the grass")
+			object.previous = object.current
+			objects.step_movements()
+			assert_eq(objects.sprites.effects.size(), 1, "departure is latched before the next stop check")
+			objects.step_movements()
+			assert_true(objects.sprites.effects.is_empty())
+			assert_eq(objects.sprites.palette.sprite_index(0x1005), 0xFF)
+			object.current = Vector2i(12, 12)
+			object.previous = object.current
+			object.ground_on_spawn = true
+			objects.step_movements()
+			objects.camera.grid.set_metatile_entry(12, 12, 0x3000)
+			objects.step_movements()
+			assert_true(objects.sprites.effects.is_empty(), "a cut tile stops grass even while occupied")
+			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
+			objects.set_held_movement(object, 0x13 if objects._frlg else 0x0B)
+			objects.step_movements()
+			anim = objects.sprites.effects[0]["anim"]
+			assert_eq(anim.image, 1, "entering grass starts the rustle rather than seeking the settled image")
+
+
+## Jumping filters tall grass at takeoff, creates landing leaves once, and retains a settled grass cover.
+## Ground tests without imported effect templates cannot see either the jump filter or duplicate covers.
+func test_grass_jump_landing_and_covering_filter_follow_the_held_movement() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		for mode: int in 4:
+			if mode == 3 and id == RomRegistry.FIRERED:
+				continue
+			var behavior: int = 3 if mode == 3 else 2
+			var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			object.ground_on_spawn = false
+			object.disable_jump_landing_effect = mode == 1
+			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
+			var action: int = 0x3D if mode == 2 else 0x45
+			objects.set_held_movement(object, action + (12 if objects._frlg else 0))
+			for frame: int in (31 if mode == 2 else 15):
+				objects.step_movements()
+				assert_false(objects.field_effect_active(4), "takeoff must not shake the landing tile")
+			objects.step_movements()
+			assert_eq(objects.field_effect_active(12), mode == 0, "%s mode %d" % [id, mode])
+			assert_eq(objects.field_effect_active(18), mode == 3)
+			assert_eq(objects.field_effect_active(4), mode == 0)
+			assert_eq(objects.field_effect_active(17), mode == 3, "long grass is not filtered at takeoff")
+			for frame: int in 60:
+				objects.step_movements()
+			assert_false(objects.field_effect_active(12) or objects.field_effect_active(18))
+			assert_eq(objects.field_effect_active(4), mode == 0, "a finished held jump never repeats its landing")
+
+
+## DoFlaggedGroundEffects gates every effect for Mew, while terrain flags still latch on hidden steps.
+## Copy-player traces test movement choices, not grass or reflection sprites.
+func test_mew_ground_effect_gate_covers_grass_and_reflections() -> void:
+	for steps: int in [0, 1, 4, 0xFFFF]:
+		var objects: Gen3ObjectEvents = _grass_objects(RomRegistry.EMERALD, 2)
+		objects.camera.group = 26
+		objects.camera.number = 57
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		object.graphics_id = 229
+		objects._graphics[229] = {"width": 16, "height": 32}
+		objects.events.var_set(Gen3ObjectEvents.VAR_FARAWAY_ISLAND_STEP_COUNTER, steps)
+		objects.camera.grid.set_metatile_entry(12, 13, 0x3010)
+		objects.step_movements()
+		var visible: bool = steps in [0, 4]
+		assert_eq(objects.field_effect_active(4), visible, str(steps))
+		assert_eq(objects.sprites.reflections.size(), int(visible))
+		assert_true(object.has_reflection, "terrain state updates before Mew's display gate")
+
+
+func _grass_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
+	var objects: Gen3ObjectEvents = _field_objects(id)
+	var data: GameData = objects.camera.data
+	data._sections["gba_graphics"] = true
+	var pixels := PackedByteArray()
+	pixels.resize(128)
+	pixels.fill(0x11)
+	data._world_tilesets = {"sprite_images": {"1": {"bytes": pixels}},
+		"object_palettes": {"9": {"bytes": PackedByteArray([31, 0])}}}
+	data._world_scripts["sprite_images"] = {"5": [[1, 128], [1, 128], [1, 128], [1, 128], [1, 128], [1, 128]]}
+	data._world_scripts["grass_templates"] = {}
+	data._world_scripts["sprite_anims"] = {}
+	for effect: int in [4, 12, 17, 18]:
+		var words: Array = [0xA0001, 0xA0002, 0xA0003, 0xA0004, 0xA0000, 0xFFFF]
+		if effect == 17:
+			words = [0x30001, 0x30002, 0x40000, 0x40003, 0x40000, 0x40003, 0x40000, 0xFFFF]
+		elif effect == 12:
+			words = [0x80000, 0x80001, 0x80002, 0x80003, 0xFFFF]
+		elif effect == 18:
+			words = [0x40000, 0x40001, 0x80002, 0x80003, 0x80004, 0x80005, 0xFFFF]
+		data._world_scripts["grass_templates"][str(effect)] = {"width": 16, "height": 8 if effect == 12 else 16,
+			"images": 5, "anims": [words], "palette_tag": 0x1005, "palette_offset": 9}
+	data._world_scripts["object_graphics"] = [{"width": 16, "height": 32, "anims": 0}]
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	object.active = true
+	object.local_id = 1
+	object.current = Vector2i(12, 12)
+	object.previous = object.current
+	object.pixel_position = object.current * 16
+	objects.objects[0] = object
+	objects.camera.grid.set_metatile_entry(12, 12, 0x3000 | behavior)
+	return objects
+
+
 ## A field heart and weather share sprite.c's tagged slots; fixed weather slots overwrite an earlier effect.
 ## Existing weather streams start with an empty palette bank and cannot expose allocation order or exhaustion.
 func test_field_effect_palettes_share_weather_allocation_and_release() -> void:
@@ -1391,6 +1518,12 @@ func test_field_effect_palettes_share_weather_allocation_and_release() -> void:
 		var weather := Gen3FieldWeather.new(objects.camera.data, palettes, objects.events)
 		weather.start()
 		assert_eq([weather.contrast_slot, weather.picture_slot], [13, 14])
+		objects.sprites.weather = weather
+		weather.set_current_and_next_no_delay(Gen3FieldWeather.Weather.RAIN)
+		weather.run_tasks()
+		assert_false(weather.sprites.pool.is_empty())
+		objects.sprites.free_effect_palette({"palette": weather.contrast_slot})
+		assert_eq(palettes.sprite_index(0x1200), weather.contrast_slot, "live weather sprites retain their palette")
 		assert_eq(palettes.unfaded_color(256 + 12 * 16), 31)
 		assert_eq(objects.sprites.load_effect_palette(info), slot)
 		assert_eq(palettes.alloc_sprite(77), 15)

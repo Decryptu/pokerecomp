@@ -41,14 +41,12 @@ const SHADOW_Y_OFFSETS: Array[int] = [4, 4, 4, 16]
 
 var data: GameData
 var palette: Gen3Palette
-## The field's weather, which `UpdateSpritePaletteWithWeather` asks after each reflection palette load and whose
-## sprites take slots beside the objects' effects.
+## `UpdateSpritePaletteWithWeather` applies after reflection loads; weather sprites share the effect pool.
 var weather: Gen3FieldWeather:
 	set(value):
 		weather = value
 		if value != null:
 			value.sprites.taken_slots = taken_slots
-## The objects' field-effect sprites: [Gen3ObjectEvents]' own array.
 var effects: Array[Dictionary] = []
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
@@ -112,7 +110,11 @@ static func corner(object: Gen3ObjectEvents.ObjectEvent, info: Dictionary, origi
 
 ## `SetObjectSubpriorityByElevation` against the screen at backup pixel [param origin].
 static func subpriority(object: Gen3ObjectEvents.ObjectEvent, elevation: int, origin: Vector2i, add: int) -> int:
-	var row: int = ((object.pixel_position.y + 16 - origin.y + 8) & 0xFF) >> 4
+	return subpriority_at(object.pixel_position.y + 16 - origin.y, elevation, add)
+
+
+static func subpriority_at(bottom: int, elevation: int, add: int) -> int:
+	var row: int = ((bottom + 8) & 0xFF) >> 4
 	return (ELEVATION_SUBPRIORITY[elevation] + ((16 - row) << 1) + add) & 0xFF
 
 
@@ -128,10 +130,13 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 		if not entry.is_empty():
 			entries[int(shadow["sprite_slot"])] = entry
 	for effect: Dictionary in effects:
-		if int(effect["request"]["effect_id"]) in objects.icon_effects():
-			var entry: Dictionary = _icon_entry(objects, effect, origin)
-			if not entry.is_empty():
-				entries[int(effect["sprite_slot"])] = entry
+		var entry: Dictionary = {}
+		if effect.get("grass", false):
+			entry = _grass_entry(objects, effect)
+		elif int(effect["request"]["effect_id"]) in objects.icon_effects():
+			entry = _icon_entry(objects, effect, origin)
+		if not entry.is_empty():
+			entries[int(effect["sprite_slot"])] = entry
 	for reflection: Dictionary in reflections:
 		var entry: Dictionary = _reflection_entry(objects, reflection, origin)
 		entries[int(reflection["sprite_slot"])] = entry
@@ -164,7 +169,6 @@ func effect_slot(reverse: bool = true) -> int:
 	return -1
 
 
-## The slots the objects, their effects and the reflections hold.
 func taken_slots() -> Array:
 	var out: Array = range(Gen3ObjectEvents.COUNT)
 	for row: Dictionary in effects + reflections:
@@ -286,13 +290,66 @@ func load_effect_palette(info: Dictionary) -> int:
 			palette.load(info.get("palette_bytes", PackedByteArray()), Gen3Palette.OBJ_OFFSET + slot * 16)
 	if slot != 0xFF and weather != null:
 		weather.update_sprite_palette(slot)
-	return int(info["palette"]) if data.id == RomRegistry.EMERALD else slot & 0xF
+	return int(info["palette"]) if data.id == RomRegistry.EMERALD and info.has("palette") else slot & 0xF
 
 
 func free_effect_palette(effect: Dictionary) -> void:
 	var slot: int = int(effect.get("palette", 0))
-	if not effects.any(func(other: Dictionary) -> bool: return int(other.get("palette", 0)) == slot):
-		palette.sprite_tags.erase(slot)
+	if effects.any(func(other: Dictionary) -> bool: return int(other.get("palette", 0)) == slot):
+		return
+	if weather != null:
+		for sprite: Gen3WeatherSprites.WeatherSprite in weather.sprites.all_sprites():
+			if slot == (weather.picture_slot if sprite.second_palette else weather.contrast_slot):
+				return
+	palette.sprite_tags.erase(slot)
+
+
+func _grass_entry(objects: Gen3ObjectEvents, effect: Dictionary) -> Dictionary:
+	var anim: Gen3SpriteAnim = effect["anim"]
+	if anim.tiles.is_empty():
+		return {}
+	var info: Dictionary = effect["info"]
+	var size := Vector2i(int(info["width"]), int(info["height"]))
+	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
+	var at: Vector2i = center - size / 2
+	var sub: int = int(effect.get("subpriority", 0))
+	var priority: int = int(effect["priority"])
+	return {"y": at.y & 0xFF, "key": (priority << 8) | sub,
+		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i(int(anim.h_flip), int(anim.v_flip)),
+			"priority": priority, "palette": int(effect["palette"]), "size": size,
+			"tiles": data.world_sprite_image(int(anim.tiles[0]), int(anim.tiles[1]))}}
+
+
+func update_grass_subpriority(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
+	var anim: Gen3SpriteAnim = effect["anim"]
+	var info: Dictionary = effect["info"]
+	var size := Vector2i(int(info["width"]), int(info["height"]))
+	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
+	var add: int = 4 if int(effect["request"]["effect_id"]) == 4 and anim.cmd_index == 0 else 0
+	var sub: int = subpriority_at(center.y + size.y / 2, int(effect["elevation"]), add)
+	if int(effect["request"]["effect_id"]) in [4, 17]:
+		sub = _grass_subpriority(objects, effect["position"], size, sub)
+	effect["subpriority"] = sub
+
+
+## `UpdateGrassFieldEffectSubpriority` raises grass behind the first overlapping object's feet.
+func _grass_subpriority(objects: Gen3ObjectEvents, center: Vector2i, size: Vector2i, sub: int) -> int:
+	for object: Gen3ObjectEvents.ObjectEvent in objects.objects:
+		if not object.active:
+			continue
+		var height: int = int(objects.graphics_info(object.graphics_id).get("height", 0))
+		var linked: Vector2i = object.pixel_position + Vector2i(8, 16 - height / 2) \
+			- objects.camera.screen_origin() - objects.camera.sprite_coord_offset()
+		linked = Vector2i(wrapi(linked.x, -32768, 32768), wrapi(linked.y, -32768, 32768))
+		var ylo: int = wrapi(center.y + size.y / 2, -32768, 32768)
+		var yhi: int = wrapi(ylo - height / 2, -32768, 32768)
+		var top: int = wrapi(linked.y - height / 2, -32768, 32768)
+		if wrapi(center.x - size.x / 2, -32768, 32768) < linked.x \
+				and wrapi(center.x + size.x / 2, -32768, 32768) > linked.x \
+				and (top < yhi or top < ylo) \
+				and linked.y > yhi and sub <= object.subpriority:
+			return (object.subpriority + 2) & 0xFF
+	return sub
 
 
 func _icon_entry(objects: Gen3ObjectEvents, effect: Dictionary, origin: Vector2i) -> Dictionary:

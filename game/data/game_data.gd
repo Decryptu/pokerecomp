@@ -420,10 +420,18 @@ func world_shadow_graphics(size: int) -> Dictionary:
 	return row
 
 
+func world_grass_graphics(effect: int) -> Dictionary:
+	return _world_effect_graphics("grass_templates", effect)
+
+
 func world_icon_graphics(effect: int) -> Dictionary:
+	return _world_effect_graphics("icon_templates", effect)
+
+
+func _world_effect_graphics(table: String, effect: int) -> Dictionary:
 	if generation != RomRegistry.GEN3:
 		return {}
-	var row: Dictionary = _coerce_service_dictionary(_scripts().get("icon_templates", {}).get(str(effect), {}))
+	var row: Dictionary = _coerce_service_dictionary(_scripts().get(table, {}).get(str(effect), {}))
 	if not row.is_empty():
 		row["images"] = world_sprite_images(int(row["images"]))
 		var colors: Dictionary = _gba_graphics_record("object_palettes", int(row.get("palette_offset", -1)))

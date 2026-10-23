@@ -97,7 +97,7 @@ Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
 the shelf. An import reads their species with Pokédex entries, moves, types,
 matchup chart, items, abilities, berry growth parameters, object graphics with
 their pictures, palettes, OAM shapes, subsprite tables, image and affine animation commands and
-step-animation positions, trainers, map headers,
+step-animation positions, grass and trainer-icon effects, trainers, map headers,
 layouts, tilesets with their animation frames and timing, events, map script
 entry points, reachable
 bytecode and the texts, braille, movement lists and marts it names, the
@@ -148,8 +148,9 @@ underwater bubbles) move on the cartridge's sprite clock, blend over the map
 through BLDALPHA, and hold a change of weather until they have faded out. Objects
 play their imported affine animations through the same clock and matrix path.
 Trainer icons and emotes bounce above their objects, play their imported image animations
-and share sprite and palette slots with weather. Grass and other field effects and gate rendering
-await the field host. Script bytecode and its data are decoded and cached; script
+and share sprite and palette slots with weather. Tall and long grass animate on entry, retain their
+settled cover while occupied, and draw separate jump-landing effects. Short grass, remaining field
+effects and gate rendering await the field host. Script bytecode and its data are decoded and cached; script
 execution awaits the rest of the GBA world model.
 
 | Game | SHA-1 |
