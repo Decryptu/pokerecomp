@@ -114,8 +114,10 @@ tileset animation frames in, and a layout cell after the count draws the
 the frames counted from the warp's fade in under the map's weather
 ([Gen3ObjectSprites](game/gen3/gen3_object_sprites.gd): OBJ palettes, priority
 by elevation, subsprite splits, shadows, reflections and shared `SortSprites`
-order). The field's camera steps across map connections as the cartridge's does, spawning and removing the map's objects as they enter
-and leave the view, and its collision test answers as the cartridge's. Every
+order). The [field camera](game/gen3/gen3_field_camera.gd) carries each pixel step through
+background and sprite offsets and steps across map connections, spawning and
+removing objects as they enter and leave the view; its collision test answers
+as the cartridge's. Every
 held object movement runs frame by frame through
 [Gen3ObjectEvents](game/gen3/gen3_object_events.gd),
 retaining each engine's action numbers, walk cadence, jump arcs and collision

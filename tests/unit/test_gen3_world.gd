@@ -2398,3 +2398,30 @@ func test_water_reflection_matrices_and_affine_pixels_match_the_hardware() -> vo
 	sprite["matrix"] = Vector4i(260, 0, 0, -256)
 	layer = Gen3FieldVram._draw_oam([sprite], Vector2i(8, 8), palette)
 	assert_eq(layer["priority"][56], -1, "negative fractional source coordinates stay outside the texture")
+
+
+func test_camera_pixel_steps_keep_background_and_sprite_offsets_aligned() -> void:
+	for direction: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		for speed: int in [1, 2, 4, 8]:
+			var objects: Gen3ObjectEvents = _field_objects(RomRegistry.EMERALD)
+			var camera: Gen3FieldCamera = objects.camera
+			camera.pos = Vector2i(5, 5)
+			var origin: Vector2i = camera.screen_origin()
+			for frame: int in 16 / speed:
+				camera.update(direction * speed)
+				assert_eq(camera.screen_origin(), origin + direction * speed * (frame + 1))
+				assert_eq(camera.sprite_coord_offset(), -direction * speed * (frame + 1) - Vector2i(0, 40))
+			assert_eq(camera.pos, Vector2i(5, 5) + direction)
+			assert_eq(camera.scroll, Vector2i.ZERO)
+			assert_eq(camera.movement_offset, Vector2i.ZERO)
+
+
+func test_camera_vertical_reversal_keeps_the_cartridge_horizontal_step() -> void:
+	var camera: Gen3FieldCamera = _field_objects(RomRegistry.EMERALD).camera
+	camera.pos = Vector2i(5, 5)
+	camera.update(Vector2i(0, 2))
+	assert_eq(camera.update(Vector2i(0, -2)), Vector2i(-1, 0))
+	assert_eq(camera.pos, Vector2i(4, 6))
+	assert_eq(camera.movement_offset, Vector2i.ZERO)
+	assert_eq(camera.pixel_offset, Vector2i.ZERO)
+	assert_eq(camera.screen_origin(), Vector2i(80, 120))

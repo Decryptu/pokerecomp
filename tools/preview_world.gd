@@ -1,11 +1,9 @@
 extends SceneTree
 
-## Renders one imported map's blocks to a PNG, or photographs the real screen on that map. `live help` prints
-## [constant KIND_HELP], which is every kind and what its two numbers mean.
+## Renders imported map blocks or the real field screen. `live help` prints [constant KIND_HELP].
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
-## A GBA map draws its backup map after an optional frame count, or given a layout cell the field screen around
-## the player, counted from the warp's fade in under the map's weather or a last number's
-## (`emerald 0 34 out.png 200 20 100 5` is Route 119 in a thunderstorm).
+## GBA: game group map path [frames [x y [weather [held_action]]]]. Frames start at the warp's fade in;
+## a held action starts at frame 120. `emerald 0 34 /tmp/w.png 128 20 100 5 11` walks right in rain.
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
 ##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]
 
@@ -283,7 +281,7 @@ func _initialize() -> void:
 	if data != null and data.generation == RomRegistry.GEN3:
 		_preview_gba(data, int(args[1]), int(args[2]), args[3], int(args[4]) if args.size() >= 5 else 0,
 			Vector2i(int(args[5]), int(args[6])) if args.size() >= 7 else Vector2i(-1, -1),
-			int(args[7]) if args.size() >= 8 else -1)
+			int(args[7]) if args.size() >= 8 else -1, int(args[8]) if args.size() >= 9 else -1)
 		return
 	var map: Gen2WorldMap = data.world_map(int(args[1]), int(args[2])) if data != null else null
 	var tileset: Gen2WorldTileset = data.world_tileset(map.tileset) if map != null else null
@@ -1864,7 +1862,7 @@ func _draw_marker(image: Image, cell_x: int, cell_y: int, color: Color) -> void:
 
 
 func _preview_gba(data: GameData, group: int, number: int, path: String, frames: int, at: Vector2i,
-		weather: int) -> void:
+		weather: int, action: int) -> void:
 	var grid: Gen3MapGrid = Gen3MapGrid.open(data, group, number)
 	if grid == null:
 		push_error("The requested GBA map is not available.")
@@ -1877,7 +1875,7 @@ func _preview_gba(data: GameData, group: int, number: int, path: String, frames:
 			vram.step()
 		image = vram.draw(grid, Rect2i(0, 0, grid.width, grid.height))
 	else:
-		image = _preview_gba_screen(data, group, number, vram, frames, at, weather)
+		image = _preview_gba_screen(data, group, number, vram, frames, at, weather, action)
 	var error: int = image.save_png(path) if image != null else ERR_CANT_CREATE
 	if error != OK:
 		push_error("Could not write %s (error %d)." % [path, error])
@@ -1887,7 +1885,7 @@ func _preview_gba(data: GameData, group: int, number: int, path: String, frames:
 ## The field screen [param frames] frames after the player spawns on layout cell [param at], under the map's
 ## weather or, when not negative, [param override].
 func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3FieldVram, frames: int,
-		at: Vector2i, override: int) -> Image:
+		at: Vector2i, override: int, action: int) -> Image:
 	var camera: Gen3FieldCamera = Gen3FieldCamera.open(data, group, number, at)
 	var events := Gen3EventData.new(data.id)
 	var objects := Gen3ObjectEvents.new(camera, events, vram.palette)
@@ -1900,16 +1898,23 @@ func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3Fiel
 		weather.set_saved(override)
 	weather.start()
 	weather.resume_paused()
-	if Gen3PlayerAvatar.open(objects, at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET, 1, 0) == null:
+	var avatar := Gen3PlayerAvatar.open(objects, at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET, 1, 0)
+	if avatar == null:
 		push_error("The player could not be placed at %s." % at)
 		return null
+	avatar.track_camera()
 	objects.spawn_in_view()
 	# WarpFadeInScreen: FillPalBufferBlack, then FadeScreen(FADE_FROM_BLACK, 0).
 	vram.palette.faded.fill(0)
 	weather.fade_screen(Gen3FieldWeather.Fade.FROM_BLACK, 0)
 	for frame: int in frames:
 		weather.run_tasks()
+		if frame == 120 and action >= 0:
+			objects.set_held_movement(avatar.object(), action)
+		var previous: Vector2i = avatar.object().pixel_position
 		objects.step_movements()
+		if camera.update(avatar.object().pixel_position - previous) != Vector2i.ZERO:
+			objects.follow_camera()
 		weather.sprites.animate(camera.sprite_coord_offset())
 		vram.palette.update_fade()
 		vram.step()
