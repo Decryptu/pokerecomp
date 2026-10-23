@@ -2517,3 +2517,49 @@ func test_affine_import_keeps_padded_frames_and_signed_rotation() -> void:
 	assert_true(Gen3World._affine_table(RomFile.from_bytes(bytes), 0).is_empty(), "invalid jump refuses the table")
 	assert_true(Gen3World._affine_table(RomFile.from_bytes(bytes.slice(0, 23)), 0).is_empty(),
 		"truncated command refuses the table")
+
+
+## Held affine movement must reach OAM and survive a pause; interpreter tests never drive an object.
+func test_object_affine_movement_updates_oam_and_retains_the_paused_transform() -> void:
+	var objects: Gen3ObjectEvents = _reflection_objects(RomRegistry.EMERALD)
+	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+	object.affine.anims = [[[256, 256, 0, 0], [8, 0, 0, 100], [Gen3AffineAnim.END, 0]],
+		[[0, 8, 0, 100], [Gen3AffineAnim.END, 0]]]
+	objects.set_held_movement(object, 0x5E)
+	objects.step_movements()
+	assert_true(object.anim.affine)
+	assert_eq(object.subsprite_mode, Gen3ObjectSprites.Subsprites.OFF)
+	assert_eq(object.affine.scale, Vector2i(256, 256))
+	Gen3ObjectEvents.clear_held_movement(object)
+	objects.set_held_movement(object, 0x62)
+	objects.step_movements()
+	objects.step_movements()
+	assert_eq(object.affine.scale, Vector2i(272, 256))
+	Gen3ObjectEvents.clear_held_movement(object)
+	object.frozen = false
+	objects.freeze_except_player()
+	objects.step_movements()
+	assert_eq(object.affine.scale, Vector2i(272, 256))
+	var part: Dictionary = objects.sprites.oam(objects, Vector2i.ZERO)[0]
+	assert_eq(part["matrix"], Vector4i(240, 0, 0, 256))
+	assert_true(part["double_size"])
+	objects.unfreeze_all()
+	Gen3ObjectEvents.clear_held_movement(object)
+	objects.set_held_movement(object, 0x63)
+	objects.step_movements()
+	assert_eq(object.affine.scale, Vector2i(272, 264), "Change preserves scale from the previous animation")
+	Gen3ObjectEvents.clear_held_movement(object)
+	objects.set_held_movement(object, 0x5F)
+	objects.step_movements()
+	assert_false(objects.sprites.oam(objects, Vector2i.ZERO)[0].has("matrix"))
+
+
+func test_double_size_affine_oam_expands_the_canvas_without_resizing_the_source() -> void:
+	var tiles := PackedByteArray()
+	tiles.resize(32)
+	tiles.fill(0x11)
+	var sprite: Dictionary = {"x": 0, "y": 0, "priority": 2, "palette": 0, "tiles": tiles,
+		"size": Vector2i(8, 8), "flip": Vector2i.ZERO, "matrix": Vector4i(128, 0, 0, 128), "double_size": true}
+	var layer: Dictionary = Gen3FieldVram._draw_oam([sprite], Vector2i(16, 16), Gen3Palette.new())
+	assert_eq((layer["priority"] as PackedInt32Array).count(2), 256,
+		"a doubled 8x8 texture covers the complete 16x16 OAM canvas")

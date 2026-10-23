@@ -161,7 +161,7 @@ static func _draw_oam(oam: Array, size: Vector2i, colors: Gen3Palette) -> Dictio
 	blend.resize(size.x * size.y)
 	for index: int in range(oam.size() - 1, -1, -1):
 		var sprite: Dictionary = oam[index]
-		var dims: Vector2i = sprite["size"]
+		var dims: Vector2i = sprite["size"] * (2 if sprite.get("double_size", false) else 1)
 		var data: PackedByteArray = sprite["tiles"]
 		for y: int in dims.y:
 			var screen_y: int = (int(sprite["y"]) + y) & 0xFF
@@ -185,7 +185,7 @@ static func _sprite_color(sprite: Dictionary, pixel: Vector2i, data: PackedByteA
 		dims.y - 1 - pixel.y if sprite["flip"].y else pixel.y)
 	if sprite.has("matrix"):
 		var matrix: Vector4i = sprite["matrix"]
-		var center: Vector2i = pixel - dims / 2
+		var center: Vector2i = pixel - dims / (1 if sprite.get("double_size", false) else 2)
 		from = Vector2i((matrix.x * center.x + matrix.y * center.y) >> 8,
 			(matrix.z * center.x + matrix.w * center.y) >> 8) + dims / 2
 	if not Rect2i(Vector2i.ZERO, dims).has_point(from):

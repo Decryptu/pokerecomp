@@ -311,6 +311,12 @@ func _parts(object: Gen3ObjectEvents.ObjectEvent, entry: Dictionary) -> Array:
 	var whole: Dictionary = {"x": entry["x"], "y": entry["y"], "flip": flip, "priority": object.priority,
 		"palette": object.palette_num, "tiles": entry["tiles"],
 		"size": OAM_SIZES[int(info["oam"]["shape"])][int(info["oam"]["size"])]}
+	if object.anim.affine:
+		whole["matrix"] = object.affine.matrix()
+		whole["double_size"] = true
+		var dims: Vector2i = whole["size"]
+		whole["x"] = (int(whole["x"]) - dims.x / 2) & 0x1FF
+		whole["y"] = (int(whole["y"]) - dims.y / 2) & 0xFF
 	var tables: Array = info["subsprite_tables"]
 	if object.subsprite_mode == Subsprites.OFF or tables.is_empty() or tables[object.subsprite_table].is_empty():
 		return [whole]

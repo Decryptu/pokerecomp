@@ -283,6 +283,7 @@ class ObjectEvent:
 	## flags `FreezeObjectEvent` backs up.
 	var anim := Gen3SpriteAnim.new()
 	var x2: int = 0
+	var affine := Gen3AffineAnim.new()
 	var affine_anim: int = -1
 	var affine_anim_paused: bool = false
 	var anim_paused_backup: bool = false
@@ -481,6 +482,7 @@ func _take_graphics(object: ObjectEvent, graphics_id: int) -> void:
 func _setup_sprite(object: ObjectEvent) -> void:
 	var info: Dictionary = graphics_info(object.graphics_id)
 	sprites.load_palette(info, true)
+	object.affine.anims = info.get("affine_anims", [])
 	if object.movement_type == MOVEMENT_TYPE_INVISIBLE:
 		object.invisible = true
 	object.priority = int(info.get("oam", {}).get("priority", 0))
@@ -894,6 +896,9 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 		if not object.fixed_priority:
 			object.subpriority = Gen3ObjectSprites.subpriority(object, object.previous_elevation, camera.screen_origin(), 1)
 		object.anim.animate()
+		object.affine.enabled = object.anim.affine
+		object.affine.paused = object.affine_anim_paused
+		object.affine.animate()
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
 	_step_effect_sprites(requests)
@@ -1170,6 +1175,9 @@ func _start_state_motion(object: ObjectEvent, row: Array, slot: int, requests: A
 			object.anim.affine = int(row[2]) == 1
 			object.affine_anim = 0 if object.anim.affine else -1
 			object.affine_anim_paused = object.anim.affine
+			if object.anim.affine:
+				object.affine.start(0)
+				object.subsprite_mode = Gen3ObjectSprites.Subsprites.OFF
 		Motion.LOCK_ANIM:
 			if int(row[2]) == 1:
 				_lock_anim(object)
@@ -1202,7 +1210,13 @@ func _start_walk(object: ObjectEvent, direction: int, pace: int, options: Dictio
 		object.anim.seek(0)
 	if options.has("affine"):
 		object.affine_anim_paused = false
-		object.affine_anim = int(options["affine"])
+		var number: int = int(options["affine"])
+		if object.affine_anim != number:
+			if number == 0:
+				object.affine.start(number)
+			else:
+				object.affine.change(number)
+		object.affine_anim = number
 	_ground(object, slot, "begin_step", requests)
 
 
