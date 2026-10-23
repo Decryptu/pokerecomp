@@ -2425,3 +2425,53 @@ func test_camera_vertical_reversal_keeps_the_cartridge_horizontal_step() -> void
 	assert_eq(camera.movement_offset, Vector2i.ZERO)
 	assert_eq(camera.pixel_offset, Vector2i.ZERO)
 	assert_eq(camera.screen_origin(), Vector2i(80, 120))
+
+
+## The cartridge clock applies absolute frames even paused, holds relative frames, and distinguishes
+## Change from Start. Reflection coverage alone never rotates, pauses or ends an affine sequence.
+func test_affine_clock_preserves_transforms_and_pause_boundaries() -> void:
+	var anim := Gen3AffineAnim.new()
+	anim.anims = [[[512, 256, 64, 0], [128, -64, 1, 2], [Gen3AffineAnim.END, 0]],
+		[[0, 0, 0, 1], [Gen3AffineAnim.END, 0]]]
+	anim.paused = true
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(512, 256))
+	assert_eq(anim.rotation, 64 << 8)
+	anim.animate()
+	assert_eq(anim.cmd_index, 0)
+	anim.paused = false
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(640, 192))
+	assert_eq(anim.delay, 1)
+	anim.paused = true
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(640, 192))
+	assert_eq(anim.delay, 1)
+	anim.paused = false
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(768, 128))
+	anim.animate()
+	assert_true(anim.ended)
+	anim.change(1)
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(768, 128))
+	assert_eq(anim.rotation, 66 << 8)
+	anim.start(1)
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(256, 256))
+	assert_eq(anim.rotation, 0)
+
+
+func test_affine_loops_wrap_signed_scales_and_keep_their_final_frame() -> void:
+	var anim := Gen3AffineAnim.new()
+	anim.anims = [[[32760, -32768, -1, 0], [Gen3AffineAnim.LOOP, 0], [10, -1, -1, 1],
+		[Gen3AffineAnim.LOOP, 2], [Gen3AffineAnim.END, 0]]]
+	anim.animate()
+	for frame: int in 4:
+		anim.animate()
+	assert_true(anim.ended)
+	assert_eq(anim.scale, Vector2i(-32746, 32765))
+	assert_eq(anim.rotation, 252 << 8)
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(-32746, 32765))
+	assert_true(anim.ended)

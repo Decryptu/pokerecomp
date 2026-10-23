@@ -137,7 +137,7 @@ walk up and turn the player; FireRed and LeafGreen scroll the camera to a
 trainer above the view. Jump shadows follow each object at ground level and
 stop on landing, grass, water or reflective ground. Water and ice reflections
 follow the object's current frame, visibility and jump offsets, with bridge
-palettes and the shared water distortion clock. [The weather](game/gen3/gen3_field_weather.gd)
+palettes and the shared [affine command clock](game/gen3/gen3_affine_anim.gd). [The weather](game/gen3/gen3_field_weather.gd)
 darkens, brightens and fades the field's colours through one
 [palette RAM](game/gen3/gen3_palette.gd) as each engine does: the colour maps
 rain and shade step through, Ruby, Sapphire and Emerald's drought tables, fog's
