@@ -3,17 +3,13 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3 trainers buried in ash now pop out with the ash puff and jump when revealed, then keep facing the way they turned.
-- Generation 3 objects now run every scripted movement, including the Pokémon Center nurse's bow, Cut trees and Rock Smash rocks breaking, and the Acro Bike's wheelies, timed by each sprite's own animation.
-- Generation 3 jump shadows now draw from cartridge graphics, follow objects at ground level and stop on landing or unsuitable terrain.
-- Generation 3 maps now take on their weather's colours: rain and shade darken the screen, fog lightens it, drought glares, and warps fade in and out the way each cartridge does.
-- Generation 3 rain, thunderstorms and downpours now fall and splash on the map, with lightning flashes, and the rain tapers off before the weather changes.
-- Generation 3 clouds, snow, fog, volcanic ash, sandstorms and underwater bubbles now drift over the map, fading in and out when the weather changes.
+- Generation 3 objects now play cartridge affine animations, including scaling and rotation during scripted movements, with the correct expanded sprite drawing area.
+- Generation 3 imports preserve every object graphics record's affine animation tables.
 - Generation 3 cartridges remain unplayable while field integration continues.
 
 ## Fixed
 
-- Generation 3 imports reject missing bridge reflection palettes and unterminated object palette tables.
+- Generation 3 camera scrolling follows the player's pixel movement between map cells, keeping the background and sprites aligned.
 
 ## Updating this release
 
