@@ -96,7 +96,7 @@ over a one-pocket bag.
 Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
 the shelf. An import reads their species with Pokédex entries, moves, types,
 matchup chart, items, abilities, berry growth parameters, object graphics with
-their pictures, palettes, OAM shapes, subsprite tables, sprite animations and
+their pictures, palettes, OAM shapes, subsprite tables, image and affine animation commands and
 step-animation positions, trainers, map headers,
 layouts, tilesets with their animation frames and timing, events, map script
 entry points, reachable

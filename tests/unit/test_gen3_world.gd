@@ -2492,3 +2492,28 @@ func test_affine_matrices_match_bios_for_all_angles_and_scale_boundaries() -> vo
 				matrix.x, matrix.y, matrix.z, matrix.w])
 	assert_eq(("\n".join(lines) + "\n").sha256_text(),
 		"adb12402c703e6812334f40db67d6f5d8817c4f5064cb0af939f8f5ecb6e0dc8")
+
+
+func test_affine_import_keeps_padded_frames_and_signed_rotation() -> void:
+	var bytes := PackedByteArray()
+	bytes.resize(40)
+	bytes.encode_u32(0, 0x08000008)
+	bytes.encode_u16(8, 512)
+	bytes.encode_u16(10, 0xFF00)
+	bytes[12] = 0xFF
+	bytes[13] = 2
+	bytes.encode_u16(16, 0x7FFD)
+	bytes.encode_u16(18, 7)
+	bytes.encode_u16(24, 0x7FFE)
+	var rom: RomFile = RomFile.from_bytes(bytes, RomRegistry.EMERALD)
+	var tables: Array = Gen3World._affine_table(rom, 0)
+	assert_eq(tables, [[[512, -256, -1, 2], [0x7FFD, 7], [0x7FFE, 0]]])
+	var anim := Gen3AffineAnim.new()
+	anim.anims = tables
+	anim.animate()
+	assert_eq(anim.scale, Vector2i(768, 0))
+	assert_eq(anim.rotation, 65280)
+	bytes.encode_u16(26, 3)
+	assert_true(Gen3World._affine_table(RomFile.from_bytes(bytes), 0).is_empty(), "invalid jump refuses the table")
+	assert_true(Gen3World._affine_table(RomFile.from_bytes(bytes.slice(0, 23)), 0).is_empty(),
+		"truncated command refuses the table")

@@ -905,15 +905,26 @@ const SPRITE_FIELDS: Array[String] = ["palette_tag", "reflection_palette_tag", "
 	"palette_slot", "shadow_size", "inanimate", "disable_reflection_palette_load", "tracks"]
 
 
+const AFFINE_DIGESTS: Dictionary = {
+	&"emerald": "912f32feb8d8cc407f35425019e5520d34fd4f43",
+	&"firered": "8dde5f0ef5130bf2c1d5a020f09f32fa0936cece",
+	&"leafgreen": "8dde5f0ef5130bf2c1d5a020f09f32fa0936cece",
+	&"ruby": "ff459bc08ed9d22a6b2d5fc6ee33533593f2c0ae",
+	&"sapphire": "ff459bc08ed9d22a6b2d5fc6ee33533593f2c0ae",
+}
+
+
 func _object_sprites() -> void:
 	var data: GameData = _r.data
 	var lines := PackedStringArray(["object sprites"])
+	var affine_lines := PackedStringArray()
 	var graphics: Dictionary = {"object_graphics": [], "mauville_graphics": []}
 	for mauville: bool in [false, true]:
 		var index: int = 0
 		while not data.world_object_graphics(index, mauville).is_empty():
 			var info: Dictionary = data.world_object_graphics(index, mauville)
 			graphics["mauville_graphics" if mauville else "object_graphics"].append(info)
+			affine_lines.append("%d|%s" % [affine_lines.size(), JSON.stringify(info["affine_anims"])])
 			var fields := PackedStringArray()
 			for field: String in SPRITE_FIELDS:
 				fields.append(str(int(info[field])))
@@ -932,6 +943,7 @@ func _object_sprites() -> void:
 	for key: String in ["tag_sets", "player_reflections", "special_reflections"]:
 		lines.append("%s|%s" % [key, JSON.stringify(sets[key])])
 	_r.digest_matches("gen3_object_sprites", lines, SPRITE_DIGESTS[data.id])
+	_r.digest_matches("gen3_object_affine", affine_lines, AFFINE_DIGESTS[data.id])
 
 
 ## Pins from pret's shadow PNG indices and `metatile_behavior.c`, independently encoded in scratch.
