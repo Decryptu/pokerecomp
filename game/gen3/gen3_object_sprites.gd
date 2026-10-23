@@ -244,8 +244,10 @@ func _reflection_entry(objects: Gen3ObjectEvents, reflection: Dictionary, origin
 		"size": OAM_SIZES[int(info["oam"]["shape"])][int(info["oam"]["size"])],
 		"flip": Vector2i(int(object.anim.h_flip), 1)}
 	if not reflection["still"]:
-		var a: int = -(65536 / _reflection_anim.scale.x)
-		part["matrix"] = Vector4i(-a if object.anim.h_flip else a, 0, 0, -256)
+		var matrix: Vector4i = _reflection_anim.matrix()
+		if object.anim.h_flip:
+			matrix.x = -matrix.x
+		part["matrix"] = matrix
 	return {"y": y, "key": (3 << 8) | 152, "part": part,
 		"invisible": object.sprite_invisible or object.hide_reflection}
 
