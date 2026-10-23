@@ -87,6 +87,7 @@ func _one_game() -> void:
 	_step_anim_rows()
 	_object_sprites()
 	_shadows()
+	_icons()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -944,6 +945,60 @@ func _object_sprites() -> void:
 		lines.append("%s|%s" % [key, JSON.stringify(sets[key])])
 	_r.digest_matches("gen3_object_sprites", lines, SPRITE_DIGESTS[data.id])
 	_r.digest_matches("gen3_object_affine", affine_lines, AFFINE_DIGESTS[data.id])
+
+
+## trainer_see.c's PNGs/macros and compiled original icon callbacks, independently encoded in scratch.
+func _icons() -> void:
+	var data: GameData = _r.data
+	var objects: Gen3ObjectEvents = _fresh_objects(_camera_at(null, data, 0, 0, Vector2i.ZERO))
+	var lines := PackedStringArray()
+	for effect: int in objects.icon_effects():
+		var row: Dictionary = data.world_icon_graphics(effect)
+		if not _r.check(not row.is_empty(), "icon %d has no template" % effect):
+			return
+		lines.append("%d|%d|%d|%s|%s" % [effect, row["anim"], row["palette"],
+			(row["palette_bytes"] as PackedByteArray).hex_encode(), JSON.stringify(row["anims"])])
+		for image: Array in row["images"]:
+			var digest := HashingContext.new()
+			digest.start(HashingContext.HASH_SHA1)
+			digest.update(data.world_sprite_image(int(image[0]), int(image[1])))
+			lines.append(digest.finish().hex_encode())
+	var frlg: bool = data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	var expected: String = "35d29724e36c719a111c339e34a002fd64a62d61"
+	if frlg:
+		expected = "b4b6042856caffbc11ec931cde5cefe39156d1b3"
+	elif data.id == RomRegistry.EMERALD:
+		expected = "b236369f1a92bdbc4e750da12a465f18a5649c58"
+	_r.digest_matches("gen3_icons", lines, expected)
+	_icon_positions(objects)
+
+
+func _icon_positions(objects: Gen3ObjectEvents) -> void:
+	var lines := PackedStringArray()
+	var object := Gen3ObjectEvents.ObjectEvent.new()
+	object.local_id = 254
+	object.current = Vector2i(12, 12)
+	object.previous = object.current
+	object.ground_on_spawn = false
+	object.frozen = true
+	object.invisible = true
+	objects.objects[0] = object
+	for slot: int in range(1, Gen3ObjectEvents.COUNT):
+		objects.objects[slot].active = false
+	var height: int = int(objects.graphics_info(0)["height"])
+	for cut: int in [32, 1000]:
+		object.active = true
+		objects.start_effect_sprite(object, 0, 0, Gen3ObjectEvents.ICON_PASSES, true, [])
+		for frame: int in range(1, 65):
+			object.active = frame < cut
+			object.pixel_position = Vector2i(92 + frame * 2, 64 + (height >> 1) + frame % 7)
+			object.x2 = frame % 5
+			object.jump_y = -(frame % 8)
+			objects.step_movements()
+			var entries: Array = objects.sprites.oam(objects, Vector2i.ZERO)
+			lines.append("%d|%d|%d" % [cut, frame, entries.size()] + (
+				"|%d|%d" % [entries[0]["x"], entries[0]["y"]] if entries.size() == 1 else ""))
+	_r.digest_matches("gen3_icon_positions", lines, "01b6b831594aa1e23c8c164ba330f09daf34f102")
 
 
 ## Pins from pret's shadow PNG indices and `metatile_behavior.c`, independently encoded in scratch.

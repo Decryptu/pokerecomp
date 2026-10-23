@@ -139,12 +139,14 @@ static func _words(bytes: PackedByteArray) -> PackedInt32Array:
 func start() -> void:
 	if task == Task.MAIN:
 		return
-	var at: int = (Gen3Palette.OBJ_OFFSET + WEATHER_SPRITE_SLOT * 16) * 2
+	contrast_slot = palette.alloc_sprite(0x1200)
+	if contrast_slot == 0xFF:
+		return
+	var at: int = (Gen3Palette.OBJ_OFFSET + contrast_slot * 16) * 2
 	for index: int in _sprite_palette.size():
 		palette.unfaded[at + index] = _sprite_palette[index]
 	build_color_maps()
-	contrast_slot = WEATHER_SPRITE_SLOT
-	picture_slot = WEATHER_SPRITE_SLOT if _frlg else WEATHER_SPRITE_SLOT + 1
+	picture_slot = contrast_slot if _frlg else palette.alloc_sprite(0x1201)
 	sprites.reset()
 	lightened_fog.clear()
 	set_blend_coeffs(16, 0)

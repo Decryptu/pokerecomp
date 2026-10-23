@@ -420,6 +420,17 @@ func world_shadow_graphics(size: int) -> Dictionary:
 	return row
 
 
+func world_icon_graphics(effect: int) -> Dictionary:
+	if generation != RomRegistry.GEN3:
+		return {}
+	var row: Dictionary = _coerce_service_dictionary(_scripts().get("icon_templates", {}).get(str(effect), {}))
+	if not row.is_empty():
+		row["images"] = world_sprite_images(int(row["images"]))
+		var colors: Dictionary = _gba_graphics_record("object_palettes", int(row.get("palette_offset", -1)))
+		row["palette_bytes"] = colors.get("bytes", PackedByteArray())
+	return row
+
+
 ## A `SpriteFrameImage` table by dump offset, as [data offset, size] rows.
 func world_sprite_images(offset: int) -> Array:
 	if generation != RomRegistry.GEN3:

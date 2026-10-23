@@ -149,9 +149,7 @@ const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
 const MOVEMENT_TYPE_BURIED: int = 0x3F
 ## `gTrainerFacingDirectionMovementTypes`, by `DIR_*`, diagonals included.
 const TRAINER_FACING_TYPES: Array[int] = [8, 8, 7, 9, 10, 8, 8, 7, 7]
-## Field-effect sprites end on the pass after their last frame: FLDEFF_ASH_PUFF (Ruby/FRLG POP_OUT_OF_ASH) has
-## five six-frame cells, and `SpriteCB_TrainerIcons`' emotes, FLDEFF_EXCLAMATION_MARK_ICON among them, show
-## one 60-frame image.
+## Callbacks stop after AnimateSprite ends: ash uses five six-frame cells; icons total 60 frames.
 const ASH_PUFF: int = 49
 const ASH_PUFF_CELL: int = 6
 const ASH_PUFF_PASSES: int = 31
@@ -687,7 +685,7 @@ func _build_motions() -> void:
 	_motions[0x4D if _frlg else 0x41] = [Motion.UNLOCK, 0, 0]
 	for row: Array in STATE_MOTIONS:
 		_motions[int(row[1 if _frlg else 0])] = [int(row[2]), 0, int(row[3])] + row.slice(4)
-	var emotes: Array = [0, 33, 46, 66, 64] if _frlg else [0, 33, 46]
+	var emotes: Array = icon_effects()
 	for index: int in emotes.size():
 		_motions[(0x62 if _frlg else 0x56) + index] = [Motion.EMOTE, 0, emotes[index]]
 	if _frlg:
@@ -937,16 +935,28 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 		requests: Array) -> Dictionary:
 	var request: Dictionary = _effect_request(object, slot, effect)
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
-	if effect == FLDEFF_SHADOW:
-		var info: Dictionary = graphics_info(object.graphics_id)
+	if effect == FLDEFF_SHADOW or effect in icon_effects():
 		sprite["sprite_slot"] = sprites.effect_slot()
 		if int(sprite["sprite_slot"]) < 0:
 			return {}
+	if effect in icon_effects():
+		var info: Dictionary = camera.data.world_icon_graphics(effect)
+		var anim := Gen3SpriteAnim.new()
+		anim.anims = info.get("anims", [])
+		anim.images = info.get("images", [])
+		anim.start(int(info.get("anim", 0)))
+		sprite.merge({"anim": anim, "y_velocity": -5, "y_offset": 0, "palette": sprites.load_effect_palette(info)})
+	if effect == FLDEFF_SHADOW:
+		var info: Dictionary = graphics_info(object.graphics_id)
 		sprite["shadow_size"] = int(info.get("shadow_size", 0))
 		sprite["y_offset"] = (int(info.get("height", 0)) >> 1) - Gen3ObjectSprites.SHADOW_Y_OFFSETS[sprite["shadow_size"]]
 	requests.append(request)
 	_effect_sprites.append(sprite)
 	return sprite
+
+
+func icon_effects() -> Array:
+	return [0, 33, 46, 66, 64] if _frlg else [0, 33, 46]
 
 
 func field_effect_active(effect: int) -> bool:
@@ -958,14 +968,26 @@ func _step_effect_sprites(requests: Array) -> void:
 		var request: Dictionary = sprite["request"]
 		var object: ObjectEvent = by_identity(int(request["local_id"]), int(request["map_number"]), int(request["map_group"]))
 		var shadow: bool = int(request["effect_id"]) == FLDEFF_SHADOW
-		if (int(sprite["end"]) >= 0 and int(sprite["passes"]) >= int(sprite["end"])) \
+		if _effect_finished(sprite) \
 				or (sprite["follow"] and object == null) or (shadow and not _shadow_allowed(object)):
 			var stop: Dictionary = request.duplicate()
 			stop["kind"] = "stop_field_effect"
 			requests.append(stop)
 			_effect_sprites.remove_at(_effect_sprites.find(sprite))
+			if sprite.has("anim"):
+				sprites.free_effect_palette(sprite)
 		else:
+			if sprite.has("anim"):
+				sprite["y_offset"] += sprite["y_velocity"]
+				sprite["y_velocity"] = int(sprite["y_velocity"]) + 1 if sprite["y_offset"] != 0 else 0
+				(sprite["anim"] as Gen3SpriteAnim).animate()
 			sprite["passes"] = int(sprite["passes"]) + 1
+
+
+func _effect_finished(sprite: Dictionary) -> bool:
+	if sprite.has("anim") and not (sprite["anim"] as Gen3SpriteAnim).anims.is_empty():
+		return (sprite["anim"] as Gen3SpriteAnim).ended
+	return int(sprite["end"]) >= 0 and int(sprite["passes"]) >= int(sprite["end"])
 
 
 func shadow_sprites() -> Array[Dictionary]:

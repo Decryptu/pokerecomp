@@ -9,6 +9,10 @@ const OBJ_OFFSET: int = 256
 const ALL: int = 0xFFFFFFFF
 enum Status { DONE = 0, ACTIVE = 1, DELAY = 2, LOADING = 0xFF }
 
+## `sprite.c`'s tagged slots start past the reserved object palettes.
+var sprite_tags: Dictionary = {}
+var reserved_sprite_count: int = 12
+
 var unfaded := PackedByteArray()
 var faded := PackedByteArray()
 ## `gPaletteFade`, normal mode. [member fade_selected] is `multipurpose1`, and what VBlank waits on.
@@ -37,6 +41,22 @@ func load(bytes: PackedByteArray, offset: int) -> void:
 	for index: int in mini(bytes.size(), (COLORS - offset) * 2):
 		unfaded[offset * 2 + index] = bytes[index]
 		faded[offset * 2 + index] = bytes[index]
+
+
+## `AllocSpritePalette`; exhaustion returns 0xFF. LoadSpritePalette looks up existing tags before calling it.
+func alloc_sprite(tag: int) -> int:
+	for slot: int in range(reserved_sprite_count, 16):
+		if sprite_tags.get(slot, 0xFFFF) == 0xFFFF:
+			sprite_tags[slot] = tag
+			return slot
+	return 0xFF
+
+
+func sprite_index(tag: int) -> int:
+	for slot: int in range(reserved_sprite_count, 16):
+		if sprite_tags.get(slot, 0xFFFF) == tag:
+			return slot
+	return 0xFF
 
 
 func unfaded_color(index: int) -> int:

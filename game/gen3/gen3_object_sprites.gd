@@ -1,8 +1,7 @@
 class_name Gen3ObjectSprites
 extends RefCounted
 
-## The object events' OBJ palettes (`event_object_movement.c`) in the OBJ half of [member palette], and the OAM
-## `BuildOamBuffer` makes of them.
+## OBJ palette loads from `event_object_movement.c` and `BuildOamBuffer`'s OAM.
 
 const PALETTE_SLOTS: int = 10
 const LINK_PALETTE_SLOTS: int = 6
@@ -70,6 +69,8 @@ func _init(game: GameData, palettes: Gen3Palette = null) -> void:
 
 ## `InitObjectEventPalettes`; a link on FireRed, LeafGreen and Emerald loads six slots.
 func init_palettes(type: int) -> void:
+	palette.sprite_tags.clear()
+	palette.reserved_sprite_count = 8 if type == 1 and not _ruby else 12
 	reflection_type = type
 	special_tag = PALETTE_TAG_NONE
 	var sets: Array = data.world_object_palette_sets().get("tag_sets", [])
@@ -115,7 +116,7 @@ static func subpriority(object: Gen3ObjectEvents.ObjectEvent, elevation: int, or
 	return (ELEVATION_SUBPRIORITY[elevation] + ((16 - row) << 1) + add) & 0xFF
 
 
-## Objects, reflections and shadows sorted together, front first; `tiles` is 4bpp in 1D order.
+## Objects, reflections and field effects sorted together, front first; `tiles` is 4bpp in 1D order.
 func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 	var entries: Dictionary = {}
 	for slot: int in Gen3ObjectEvents.COUNT:
@@ -126,6 +127,11 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 		var entry: Dictionary = _shadow_entry(objects, shadow, origin)
 		if not entry.is_empty():
 			entries[int(shadow["sprite_slot"])] = entry
+	for effect: Dictionary in effects:
+		if int(effect["request"]["effect_id"]) in objects.icon_effects():
+			var entry: Dictionary = _icon_entry(objects, effect, origin)
+			if not entry.is_empty():
+				entries[int(effect["sprite_slot"])] = entry
 	for reflection: Dictionary in reflections:
 		var entry: Dictionary = _reflection_entry(objects, reflection, origin)
 		entries[int(reflection["sprite_slot"])] = entry
@@ -267,6 +273,44 @@ func _shadow_entry(objects: Gen3ObjectEvents, shadow: Dictionary, origin: Vector
 	return {"y": at.y & 0xFF, "key": (object.priority << 8) | 148,
 		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i.ZERO, "priority": object.priority,
 			"palette": 0, "size": size, "tiles": data.world_sprite_image(int(frame[0]), int(frame[1]))}}
+
+
+func load_effect_palette(info: Dictionary) -> int:
+	var tag: int = int(info.get("palette_tag", 0xFFFF))
+	if tag == 0xFFFF:
+		return int(info.get("palette", 0))
+	var slot: int = palette.sprite_index(tag)
+	if slot == 0xFF:
+		slot = palette.alloc_sprite(tag)
+		if slot != 0xFF:
+			palette.load(info.get("palette_bytes", PackedByteArray()), Gen3Palette.OBJ_OFFSET + slot * 16)
+	if slot != 0xFF and weather != null:
+		weather.update_sprite_palette(slot)
+	return int(info["palette"]) if data.id == RomRegistry.EMERALD else slot & 0xF
+
+
+func free_effect_palette(effect: Dictionary) -> void:
+	var slot: int = int(effect.get("palette", 0))
+	if not effects.any(func(other: Dictionary) -> bool: return int(other.get("palette", 0)) == slot):
+		palette.sprite_tags.erase(slot)
+
+
+func _icon_entry(objects: Gen3ObjectEvents, effect: Dictionary, origin: Vector2i) -> Dictionary:
+	var request: Dictionary = effect["request"]
+	var object: Gen3ObjectEvents.ObjectEvent = objects.by_identity(int(request["local_id"]),
+		int(request["map_number"]), int(request["map_group"]))
+	var info: Dictionary = data.world_icon_graphics(int(request["effect_id"]))
+	var anim: Gen3SpriteAnim = effect["anim"]
+	if object == null or info.is_empty() or anim.tiles.is_empty():
+		return {}
+	var height: int = int(objects.graphics_info(object.graphics_id).get("height", 0))
+	var center: Vector2i = object.pixel_position + Vector2i(8, -(height >> 1)) + Vector2i(object.x2,
+		object.jump_y + int(effect["y_offset"])) - origin
+	var at: Vector2i = center - Vector2i(8, 8)
+	return {"y": at.y & 0xFF, "key": (1 << 8) | (0x53 if request["effect_id"] == 0 else 0x52),
+		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i(int(anim.h_flip), int(anim.v_flip)),
+			"priority": 1, "palette": int(effect["palette"]), "size": Vector2i(16, 16),
+			"tiles": data.world_sprite_image(int(anim.tiles[0]), int(anim.tiles[1]))}}
 
 
 func _entry(objects: Gen3ObjectEvents, object: Gen3ObjectEvents.ObjectEvent, origin: Vector2i) -> Dictionary:
