@@ -33,8 +33,11 @@ const LONG_GRASS_TABLE_HIGH: int = 5
 const DISPLAY_HEIGHT: int = 160
 const SPRITE_COUNT: int = 64
 const SHADOW_SIZES: Array[Vector2i] = [Vector2i(8, 8), Vector2i(16, 8), Vector2i(32, 8), Vector2i(64, 32)]
-## `sAffineAnim_ReflectionDistortion_0`: relative X deltas, four/eight frames each.
-const REFLECTION_DELTAS: Array[int] = [1, 0, -1, 0, -1, 0, 1, 0]
+const REFLECTION_ANIM: Array = [
+	[-256, 256, -128, 0], [1, 0, 0, 4], [0, 0, 0, 8], [-1, 0, 0, 4],
+	[0, 0, 0, 8], [-1, 0, 0, 4], [0, 0, 0, 8], [1, 0, 0, 4],
+	[0, 0, 0, 8], [Gen3AffineAnim.JUMP, 1],
+]
 const SHADOW_Y_OFFSETS: Array[int] = [4, 4, 4, 16]
 
 var data: GameData
@@ -51,14 +54,14 @@ var effects: Array[Dictionary] = []
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
 var reflections: Array[Dictionary] = []
-var _reflection_frame: int = 0
-var _reflection_scale: int = -256
+var _reflection_anim := Gen3AffineAnim.new()
 var _ruby: bool = false
 var _order: Array[int] = []
 
 
 func _init(game: GameData, palettes: Gen3Palette = null) -> void:
 	data = game
+	_reflection_anim.anims = [REFLECTION_ANIM]
 	palette = palettes if palettes != null else Gen3Palette.new()
 	_ruby = game.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE]
 	for slot: int in SPRITE_COUNT:
@@ -228,11 +231,7 @@ func step_reflections(objects: Gen3ObjectEvents) -> void:
 		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[int(reflection["object_slot"])]
 		if not object.active or not object.has_reflection or object.local_id != int(reflection["local_id"]):
 			reflections.remove_at(index)
-	if _reflection_frame > 0:
-		var phase: int = (_reflection_frame - 1) % 48
-		var command: int = phase / 12 * 2 + int(phase % 12 >= 4)
-		_reflection_scale += REFLECTION_DELTAS[command]
-	_reflection_frame += 1
+	_reflection_anim.animate()
 
 
 func _reflection_entry(objects: Gen3ObjectEvents, reflection: Dictionary, origin: Vector2i) -> Dictionary:
@@ -245,7 +244,7 @@ func _reflection_entry(objects: Gen3ObjectEvents, reflection: Dictionary, origin
 		"size": OAM_SIZES[int(info["oam"]["shape"])][int(info["oam"]["size"])],
 		"flip": Vector2i(int(object.anim.h_flip), 1)}
 	if not reflection["still"]:
-		var a: int = -(65536 / _reflection_scale)
+		var a: int = -(65536 / _reflection_anim.scale.x)
 		part["matrix"] = Vector4i(-a if object.anim.h_flip else a, 0, 0, -256)
 	return {"y": y, "key": (3 << 8) | 152, "part": part,
 		"invisible": object.sprite_invisible or object.hide_reflection}
