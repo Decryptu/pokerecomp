@@ -93,6 +93,7 @@ const FIGURE_8_Y: Array[int] = [
 ## Emerald's NINJA_BOY. Emerald's bard reads the current Mauville man.
 const GRAPHICS_FALLBACK: Dictionary = {&"ruby": 5, &"sapphire": 5, &"firered": 16, &"leafgreen": 16, &"emerald": 5}
 const OBJ_EVENT_GFX_BARD: int = 69
+const VAR_FARAWAY_ISLAND_STEP_COUNTER: int = 0x403A
 ## `gSineTable`: sin(i * pi / 128) in Q8.8, truncated toward zero, as pret's `trig.c` lists it; its 320 entries
 ## run a quarter turn past the circle so that index + 64 reads the cosine.
 static var SINE: PackedInt32Array = _sine_table()
@@ -215,8 +216,7 @@ const MORE_ACTIONS: Array = [
 	[-1, -1, 0x9F, Motion.START_ANIM, ANIM_SHAKE_HEAD, {"mode": 0}],
 	[-1, -1, 0xA0, Motion.WALK, Pace.FAST, {"family": true, "glide": true}],
 ]
-## Held actions whose list ends in `MovementAction_PauseSpriteAnim`, run on every frame the finished hold
-## stays set.
+## `MovementAction_PauseSpriteAnim` runs every frame while the completed hold remains set.
 const PAUSE_AFTER: Array[int] = [Motion.FACE, Motion.WALK, Motion.IN_PLACE, Motion.JUMP, Motion.ANIM, Motion.FIGURE_8]
 
 ## `MetatileBehavior_Is*Blocked` by the side each blocks. Ruby, Sapphire and Emerald add the two-sided rows
@@ -335,8 +335,7 @@ var _facing := PackedByteArray()
 var _blocked: Dictionary = {}
 var _motions: Dictionary = {}
 var _effect_requests: Array = []
-## Buried trainers whose reveal action created `trainer_see.c`'s task this frame, by slot; [Gen3TrainerSee]
-## takes them before its next run.
+## Reveals queued this frame, by slot; [Gen3TrainerSee] takes them before its next task run.
 var buried_reveals: Array[int] = []
 var _effect_sprites: Array[Dictionary] = []
 ## Emerald's `GetCurrentMauvilleOldMan`, which picks the bard's graphics.
@@ -594,8 +593,7 @@ func _frlg_should_init(template: Dictionary, clone: bool, at: Vector2i) -> bool:
 	return true
 
 
-## `TemplateIsObstacleAndWithinView`: false for a clone obstacle less than nine columns and seven rows from
-## the focus.
+## `TemplateIsObstacleAndWithinView` refuses clone obstacles within nine columns/seven rows of the focus.
 func _obstacle_in_view_ok(at: Vector2i) -> bool:
 	var pos: Vector2i = camera.pos
 	if (pos.x < at.x and pos.x + Gen3MapGrid.MAP_OFFSET + 1 < at.x) \
@@ -904,8 +902,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	return requests
 
 
-## `ObjectEventExecHeldMovementAction` only ever sets `heldMovementFinished`, and keeps calling the step a
-## finished hold stopped on.
+## `ObjectEventExecHeldMovementAction` only sets `heldMovementFinished`; finished holds keep their last step.
 func _step_held(object: ObjectEvent, slot: int, requests: Array) -> void:
 	if not object.held_action_done:
 		object.held_action_done = _advance_motion(object, slot, requests)
@@ -968,7 +965,7 @@ func _step_effect_sprites(requests: Array) -> void:
 		var request: Dictionary = sprite["request"]
 		var object: ObjectEvent = by_identity(int(request["local_id"]), int(request["map_number"]), int(request["map_group"]))
 		var shadow: bool = int(request["effect_id"]) == FLDEFF_SHADOW
-		if _effect_finished(sprite) \
+		if (_grass_finished(sprite, object) if sprite.get("grass", false) else _effect_finished(sprite)) \
 				or (sprite["follow"] and object == null) or (shadow and not _shadow_allowed(object)):
 			var stop: Dictionary = request.duplicate()
 			stop["kind"] = "stop_field_effect"
@@ -977,9 +974,12 @@ func _step_effect_sprites(requests: Array) -> void:
 			if sprite.has("anim"):
 				sprites.free_effect_palette(sprite)
 		else:
-			if sprite.has("anim"):
+			if sprite.get("grass", false):
+				sprites.update_grass_subpriority(self, sprite)
+			if sprite.has("y_velocity"):
 				sprite["y_offset"] += sprite["y_velocity"]
 				sprite["y_velocity"] = int(sprite["y_velocity"]) + 1 if sprite["y_offset"] != 0 else 0
+			if sprite.has("anim"):
 				(sprite["anim"] as Gen3SpriteAnim).animate()
 			sprite["passes"] = int(sprite["passes"]) + 1
 
@@ -1538,6 +1538,8 @@ func _advance_jump(object: ObjectEvent, parameter: int, slot: int, requests: Arr
 		return false
 	object.jump_y = 0
 	_finish_motion(object, slot, requests)
+	if not special and not object.disable_jump_landing_effect:
+		_grass_landing(object, slot, requests)
 	object.has_shadow = object.has_shadow and special
 	return true
 
@@ -1565,12 +1567,94 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
 	if kind != "finish_step":
 		_update_reflection(object, slot)
+	_ground_grass(object, slot, kind, covering, requests)
 	requests.append({"kind": kind, "object_id": slot})
+
+
+## Ground-effect predicates take u8 even on FRLG's nine-bit map attributes.
+func _grass_effect(behavior: int) -> int:
+	behavior &= 0xFF
+	if behavior == 2 or (_frlg and behavior == 0xD1):
+		return 4
+	return 17 if not _frlg and behavior == MB_LONG_GRASS else -1
+
+
+func _ground_effects_visible(object: ObjectEvent) -> bool:
+	var steps: int = events.var_get(VAR_FARAWAY_ISLAND_STEP_COUNTER)
+	return not _is_faraway_mew(object) or (steps != 0xFFFF and steps % 4 == 0)
+
+
+func _ground_grass(object: ObjectEvent, slot: int, kind: String, covering: bool, requests: Array) -> void:
+	var effect: int = _grass_effect(object.current_behavior)
+	if effect < 0 or kind == "finish_step" or not _ground_effects_visible(object):
+		return
+	# The covering filter removes tall grass on a jump's start, but leaves long grass.
+	if kind == "begin_step" and not covering and effect == 4:
+		return
+	_start_grass(object, slot, effect, kind == "spawn", requests)
+
+
+func _grass_landing(object: ObjectEvent, slot: int, requests: Array) -> void:
+	var effect: int = _grass_effect(object.current_behavior)
+	if effect < 0 or not _ground_effects_visible(object):
+		return
+	_start_grass(object, slot, 12 if effect == 4 else 18, false, requests)
+	if effect == 4 and not _effect_sprites.any(func(row: Dictionary) -> bool:
+		return row.has("cell") and row["cell"] == object.current and int(row["request"]["effect_id"]) == 4 \
+			and by_identity(int(row["request"]["local_id"]), int(row["request"]["map_number"]),
+				int(row["request"]["map_group"])) == object):
+		_start_grass(object, slot, 4, true, requests)
+
+
+func _start_grass(object: ObjectEvent, slot: int, effect: int, settled: bool, requests: Array) -> void:
+	var info: Dictionary = camera.data.world_grass_graphics(effect)
+	if info.is_empty():
+		return
+	var sprite_slot: int = sprites.effect_slot()
+	if sprite_slot < 0:
+		return
+	var anim := Gen3SpriteAnim.new()
+	anim.anims = info["anims"]
+	anim.images = info["images"]
+	if settled:
+		anim.seek(4 if effect == 4 else 6)
+	var request: Dictionary = _effect_request(object, slot, effect)
+	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 12 if effect == 12 else 8)
+	position = Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768))
+	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
+		"passes": 0, "end": -1, "follow": effect in [4, 17], "grass": true, "moved": false, "info": info,
+		"cell": object.current, "map": Vector2i(camera.group, camera.number),
+		"position": position,
+		"elevation": object.previous_elevation, "priority": Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation]
+			if effect == 17 else 2, "palette": sprites.load_effect_palette(info)}
+	requests.append(request)
+	_effect_sprites.append(sprite)
+
+
+## Grass persists on either occupied cell; connections rebase its terrain lookup, leaving sprite pixels fixed.
+func _grass_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
+	var effect: int = int(sprite["request"]["effect_id"])
+	var anim: Gen3SpriteAnim = sprite["anim"]
+	if effect in [12, 18]:
+		return anim.ended
+	var map := Vector2i(camera.group, camera.number)
+	if camera.crossed and sprite["map"] != map:
+		var shifted: Vector2i = sprite["cell"] - camera.shift
+		sprite["cell"] = Vector2i(wrapi(shifted.x, -32768, 32768), wrapi(shifted.y, -32768, 32768))
+		sprite["map"] = map
+	var cell: Vector2i = sprite["cell"]
+	if object == null or _grass_effect(camera.grid.behavior_at(cell.x, cell.y)) != effect:
+		return true
+	if sprite["moved"] and anim.ended:
+		return true
+	if object.current != cell and object.previous != cell:
+		sprite["moved"] = true
+	return false
 
 
 func _update_reflection(object: ObjectEvent, slot: int) -> void:
 	var type: int = nearby_reflection_type(object)
-	if type != 0 and not object.has_reflection:
+	if type != 0 and not object.has_reflection and _ground_effects_visible(object):
 		sprites.start_reflection(self, object, slot, type == 1)
 	object.has_reflection = type != 0
 
@@ -1763,7 +1847,7 @@ func _mew_direction(player: ObjectEvent) -> int:
 		return 0
 	var delta := Vector2i(wrapi(player.previous.x - mew.current.x, -32768, 32768),
 		wrapi(player.previous.y - mew.current.y, -32768, 32768))
-	var steps: int = events.var_get(0x403A)
+	var steps: int = events.var_get(VAR_FARAWAY_ISLAND_STEP_COUNTER)
 	mew.invisible = steps % 8 != 0
 	if steps % 9 == 0:
 		return 0
