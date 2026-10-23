@@ -6,6 +6,8 @@ const LOOP: int = 0x7FFD
 const JUMP: int = 0x7FFE
 const END: int = 0x7FFF
 
+static var _bios_sine: PackedInt32Array = _bios_sine_table()
+
 var anims: Array = []
 var anim_num: int = 0
 var cmd_index: int = 0
@@ -105,3 +107,21 @@ func _relative(row: Array) -> void:
 
 static func _s16(value: int) -> int:
 	return ((value + 32768) & 65535) - 32768
+
+
+## `ConvertScaleParam` then BIOS `ObjAffineSet`: signed reciprocals and 1.14 trig, negation after shifting.
+func matrix() -> Vector4i:
+	var x: int = _s16(65536 / scale.x) if scale.x else 0
+	var y: int = _s16(65536 / scale.y) if scale.y else 0
+	var angle: int = (rotation >> 8) & 255
+	var sine: int = _bios_sine[angle]
+	var cosine: int = _bios_sine[(angle + 64) & 255]
+	return Vector4i(_s16((x * cosine) >> 14), _s16(-((x * sine) >> 14)),
+		_s16((y * sine) >> 14), _s16((y * cosine) >> 14))
+
+
+static func _bios_sine_table() -> PackedInt32Array:
+	var table := PackedInt32Array()
+	for angle: int in 256:
+		table.append(int(sin(angle * TAU / 256.0) * 16384.0))
+	return table

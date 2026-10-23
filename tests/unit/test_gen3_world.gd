@@ -2475,3 +2475,20 @@ func test_affine_loops_wrap_signed_scales_and_keep_their_final_frame() -> void:
 	anim.animate()
 	assert_eq(anim.scale, Vector2i(-32746, 32765))
 	assert_true(anim.ended)
+
+
+## VBA-M's compiled BIOS_ObjAffineSet pins every angle, signed reciprocals, zero and overflow.
+## The reflection oracle covers only a half turn and cannot catch rotation rounding or off-diagonal signs.
+func test_affine_matrices_match_bios_for_all_angles_and_scale_boundaries() -> void:
+	var anim := Gen3AffineAnim.new()
+	var lines := PackedStringArray()
+	for scales: Vector2i in [Vector2i(256, 256), Vector2i(512, -128), Vector2i(0, 1),
+		Vector2i(-1, -32768), Vector2i(32767, 255), Vector2i(3, -7)]:
+		anim.scale = scales
+		for angle: int in 256:
+			anim.rotation = (angle << 8) | 255
+			var matrix: Vector4i = anim.matrix()
+			lines.append("%d|%d|%d|%d|%d|%d|%d" % [scales.x, scales.y, angle,
+				matrix.x, matrix.y, matrix.z, matrix.w])
+	assert_eq(("\n".join(lines) + "\n").sha256_text(),
+		"adb12402c703e6812334f40db67d6f5d8817c4f5064cb0af939f8f5ecb6e0dc8")
