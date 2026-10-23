@@ -1329,6 +1329,81 @@ func test_instant_actions_persist_without_changing_occupancy_or_repeating_emotes
 		assert_eq(object.previous, Vector2i(12, 12))
 
 
+## Movement traces only see effect requests. The icon must bounce above even an invisible jumping object,
+## animate through the shared image clock, reserve its own sprite slot and disappear after its last frame.
+func test_emote_movement_draws_and_releases_its_bouncing_sprite() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var data: GameData = objects.camera.data
+		data._sections["gba_graphics"] = true
+		var first := PackedByteArray()
+		first.resize(128)
+		first.fill(0x11)
+		var last := first.duplicate()
+		last.fill(0x22)
+		data._world_tilesets = {"sprite_images": {"1": {"bytes": first}, "2": {"bytes": last}}}
+		data._world_scripts["sprite_images"] = {"5": [[1, 128], [2, 128]]}
+		data._world_scripts["sprite_anims"] = {}
+		data._world_scripts["icon_templates"] = {"0": {"width": 16, "height": 16, "images": 5,
+			"anims": [[0x40000, 0x380001, Gen3SpriteAnim.END]], "anim": 0, "palette": 0}}
+		data._world_scripts["object_graphics"] = [{"width": 16, "height": 32, "anims": 0}]
+		var object := Gen3ObjectEvents.ObjectEvent.new()
+		object.active = true
+		object.local_id = 3
+		object.pixel_position = Vector2i(80, 80)
+		object.current = Vector2i(12, 12)
+		object.previous = object.current
+		object.ground_on_spawn = false
+		object.invisible = true
+		object.frozen = true
+		object.jump_y = -12
+		object.x2 = 7
+		objects.objects[0] = object
+		objects.set_held_movement(object, 0x62 if objects._frlg else 0x56)
+		objects.step_movements()
+		assert_eq(objects.sprites.effect_slot(), 60, str(id))
+		var out: Array = objects.sprites.oam(objects, Vector2i.ZERO)
+		assert_eq(out.size(), 1)
+		if out.is_empty():
+			continue
+		assert_eq([out[0]["x"], out[0]["y"], out[0]["palette"], out[0]["tiles"]], [87, 39, 0, first])
+		for frame: int in 4:
+			objects.step_movements()
+		out = objects.sprites.oam(objects, Vector2i(16, 8))
+		assert_eq([out[0]["x"], out[0]["y"], out[0]["tiles"]], [71, 21, last])
+		for frame: int in 56:
+			objects.step_movements()
+		assert_eq(objects.sprites.oam(objects, Vector2i.ZERO).size(), 1)
+		objects.step_movements()
+		assert_true(objects.sprites.oam(objects, Vector2i.ZERO).is_empty())
+		assert_eq(objects.sprites.effect_slot(), 61)
+
+
+## A field heart and weather share sprite.c's tagged slots; fixed weather slots overwrite an earlier effect.
+## Existing weather streams start with an empty palette bank and cannot expose allocation order or exhaustion.
+func test_field_effect_palettes_share_weather_allocation_and_release() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var palettes: Gen3Palette = objects.sprites.palette
+		var info: Dictionary = {"palette_tag": 0x1004, "palette": 2, "palette_bytes": PackedByteArray([31, 0])}
+		var slot: int = objects.sprites.load_effect_palette(info)
+		assert_eq(slot, 12 if id == RomRegistry.RUBY else 2)
+		var weather := Gen3FieldWeather.new(objects.camera.data, palettes, objects.events)
+		weather.start()
+		assert_eq([weather.contrast_slot, weather.picture_slot], [13, 14])
+		assert_eq(palettes.unfaded_color(256 + 12 * 16), 31)
+		assert_eq(objects.sprites.load_effect_palette(info), slot)
+		assert_eq(palettes.alloc_sprite(77), 15)
+		assert_eq(palettes.alloc_sprite(88), 0xFF)
+		objects.sprites.free_effect_palette({"palette": slot})
+		assert_eq(palettes.alloc_sprite(88), 12 if id == RomRegistry.RUBY else 0xFF)
+		objects.sprites.init_palettes(1)
+		assert_eq(palettes.alloc_sprite(99), 12 if id == RomRegistry.RUBY else 8)
+		objects.sprites.init_palettes(0)
+		assert_eq(palettes.alloc_sprite(0xFFFF), 12)
+		assert_eq(palettes.alloc_sprite(99), 12)
+
+
 ## Gate turns share temp-var bytes, static probes never turn, and only collision
 ## 1 blocks the arm. Stationary non-puzzle avatar probes miss all three seams.
 func test_rotating_gate_collision_turns_shared_vars_once_and_preserves_static_queries() -> void:

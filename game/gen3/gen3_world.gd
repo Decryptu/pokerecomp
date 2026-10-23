@@ -40,6 +40,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	if layout.has("shadow_templates") and not _shadow_templates(rom, layout, object_graphics, graphics):
 		return {}
+	if layout.has("icon_template") and not _icon_templates(rom, layout, object_graphics, graphics):
+		return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
 	if layout.has("weather_palette") and weather.is_empty():
 		return {}
@@ -157,6 +159,52 @@ static func _shadow_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 		rows.append({"images": images, "width": size.x, "height": size.y})
 	out["shadow_templates"] = rows
 	return true
+
+
+static func _icon_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var frlg: bool = rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	var effects: Array = [0, 33, 46, 66, 64] if frlg else [0, 33, 46]
+	var rows: Dictionary = {}
+	for index: int in effects.size():
+		var heart: bool = not frlg and index == 2
+		var at: int = int(layout["icon_template"]) + (24 if heart else 0)
+		var image_count: int = 15 if frlg else 2
+		if heart:
+			image_count = 1
+		var row: Dictionary = _icon_template(rom, at, 5 if frlg else 2, image_count, out, graphics)
+		if row.is_empty():
+			return false
+		row["anim"] = [0, 4, 2, 1, 3][index] if frlg else index % 2
+		row["palette"] = 2 if rom.id == RomRegistry.EMERALD and heart else 0
+		rows[str(effects[index])] = row
+	if layout.has("icon_palette"):
+		var at: int = int(layout["icon_palette"])
+		if not rom.in_bounds(at, Gen3Layout.PALETTE_BYTES):
+			return false
+		graphics["object_palettes"][str(at)] = {"bytes": Array(rom.slice(at, Gen3Layout.PALETTE_BYTES))}
+		rows["46"]["palette_offset"] = at
+	out["icon_templates"] = rows
+	return true
+
+
+static func _icon_template(rom: RomFile, at: int, anim_count: int, image_count: int,
+		out: Dictionary, graphics: Dictionary) -> Dictionary:
+	if not rom.in_bounds(at, 24):
+		return {}
+	var oam: int = Gen3Layout.read_pointer(rom, at + 4, 8)
+	var anims: int = Gen3Layout.read_pointer(rom, at + 8, anim_count * 4)
+	var images: int = Gen3Layout.read_pointer(rom, at + 12, image_count * 8)
+	if oam < 0 or anims < 0 or images < 0 or rom.u16le(at) != 0xFFFF:
+		return {}
+	var sequences: Array = _anim_table(rom, anims)
+	if sequences.size() != anim_count:
+		return {}
+	_read_images(rom, images, image_count - 1, out, graphics)
+	var size: Vector2i = Gen3ObjectSprites.OAM_SIZES[rom.u16le(oam) >> 14][rom.u16le(oam + 2) >> 14]
+	if size != Vector2i(16, 16) or out["sprite_images"][str(images)].size() != image_count:
+		return {}
+	return {"images": images, "anims": sequences, "width": size.x, "height": size.y,
+		"palette_tag": rom.u16le(at + 2)}
 
 
 ## StartWeather's sprite palette, the sprite weathers' palettes and sheets, and the drought colour tables:
