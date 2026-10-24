@@ -14,7 +14,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
 ## Effect id: template index, frame count. `gFieldEffectObjectTemplatePointers`.
-const GRASS_TEMPLATES: Dictionary = {4: [4, 5], 12: [10, 4], 17: [15, 4], 18: [16, 6]}
+const GRASS_TEMPLATES: Dictionary = {4: [4, 5], 12: [10, 4], 17: [15, 4], 18: [16, 6], 41: [30, 2]}
 
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:

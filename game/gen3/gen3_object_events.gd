@@ -277,6 +277,7 @@ class ObjectEvent:
 	var hide_reflection: bool = false
 	var has_shadow: bool = false
 	var has_reflection: bool = false
+	var in_short_grass: bool = false
 	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a walk started and the pause
 	## flags `FreezeObjectEvent` backs up.
 	var anim := Gen3SpriteAnim.new()
@@ -489,7 +490,6 @@ func _setup_sprite(object: ObjectEvent) -> void:
 	_update_visibility(object)
 
 
-## `UpdateObjectEventVisibility`.
 func _update_visibility(object: ObjectEvent) -> void:
 	var info: Dictionary = graphics_info(object.graphics_id)
 	var corner: Vector2i = Gen3ObjectSprites.corner(object, info, camera.screen_origin())
@@ -975,7 +975,7 @@ func _step_effect_sprites(requests: Array) -> void:
 				sprites.free_effect_palette(sprite)
 		else:
 			if sprite.get("grass", false):
-				sprites.update_grass_subpriority(self, sprite)
+				sprites.update_grass(self, sprite)
 			if sprite.has("y_velocity"):
 				sprite["y_offset"] += sprite["y_velocity"]
 				sprite["y_velocity"] = int(sprite["y_velocity"]) + 1 if sprite["y_offset"] != 0 else 0
@@ -1567,6 +1567,7 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
 	if kind != "finish_step":
 		_update_reflection(object, slot)
+	_ground_short_grass(object, slot, covering, requests)
 	_ground_grass(object, slot, kind, covering, requests)
 	requests.append({"kind": kind, "object_id": slot})
 
@@ -1592,6 +1593,15 @@ func _ground_grass(object: ObjectEvent, slot: int, kind: String, covering: bool,
 	if kind == "begin_step" and not covering and effect == 4:
 		return
 	_start_grass(object, slot, effect, kind == "spawn", requests)
+
+
+## `GetGroundEffectFlags_ShortGrass` latches before the display gate; FRLG's predicate always returns false.
+func _ground_short_grass(object: ObjectEvent, slot: int, covering: bool, requests: Array) -> void:
+	var inside: bool = not _frlg and covering and object.current_behavior == 7 and object.previous_behavior == 7
+	var start: bool = inside and not object.in_short_grass
+	object.in_short_grass = inside
+	if start and _ground_effects_visible(object):
+		_start_grass(object, slot, 41, false, requests)
 
 
 func _grass_landing(object: ObjectEvent, slot: int, requests: Array) -> void:
@@ -1622,7 +1632,7 @@ func _start_grass(object: ObjectEvent, slot: int, effect: int, settled: bool, re
 	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 12 if effect == 12 else 8)
 	position = Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768))
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
-		"passes": 0, "end": -1, "follow": effect in [4, 17], "grass": true, "moved": false, "info": info,
+		"passes": 0, "end": -1, "follow": effect in [4, 17, 41], "grass": true, "moved": false, "info": info,
 		"cell": object.current, "map": Vector2i(camera.group, camera.number),
 		"position": position,
 		"elevation": object.previous_elevation, "priority": Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation]
@@ -1631,10 +1641,11 @@ func _start_grass(object: ObjectEvent, slot: int, effect: int, settled: bool, re
 	_effect_sprites.append(sprite)
 
 
-## Grass persists on either occupied cell; connections rebase its terrain lookup, leaving sprite pixels fixed.
 func _grass_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 	var effect: int = int(sprite["request"]["effect_id"])
 	var anim: Gen3SpriteAnim = sprite["anim"]
+	if effect == 41:
+		return _short_grass_finished(sprite, object)
 	if effect in [12, 18]:
 		return anim.ended
 	var map := Vector2i(camera.group, camera.number)
@@ -1649,6 +1660,25 @@ func _grass_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 		return true
 	if object.current != cell and object.previous != cell:
 		sprite["moved"] = true
+	return false
+
+
+## `UpdateShortGrassFieldEffect` follows pos1 only, restarting an ended animation when that position changes.
+func _short_grass_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
+	if object == null or not object.in_short_grass:
+		return true
+	var height: int = int(graphics_info(object.graphics_id).get("height", 0))
+	var linked: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1)) \
+		- camera.screen_origin() - camera.sprite_coord_offset()
+	linked = Vector2i(wrapi(linked.x, -32768, 32768), wrapi(linked.y, -32768, 32768))
+	var anim: Gen3SpriteAnim = sprite["anim"]
+	if linked != sprite.get("linked_position", linked) and anim.ended:
+		anim.start(0)
+	sprite["linked_position"] = linked
+	sprite["position"] = linked + Vector2i(0, (height >> 1) - 8)
+	sprite["priority"] = object.priority
+	sprite["subpriority"] = (object.subpriority - 1) & 0xFF
+	sprite["invisible"] = object.sprite_invisible
 	return false
 
 
