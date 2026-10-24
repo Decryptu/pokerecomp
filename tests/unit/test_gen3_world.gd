@@ -1457,19 +1457,124 @@ func test_grass_jump_landing_and_covering_filter_follow_the_held_movement() -> v
 ## Copy-player traces test movement choices, not grass or reflection sprites.
 func test_mew_ground_effect_gate_covers_grass_and_reflections() -> void:
 	for steps: int in [0, 1, 4, 0xFFFF]:
-		var objects: Gen3ObjectEvents = _grass_objects(RomRegistry.EMERALD, 2)
-		objects.camera.group = 26
-		objects.camera.number = 57
+		for behavior: int in [2, 7]:
+			var objects: Gen3ObjectEvents = _grass_objects(RomRegistry.EMERALD, behavior)
+			objects.camera.group = 26
+			objects.camera.number = 57
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			object.graphics_id = 229
+			objects._graphics[229] = {"width": 16, "height": 32}
+			objects.events.var_set(Gen3ObjectEvents.VAR_FARAWAY_ISLAND_STEP_COUNTER, steps)
+			objects.camera.grid.set_metatile_entry(12, 13, 0x3010)
+			objects.step_movements()
+			var visible: bool = steps in [0, 4]
+			assert_eq(objects.field_effect_active(4 if behavior == 2 else 41), visible, str(steps))
+			assert_eq(objects.sprites.reflections.size(), int(visible))
+			assert_true(object.has_reflection, "terrain state updates before Mew's display gate")
+			assert_eq(object.in_short_grass, behavior == 7, "the short-grass latch also precedes that gate")
+
+
+## The linked overlay survives animation end, restarts on pos1 motion and stops at terrain/jump boundaries.
+## Tile-anchored grass cases never exercise the linked sprite callback or Hoenn-only terrain predicate.
+func test_short_grass_follows_steps_restarts_and_hides_with_its_object() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.EMERALD,
+			RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		var objects: Gen3ObjectEvents = _grass_objects(id, 7)
 		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
-		object.graphics_id = 229
-		objects._graphics[229] = {"width": 16, "height": 32}
-		objects.events.var_set(Gen3ObjectEvents.VAR_FARAWAY_ISLAND_STEP_COUNTER, steps)
-		objects.camera.grid.set_metatile_entry(12, 13, 0x3010)
 		objects.step_movements()
-		var visible: bool = steps in [0, 4]
-		assert_eq(objects.field_effect_active(4), visible, str(steps))
-		assert_eq(objects.sprites.reflections.size(), int(visible))
-		assert_true(object.has_reflection, "terrain state updates before Mew's display gate")
+		assert_eq(objects.field_effect_active(41), not objects._frlg, str(id))
+		if objects._frlg:
+			continue
+		var effect: Dictionary = objects.sprites.effects[0]
+		var anim: Gen3SpriteAnim = effect["anim"]
+		for frame: int in 12:
+			objects.step_movements()
+		assert_true(anim.ended)
+		var out: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+		assert_eq([out[0]["x"], out[0]["y"], out[0]["priority"]], [192, 152, object.priority])
+		object.x2 = 6
+		object.jump_y = -10
+		objects.step_movements()
+		assert_true(anim.ended, "pos2 offsets never restart the linked grass")
+		assert_eq(objects.sprites.oam(objects, objects.camera.screen_origin())[0]["x"], 192)
+		object.x2 = 0
+		object.jump_y = 0
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3007)
+		objects.set_held_movement(object, 0x0B)
+		objects.step_movements()
+		assert_false(anim.ended, "moving inside short grass restarts its ended animation")
+		assert_eq(anim.image, 0)
+		assert_eq(objects.sprites.effects.size(), 1, "the terrain latch prevents duplicates")
+		assert_eq(effect["subpriority"], (object.subpriority - 1) & 0xFF)
+		object.invisible = true
+		objects.step_movements()
+		assert_true(objects.sprites.oam(objects, objects.camera.screen_origin()).is_empty())
+		object.invisible = false
+		for frame: int in 16:
+			objects.step_movements()
+		Gen3ObjectEvents.clear_held_movement(object)
+		objects.set_held_movement(object, 0x0B)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(41), "leaving short grass stops on begin-step")
+		assert_eq(objects.sprites.palette.sprite_index(0x1005), 0xFF)
+		for frame: int in 15:
+			objects.step_movements()
+		Gen3ObjectEvents.clear_held_movement(object)
+		objects.set_held_movement(object, 0x0A)
+		for frame: int in 15:
+			objects.step_movements()
+			assert_false(objects.field_effect_active(41), "entry waits until both occupied cells are short grass")
+		objects.step_movements()
+		assert_true(objects.field_effect_active(41))
+
+
+func test_short_grass_covering_filter_stops_at_takeoff_and_restarts_on_landing() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _grass_objects(id, 7)
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.step_movements()
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3007)
+		objects.set_held_movement(object, 0x45)
+		objects.step_movements()
+		assert_false(object.in_short_grass)
+		assert_false(objects.field_effect_active(41))
+		for frame: int in 15:
+			objects.step_movements()
+		assert_true(object.in_short_grass)
+		assert_true(objects.field_effect_active(41), "finish-step rechecks both occupied cells")
+		object.active = false
+		objects.step_movements()
+		assert_false(objects.field_effect_active(41), "a removed identity releases the linked effect")
+
+
+## OAM masks distant coordinates back onto the display unless field effects apply their own visibility gate.
+## Existing grass screenshots stay near the camera and miss the wrap through both hardware coordinate masks.
+func test_grass_effects_outside_the_camera_do_not_wrap_back_onto_the_screen() -> void:
+	for behavior: int in [2, 3, 7]:
+		var objects: Gen3ObjectEvents = _grass_objects(RomRegistry.EMERALD, behavior)
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.step_movements()
+		if behavior != 7:
+			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
+			objects.set_held_movement(object, 0x45)
+			for frame: int in 16:
+				objects.step_movements()
+		var origin: Vector2i = objects.camera.screen_origin()
+		assert_false(objects.sprites.oam(objects, origin).is_empty())
+		objects.camera.pixel_offset = Vector2i(-512, -256)
+		objects.camera.pos = Vector2i(32, 16)
+		assert_false(objects.sprites.oam(objects, origin).is_empty(), "visibility waits for the next sprite callback")
+		if behavior == 7:
+			object.x2 = 512
+			object.jump_y = 256
+		objects.step_movements()
+		assert_true(objects.sprites.oam(objects, origin).is_empty(), "every grass template must cull before OAM wrapping")
+		objects.camera.pixel_offset = Vector2i.ZERO
+		objects.camera.pos = Vector2i.ZERO
+		object.x2 = 0
+		object.jump_y = 0
+		objects.step_movements()
+		assert_false(objects.sprites.oam(objects, origin).is_empty(), "offscreen culling never destroys a live effect")
 
 
 func _grass_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
@@ -1484,12 +1589,14 @@ func _grass_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	data._world_scripts["sprite_images"] = {"5": [[1, 128], [1, 128], [1, 128], [1, 128], [1, 128], [1, 128]]}
 	data._world_scripts["grass_templates"] = {}
 	data._world_scripts["sprite_anims"] = {}
-	for effect: int in [4, 12, 17, 18]:
+	for effect: int in [4, 12, 17, 18, 41]:
 		var words: Array = [0xA0001, 0xA0002, 0xA0003, 0xA0004, 0xA0000, 0xFFFF]
 		if effect == 17:
 			words = [0x30001, 0x30002, 0x40000, 0x40003, 0x40000, 0x40003, 0x40000, 0xFFFF]
 		elif effect == 12:
 			words = [0x80000, 0x80001, 0x80002, 0x80003, 0xFFFF]
+		elif effect == 41:
+			words = [0x40000, 0x40001, 0xFFFF]
 		elif effect == 18:
 			words = [0x40000, 0x40001, 0x80002, 0x80003, 0x80004, 0x80005, 0xFFFF]
 		data._world_scripts["grass_templates"][str(effect)] = {"width": 16, "height": 8 if effect == 12 else 16,

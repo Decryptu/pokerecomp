@@ -1,7 +1,7 @@
 class_name Gen3ObjectSprites
 extends RefCounted
 
-## OBJ palette loads from `event_object_movement.c` and `BuildOamBuffer`'s OAM.
+## OBJ palettes and field-effect culling from `event_object_movement.c`; `BuildOamBuffer`'s OAM.
 
 const PALETTE_SLOTS: int = 10
 const LINK_PALETTE_SLOTS: int = 6
@@ -315,16 +315,29 @@ func _grass_entry(objects: Gen3ObjectEvents, effect: Dictionary) -> Dictionary:
 	var sub: int = int(effect.get("subpriority", 0))
 	var priority: int = int(effect["priority"])
 	return {"y": at.y & 0xFF, "key": (priority << 8) | sub,
+		"invisible": effect.get("invisible", false),
 		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i(int(anim.h_flip), int(anim.v_flip)),
 			"priority": priority, "palette": int(effect["palette"]), "size": size,
 			"tiles": data.world_sprite_image(int(anim.tiles[0]), int(anim.tiles[1]))}}
 
 
-func update_grass_subpriority(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
+static func _field_effect_off_screen(top_left: Vector2i, size: Vector2i) -> bool:
+	var x: int = wrapi(top_left.x, -32768, 32768)
+	var y: int = wrapi(top_left.y, -32768, 32768)
+	var x2: int = wrapi(x + size.x / 4, -32768, 32768)
+	var y2: int = wrapi(y + size.y / 4, -32768, 32768)
+	return x >= 256 or x2 < -16 or y >= 176 or y2 < -16
+
+
+func update_grass(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	var anim: Gen3SpriteAnim = effect["anim"]
 	var info: Dictionary = effect["info"]
 	var size := Vector2i(int(info["width"]), int(info["height"]))
 	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
+	var linked_hidden: bool = int(effect["request"]["effect_id"]) == 41 and effect.get("invisible", false)
+	effect["invisible"] = linked_hidden or _field_effect_off_screen(center - size / 2, size)
+	if int(effect["request"]["effect_id"]) == 41:
+		return
 	var add: int = 4 if int(effect["request"]["effect_id"]) == 4 and anim.cmd_index == 0 else 0
 	var sub: int = subpriority_at(center.y + size.y / 2, int(effect["elevation"]), add)
 	if int(effect["request"]["effect_id"]) in [4, 17]:

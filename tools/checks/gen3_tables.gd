@@ -964,8 +964,8 @@ func _grass() -> void:
 			digest.start(HashingContext.HASH_SHA1)
 			digest.update(data.world_sprite_image(int(image[0]), int(image[1])))
 			lines.append(digest.finish().hex_encode())
-	var expected: String = "b062a45916e2c097717fe7b3c41b8989410258da" \
-		if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "eb068e5d1e87ab14dbecf2516351c26c944912fa"
+	var expected: String = "8beb7d087afcd2bdbcd48cd9386828ae4766512b" \
+		if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "7119ba5bbe7b8ee596f7dca8324deca95dcd2d16"
 	_r.digest_matches("gen3_grass", lines, expected)
 
 
