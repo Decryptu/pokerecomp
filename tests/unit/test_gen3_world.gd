@@ -1714,6 +1714,17 @@ func _movement_objects(id: StringName) -> Gen3ObjectEvents:
 	for type: int in 81:
 		types.append({"ranged": false, "facing": [2, 1, 3, 4][type - 0x19] if type >= 0x19 and type <= 0x1C else 4})
 	field.camera.data._world_scripts["movement_types"] = types
+	var data: GameData = field.camera.data
+	data._sections["gba_graphics"] = true
+	var pixels := PackedByteArray()
+	pixels.resize(128)
+	pixels.fill(0x11)
+	data._world_tilesets = {"sprite_images": {"1": {"bytes": pixels}},
+		"object_palettes": {"9": {"bytes": PackedByteArray([31, 0])}}}
+	data._world_scripts["sprite_images"] = {"5": [[1, 128], [1, 128], [1, 128], [1, 128], [1, 128]]}
+	data._world_scripts["ash_template"] = {"49": {"width": 16, "height": 16, "images": 5,
+		"anims": [[0x60000, 0x60001, 0x60002, 0x60003, 0x60004, 0xFFFF]],
+		"palette_tag": 0x100D, "palette_offset": 9}}
 	return Gen3ObjectEvents.new(field.camera, field.events)
 
 
@@ -2085,6 +2096,43 @@ func test_reveal_dispatch_does_not_read_patrol_state_as_disguise_state() -> void
 		assert_false(objects.set_held_movement(object, 0x67 if objects._frlg else 0x59))
 		objects.step_movements()
 		assert_true(object.held_movement_finished)
+
+
+## The reveal clock alone misses absent OAM, linked-position drift and early palette release.
+func test_ash_puff_draws_at_its_cell_and_finishes_from_its_animation() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _movement_objects(id)
+		var object := Gen3ObjectEvents.ObjectEvent.new()
+		object.active = true
+		object.local_id = 1
+		object.current = Vector2i(12, 12)
+		object.previous = object.current
+		object.subpriority = 0
+		objects.objects[0] = object
+		objects.camera.data._world_scripts["ash_template"]["49"]["anims"] = [
+			[0x20000, 0x20001, 0x20002, 0x20003, 0x20004, 0xFFFF]]
+		var requests: Array = []
+		objects.start_effect_sprite(object, 0, 49, -1, false, requests)
+		objects.step_movements()
+		var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+		assert_eq(oam.size(), 1, str(id))
+		if oam.is_empty():
+			continue
+		var position: Vector2i = objects.camera.sprite_position(object.current) + objects.camera.sprite_coord_offset()
+		assert_eq(Vector2i(oam[0]["x"], oam[0]["y"]), Vector2i(position.x & 511, position.y & 255))
+		assert_eq(oam[0]["priority"], 2)
+		assert_eq(oam[0]["tiles"].size(), 128)
+		object.active = false
+		object.current += Vector2i(1, 1)
+		for frame: int in 10:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(49), "the END frame remains drawn until the next callback")
+		assert_eq(objects.sprites.oam(objects, Vector2i.ZERO), oam, "the puff stays anchored after its trainer leaves")
+		objects.step_movements()
+		assert_false(objects.field_effect_active(49))
+		assert_true(objects.sprites.oam(objects, Vector2i.ZERO).is_empty())
+		assert_false(objects.sprites.palette.sprite_tags.has(12), "the last puff releases the shared ash palette")
 
 
 ## A buried trainer's reveal hands off to `trainer_see.c`'s task: the task's

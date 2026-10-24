@@ -348,15 +348,15 @@ func _reveal_buried(task: Dictionary, object: Gen3ObjectEvents.ObjectEvent, _req
 func _pop_out_of_ash(task: Dictionary, object: Gen3ObjectEvents.ObjectEvent, requests: Array) -> bool:
 	if Gen3ObjectEvents.held_movement_status(object) != 0:
 		task["puff"] = objects.start_effect_sprite(object, int(task["slot"]), Gen3ObjectEvents.ASH_PUFF,
-			Gen3ObjectEvents.ASH_PUFF_PASSES, false, requests)
-		task["puff"]["request"]["at"] = object.current
-		task["func"] = See.BURIED_JUMP
+			-1, false, requests)
+		if not task["puff"].is_empty():
+			task["func"] = See.BURIED_JUMP
 	return false
 
 
 ## The jump starts once the puff reaches its third cell (animCmdIndex 2).
 func _jump_out_of_ash(task: Dictionary, object: Gen3ObjectEvents.ObjectEvent, _requests: Array) -> bool:
-	if (int(task["puff"]["passes"]) - 1) / Gen3ObjectEvents.ASH_PUFF_CELL == 2:
+	if (task["puff"]["anim"] as Gen3SpriteAnim).cmd_index == 2:
 		object.fixed_priority = false
 		Gen3ObjectEvents.clear_held_movement_if_finished(object)
 		objects.set_held_movement(object, _action(JUMP_IN_PLACE, object.facing))

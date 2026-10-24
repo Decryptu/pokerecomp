@@ -131,8 +131,8 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 			entries[int(shadow["sprite_slot"])] = entry
 	for effect: Dictionary in effects:
 		var entry: Dictionary = {}
-		if effect.get("grass", false):
-			entry = _grass_entry(objects, effect)
+		if effect.get("grass", false) or effect.get("map_effect", false):
+			entry = _map_effect_entry(objects, effect)
 		elif int(effect["request"]["effect_id"]) in objects.icon_effects():
 			entry = _icon_entry(objects, effect, origin)
 		if not entry.is_empty():
@@ -304,7 +304,7 @@ func free_effect_palette(effect: Dictionary) -> void:
 	palette.sprite_tags.erase(slot)
 
 
-func _grass_entry(objects: Gen3ObjectEvents, effect: Dictionary) -> Dictionary:
+func _map_effect_entry(objects: Gen3ObjectEvents, effect: Dictionary) -> Dictionary:
 	var anim: Gen3SpriteAnim = effect["anim"]
 	if anim.tiles.is_empty():
 		return {}

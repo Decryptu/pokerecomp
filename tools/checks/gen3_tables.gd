@@ -89,6 +89,7 @@ func _one_game() -> void:
 	_shadows()
 	_icons()
 	_grass()
+	_ash()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -951,11 +952,24 @@ func _object_sprites() -> void:
 ## Independently encoded pret PNGs, palettes and AnimCmd macros; FRLG's final jump-long-grass frame
 ## reads the first frame of the following unused-grass sheet, as its source image table specifies.
 func _grass() -> void:
+	var rows: Dictionary = {}
+	for effect: int in Gen3World.GRASS_TEMPLATES:
+		rows[effect] = _r.data.world_grass_graphics(effect)
+	var expected: String = "8beb7d087afcd2bdbcd48cd9386828ae4766512b" \
+		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "7119ba5bbe7b8ee596f7dca8324deca95dcd2d16"
+	_effect_graphics(rows, "gen3_grass", expected)
+
+
+func _ash() -> void:
+	_effect_graphics({49: _r.data.world_ash_graphics()}, "gen3_ash", "fc4d7099756e877970810d38ffb485ff25c95cfc")
+
+
+func _effect_graphics(rows: Dictionary, topic: String, expected: String) -> void:
 	var data: GameData = _r.data
 	var lines := PackedStringArray()
-	for effect: int in Gen3World.GRASS_TEMPLATES:
-		var row: Dictionary = data.world_grass_graphics(effect)
-		if not _r.check(not row.is_empty(), "grass %d has no template" % effect):
+	for effect: int in rows:
+		var row: Dictionary = rows[effect]
+		if not _r.check(not row.is_empty(), "%s %d has no template" % [topic, effect]):
 			return
 		lines.append("%d|%d|%d|%s|%s" % [effect, row["width"], row["height"],
 			(row["palette_bytes"] as PackedByteArray).hex_encode(), JSON.stringify(row["anims"])])
@@ -964,9 +978,7 @@ func _grass() -> void:
 			digest.start(HashingContext.HASH_SHA1)
 			digest.update(data.world_sprite_image(int(image[0]), int(image[1])))
 			lines.append(digest.finish().hex_encode())
-	var expected: String = "8beb7d087afcd2bdbcd48cd9386828ae4766512b" \
-		if data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "7119ba5bbe7b8ee596f7dca8324deca95dcd2d16"
-	_r.digest_matches("gen3_grass", lines, expected)
+	_r.digest_matches(topic, lines, expected)
 
 
 ## trainer_see.c's PNGs/macros and compiled original icon callbacks, independently encoded in scratch.

@@ -150,10 +150,7 @@ const ROTATION_DIRECTIONS: Array = [[1, 4, 3, 1, 2], [1, 3, 4, 2, 1]]
 const MOVEMENT_TYPE_BURIED: int = 0x3F
 ## `gTrainerFacingDirectionMovementTypes`, by `DIR_*`, diagonals included.
 const TRAINER_FACING_TYPES: Array[int] = [8, 8, 7, 9, 10, 8, 8, 7, 7]
-## Callbacks stop after AnimateSprite ends: ash uses five six-frame cells; icons total 60 frames.
 const ASH_PUFF: int = 49
-const ASH_PUFF_CELL: int = 6
-const ASH_PUFF_PASSES: int = 31
 const EXCLAMATION_MARK_ICON: int = 0
 const ICON_PASSES: int = 61
 
@@ -930,6 +927,8 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 ## `FieldEffectStart`: effects run after objects this frame; followed effects stop when their object is gone.
 func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
 		requests: Array) -> Dictionary:
+	if effect == ASH_PUFF:
+		return _start_ash(object, slot, requests)
 	var request: Dictionary = _effect_request(object, slot, effect)
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
 	if effect == FLDEFF_SHADOW or effect in icon_effects():
@@ -947,6 +946,28 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 		var info: Dictionary = graphics_info(object.graphics_id)
 		sprite["shadow_size"] = int(info.get("shadow_size", 0))
 		sprite["y_offset"] = (int(info.get("height", 0)) >> 1) - Gen3ObjectSprites.SHADOW_Y_OFFSETS[sprite["shadow_size"]]
+	requests.append(request)
+	_effect_sprites.append(sprite)
+	return sprite
+
+
+## `FldEff_AshPuff` / `FldEff_PopOutOfAsh`: map-anchored, with the trainer caller's subpriority minus one.
+func _start_ash(object: ObjectEvent, slot: int, requests: Array) -> Dictionary:
+	var info: Dictionary = camera.data.world_ash_graphics()
+	var sprite_slot: int = sprites.effect_slot()
+	if info.is_empty() or sprite_slot < 0:
+		return {}
+	var anim := Gen3SpriteAnim.new()
+	anim.anims = info["anims"]
+	anim.images = info["images"]
+	var request: Dictionary = _effect_request(object, slot, ASH_PUFF)
+	request["at"] = object.current
+	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 8)
+	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
+		"passes": 0, "end": -1, "follow": false, "map_effect": true, "info": info,
+		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
+		"priority": 2, "subpriority": (object.subpriority - 1) & 0xFF,
+		"palette": sprites.load_effect_palette(info)}
 	requests.append(request)
 	_effect_sprites.append(sprite)
 	return sprite

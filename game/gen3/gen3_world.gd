@@ -46,6 +46,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	if layout.has("grass_palette") and not _grass_templates(rom, layout, object_graphics, graphics):
 		return {}
+	if layout.has("ash_palette") and not _ash_template(rom, layout, object_graphics, graphics):
+		return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
 	if layout.has("weather_palette") and weather.is_empty():
 		return {}
@@ -181,6 +183,18 @@ static func _grass_templates(rom: RomFile, layout: Dictionary, out: Dictionary, 
 		row["palette_offset"] = palette
 		rows[str(effect)] = row
 	out["grass_templates"] = rows
+	return true
+
+
+static func _ash_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var palette: int = int(layout["ash_palette"])
+	var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + 32 * 4, 24)
+	var row: Dictionary = _sprite_template(rom, at, 1, 5, Vector2i(16, 16), out, graphics)
+	if row.is_empty() or int(row["palette_tag"]) != 0x100D or not rom.in_bounds(palette, Gen3Layout.PALETTE_BYTES):
+		return false
+	graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
+	row["palette_offset"] = palette
+	out["ash_template"] = {"49": row}
 	return true
 
 
