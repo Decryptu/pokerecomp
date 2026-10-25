@@ -96,6 +96,7 @@ func _one_game() -> void:
 	_sand_pile()
 	_hot_springs()
 	_bubbles()
+	_tracks()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -1003,13 +1004,22 @@ func _hot_springs() -> void:
 	_effect_graphics({42: _r.data.world_map_effect_graphics(42)}, "gen3_hot_springs", expected)
 
 
-## pret's bubbles PNGs, general_0.pal and sAnim_Bubbles, encoded independently in tile order.
 func _bubbles() -> void:
 	var expected: String = "2150c71d3ed3c3bddeb12022ac3c742a15d4fd2a" \
 		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "d2d1cedc5e1ad53c8bb3b9223b2de7ba715eeac6"
 	_effect_graphics({53: _r.data.world_map_effect_graphics(53)}, "gen3_bubbles", expected)
 
 
+func _tracks() -> void:
+	var rows: Dictionary = {}
+	for effect: int in Gen3ObjectEvents.TRACK_EFFECTS:
+		rows[effect] = _r.data.world_map_effect_graphics(effect)
+	var expected: String = "5fcec9973b219419bc633bffa6ebbde878c56af1" \
+		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "6a18411cd4ac7e29bae43940848eb35b73e9a04a"
+	_effect_graphics(rows, "gen3_tracks", expected)
+
+
+## Digests come from pret's PNGs, palettes and anim tables, encoded independently in tile order.
 func _effect_graphics(rows: Dictionary, topic: String, expected: String) -> void:
 	var data: GameData = _r.data
 	var lines := PackedStringArray()

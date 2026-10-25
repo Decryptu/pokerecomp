@@ -54,10 +54,21 @@ const JUMP_SHAPES: Dictionary = {
 	Jump.ACRO_FAR: {"distance": 2, "arc": 0, "shadow": true, "wheelie": true},
 }
 const FLDEFF_SHADOW: int = 3
+const FLDEFF_SAND_FOOTPRINTS: int = 13
+const FLDEFF_DEEP_SAND_FOOTPRINTS: int = 24
 const FLDEFF_FEET_IN_FLOWING_WATER: int = 34
+const FLDEFF_BIKE_TIRE_TRACKS: int = 35
 const FLDEFF_SAND_PILE: int = 39
 const FLDEFF_HOT_SPRINGS_WATER: int = 42
 const FLDEFF_BUBBLES: int = 53
+const LINKED_EFFECTS: Array[int] = [15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER]
+const TRACK_EFFECTS: Array[int] = [FLDEFF_SAND_FOOTPRINTS, FLDEFF_DEEP_SAND_FOOTPRINTS, FLDEFF_BIKE_TIRE_TRACKS]
+## `bikeTireTracks_Transitions`; a step's `SetObjectEventDirection` keeps its row index in range.
+const BIKE_TRACK_ANIMS: Array[int] = [1, 2, 7, 8, 1, 2, 6, 5, 5, 8, 3, 4, 6, 7, 3, 4]
+enum Tracks { NONE, FOOT, BIKE_TIRE }
+## Map effect: y below the cell's corner, priority (-1: the object's), subpriority (-1: one ahead of it).
+const MAP_EFFECT_PLACEMENT: Dictionary = {5: [0, 3, 151], 13: [8, 2, 149], 14: [8, -1, 0], 24: [8, 2, 149],
+	35: [8, 2, 149], 49: [8, 2, -1], 53: [0, 1, 82]}
 const DISPLAY_WIDTH: int = 240
 const DISPLAY_HEIGHT: int = 160
 const MOVEMENT_TYPE_INVISIBLE: int = 0x4C
@@ -958,11 +969,7 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 
 
 func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Array) -> Dictionary:
-	var ash: bool = effect == ASH_PUFF
-	var ripple: bool = effect == 5
-	var sand: bool = effect == FLDEFF_SAND_PILE
-	var bubbles: bool = effect == FLDEFF_BUBBLES
-	var info: Dictionary = camera.data.world_ash_graphics() if ash else camera.data.world_map_effect_graphics(15 if effect == FLDEFF_FEET_IN_FLOWING_WATER else effect)
+	var info: Dictionary = camera.data.world_ash_graphics() if effect == ASH_PUFF else camera.data.world_map_effect_graphics(15 if effect == FLDEFF_FEET_IN_FLOWING_WATER else effect)
 	var sprite_slot: int = sprites.effect_slot()
 	if info.is_empty() or sprite_slot < 0:
 		return {}
@@ -971,20 +978,21 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 	anim.images = info["images"]
 	if effect == FLDEFF_FEET_IN_FLOWING_WATER:
 		anim.start(1)
-	if sand:
+	if effect == FLDEFF_SAND_PILE:
 		anim.seek(2)
+	var place: Array = MAP_EFFECT_PLACEMENT.get(effect, [12, -1, 0])
 	var request: Dictionary = _effect_request(object, slot, effect)
-	request["at"] = object.current
-	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 0 if bubbles else (8 if ash or effect == 14 else 12))
-	if ripple:
+	request["at"] = object.previous if effect in TRACK_EFFECTS else object.current
+	var position: Vector2i = camera.sprite_position(request["at"]) + Vector2i(8, int(place[0]))
+	if effect == 5:
 		position = object.pixel_position + Vector2i(8, 14) - camera.screen_origin() - camera.sprite_coord_offset()
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
-		"passes": 0, "end": -1, "follow": effect in [15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER], "map_effect": true, "info": info,
+		"passes": 0, "end": -1, "follow": effect in LINKED_EFFECTS, "map_effect": true, "info": info,
 		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
-		"priority": 1 if bubbles else (3 if ripple else (2 if ash else object.priority)),
-		"subpriority": 82 if bubbles else (151 if ripple else ((object.subpriority - 1) & 0xFF if ash else 0)),
+		"priority": object.priority if int(place[1]) < 0 else int(place[1]),
+		"subpriority": (object.subpriority - 1) & 0xFF if int(place[2]) < 0 else int(place[2]),
 		"palette": sprites.load_effect_palette(info)}
-	if not ash and effect not in [FLDEFF_BUBBLES, 5, 15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER]:
+	if effect in [10, 14, 16]:
 		sprite["elevation"] = object.previous_elevation
 	if sprite["follow"]:
 		_init_linked_map_effect(object, sprite, requests)
@@ -1043,6 +1051,8 @@ func _step_effect_sprites(requests: Array) -> void:
 
 
 func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
+	if int(sprite["request"]["effect_id"]) in TRACK_EFFECTS:
+		return _fade_tracks(sprite)
 	if int(sprite["request"]["effect_id"]) == FLDEFF_BUBBLES and sprites.field_effect_off_screen(self, sprite):
 		return true
 	if int(sprite["request"]["effect_id"]) == FLDEFF_FEET_IN_FLOWING_WATER:
@@ -1054,6 +1064,17 @@ func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 	if sprite.has("anim") and not (sprite["anim"] as Gen3SpriteAnim).anims.is_empty():
 		return (sprite["anim"] as Gen3SpriteAnim).ended
 	return int(sprite["end"]) >= 0 and int(sprite["passes"]) >= int(sprite["end"])
+
+
+func _fade_tracks(sprite: Dictionary) -> bool:
+	var timer: int = int(sprite.get("timer", 0)) + 1
+	sprite["timer"] = timer
+	if not sprite.get("blinking", false):
+		sprite["blinking"] = timer > 40
+		sprite["invisible"] = false
+		return false
+	sprite["invisible"] = not sprite.get("invisible", false)
+	return timer > 56
 
 
 func shadow_sprites() -> Array[Dictionary]:
@@ -1629,19 +1650,22 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 	if covering and not _frlg and object.current_behavior == MB_LONG_GRASS and object.previous_behavior == MB_LONG_GRASS:
 		object.subsprite_table = Gen3ObjectSprites.LONG_GRASS_TABLE_HIGH \
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
+	# `sGroundEffectFuncs` order decides each effect's sprite slot.
+	_ground_grass(object, slot, kind, covering, requests)
 	if kind != "finish_step":
 		_update_reflection(object, slot)
-	_ground_sand_pile(object, slot, covering, requests)
 	_ground_flowing_water(object, slot, covering, requests)
-	if kind != "spawn" and not landing:
-		_ground_puddle(object, slot, requests)
+	if kind == "begin_step":
+		_ground_tracks(object, slot, requests)
 	if kind == "finish_step":
 		_ground_ripple(object, slot, requests)
+	if kind != "spawn" and not landing:
+		_ground_puddle(object, slot, requests)
+	_ground_sand_pile(object, slot, covering, requests)
 	if landing:
 		_jump_landing(object, slot, requests)
 	_ground_short_grass(object, slot, covering, requests)
 	_ground_hot_springs(object, slot, covering, requests)
-	_ground_grass(object, slot, kind, covering, requests)
 	if kind == "finish_step":
 		_ground_seaweed(object, slot, requests)
 	requests.append({"kind": kind, "object_id": slot})
@@ -1692,6 +1716,23 @@ func _ground_hot_springs(object: ObjectEvent, slot: int, covering: bool, request
 	object.in_hot_springs = inside
 	if start and _ground_effects_visible(object):
 		start_effect_sprite(object, slot, FLDEFF_HOT_SPRINGS_WATER, -1, true, requests)
+
+
+## `GetGroundEffectFlags_Tracks` on pos2's u8 behavior; FRLG's sand adds MB_SAND_CAVE and drops the others.
+func _ground_tracks(object: ObjectEvent, slot: int, requests: Array) -> void:
+	var behavior: int = object.previous_behavior & 0xFF
+	var deep: bool = not _frlg and behavior == 6
+	if not deep and behavior != 0x21 and behavior != (0x2B if _frlg else 0x25):
+		return
+	var kind: int = int(graphics_info(object.graphics_id).get("tracks", Tracks.NONE))
+	if not _ground_effects_visible(object) or kind == Tracks.NONE \
+			or (kind == Tracks.BIKE_TIRE and object.current == object.previous):
+		return
+	var effect: int = FLDEFF_BIKE_TIRE_TRACKS if kind == Tracks.BIKE_TIRE else (FLDEFF_DEEP_SAND_FOOTPRINTS if deep else FLDEFF_SAND_FOOTPRINTS)
+	var sprite: Dictionary = start_effect_sprite(object, slot, effect, -1, false, requests)
+	if not sprite.is_empty():
+		(sprite["anim"] as Gen3SpriteAnim).start(object.facing if kind == Tracks.FOOT
+			else BIKE_TRACK_ANIMS[object.previous_movement_direction * 4 + object.facing - 5])
 
 
 ## `GetGroundEffectFlags_ShallowFlowingWater`: both cells must share water or log terrain; jump filters reset it.

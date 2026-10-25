@@ -40,8 +40,7 @@ const SLIDE_STEP: int = 8
 const END_HOLD_FRAMES: int = 600
 
 const BLACK_TILE: int = 0x7E
-## `FillFourRowsWithBlack` at rows 0 and 14, `FillMiddleOfScreenWithWhite`
-## between them.
+## `FillFourRowsWithBlack` at rows 0 and 14, `FillMiddleOfScreenWithWhite` between them.
 const BAND_ROWS: int = 4
 const BAND_BOTTOM_ROW: int = 14
 const MIDDLE_FIRST_ROW: int = 4

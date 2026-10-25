@@ -1916,6 +1916,56 @@ func test_seaweed_bubbles_start_at_step_end_and_release_at_end_or_offscreen() ->
 			assert_false(objects.field_effect_active(53), "offscreen bubbles stop instead of wrapping or retaining a slot")
 
 
+func test_tracks_mark_the_cell_left_and_fade_out() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		for behavior: int in [0x21, 0x06, 0x25, 0x2B, 0x20]:
+			for tracks: int in [Gen3ObjectEvents.Tracks.FOOT, Gen3ObjectEvents.Tracks.BIKE_TIRE]:
+				var objects: Gen3ObjectEvents = _landing_objects(id, behavior)
+				var frlg: bool = objects._frlg
+				for effect: int in Gen3ObjectEvents.TRACK_EFFECTS:
+					objects.camera.data._world_scripts["map_effect_templates"][str(effect)] = {"width": 16, "height": 16,
+						"images": 5, "anims": [[0x10000, 0xFFFF]], "palette_tag": 0x1004, "palette_offset": 9}
+				objects.camera.data._world_scripts["object_graphics"][0]["tracks"] = tracks
+				var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+				object.facing = Gen3ObjectEvents.Direction.SOUTH
+				objects.step_movements()
+				objects.set_held_movement(object, 0x13 if frlg else 0x0B)
+				objects.step_movements()
+				var sand: bool = behavior == 0x21 or (behavior == 0x2B and frlg) or (behavior in [0x06, 0x25] and not frlg)
+				var effect: int = 13
+				if tracks == Gen3ObjectEvents.Tracks.BIKE_TIRE:
+					effect = 35
+				elif behavior == 0x06:
+					effect = 24
+				var label: String = "%s %x %d" % [id, behavior, tracks]
+				var live: Array = objects.sprites.effects.filter(func(row: Dictionary) -> bool:
+					return int(row["request"]["effect_id"]) in Gen3ObjectEvents.TRACK_EFFECTS)
+				assert_eq(live.map(func(row: Dictionary) -> int: return row["request"]["effect_id"]),
+					[effect] if sand else [], label)
+				if not sand:
+					continue
+				var mark: Dictionary = live[0]
+				assert_eq((mark["anim"] as Gen3SpriteAnim).anim_num, 4 if tracks == Gen3ObjectEvents.Tracks.FOOT else 8,
+					"footprints face east; a south-to-east turn draws the north-east corner")
+				var at: Vector2i = objects.camera.sprite_position(Vector2i(12, 12)) + Vector2i(8, 8)
+				assert_eq([mark["position"], mark["priority"], mark["subpriority"]], [at, 2, 149], label)
+				var hidden: Array = []
+				var expected: Array = []
+				for timer: int in range(2, 57):
+					objects.step_movements()
+					hidden.append(mark["invisible"])
+					expected.append(timer > 41 and timer % 2 == 0)
+				assert_eq(hidden, expected, "41 shown callbacks, then a toggle each frame")
+				objects.step_movements()
+				assert_false(objects.field_effect_active(effect), "the 57th callback stops it")
+				if tracks == Gen3ObjectEvents.Tracks.BIKE_TIRE:
+					objects.set_held_movement(object, 0x52 if frlg else 0x46)
+					objects.camera.grid.set_metatile_entry(13, 12, 0x3021)
+					objects.step_movements()
+					assert_false(objects.field_effect_active(35), "a jump in place leaves no tire track")
+
+
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 	var data: GameData = objects.camera.data

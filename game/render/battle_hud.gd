@@ -35,8 +35,7 @@ const PLAYER_EDGE: Vector2i = Vector2i(18, 10)
 
 const EDGE_TILES: int = 8
 
-## Both HP numbers are printed three columns wide, right-aligned, with a slash
-## between them.
+## Both HP numbers are printed three columns wide, right-aligned, with a slash between them.
 const HP_DIGITS: int = 3
 
 ## Two columns left of where Crystal prints the same number.

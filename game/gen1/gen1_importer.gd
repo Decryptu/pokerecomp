@@ -1909,8 +1909,7 @@ func _import_dex_ratings(rom: RomFile, layout: Dictionary) -> Dictionary:
 	}
 
 
-## `engine/movie/credits.asm`'s four tables, in the shape `GameData.credits_*`
-## reads.
+## `engine/movie/credits.asm`'s four tables, in the shape `GameData.credits_*` reads.
 static func read_credits(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var order: PackedByteArray = read_credits_order(rom, layout)
 	var table: int = int(layout["credits_text_pointers"])

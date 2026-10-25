@@ -13,9 +13,12 @@ const SLOT_CHANCES: Array = [
 const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5, 10]}
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
-## Effect id: template index, frame count. `gFieldEffectObjectTemplatePointers`.
-const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5], 10: [9, 3], 14: [12, 4], 15: [13, 2], 16: [14, 3], 39: [29, 3], 42: [31, 1], 53: [34, 8]}
-const GRASS_TEMPLATES: Dictionary = {4: [4, 5], 12: [10, 4], 17: [15, 4], 18: [16, 6], 41: [30, 2]}
+## Effect id: `gFieldEffectObjectTemplatePointers` index, image count, anim count, frame height.
+const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5, 1, 16], 10: [9, 3, 1, 8], 13: [11, 2, 5, 16], 14: [12, 4, 1, 16],
+	15: [13, 2, 2, 8], 16: [14, 3, 1, 8], 24: [23, 2, 5, 16], 35: [27, 4, 9, 16], 39: [29, 3, 1, 8], 42: [31, 1, 1, 16],
+	53: [34, 8, 1, 32]}
+const GRASS_TEMPLATES: Dictionary = {4: [4, 5, 1, 16], 12: [10, 4, 1, 8], 17: [15, 4, 1, 16], 18: [16, 6, 1, 16],
+	41: [30, 2, 1, 16]}
 
 
 static func verify(rom: RomFile, layout: Dictionary) -> Dictionary:
@@ -181,8 +184,7 @@ static func _ground_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 				return false
 			graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
 			var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + int(spec[0]) * 4, 24)
-			var size := Vector2i(16, 32 if effect == 53 else (8 if effect in [10, 12, 15, 16, 39] else 16))
-			var row: Dictionary = _sprite_template(rom, at, 2 if effect == 15 else 1, int(spec[1]), size, out, graphics)
+			var row: Dictionary = _sprite_template(rom, at, int(spec[2]), int(spec[1]), Vector2i(16, int(spec[3])), out, graphics)
 			if row.is_empty() or int(row["palette_tag"]) != (0x1005 if grass_palette else 0x1004):
 				return false
 			row["palette_offset"] = palette
