@@ -266,8 +266,6 @@ func test_the_saved_name_is_the_one_typed_on_the_naming_screen() -> void:
 	assert_eq(save.player_name, typed)
 
 
-## The launcher's field is the save file's own name, and it survives the intro
-## rather than being overwritten by the trainer's.
 func test_the_slot_label_round_trips_through_the_intro() -> void:
 	_run_intro()
 	var save: Gen2SaveData = Gen2SaveStore.load_result(_data.id, _data.sha1, SLOT, _data)["save"]
@@ -291,8 +289,6 @@ func test_the_chosen_gender_reaches_the_save() -> void:
 	assert_eq(female.gender, Gen2SaveData.GENDER_FEMALE)
 
 
-## The written save is the one the world then loads, so the intro hands over a
-## slot rather than a screen.
 func test_the_written_save_carries_the_new_game_spawn() -> void:
 	_run_intro()
 	var save: Gen2SaveData = _finished[0]

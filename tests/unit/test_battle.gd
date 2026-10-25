@@ -1499,9 +1499,6 @@ func test_experience_and_stat_experience_both_divide_among_participants() -> voi
 		assert_eq(stat_gain["gains"]["speed"], 10, "20 / 2")
 
 
-## The rules a battle was built with are the ones it keeps and the ones the
-## formula's statics read, so a test or a tool cannot resolve half a fight under
-## one set and half under another.
 func test_a_battle_installs_the_rules_it_was_created_with() -> void:
 	var rules := Gen2Rules.new()
 	rules.set_flag(&"metal_powder_overflow", false)
@@ -2690,8 +2687,6 @@ func test_being_bound_does_not_stop_the_bound_pokemon_moving() -> void:
 	assert_eq(_of_type(events, Gen2Battle.USED_MOVE).size(), 2, JSON.stringify(events))
 
 
-## A Pokémon that goes down to the binding faints there, the same shape a burn
-## or a poison already has.
 func test_a_pokemon_can_faint_to_the_binding() -> void:
 	# Growl both sides, so the binding is the only thing that can take the last
 	# point of health.
@@ -2857,7 +2852,6 @@ func test_a_pokemon_can_faint_to_a_sandstorm() -> void:
 	assert_true(battle.is_over())
 
 
-## A battle carries its own sky and nothing outside one has weather at all.
 func test_a_fresh_battle_has_no_weather() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
@@ -2892,8 +2886,6 @@ func test_a_pokemon_counts_the_turns_it_has_actually_acted_on() -> void:
 	assert_eq(battle.mon(Gen2Battle.PLAYER).turns_taken, 0, "a fresh Pokémon has acted on none")
 
 
-## The increment sits ahead of the Struggle check, so a Pokémon with nothing left
-## still counts the turns it spends struggling.
 func test_struggling_counts_as_a_turn_even_though_it_spends_no_pp() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
@@ -3083,7 +3075,6 @@ func test_a_status_berry_takes_the_toxic_ramp_and_the_nightmare_with_it() -> voi
 	assert_false(Gen2Substatus.has(holder.substatus, Gen2Substatus.NIGHTMARE))
 
 
-## A berry that answers for one status says nothing about another.
 func test_a_status_berry_only_answers_for_its_own_status() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.GROWL]),
@@ -3171,8 +3162,6 @@ func test_the_between_turn_items_do_not_agree_on_an_order() -> void:
 	assert_eq(int(berries[0]["side"]), Gen2Battle.ENEMY, "the healing items go the other way")
 
 
-## The heal family through a whole turn rather than a bare command: Recover
-## reaches the caller's event list with the numbers a screen draws from.
 func test_recover_reaches_the_turn_loop_with_the_numbers_a_screen_needs() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.RECOVER])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 5, [Fixture.TACKLE])
@@ -3339,8 +3328,6 @@ func test_a_fainted_exp_share_holder_neither_collects_nor_halves() -> void:
 	assert_eq(gains[0]["amount"], 45, "the full award, nothing halved")
 
 
-## Two holders split the halved block between them, on top of the participants
-## splitting their own copy of it.
 func test_two_exp_share_holders_split_their_half() -> void:
 	# Geodude, base exp 86, at level 20. Halved: 43. One participant takes it
 	# whole, floor(43*20/7) = 122; two holders take floor(43/2) = 21 each, which
@@ -3642,7 +3629,6 @@ func test_a_trainer_item_resolves_before_the_players_move_and_is_spent() -> void
 	assert_gt(battle.enemy.hp, 1)
 
 
-## The enemy's item costs it the turn: nothing of its own is thrown that turn.
 func test_a_trainer_using_an_item_does_not_also_attack() -> void:
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		_data, Gen2Party.of(_mon(Fixture.PIKACHU, 100, [Fixture.TACKLE])),
@@ -3659,8 +3645,6 @@ func test_a_trainer_using_an_item_does_not_also_attack() -> void:
 	assert_eq(battle.enemy.stage("attack"), 1)
 
 
-## An X Accuracy makes everything the holder throws land, checked ahead of the
-## stat modifiers and the roll.
 func test_an_x_accuracy_makes_the_enemys_moves_stop_missing() -> void:
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		_data, Gen2Party.of(_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])),
@@ -3731,8 +3715,6 @@ func test_a_move_that_is_never_announced_is_never_remembered() -> void:
 	assert_eq(battle.player_used_moves, [] as Array[int])
 
 
-## The enemy's own send-out leaves the list alone: it records what the player has
-## shown, not what it is being shown to.
 func test_an_enemy_switch_leaves_the_used_move_list_alone() -> void:
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		_data, Gen2Party.of(_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])),
@@ -3779,8 +3761,6 @@ func test_a_screen_lasts_five_turns_counting_the_one_that_set_it() -> void:
 	assert_eq(battle.reflect_turns[Gen2Battle.PLAYER], 0)
 
 
-## Reflect and Light Screen have counts of their own rather than sharing one, so
-## a side can hold both and lose them on different turns.
 func test_the_two_screens_run_down_separately() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.REFLECT, Fixture.LIGHT_SCREEN, Fixture.GROWL]),
@@ -4151,7 +4131,6 @@ func test_spikes_are_paid_by_whoever_walks_onto_them() -> void:
 	assert_eq(_of_type(events, Gen2Battle.HURT_BY_SPIKES).size(), 1)
 
 
-## Field state, so the same spikes charge every entrance rather than one.
 func test_spikes_outlive_the_pokemon_that_walked_into_them() -> void:
 	var battle: Gen2Battle = _party_battle(
 		[_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]), _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])],
@@ -4456,8 +4435,6 @@ func test_a_trainers_roar_drags_the_players_pokemon_out() -> void:
 	assert_false(battle.is_over())
 
 
-## The same move in a wild battle ends it rather than switching anybody, and the
-## parties are left exactly as they stood.
 func test_a_wild_roar_ends_the_battle_with_both_sides_standing() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
@@ -4649,8 +4626,6 @@ func test_a_nightmare_survives_a_pass_only_into_a_sleeping_pokemon() -> void:
 		)
 
 
-## The enemy's half needs no answer at all: its target is picked for it, so the
-## turn runs straight through.
 func test_an_enemy_baton_pass_resolves_inside_the_turn() -> void:
 	var battle: Gen2Battle = Gen2Battle.create_parties(
 		_data, Gen2Party.of(_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE])),
@@ -4668,7 +4643,6 @@ func test_an_enemy_baton_pass_resolves_inside_the_turn() -> void:
 	assert_false(_first(events, Gen2Battle.SENT_OUT).is_empty())
 
 
-## A wild Pokemon has no party behind it, and neither has a lone one.
 func test_a_baton_pass_with_nobody_behind_it_fails() -> void:
 	var wild: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TACKLE]),
@@ -4808,8 +4782,6 @@ func test_a_replacement_after_a_faint_is_not_pursued() -> void:
 		"no turn is in flight, so no flag is up")
 
 
-## Teleport in a whole turn: the wild battle ends and the turn stops where it is,
-## the same shape a Whirlwind against a wild takes.
 func test_teleport_ends_the_turn_and_the_battle() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.PIKACHU, 50, [Fixture.TELEPORT]),
@@ -5145,8 +5117,6 @@ func test_a_faint_costs_happiness_once_and_reads_the_enemy_level() -> void:
 	assert_eq(enemy_down.enemy.happiness, enemy_before)
 
 
-## A faint reported through the ordinary turn loop reaches the same seam, which
-## is the point of routing every report through it.
 func test_a_faint_taken_in_a_turn_costs_happiness() -> void:
 	var battle: Gen2Battle = _battle(
 		_mon(Fixture.CHARMANDER, 5, [Fixture.TACKLE]),

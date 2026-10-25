@@ -224,8 +224,6 @@ func test_a_script_outside_its_region_fails_at_once() -> void:
 	assert_true(truncated.failed())
 
 
-## The shared decoder, which the importer walks every body with. A branch
-## command reports where it would go; everything else reports -1.
 func test_decode_command_reports_operands_and_branch_targets() -> void:
 	var region: PackedByteArray = _region([0xFC, 0x34, 0x12, 0xE0, 0x01, 0x31])
 	var jump: Dictionary = Gen2BattleAnimScript.decode_command(region, BASE, BASE)

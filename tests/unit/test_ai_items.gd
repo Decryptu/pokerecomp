@@ -107,8 +107,6 @@ func test_a_context_class_cures_only_what_is_worth_curing() -> void:
 	assert_eq(_use_rate(Gen2AIItems.FULL_HEAL, mon, CONTEXT, 1), 64)
 
 
-## A Toxic that has been ramping for four turns is worth a cure on a coin flip
-## even though a plain poison is not.
 func test_a_context_class_cures_a_ramped_toxic_but_not_a_fresh_one() -> void:
 	var mon: Gen2BattleMon = _mon()
 	mon.status = Gen2Status.POISON

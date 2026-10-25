@@ -25,8 +25,6 @@ func after_each() -> void:
 	Gen2ModHost.reset()
 
 
-## The screen reads the options once, when it builds its box, so each speed is a
-## fresh screen the way a battle entered from the overworld is.
 func _open_with(text_speed: int, frame: int) -> Gen2BattleScreen:
 	var options: Gen2Options = Gen2OptionsStore.current()
 	options.text_speed = text_speed

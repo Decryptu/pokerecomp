@@ -119,8 +119,6 @@ func test_a_gain_too_small_to_move_a_pixel_still_takes_its_time() -> void:
 	assert_eq(animation.pixels(), 12)
 
 
-## Which is what lets the screen treat "no animation" and "arrived" as the same
-## question.
 func test_an_animation_with_no_segments_is_finished_and_never_ticks() -> void:
 	var animation := Gen2ExpBarAnimation.create(20, [] as Array[int])
 	assert_true(animation.finished())

@@ -6820,7 +6820,6 @@ func _stage_fruit_tree(tree_id: int) -> Dictionary:
 	return {"ok": true}
 
 
-## The second half, run once the tree's own line has been acknowledged.
 func _resolve_fruit_tree(tree_id: int, item: int) -> Dictionary:
 	_stage_fruit_tree_reset()
 	if _fruit_tree_picked(tree_id):

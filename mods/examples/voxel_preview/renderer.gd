@@ -312,9 +312,6 @@ func _player_height() -> float:
 		/ float(Gen2WorldAPI.CELL_PIXELS) * CELL_SIZE
 
 
-## One solid per walk cell, extruded by what the cell's collision permission
-## says it is. Built as a single mesh: a map is a few thousand cells and a node
-## for each of them would cost more than the geometry does.
 func _rebuild_terrain() -> void:
 	if _world == null or _world.current_map == null or _terrain == null:
 		return

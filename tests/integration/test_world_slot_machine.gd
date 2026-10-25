@@ -117,8 +117,6 @@ func test_the_special_opens_the_machine_and_holds_the_world() -> void:
 	assert_false(_world_screen.interact())
 
 
-## The bet menu is the machine's, not the world's: a press reaches it and the
-## balance it takes is the world's own coins.
 func test_the_bet_is_taken_out_of_the_coin_case() -> void:
 	await _open_world()
 	_run_script()
@@ -152,7 +150,6 @@ func test_cancelling_closes_the_machine_and_writes_the_coins_back() -> void:
 	)
 
 
-## The world takes its own presses back once the machine has gone.
 func test_the_world_moves_again_once_the_machine_closes() -> void:
 	await _open_world()
 	_run_script()

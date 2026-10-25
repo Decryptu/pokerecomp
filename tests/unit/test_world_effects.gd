@@ -391,8 +391,6 @@ func test_an_actor_naming_art_that_is_not_there_draws_nothing() -> void:
 	RomCache.clear(ActorFixture.directory())
 
 
-## Whether the screen has to redraw: a still actor costs nothing beyond the
-## icon's own animation.
 func test_an_actor_that_has_not_moved_reports_no_redraw() -> void:
 	var world: Gen2WorldAPI = _actor_world()
 	var actor := FakeActor.new()
@@ -567,7 +565,6 @@ func test_an_out_of_range_emote_is_no_emote() -> void:
 	RomCache.clear(ActorFixture.directory())
 
 
-## An emote is state, so putting one up is a change the screen redraws for.
 func test_raising_an_emote_is_a_change_the_frame_reports() -> void:
 	var world: Gen2WorldAPI = _actor_world()
 	var actor := FakeActor.new()

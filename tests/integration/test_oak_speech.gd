@@ -214,8 +214,6 @@ func test_a_preset_name_skips_the_keyboard_and_resumes_the_speech() -> void:
 	assert_eq(_finished, ["CHRIS"])
 
 
-## While the keyboard is up it owns every button, so A types rather than
-## advancing the speech.
 func test_the_naming_screen_takes_the_buttons_while_it_is_open() -> void:
 	_press_a_until(_at_naming)
 	var beat: int = _screen.beat_index()

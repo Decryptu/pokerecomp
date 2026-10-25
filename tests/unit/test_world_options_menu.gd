@@ -147,8 +147,6 @@ func test_adjust_by_zero_changes_nothing() -> void:
 	assert_eq(_options.text_speed, 1)
 
 
-## The model edits the object it was handed, which is what lets the launcher
-## card and this menu share one Gen2OptionsStore instance.
 func test_the_menu_edits_the_options_object_it_was_given() -> void:
 	_select(Gen2WorldOptionsMenu.OPT_BATTLE_STYLE)
 	_menu.adjust(1)

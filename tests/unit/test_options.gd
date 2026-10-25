@@ -193,8 +193,6 @@ func test_the_screen_fill_rows_round_trip_and_default_on() -> void:
 	)
 
 
-## The gameplay rules live in the options file but are their own block: the
-## settings screen edits them there, and a new run takes a copy.
 func test_the_rules_block_travels_with_the_options_file() -> void:
 	var options := Gen2Options.new()
 	assert_eq(options.rules.mode, Gen2Rules.MODE_CURRENT)

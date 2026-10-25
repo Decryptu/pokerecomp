@@ -1066,7 +1066,6 @@ static func _read_map_blocks(
 	return {"ok": true, "blocks": block_bytes}
 
 
-## A trainer object points at four scripts and texts; every other event at one.
 static func _collect_event_scripts(
 	rom: RomFile,
 	scripts_bank: int,

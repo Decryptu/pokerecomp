@@ -128,8 +128,6 @@ func test_export_then_import_round_trips_into_a_free_slot() -> void:
 	assert_eq(save.slot, 1, "the imported copy owns its new slot number")
 
 
-## A picker grants the one file it answered, which Android's has already created
-## empty: nothing beside it can be written, so the export goes to it directly.
 func test_export_writes_into_a_file_whose_directory_is_closed() -> void:
 	_write_slot(0, "ASH")
 	var granted: String = ProjectSettings.globalize_path("user://slot-export-grant")
@@ -259,8 +257,6 @@ func test_the_reset_count_is_patched_into_the_slot_and_nothing_else_moves() -> v
 	assert_eq(reloaded.to_dict(), before, "the rest of the slot is untouched")
 
 
-## The backup carries the same number, so a slot recovered from it does not
-## forget the hunt.
 func test_the_backup_copy_is_counted_too() -> void:
 	_write_slot(0)
 	Gen2SaveStore.bump_reset_count(_data.id, _data.sha1, 0)

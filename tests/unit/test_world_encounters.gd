@@ -25,8 +25,6 @@ func test_grass_uses_the_selected_time_of_day_slots() -> void:
 	assert_eq(result["values"]["kind"], &"wild")
 
 
-## A slot may name a species a mod defined, and a wild is built from it the way
-## a gift or a trainer's party is. A number nothing defined finds nothing.
 func test_a_slot_naming_a_mod_species_is_met_in_the_wild() -> void:
 	Gen2ModHost.reset()
 	var voltling: int = Gen2ContentOverlay.FIRST_MOD_NUMBER

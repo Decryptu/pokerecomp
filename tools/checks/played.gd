@@ -670,7 +670,6 @@ func _warp_to(map: Vector2i) -> Callable:
 		return PokeButton.NONE
 
 
-## Predicates that end a leg.
 func _on_map(map: Vector2i) -> Callable:
 	return func(world: Gen2WorldAPI) -> bool:
 		return world.map_id() == map

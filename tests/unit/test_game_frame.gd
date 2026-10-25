@@ -39,15 +39,11 @@ func _controls(area: Vector2, controls: bool) -> Rect2:
 	return Gen2GameFrame.split(area, controls)["controls"]
 
 
-## With nothing to place, both cases are the same and a desktop window is
-## exactly what it was.
 func test_without_a_controller_the_screen_takes_the_whole_frame() -> void:
 	for area: Vector2 in [Vector2(1152, 648), Vector2(480, 960)]:
 		assert_eq(_screen(area, false), Rect2(Vector2.ZERO, area))
 
 
-## Landscape centres the screen and overlays the controller on the margins,
-## which is where the thumbs already are.
 func test_landscape_centres_the_screen_and_shares_the_frame() -> void:
 	var area := Vector2(1152, 648)
 	assert_eq(_screen(area, true), Rect2(Vector2.ZERO, area))
@@ -203,10 +199,6 @@ func test_a_layer_over_a_screen_does_not_answer_for_it() -> void:
 	assert_eq(screen.surround_color, Color.WHITE, "the screen under it still owns it")
 
 
-## Until something says what the field is, there is no surround to paint.
-## "Not told yet" is not "told it is black": a screen laid out over another one
-## -- a menu box over the map -- has no field of its own, and a band of the
-## default cut the map back to 160x144 with bars around it.
 func test_a_screen_nothing_has_told_paints_no_surround() -> void:
 	var screen: Gen2Screen = _built()
 	assert_false(screen.has_field(), "nothing has said what it stands on")
@@ -251,8 +243,6 @@ func test_a_host_outside_every_screen_gets_one_of_its_own() -> void:
 	assert_eq(screen.get_parent(), host)
 
 
-## Half the screens here are drawn as a colour rather than as a picture, so the
-## field they stand on is the same seam.
 func test_a_screen_drawn_as_a_colour_says_so_too() -> void:
 	var screen: Gen2Screen = _built()
 	screen.display(Gen2Screen.Field.create(Color.AQUA))
@@ -274,8 +264,6 @@ func test_hardware_sized_content_lands_on_the_interface_rectangle() -> void:
 	assert_gt(screen.interface_layer().position.x, 0.0, "which is not the corner")
 
 
-## A view that fills the buffer keeps the buffer's own origin, or the map would
-## be drawn one interface rectangle in from the corner.
 func test_a_buffer_filling_view_keeps_the_buffer_origin() -> void:
 	var screen: Gen2Screen = _built()
 	var map := ColorRect.new()

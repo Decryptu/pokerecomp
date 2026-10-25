@@ -2873,7 +2873,6 @@ func _audio_assets() -> Dictionary:
 	return {} if _data == null else _data.audio_assets()
 
 
-## The entering square emptied for the ball; the other stays as it stands.
 func _clear_entering_square(side: int) -> void:
 	var player_side: bool = side == Gen2Battle.PLAYER
 	var before: PackedByteArray = _bg_map
@@ -2906,8 +2905,6 @@ func set_exp(pixels: int) -> void:
 	_push_view()
 
 
-## Where the player's Pokémon sits between its level's threshold and the next,
-## recomputed at battle start and on every award and level.
 func _refresh_exp_bar() -> void:
 	if _battle == null or _battle.player == null:
 		set_exp(0)
@@ -3148,9 +3145,6 @@ func _gate_annotations() -> void:
 	_refresh_annotations()
 
 
-## Rebuilds the annotation layer when what a provider would answer has changed.
-## Cheap to call on every push: with no provider registered the signature is
-## empty for the whole battle and nothing is ever drawn.
 func _refresh_annotations() -> void:
 	if _annotation_layer == null:
 		return
@@ -5768,9 +5762,6 @@ func _player_label() -> String:
 	return Gen2OakSpeech.DEFAULT_MALE
 
 
-## Redraws the menu layer even when nothing about the cursor moved, which is what
-## opening a list has to do: the same stage and cursor can be looking at a
-## different party.
 func _reopen_menu_layer() -> void:
 	_menu_drawn = ""
 	_refresh_menu_layer()
@@ -6109,7 +6100,6 @@ func _draw_gen1_pack_menu() -> void:
 		}), Vector2i.ZERO)
 
 
-## The small ball selector a fight with no bag behind it is handed.
 func _draw_capture_menu() -> void:
 	var rows: Array = []
 	for ball: int in _capture_balls:
@@ -6772,9 +6762,6 @@ const WEATHER_TEXT_OF: Dictionary = {
 }
 
 
-## An event as a sentence, or an empty string for one there is nothing to say
-## about. A neutral hit has no line of its own in these games: the bar moving is
-## the whole of the message.
 func _describe(event: Dictionary) -> String:
 	var kind: Variant = event["type"]
 	var gen1: bool = _generation() == RomRegistry.GEN1
@@ -7199,8 +7186,6 @@ func _event_name(event: Dictionary) -> String:
 	return named if not named.is_empty() else _name_of(int(event.get("species", 0)))
 
 
-## Re-reads both Pokémon. For the paths that change health outside a turn, where
-## there is no event to read it out of.
 func _read_hp() -> void:
 	if _battle == null:
 		return

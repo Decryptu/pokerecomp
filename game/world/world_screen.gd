@@ -2268,8 +2268,6 @@ func _soft_reset(counted: bool = true) -> void:
 		get_tree().change_scene_to_file.call_deferred(Gen2GameRuntime.SAVE_SCENE)
 
 
-## Offered as a B, which backs out of whatever owns the screen. Nothing on a
-## bare map takes one, and a press nobody took is the pause menu.
 func _on_back_requested() -> void:
 	if not press_button(PokeButton.B):
 		press_button(PokeButton.START)

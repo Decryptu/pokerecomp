@@ -317,8 +317,6 @@ func test_forced_action_follows_both_forced_walk_tables() -> void:
 		_assert_forced_walk(0x58 + index, land2[index])
 
 
-## .warps accepts four codes and lets every other $7x fall through, so a warp
-## panel or an unnamed $7x tile forces nothing.
 func test_forced_action_steps_down_off_doors_stairs_and_caves() -> void:
 	for code: int in [0x71, 0x79, 0x7A, 0x7B]:
 		_assert_forced_walk(code, Vector2i.DOWN)

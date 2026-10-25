@@ -108,9 +108,6 @@ func _write_fruit_trees(data: PackedByteArray) -> void:
 		data[offset + index] = rows[index]
 
 
-## The two tables in their own shape: coordinates and spawn indexes are what
-## identifies each, so the fixture writes the pinned columns and invents the
-## rest.
 func _write_spawns(data: PackedByteArray) -> void:
 	var offset: int = int(_layout["spawn_points"])
 	for index: int in Gen2Layout.SPAWN_COUNT:

@@ -376,8 +376,6 @@ func test_running_takes_the_fast_row_and_only_for_a_walk() -> void:
 		assert_eq(_world._step_frames_for_movement(), passes, String(mode))
 
 
-## A follower queued on the walk row falls a cell behind a running leader every
-## step, so it takes the duration the player's step actually took.
 func test_a_follower_takes_the_duration_the_leaders_step_took() -> void:
 	_world.player_cell = Vector2i(5, 4)
 	_world._start_object_follow({
@@ -396,9 +394,6 @@ func test_a_follower_takes_the_duration_the_leaders_step_took() -> void:
 	)
 
 
-## The run state goes in the log beside the held direction, or a replay taken
-## while running walks at the wrong speed and lands somewhere else. The provider
-## is registered rather than mocked: the recording is what the pump polled.
 func test_a_recording_carries_the_run_state_and_a_replay_reads_it_back() -> void:
 	Gen2ModHost.reset()
 	var policy := GDScript.new()

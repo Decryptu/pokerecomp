@@ -88,9 +88,6 @@ func test_down_from_the_tab_strip_returns_to_the_current_page() -> void:
 	assert_true(_focus_owner() is Gen2CartridgeStage)
 
 
-## The header row is the top of the mods page, and what is under it is however
-## many mods this machine happens to have. So the route asserted is the one that
-## holds on an empty catalogue too: along the row, and up out of the page.
 func test_mod_page_builds_a_visible_logical_focus_route() -> void:
 	_use(InputEventJoypadButton.new())
 	_launcher.select_page(&"mods")
@@ -111,8 +108,6 @@ func test_mod_page_builds_a_visible_logical_focus_route() -> void:
 	assert_eq((tab as Gen2LauncherButton).text, "Mods", "on the tab the page belongs to")
 
 
-## A mouse needs no ring, and putting one up would move it away from whatever
-## the player is pointing at.
 func test_a_mouse_is_left_alone() -> void:
 	_use(InputEventMouseButton.new())
 	var guard: Gen2FocusGuard = _launcher.find_child("FocusGuard", true, false)
@@ -140,8 +135,6 @@ func test_the_ring_never_lands_on_a_pane_that_holds_controls() -> void:
 		assert_true(focused.is_visible_in_tree(), "%s: focus never lands on a hidden page" % page)
 
 
-## The settings page is a rail beside its rows: right leaves the rail for them,
-## left comes back, and up is always a way out of the page.
 func test_a_pad_crosses_the_settings_page_and_leaves_it() -> void:
 	_use(InputEventJoypadButton.new())
 	_launcher.select_page(&"settings")
@@ -283,8 +276,6 @@ func test_a_guard_with_nothing_to_focus_does_not_claim_a_direction() -> void:
 	assert_same(_focus_owner(), elsewhere, "and it is left where it was")
 
 
-## A modal is where a pad has to be, and where it was has to come back, or
-## closing a sheet would strand the player with nothing selected.
 func test_a_sheet_takes_the_ring_and_gives_it_back() -> void:
 	_use(InputEventJoypadButton.new())
 	await get_tree().process_frame

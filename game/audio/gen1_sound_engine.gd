@@ -399,8 +399,6 @@ func _reset_counters() -> void:
 		_wram[NOTE_SPEEDS + index] = 1
 
 
-## Every array the two clears zero, plus the three they set to one. The delay
-## fraction, the octave and the volume are deliberately outside it.
 func _clear_channel(channel: int) -> void:
 	for base: int in [
 		SOUND_IDS, FLAGS1, FLAGS2, DUTY_CYCLES, DUTY_CYCLE_PATTERNS, VIBRATO_DELAY,

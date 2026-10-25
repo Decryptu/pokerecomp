@@ -341,8 +341,6 @@ func _read_live_options(args: PackedStringArray) -> bool:
 	return true
 
 
-## The production screen on a real map, with every effect sprite running at once. Each is started through the
-## same call the game makes, so what is photographed is the renderer's own path rather than a drawing of it.
 func _build_live(data: GameData, group: int, number: int, cell: Vector2i) -> void:
 	DisplayServer.window_set_size(_window)
 	root.set_content_scale_size(_window)
@@ -1057,8 +1055,6 @@ const FACINGS: Dictionary = {
 }
 
 
-## Prints out and presses through whatever boxes the shop is holding on, so a kind lands on the same stage on
-## either generation.
 func _clear_mart_boxes() -> void:
 	for _press: int in MART_PRESSES:
 		var host: Gen2WorldServiceScreen = _screen.get("_service_host")

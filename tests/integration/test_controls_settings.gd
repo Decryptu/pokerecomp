@@ -68,7 +68,6 @@ func test_a_button_with_nothing_bound_says_so() -> void:
 	assert_eq(Gen2ControlsSection.describe([]), "Unbound")
 
 
-## The whole point of the card: press something, and that is what the button is.
 func test_capturing_a_key_adds_it_to_the_button() -> void:
 	var before: int = (_options.controls[PokeButton.B] as Array).size()
 	var sheet: Gen2BindingSheet = await _open(PokeButton.B)
@@ -104,7 +103,6 @@ func test_binding_the_same_thing_twice_changes_nothing() -> void:
 	assert_eq(_options.controls[PokeButton.A], before)
 
 
-## One key on two buttons is the player's call. The sheet says so and allows it.
 func test_a_binding_already_on_another_button_is_reported_not_refused() -> void:
 	var sheet: Gen2BindingSheet = await _open(PokeButton.B)
 	sheet._start_capture()
@@ -132,8 +130,6 @@ func test_holding_a_button_cancels_the_capture_instead_of_binding_it() -> void:
 	assert_null(_sheet(), "and the sheet closed")
 
 
-## A release that is not the held one is not the end of the capture: letting go
-## of a modifier still leaves the key it was pressed with waiting.
 func test_a_release_of_something_else_does_not_finish_the_capture() -> void:
 	var sheet: Gen2BindingSheet = await _open(PokeButton.B)
 	var before: int = (_options.controls[PokeButton.B] as Array).size()
@@ -146,8 +142,6 @@ func test_a_release_of_something_else_does_not_finish_the_capture() -> void:
 	assert_eq((_options.controls[PokeButton.B] as Array).size(), before + 1)
 
 
-## A stick has no release event: it falls back inside the same deadzone that
-## stopped it being read as a binding on the way out.
 func test_a_stick_binds_when_it_returns_to_centre() -> void:
 	var sheet: Gen2BindingSheet = await _open(PokeButton.LEFT)
 	var before: int = (_options.controls[PokeButton.LEFT] as Array).size()
@@ -226,10 +220,6 @@ func test_the_layout_editor_previews_the_controller_it_is_arranging() -> void:
 	await get_tree().process_frame
 
 
-## The Gameplay card names three modes and nothing else said what was in them,
-## while the per-flag overrides the model has always carried were reachable from
-## no screen at all. Both halves are read off one snapshot, so the line under the
-## row and the sheet's own list cannot disagree.
 func test_the_bug_rules_are_named_and_each_one_can_be_moved_by_hand() -> void:
 	var page: Gen2SettingsPage = Gen2SettingsPage.create(_theme, _host)
 	_host.add_child(page)

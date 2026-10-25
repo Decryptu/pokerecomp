@@ -29,7 +29,6 @@ func test_a_bar_already_where_it_is_going_is_finished() -> void:
 	assert_false(animation.advance_frame())
 
 
-## Healing walks the other way.
 func test_the_bar_fills_as_well_as_drains() -> void:
 	var animation: Gen2HpBarAnimation = Gen2HpBarAnimation.create(0, 100, 100)
 	assert_eq(animation.pixels(), 0)
@@ -54,7 +53,6 @@ func test_a_faint_empties_the_bar() -> void:
 	assert_eq(animation.hp(), 0)
 
 
-## The number beside the bar counts down with it rather than jumping.
 func test_the_printed_hp_follows_the_bar_down() -> void:
 	var animation: Gen2HpBarAnimation = Gen2HpBarAnimation.create(100, 0, 100)
 	var seen: Array = []

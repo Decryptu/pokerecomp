@@ -66,7 +66,6 @@ static func read_mon(ctx: Gen1SramContext, at: int, party: bool) -> Gen2SaveMon:
 	return mon
 
 
-## One Special stat answers for both.
 static func _read_stats(ctx: Gen1SramContext, at: int) -> Dictionary:
 	var special: int = ctx.u16(at + AT_STATS + 8)
 	return {

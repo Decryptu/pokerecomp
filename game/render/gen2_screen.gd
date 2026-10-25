@@ -641,8 +641,6 @@ func _draw_cover() -> void:
 			)
 
 
-## Four bands around the 160x144, since a battle transition has to stay visible
-## inside them; a backdrop paints through the same four.
 func _draw_mask() -> void:
 	var inside := Rect2(_interface.position, Vector2(WIDTH, HEIGHT))
 	var whole := Vector2(_view_size)

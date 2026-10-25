@@ -277,7 +277,6 @@ func _hall(save: Gen2SaveData) -> void:
 		_r.check(_same(mons, teams[index]), "Hall of Fame team %d is %s" % [index, mons])
 
 
-## On a copy: opening a world writes the map's music into the state it is handed.
 func _opens(save: Gen2SaveData) -> void:
 	var world: Gen2WorldAPI = Gen2WorldAPI.open_snapshot(
 		_r.data, Gen2SaveData.from_dict(save.to_dict()).world, null

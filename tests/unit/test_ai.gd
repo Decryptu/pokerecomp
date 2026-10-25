@@ -1082,8 +1082,6 @@ func test_smart_lock_on_dismisses_itself_once_the_target_is_aimed_at() -> void:
 	)
 
 
-## The other half: aiming is worth it against a sharply raised evasion and not
-## worth a turn while the user is nearly down.
 func test_smart_lock_on_reads_health_then_evasion() -> void:
 	var pikachu: Gen2BattleMon = _mon(Fixture.PIKACHU, 50, [Fixture.LOCK_ON, Fixture.TACKLE])
 	var geodude: Gen2BattleMon = _mon(Fixture.GEODUDE, 50, [Fixture.TACKLE])

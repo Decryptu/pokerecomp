@@ -80,8 +80,6 @@ func test_a_saved_clock_catches_up_to_the_time_that_passed_while_it_was_closed()
 	)
 
 
-## The stamp is the snapshot's, so what a save carries is the host second its own
-## clock was written at.
 func test_a_snapshot_stamps_the_host_second_its_clock_was_written_at() -> void:
 	Gen2WorldClock.host_seconds_override = 1_234_567.0
 	var snapshot := Gen2WorldSnapshot.new()

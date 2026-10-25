@@ -510,7 +510,6 @@ func _transition_source(index: int) -> int:
 	return -1 if source < 0 or source == index else source
 
 
-## The map tile another screen cell was drawing, painted over this one.
 func _draw_moved_tile(
 	screen_tile: Vector2i, source: int, at: Rect2, covered: Rect2
 ) -> void:

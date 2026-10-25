@@ -155,8 +155,6 @@ func _now() -> String:
 	return "%02d:%02d" % [int(clock["hour"]), int(clock["minute"])]
 
 
-## The strip is laid over the row rather than placed in it: a centre cell between
-## two of different widths is not the middle of the screen.
 func _build_top_bar() -> Control:
 	_top_bar = Control.new()
 	_top_bar.custom_minimum_size.y = Gen2LauncherButton.TAB_HEIGHT
@@ -482,8 +480,6 @@ func _tab_landing(from: Control) -> Control:
 	return _buttons.get(_current) as Control
 
 
-## Godot's search prefers a page control below a tab over the tab beside it, so
-## the strip owns its axes: left and right wrap, down leaves.
 func _on_tab_input(event: InputEvent, id: StringName) -> void:
 	var at: int = _index_of(id)
 	var target: Control = null
@@ -533,8 +529,6 @@ func _apply_layout() -> void:
 			page.call("set_compact", compact)
 
 
-## The tabs keep their words while the row has any to spare, and drop to glyphs
-## in squares when it has not.
 func _layout_bars(insets: Dictionary) -> void:
 	var named: bool = names_tabs(size, _entries.size())
 	for entry: Dictionary in _entries:

@@ -278,8 +278,6 @@ func test_a_type_boosting_item_lifts_a_move_of_its_own_type() -> void:
 	assert_eq(int(_hit(attacker, defender, Fixture.THUNDERBOLT)["damage"]), 29)
 
 
-## The row has to match the type as well as the effect, so a Magnet does nothing
-## for a Normal move.
 func test_a_type_boosting_item_does_nothing_for_another_type() -> void:
 	var attacker: Gen2BattleMon = _mon(Fixture.PIKACHU)
 	var defender: Gen2BattleMon = _mon(Fixture.BULBASAUR)
@@ -545,7 +543,6 @@ func test_foresight_opens_a_ghost_to_normal_damage() -> void:
 	assert_eq(opened["effectiveness"], Gen2Layout.MATCHUP_EFFECTIVE)
 
 
-## Nothing else moves: the flag cancels the two Ghost rows and no other.
 func test_foresight_leaves_every_other_matchup_alone() -> void:
 	var attacker: Gen2BattleMon = _mon(Fixture.PIKACHU)
 	var defender: Gen2BattleMon = _mon(Fixture.GEODUDE)

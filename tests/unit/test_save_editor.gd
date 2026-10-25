@@ -341,8 +341,6 @@ func test_a_negative_flag_number_is_refused() -> void:
 	assert_false(editor.set_engine_flag(-1, true)["ok"])
 
 
-## The badge engine flags differ between the profiles, so the list follows the
-## save's own game rather than a single hardcoded set.
 func test_badge_flags_follow_the_saves_own_profile() -> void:
 	var editor: Gen2SaveEditor = _with_world()
 	editor.save.game_id = RomRegistry.CRYSTAL

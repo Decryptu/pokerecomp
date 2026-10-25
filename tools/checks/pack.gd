@@ -217,7 +217,6 @@ func _incompatible_machine(species: int) -> int:
 	return 0
 
 
-## The menu's box printed out and paged through, answering how many presses.
 func _read_box(host: Gen2StartMenuScreen) -> int:
 	var presses: int = 0
 	for _frame: int in BOX_FRAME_CAP:

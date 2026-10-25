@@ -175,9 +175,6 @@ func _start_poll() -> void:
 	_apply(reading)
 
 
-## Hands a finished worker's answer to the cell. The task writes the shared
-## reading rather than touching this node, so a shell freed mid-probe leaves
-## nothing dangling.
 func _collect_finished_task() -> void:
 	if _task < 0 or not WorkerThreadPool.is_task_completed(_task):
 		return

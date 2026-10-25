@@ -35,9 +35,6 @@ func after_each() -> void:
 	Gen2ModHost.reset()
 
 
-## Opens the screen, then puts the crafted battle on it. show_matchup() builds
-## its parties from the learnset, which cannot produce a full moveset at level
-## 5, so the battle itself is assembled the way the unit tests assemble one.
 func _open_with_full_moveset(third_move: int = BattleFixture.THUNDERBOLT) -> void:
 	var packed: PackedScene = load("res://game/battle/battle_screen.tscn")
 	_screen = packed.instantiate() as Gen2BattleScreen

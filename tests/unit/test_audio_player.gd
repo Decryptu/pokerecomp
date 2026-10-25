@@ -77,8 +77,6 @@ func test_the_app_volumes_and_a_host_scale_reach_the_drivers_mix() -> void:
 	options.sfx_volume = sfx
 
 
-## A host that stops its own stream and then asks for music again gets sound,
-## not a live driver over a dead output.
 func test_a_stopped_output_under_live_channels_starts_itself_again() -> void:
 	assert_true(_player.play_record(_record(2), &"map_music")["played"])
 	_player._player.stop()
@@ -184,8 +182,6 @@ func test_the_queue_is_kept_to_its_latency_target_not_to_the_brim() -> void:
 	)
 
 
-## A device that cannot hold the target says so by running the queue dry, and the
-## target rises for it rather than being chosen per platform by ear.
 func test_an_underrun_raises_the_target_instead_of_needing_a_build_per_target() -> void:
 	assert_true(_player.play_record(_record(99), &"map_music")["ok"])
 	_player._service_timeline()

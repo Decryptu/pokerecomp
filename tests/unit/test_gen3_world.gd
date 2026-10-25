@@ -606,9 +606,6 @@ func test_player_avatar_reserves_a_slot_and_preserves_control_state() -> void:
 	assert_null(Gen3PlayerAvatar.open(full_pool, Vector2i(12, 12), 1, 0))
 
 
-## Protect precedence and current-vs-previous lookup: a blocked ledge is still
-## jumped, surf dismount ignores a departing object, Strength does not. A flat
-## passability test or reuse of the generic occupancy reader changes them.
 func test_player_collision_precedence_and_effect_requests() -> void:
 	var objects: Gen3ObjectEvents = _field_objects(RomRegistry.EMERALD)
 	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 1, 0)
@@ -1424,8 +1421,6 @@ func test_grass_keeps_its_last_image_until_departure_and_releases_shared_palette
 			assert_eq(anim.image, 1, "entering grass starts the rustle rather than seeking the settled image")
 
 
-## Jumping filters tall grass at takeoff, creates landing leaves once, and retains a settled grass cover.
-## Ground tests without imported effect templates cannot see either the jump filter or duplicate covers.
 func test_grass_jump_landing_and_covering_filter_follow_the_held_movement() -> void:
 	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
 		for mode: int in 4:
@@ -2146,7 +2141,6 @@ func test_removed_disguise_stops_before_reused_slot_spawns_its_effect() -> void:
 		assert_eq(objects.step_movements(), [])
 
 
-## Reveal is an immediate no-op for ordinary trainers regardless of patrol state.
 func test_reveal_dispatch_does_not_read_patrol_state_as_disguise_state() -> void:
 	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
 		var objects: Gen3ObjectEvents = _movement_objects(id)

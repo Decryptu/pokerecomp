@@ -423,7 +423,6 @@ func _open_manage_sheet(game_id: StringName) -> void:
 	sheet.open(self)
 
 
-## The manage sheet answers the same states, but it is a workbench.
 func _open_update_sheet(game_id: StringName, state: StringName) -> void:
 	var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(
 		_palette, RomRegistry.title_for(game_id)

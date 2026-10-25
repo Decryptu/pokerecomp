@@ -112,8 +112,6 @@ func test_pad_bindings_match_every_device() -> void:
 		)
 
 
-## A stick resting near centre reports motion constantly, and none of it is a
-## binding the player meant to make.
 func test_a_resting_stick_is_not_a_binding() -> void:
 	var motion := InputEventJoypadMotion.new()
 	motion.axis = JOY_AXIS_LEFT_X

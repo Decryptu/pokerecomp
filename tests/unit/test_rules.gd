@@ -186,8 +186,6 @@ func test_hard_raises_a_trainers_party_by_one_global_rule_each() -> void:
 		assert_eq(int(trained[key]), Gen2Stats.MAX_STAT_EXP)
 
 
-## The challenge is part of what names a run, so two runs under different ones
-## are not the same rules even with identical flags.
 func test_the_challenge_is_part_of_what_makes_two_rule_sets_equal() -> void:
 	var vanilla := Gen2Rules.new()
 	var nuzlocke: Gen2Rules = vanilla.duplicate_rules()

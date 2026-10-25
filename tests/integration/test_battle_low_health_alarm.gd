@@ -39,8 +39,6 @@ func test_each_battler_cries_on_its_own_side() -> void:
 	assert_eq(Gen2BattleScreen.cry_tracks(false), 0xF0)
 
 
-## The bar's colour follows what is drawn, so a full bar is green and the alarm
-## is silent.
 func test_a_healthy_bar_leaves_the_alarm_off() -> void:
 	_screen.set_hp(40, 40, 40, 40)
 	assert_false(_alarm())

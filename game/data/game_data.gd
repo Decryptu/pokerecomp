@@ -277,7 +277,6 @@ static func _string_list(raw: Variant) -> PackedStringArray:
 	return out
 
 
-## The tables that live beside the manifest as their own files.
 func _read_cache(path: String) -> void:
 	_species = _read_array(RomCache.species_path(path))
 	_moves = _read_array(RomCache.moves_path(path))

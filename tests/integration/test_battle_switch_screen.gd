@@ -480,8 +480,6 @@ func test_the_pack_is_the_pack_screen_with_the_row_description_under_it() -> voi
 	assert_eq(_menu_stage(), "main", "`.didnt_use_item` is `jp BattleMenu`")
 
 
-## The throw is a message and no message redraws a menu, so the ball list stood
-## over the whole of the fight it had just started.
 func test_throwing_a_ball_takes_the_list_off_the_screen() -> void:
 	var battle: Gen2Battle = _menu_battle()
 	await _open(battle, [Gen2Battle.use_move(0), Gen2Battle.use_move(0)])

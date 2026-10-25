@@ -131,8 +131,6 @@ func advance() -> void:
 	_refresh()
 
 
-## Crystal's pics go under the page, so the box borders stay drawn over them;
-## Generation 1's page is opaque.
 func _build() -> void:
 	add_child(Gen2Screen.Field.create(BACKDROP))
 	_background = TextureRect.new()

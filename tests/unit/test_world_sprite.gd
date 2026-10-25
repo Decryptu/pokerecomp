@@ -43,8 +43,6 @@ func test_frame_three_mirrors_down_and_up_but_not_left_or_right() -> void:
 	assert_true(Gen2WorldSprite.frame_is_mirrored(Gen2WorldSprite.FACING_RIGHT, 3))
 
 
-## A still sprite is one four-tile picture whatever it is asked for, and a
-## standing sprite has no walking half to reach.
 func test_a_still_sprite_answers_one_picture_for_every_frame() -> void:
 	var still: Gen2WorldSprite = Gen2WorldSprite.from_cache({
 		"number": 2, "bytes": 64, "tiles": 4,

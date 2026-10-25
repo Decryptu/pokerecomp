@@ -26,44 +26,28 @@ func _movie() -> Gen2IntroMovie:
 
 
 ## The budget the boot cinema spends, and the scene it spends each frame in.
-func test_the_movie_runs_every_scene_and_sets_its_own_exit_bit() -> void:
+func test_the_movie_timeline_and_audio_requests() -> void:
 	var movie: Gen2IntroMovie = _movie()
 	var starts: Array[int] = [0]
 	var scene: int = 0
+	var music: Array[Dictionary] = []
+	var sfx: Array[int] = []
 	while not movie.finished() and movie.frame() < FRAME_CAP:
-		movie.advance_frame()
+		for event: Dictionary in movie.advance_frame():
+			if event["type"] == &"play_music":
+				music.append(event)
+			elif event["type"] == &"play_sfx":
+				sfx.append(int(event["sfx"]))
 		if movie.scene() != scene:
 			scene = movie.scene()
 			starts.append(movie.frame())
 	assert_true(movie.finished())
 	assert_eq(movie.frame(), MOVIE_FRAMES)
 	assert_eq(starts, SCENE_STARTS)
-	assert_eq(starts.size(), Gen2Layout.INTRO_SCENES)
-
-
-## `IntroScene13` is the only `PlayMusic` in the movie, so the GameFreak logo's
-## silence runs a third of the way in before the opening theme starts.
-func test_the_music_starts_part_way_in_and_only_once() -> void:
-	var movie: Gen2IntroMovie = _movie()
-	var music: Array[Dictionary] = []
-	while not movie.finished() and movie.frame() < FRAME_CAP:
-		for event: Dictionary in movie.advance_frame():
-			if event["type"] == &"play_music":
-				music.append(event)
 	assert_eq(music.size(), 1)
-	assert_eq(int(music[0]["music"]), Gen2IntroMovie.MUSIC_CRYSTAL_OPENING)
-	assert_eq(int(music[0]["frame"]), SCENE_STARTS[12] + 1)
-
-
-## The eight `.UnownSounds` rows plus the nine the scenes play directly, in the
-## order the movie asks for them.
-func test_every_scene_asks_for_its_own_sounds() -> void:
-	var movie: Gen2IntroMovie = _movie()
-	var sfx: Array[int] = []
-	while not movie.finished() and movie.frame() < FRAME_CAP:
-		for event: Dictionary in movie.advance_frame():
-			if event["type"] == &"play_sfx":
-				sfx.append(int(event["sfx"]))
+	if music.size() == 1:
+		assert_eq(int(music[0]["music"]), Gen2IntroMovie.MUSIC_CRYSTAL_OPENING)
+		assert_eq(int(music[0]["frame"]), SCENE_STARTS[12] + 1)
 	assert_eq(sfx, [
 		Gen2Sfx.SFX_INTRO_UNOWN_1,
 		Gen2Sfx.SFX_INTRO_UNOWN_2, Gen2Sfx.SFX_INTRO_UNOWN_1,

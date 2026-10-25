@@ -126,7 +126,6 @@ func _initialize() -> void:
 	current_scene = _view
 
 
-## The four optional arguments, each left at its default where it is absent.
 func _read_options(args: PackedStringArray) -> void:
 	if args.size() > 2:
 		_tab = StringName(args[2])

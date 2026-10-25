@@ -1183,7 +1183,6 @@ static func _set_step_anim(object: ObjectEvent, number: int) -> void:
 		sprite.seek(int(positions[0]) if sprite.cmd_index <= int(positions[0]) else int(positions[1]))
 
 
-## A step resumes from the paired position, leading with the other foot.
 static func _set_step_anim_alternating(object: ObjectEvent, number: int) -> void:
 	if object.inanimate:
 		return

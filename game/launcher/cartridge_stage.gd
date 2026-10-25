@@ -174,8 +174,6 @@ func _step_by(event: InputEvent) -> bool:
 	return false
 
 
-## The row is dragged rather than paged: a press takes hold of it and letting go
-## settles on the nearest. Touch arrives here, the engine emulating a mouse.
 func _on_click(click: InputEventMouseButton) -> void:
 	match click.button_index:
 		MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_LEFT:

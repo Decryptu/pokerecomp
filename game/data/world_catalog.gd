@@ -859,7 +859,6 @@ func _requirements(commands: Array, at: int, crystal: bool) -> Array:
 	return out
 
 
-## One entry per distinct condition: two blobs reaching one routine walk it twice.
 static func _append_once(out: Array, seen: Dictionary, entry: Dictionary) -> void:
 	var key: String = str(entry)
 	if seen.has(key):
