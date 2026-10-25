@@ -2,8 +2,8 @@ extends SceneTree
 
 ## Renders imported map blocks or the real field screen. `live help` prints [constant KIND_HELP].
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
-## GBA: game group map path [frames [x y [weather [held_action]]]]. Frames start at the warp's fade in;
-## a held action starts at frame 120. `emerald 0 34 /tmp/w.png 128 20 100 5 11` walks right in rain.
+## GBA: game group map path [frames [x y [weather [held_action [avatar_flags]]]]] from the warp's fade in; a held
+## action starts at frame 120, and avatar flags 8 surf. `emerald 0 34 /tmp/w.png 128 20 100 5 11` walks right in rain.
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
 ##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]
 
@@ -279,9 +279,7 @@ func _initialize() -> void:
 		)
 		return
 	if data != null and data.generation == RomRegistry.GEN3:
-		_preview_gba(data, int(args[1]), int(args[2]), args[3], int(args[4]) if args.size() >= 5 else 0,
-			Vector2i(int(args[5]), int(args[6])) if args.size() >= 7 else Vector2i(-1, -1),
-			int(args[7]) if args.size() >= 8 else -1, int(args[8]) if args.size() >= 9 else -1)
+		_preview_gba(data, args)
 		return
 	var map: Gen2WorldMap = data.world_map(int(args[1]), int(args[2])) if data != null else null
 	var tileset: Gen2WorldTileset = data.world_tileset(map.tileset) if map != null else null
@@ -1857,8 +1855,15 @@ func _draw_marker(image: Image, cell_x: int, cell_y: int, color: Color) -> void:
 				image.set_pixel(pixel_x + x, pixel_y + y, color)
 
 
-func _preview_gba(data: GameData, group: int, number: int, path: String, frames: int, at: Vector2i,
-		weather: int, action: int) -> void:
+func _preview_gba(data: GameData, args: PackedStringArray) -> void:
+	var options: Array[int] = []
+	for index: int in range(4, 10):
+		options.append(int(args[index]) if index < args.size() else -1)
+	var group: int = int(args[1])
+	var number: int = int(args[2])
+	var path: String = args[3]
+	var frames: int = maxi(options[0], 0)
+	var at: Vector2i = Vector2i(options[1], options[2]) if args.size() >= 7 else Vector2i(-1, -1)
 	var grid: Gen3MapGrid = Gen3MapGrid.open(data, group, number)
 	if grid == null:
 		push_error("The requested GBA map is not available.")
@@ -1871,7 +1876,7 @@ func _preview_gba(data: GameData, group: int, number: int, path: String, frames:
 			vram.step()
 		image = vram.draw(grid, Rect2i(0, 0, grid.width, grid.height))
 	else:
-		image = _preview_gba_screen(data, group, number, vram, frames, at, weather, action)
+		image = _preview_gba_screen(data, group, number, vram, frames, at, options[3], options[4], maxi(options[5], 0))
 	var error: int = image.save_png(path) if image != null else ERR_CANT_CREATE
 	if error != OK:
 		push_error("Could not write %s (error %d)." % [path, error])
@@ -1881,7 +1886,7 @@ func _preview_gba(data: GameData, group: int, number: int, path: String, frames:
 ## The field screen [param frames] frames after the player spawns on layout cell [param at], under the map's
 ## weather or, when not negative, [param override].
 func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3FieldVram, frames: int,
-		at: Vector2i, override: int, action: int) -> Image:
+		at: Vector2i, override: int, action: int, avatar_flags: int) -> Image:
 	var camera: Gen3FieldCamera = Gen3FieldCamera.open(data, group, number, at)
 	var events := Gen3EventData.new(data.id)
 	var objects := Gen3ObjectEvents.new(camera, events, vram.palette)
@@ -1898,6 +1903,7 @@ func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3Fiel
 	if avatar == null:
 		push_error("The player could not be placed at %s." % at)
 		return null
+	avatar.transition(avatar_flags)
 	avatar.track_camera()
 	objects.spawn_in_view()
 	# WarpFadeInScreen: FillPalBufferBlack, then FadeScreen(FADE_FROM_BLACK, 0).

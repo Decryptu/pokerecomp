@@ -54,6 +54,12 @@ const JUMP_SHAPES: Dictionary = {
 	Jump.ACRO_FAR: {"distance": 2, "arc": 0, "shadow": true, "wheelie": true},
 }
 const FLDEFF_SHADOW: int = 3
+const FLDEFF_SURF_BLOB: int = 8
+const FLDEFF_DUST: int = 10
+const UNDERWATER_BOB: int = -1
+enum Bob { NONE, PLAYER_AND_MON, JUST_MON }
+## `surfBlobDirectionAnims`, by movement direction.
+const SURF_BLOB_ANIMS: Array[int] = [0, 0, 1, 2, 3, 0, 0, 1, 1]
 const FLDEFF_SAND_FOOTPRINTS: int = 13
 const FLDEFF_DEEP_SAND_FOOTPRINTS: int = 24
 const FLDEFF_FEET_IN_FLOWING_WATER: int = 34
@@ -332,6 +338,8 @@ class ObjectEvent:
 	var berry_just_picked: bool = false
 	var disguise_spawned: bool = false
 	var disguise_effect_id: int = 0
+	## `fieldEffectSpriteId`: the surf blob or underwater bob this object owns.
+	var field_effect_sprite: Dictionary = {}
 	var disguise_state: int = 0
 	var disguise_frame: int = 0
 	var disguise_ready: bool = false
@@ -388,8 +396,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	load_templates()
 
 
-## `LoadObjEventTemplatesFromHeader`. FireRed and LeafGreen copy a clone's target in its place, keeping the
-## clone's id, position and kind.
+## `LoadObjEventTemplatesFromHeader`; FRLG copies a clone's target in, keeping the clone's id, position and kind.
 func load_templates() -> void:
 	templates.clear()
 	for row: Dictionary in camera.data.world_map_events(camera.group, camera.number).get("objects", []):
@@ -575,6 +582,14 @@ static func set_direction(object: ObjectEvent, direction: int) -> void:
 	object.movement_direction = direction
 
 
+## `ObjectEventTurn`.
+static func turn(object: ObjectEvent, direction: int) -> void:
+	set_direction(object, direction)
+	if not object.inanimate:
+		object.anim.start(DIRECTION_ANIM_OFFSETS[object.facing])
+		object.anim.seek(0)
+
+
 ## `GetObjectEventIdByXY` / `GetObjectEventIdByPosition`: current cell; elevation <= 0 matches any.
 func at_position(at: Vector2i, elevation: int = -1) -> int:
 	for slot: int in COUNT:
@@ -585,8 +600,7 @@ func at_position(at: Vector2i, elevation: int = -1) -> int:
 	return -1
 
 
-## `ShouldInitObjectEventStateFromTemplate`. A clone is tested at its own layout position; the obstacle test
-## reads the target's.
+## `ShouldInitObjectEventStateFromTemplate` tests a clone at its own position, its obstacle check at the target's.
 func _frlg_should_init(template: Dictionary, clone: bool, at: Vector2i) -> bool:
 	if int(template["graphics_id"]) not in FRLG_OBSTACLES:
 		return true
@@ -777,8 +791,7 @@ static func movement_overridden(object: ObjectEvent) -> bool:
 	return object.single_movement_active or object.held_movement_active
 
 
-## `FreezeObjectEvents` (`FreezeObjectEventsExceptOne` past [param except_slot]) skips player/held actions;
-## unfreezing visits every active slot.
+## `FreezeObjectEvents`/`FreezeObjectEventsExceptOne` skip player and held actions; unfreezing visits every slot.
 func freeze_except_player(except_slot: int = -1) -> void:
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
@@ -804,8 +817,7 @@ static func _unfreeze(object: ObjectEvent) -> void:
 		object.affine_anim_paused = object.affine_anim_paused_backup
 
 
-## `RemoveObjectEventByLocalIdAndMap` sets the template's hide flag. The current map's mutable templates
-## precede another map's header templates.
+## `RemoveObjectEventByLocalIdAndMap` sets the template's hide flag, the current map's mutable rows first.
 func remove(local_id: int, number: int, group: int) -> void:
 	var object: ObjectEvent = by_identity(local_id, number, group)
 	if object != null:
@@ -1014,12 +1026,94 @@ func _init_linked_map_effect(object: ObjectEvent, sprite: Dictionary, requests: 
 		sprite["last_cell"] = Vector2i(-1, -1)
 
 
+## `FldEff_SurfBlob`: off the active list at once, alive until [method destroy_effect_sprite].
+func start_surf_blob(slot: int) -> Dictionary:
+	var object: ObjectEvent = objects[slot]
+	var info: Dictionary = camera.data.world_surf_blob_graphics()
+	var sprite_slot: int = sprites.effect_slot()
+	if info.is_empty() or sprite_slot < 0:
+		return {}
+	var anim := Gen3SpriteAnim.new()
+	anim.anims = info["anims"]
+	anim.images = info["images"]
+	var sprite: Dictionary = {"request": _effect_request(object, slot, FLDEFF_SURF_BLOB), "sprite_slot": sprite_slot,
+		"anim": anim, "info": info, "map_effect": true, "unlisted": true, "passes": 0, "end": -1, "follow": false,
+		"position": camera.sprite_position(object.current) + Vector2i(8, 8), "priority": object.priority,
+		"subpriority": 150, "palette": 0, "bob": Bob.NONE, "velocity": 0 if _frlg else -1, "timer": 0,
+		"interval": 0, "last_cell": Vector2i(-1, -1), "y2": 0}
+	_effect_sprites.append(sprite)
+	return sprite
+
+
+## `StartUnderwaterSurfBlobBobbing` passes the player's own sprite, so the dummy bobs the player.
+func start_underwater_bob(slot: int) -> Dictionary:
+	var sprite_slot: int = sprites.effect_slot()
+	if sprite_slot < 0:
+		return {}
+	var sprite: Dictionary = {"request": _effect_request(objects[slot], slot, UNDERWATER_BOB),
+		"sprite_slot": sprite_slot, "unlisted": true, "passes": 0, "end": -1, "follow": false, "timer": 0, "bob_y": 1}
+	_effect_sprites.append(sprite)
+	return sprite
+
+
+## `DestroySprite`, which frees neither tiles nor palette.
+func destroy_effect_sprite(sprite: Dictionary) -> void:
+	var index: int = _effect_sprites.find(sprite)
+	if index >= 0:
+		_effect_sprites.remove_at(index)
+
+
+## `UpdateSurfBlobFieldEffect`; a cell beside elevation 3 halves the rate. FRLG's blob starts still, and its
+## second anim frames lower the player a pixel.
+func _update_surf_blob(sprite: Dictionary) -> void:
+	var player: ObjectEvent = objects[int(sprite["request"]["object_id"])]
+	var anim: Gen3SpriteAnim = sprite["anim"]
+	anim.start_if_different(SURF_BLOB_ANIMS[player.movement_direction])
+	if int(sprite["y2"]) == 0 and player.current != sprite["last_cell"]:
+		sprite["last_cell"] = player.current
+		sprite["interval"] = 0
+		for direction: int in range(Direction.SOUTH, Direction.EAST + 1):
+			var at: Vector2i = player.current + Gen3FieldCamera.DIRECTIONS[direction]
+			if camera.grid.elevation_at(at.x, at.y) == 3:
+				sprite["interval"] = 1
+				break
+	if int(sprite["bob"]) != Bob.NONE:
+		var timer: int = (int(sprite["timer"]) + 1) & 0xFFFF
+		sprite["timer"] = timer
+		if timer & ([7, 15] if _frlg else [3, 7])[int(sprite["interval"])] == 0:
+			sprite["y2"] = int(sprite["y2"]) + int(sprite["velocity"])
+		if timer & (0x1F if _frlg else 0xF) == 0:
+			sprite["velocity"] = -int(sprite["velocity"])
+		if int(sprite["bob"]) != Bob.JUST_MON:
+			player.jump_y = int(sprite["y2"]) + int(_frlg and anim.cmd_index != 0)
+			sprite["position"] = linked_sprite_position(player) + Vector2i(0, 8)
+	sprite["priority"] = player.priority
+
+
+func _update_underwater_bob(sprite: Dictionary) -> void:
+	var timer: int = int(sprite["timer"])
+	if timer & 3 == 0:
+		objects[int(sprite["request"]["object_id"])].jump_y += int(sprite["bob_y"])
+	sprite["timer"] = (timer + 1) & 0xFFFF
+	if int(sprite["timer"]) & 15 == 0:
+		sprite["bob_y"] = -int(sprite["bob_y"])
+
+
+## The sprite's x and y: the object's centre with `coordOffsetEnabled` taken off, as linked effects read it.
+func linked_sprite_position(object: ObjectEvent) -> Vector2i:
+	var height: int = int(graphics_info(object.graphics_id).get("height", 0))
+	var linked: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1)) \
+		- camera.screen_origin() - camera.sprite_coord_offset()
+	return Vector2i(wrapi(linked.x, -32768, 32768), wrapi(linked.y, -32768, 32768))
+
+
 func icon_effects() -> Array:
 	return [0, 33, 46, 66, 64] if _frlg else [0, 33, 46]
 
 
 func field_effect_active(effect: int) -> bool:
-	return _effect_sprites.any(func(sprite: Dictionary) -> bool: return sprite["request"]["effect_id"] == effect)
+	return _effect_sprites.any(func(sprite: Dictionary) -> bool:
+		return sprite["request"]["effect_id"] == effect and not sprite.get("unlisted", false))
 
 
 func _step_effect_sprites(requests: Array) -> void:
@@ -1036,7 +1130,11 @@ func _step_effect_sprites(requests: Array) -> void:
 			if sprite.has("anim"):
 				sprites.free_effect_palette(sprite)
 		else:
-			if sprite.get("grass", false) or sprite.get("map_effect", false):
+			if int(request["effect_id"]) == FLDEFF_SURF_BLOB:
+				_update_surf_blob(sprite)
+			elif int(request["effect_id"]) == UNDERWATER_BOB:
+				_update_underwater_bob(sprite)
+			elif sprite.get("grass", false) or sprite.get("map_effect", false):
 				sprites.update_field_effect(self, sprite)
 			if int(request["effect_id"]) == FLDEFF_FEET_IN_FLOWING_WATER and sprite["last_cell"] != object.current:
 				sprite["last_cell"] = object.current
@@ -1051,6 +1149,8 @@ func _step_effect_sprites(requests: Array) -> void:
 
 
 func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
+	if sprite.get("unlisted", false):
+		return false
 	if int(sprite["request"]["effect_id"]) in TRACK_EFFECTS:
 		return _fade_tracks(sprite)
 	if int(sprite["request"]["effect_id"]) == FLDEFF_BUBBLES and sprites.field_effect_off_screen(self, sprite):
@@ -1344,8 +1444,7 @@ func _advance_walk(object: ObjectEvent, direction: int, pace: int, options: Dict
 	return true
 
 
-## `StartSpriteAnimInDirection`: a family reads its anim by direction, and
-## `MOVEMENT_ACTION_START_ANIM_IN_DIRECTION` restarts the current anim facing its movement.
+## `StartSpriteAnimInDirection`; `MOVEMENT_ACTION_START_ANIM_IN_DIRECTION` restarts the current anim on its movement.
 func _start_anim_in_direction(object: ObjectEvent, direction: int, anim: int, options: Dictionary) -> void:
 	if direction == 0:
 		direction = object.movement_direction
@@ -1484,8 +1583,8 @@ func _run_levitate_tasks() -> void:
 		task["timer"] = (int(task["timer"]) + 1) & 0xFFFF
 
 
-## `MovementAction_LockAnim_Step0`/`UnlockAnim_Step0` over 16 local ids and a count; a new id takes the first
-## free slot, and an id already held changes nothing.
+## `MovementAction_LockAnim_Step0`/`UnlockAnim_Step0` over 16 ids: a new id takes the first free slot, and an
+## id already held changes nothing.
 func _lock_anim(object: ObjectEvent) -> void:
 	if _locked_anims == null:
 		var ids := PackedInt32Array()
@@ -1781,7 +1880,7 @@ func _jump_landing(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var effect: int = _grass_effect(object.current_behavior)
 	if effect < 0:
 		var behavior: int = object.current_behavior & 0xFF
-		var impact: int = 10
+		var impact: int = FLDEFF_DUST
 		if behavior == 0x16:
 			impact = 16
 		elif camera.data.world_surfable(behavior):
@@ -1850,9 +1949,7 @@ func _short_grass_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 	if object == null or not object.in_short_grass:
 		return true
 	var height: int = int(graphics_info(object.graphics_id).get("height", 0))
-	var linked: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1)) \
-		- camera.screen_origin() - camera.sprite_coord_offset()
-	linked = Vector2i(wrapi(linked.x, -32768, 32768), wrapi(linked.y, -32768, 32768))
+	var linked: Vector2i = linked_sprite_position(object)
 	var anim: Gen3SpriteAnim = sprite["anim"]
 	if linked != sprite.get("linked_position", linked) and anim.ended:
 		anim.start(0)
