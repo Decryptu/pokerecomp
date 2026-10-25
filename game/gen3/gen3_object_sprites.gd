@@ -329,8 +329,8 @@ static func _field_effect_off_screen(top_left: Vector2i, size: Vector2i) -> bool
 
 
 func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
-	if int(effect["request"]["effect_id"]) in [15, Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER]:
-		_update_splash(objects, effect)
+	if int(effect["request"]["effect_id"]) in [15, Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER, Gen3ObjectEvents.FLDEFF_SAND_PILE]:
+		_update_linked_effect(objects, effect)
 	var anim: Gen3SpriteAnim = effect["anim"]
 	var info: Dictionary = effect["info"]
 	var size := Vector2i(int(info["width"]), int(info["height"]))
@@ -346,8 +346,8 @@ func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	effect["subpriority"] = sub
 
 
-## Splash callbacks follow pos1 without pos2; flowing water also follows subpriority.
-func _update_splash(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
+## `UpdateSandPileFieldEffect` restarts an ended animation only when pos1 changes; linked effects ignore pos2.
+func _update_linked_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	var request: Dictionary = effect["request"]
 	var object: Gen3ObjectEvents.ObjectEvent = objects.by_identity(int(request["local_id"]),
 		int(request["map_number"]), int(request["map_group"]))
@@ -355,7 +355,11 @@ func _update_splash(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	var position: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1) + int(effect["y_offset"])) \
 		- objects.camera.screen_origin() - objects.camera.sprite_coord_offset()
 	effect["position"] = Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768))
-	if int(request["effect_id"]) == Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER:
+	if int(request["effect_id"]) == Gen3ObjectEvents.FLDEFF_SAND_PILE and effect["last_position"] != effect["position"]:
+		effect["last_position"] = effect["position"]
+		if (effect["anim"] as Gen3SpriteAnim).ended:
+			(effect["anim"] as Gen3SpriteAnim).start(0)
+	if int(request["effect_id"]) != 15:
 		effect["subpriority"] = object.subpriority
 
 

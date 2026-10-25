@@ -1771,6 +1771,55 @@ func test_flowing_water_latches_follows_and_loops_until_terrain_or_identity_chan
 		assert_true(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER), "landing restores the persistent covering effect")
 
 
+func test_sand_pile_settles_restarts_on_motion_and_releases_with_terrain_or_identity() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _landing_objects(id, 0x106)
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3006)
+		objects.camera.grid.set_metatile_entry(14, 12, 0x3006)
+		objects.camera.data._world_scripts["map_effect_templates"]["39"] = {"width": 16, "height": 8,
+			"images": 5, "anims": [[0x40000, 0x40001, 0x40002, 0xFFFF]],
+			"palette_tag": 0x1004, "palette_offset": 9}
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.step_movements()
+		assert_eq(objects.field_effect_active(39), not objects._frlg, str(id))
+		if objects._frlg:
+			continue
+		var sand: Dictionary = objects.sprites.effects.filter(
+			func(effect: Dictionary) -> bool: return effect["request"]["effect_id"] == 39)[0]
+		var anim: Gen3SpriteAnim = sand["anim"]
+		assert_eq(anim.image, 2, "spawn seeks the settled image")
+		for frame: int in 16:
+			objects.step_movements()
+		assert_true(anim.ended)
+		object.invisible = true
+		object.x2 = 11
+		object.jump_y = -12
+		objects.set_held_movement(object, 0x0B)
+		objects.step_movements()
+		assert_eq(anim.image, 0, "pos1 motion restarts an ended animation")
+		assert_eq(sand["subpriority"], object.subpriority)
+		var at: Vector2i = object.pixel_position - objects.camera.screen_origin()
+		var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+		assert_eq([oam[0]["x"], oam[0]["y"]], [at.x & 511, (at.y + 10) & 255], "sand ignores pos2 and parent visibility")
+		for frame: int in 31:
+			objects.step_movements()
+		assert_eq(objects.sprites.effects.size(), 1, "motion never duplicates the latched covering")
+		objects.clear_held_movement(object)
+		objects.set_held_movement(object, 0x45)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(39), "jump takeoff clears the covering")
+		for frame: int in 15:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(39), "landing restores the covering")
+		object.active = false
+		objects.step_movements()
+		assert_false(objects.field_effect_active(39))
+		for frame: int in 8:
+			objects.step_movements()
+		assert_eq(objects.sprites.palette.sprite_index(0x1004), 0xFF, "landing dust releases the shared palette last")
+
+
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 	var data: GameData = objects.camera.data
