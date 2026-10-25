@@ -1604,7 +1604,7 @@ func test_jump_impacts_select_terrain_and_outlive_the_jumper() -> void:
 			assert_true(objects.field_effect_active(effect), "%s terrain %x" % [id, behavior])
 			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin()).filter(
 				func(part: Dictionary) -> bool: return part["priority"] == object.priority)
-			assert_eq(oam.size(), 1)
+			assert_eq(oam.size(), 2 if objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER) else 1)
 			if oam.is_empty():
 				continue
 			var position: Vector2i = objects.camera.sprite_position(object.current) + objects.camera.sprite_coord_offset()
@@ -1615,9 +1615,9 @@ func test_jump_impacts_select_terrain_and_outlive_the_jumper() -> void:
 			for frame: int in 6:
 				objects.step_movements()
 			assert_true(objects.field_effect_active(effect), "shortened cached animations reach END on pass seven")
-			assert_eq(objects.sprites.oam(objects, Vector2i.ZERO).filter(
-				func(part: Dictionary) -> bool: return part["priority"] == object.priority), oam,
-				"impacts remain on their landing cell")
+			assert_has(oam, objects.sprites.oam(objects, Vector2i.ZERO).filter(
+				func(part: Dictionary) -> bool: return part["priority"] == object.priority)[0],
+				"impacts remain on their landing cell after the linked water stops")
 			objects.step_movements()
 			assert_false(objects.field_effect_active(effect), "the callback after END frees the impact")
 			assert_false(objects.sprites.palette.sprite_tags.has(12), "the last impact releases its palette")
@@ -1724,6 +1724,53 @@ func test_puddle_splashes_follow_pos1_at_step_ends_and_stop_with_the_object() ->
 		assert_true(objects.field_effect_active(15))
 
 
+func test_flowing_water_latches_follows_and_loops_until_terrain_or_identity_changes() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		for behavior: int in [0x117, 0x1B, 0x1C, 0x74, 0x75, 0x76, 0x77]:
+			var objects: Gen3ObjectEvents = _landing_objects(id, behavior)
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			objects.camera.grid.set_metatile_entry(13, 12, 0x3017)
+			var requests: Array = objects.step_movements()
+			var expected: bool = not objects._frlg or behavior == 0x117
+			assert_eq(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER), expected, "%s %x" % [id, behavior])
+			if not expected:
+				continue
+			assert_has(requests, {"kind": "sound", "name": "puddle"})
+			var water: Dictionary = objects.sprites.effects.filter(
+				func(effect: Dictionary) -> bool: return effect["request"]["effect_id"] == Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER)[0]
+			assert_eq((water["anim"] as Gen3SpriteAnim).anim_num, 1)
+			object.invisible = true
+			object.x2 = 11
+			object.jump_y = -12
+			for frame: int in 64:
+				assert_false(objects.step_movements().has({"kind": "sound", "name": "puddle"}))
+			assert_eq(objects.sprites.effects.size(), 1, "a stationary object keeps one looping splash")
+			assert_eq(water["subpriority"], object.subpriority)
+			var at: Vector2i = object.pixel_position - objects.camera.screen_origin()
+			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+			assert_eq([oam[0]["x"], oam[0]["y"]], [at.x & 511, (at.y + 8) & 255])
+			objects.set_held_movement(object, 0x13 if objects._frlg else 0x0B)
+			requests = objects.step_movements()
+			if behavior == 0x117 or behavior in [0x1B, 0x1C]:
+				assert_has(requests, {"kind": "sound", "name": "puddle"})
+				assert_eq(objects.sprites.effects.size(), 1)
+				object.active = false
+				objects.step_movements()
+			assert_false(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER), "removed identities and mixed log/water cells stop it")
+			assert_eq(objects.sprites.palette.sprite_index(0x1004), 0xFF)
+		var objects: Gen3ObjectEvents = _landing_objects(id, 0x17)
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3017)
+		objects.step_movements()
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.set_held_movement(object, 0x45 + (12 if objects._frlg else 0))
+		objects.step_movements()
+		assert_false(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER), "jump takeoff clears the terrain latch")
+		for frame: int in 15:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER), "landing restores the persistent covering effect")
+
+
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 	var data: GameData = objects.camera.data
@@ -1731,7 +1778,7 @@ func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	data._world_scripts["map_effect_templates"] = {}
 	for effect: int in [5, 10, 14, 15, 16]:
 		data._world_scripts["map_effect_templates"][str(effect)] = {"width": 16, "height": 16 if effect in [5, 14] else 8,
-			"images": 5, "anims": [[0x30000, 0x30001, 0xFFFF]],
+			"images": 5, "anims": [[0x30000, 0x30001, 0xFFFF], [0x40000, 0x40001, 0xFFFE]],
 			"palette_tag": 0x1005 if effect == 5 else 0x1004, "palette_offset": 9}
 	data._world_scripts["ash_template"] = {"49": {"width": 16, "height": 16, "images": 5,
 		"anims": [[0x80000, 0x80001, 0xFFFF]], "palette_tag": 0x100D, "palette_offset": 9}}
