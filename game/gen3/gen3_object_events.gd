@@ -61,6 +61,7 @@ enum Bob { NONE, PLAYER_AND_MON, JUST_MON }
 ## `surfBlobDirectionAnims`, by movement direction.
 const SURF_BLOB_ANIMS: Array[int] = [0, 0, 1, 2, 3, 0, 0, 1, 1]
 const FLDEFF_SAND_FOOTPRINTS: int = 13
+const FLDEFF_BERRY_TREE_GROWTH_SPARKLE: int = 23
 const FLDEFF_DEEP_SAND_FOOTPRINTS: int = 24
 const FLDEFF_FEET_IN_FLOWING_WATER: int = 34
 const FLDEFF_BIKE_TIRE_TRACKS: int = 35
@@ -73,8 +74,8 @@ const TRACK_EFFECTS: Array[int] = [FLDEFF_SAND_FOOTPRINTS, FLDEFF_DEEP_SAND_FOOT
 const BIKE_TRACK_ANIMS: Array[int] = [1, 2, 7, 8, 1, 2, 6, 5, 5, 8, 3, 4, 6, 7, 3, 4]
 enum Tracks { NONE, FOOT, BIKE_TIRE }
 ## Map effect: y below the cell's corner, priority (-1: the object's), subpriority (-1: one ahead of it).
-const MAP_EFFECT_PLACEMENT: Dictionary = {5: [0, 3, 151], 13: [8, 2, 149], 14: [8, -1, 0], 24: [8, 2, 149],
-	35: [8, 2, 149], 49: [8, 2, -1], 53: [0, 1, 82]}
+const MAP_EFFECT_PLACEMENT: Dictionary = {5: [0, 3, 151], 13: [8, 2, 149], 14: [8, -1, 0], 23: [4, -1, -1],
+	24: [8, 2, 149], 35: [8, 2, 149], 49: [8, 2, -1], 53: [0, 1, 82]}
 const DISPLAY_WIDTH: int = 240
 const DISPLAY_HEIGHT: int = 160
 const MOVEMENT_TYPE_INVISIBLE: int = 0x4C
@@ -956,7 +957,8 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 
 func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
 		requests: Array) -> Dictionary:
-	if effect in [ASH_PUFF, FLDEFF_FEET_IN_FLOWING_WATER] or Gen3World.MAP_EFFECT_TEMPLATES.has(effect):
+	if effect in [ASH_PUFF, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_BERRY_TREE_GROWTH_SPARKLE] \
+			or Gen3World.MAP_EFFECT_TEMPLATES.has(effect):
 		return _start_map_effect(object, slot, effect, requests)
 	var request: Dictionary = _effect_request(object, slot, effect)
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
@@ -2028,15 +2030,7 @@ func _set_berry_graphics(object: ObjectEvent) -> void:
 	object.anim.start(stage - 1)
 
 
-func _berry_sparkle(object: ObjectEvent, slot: int, requests: Array) -> void:
-	var request: Dictionary = _effect_request(object, slot, 23)
-	request["x"] = object.current.x
-	request["y"] = object.current.y
-	requests.append(request)
-
-
-## `MovementType_BerryTreeGrowth`: each TRUE callback runs the next state in the same frame; the two sparkle
-## phases each spend timer values 1 through 65.
+## `MovementType_BerryTreeGrowth`: a TRUE callback runs the next state at once; each sparkle phase spends timers 1-65.
 func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 	while true:
 		match object.movement_state:
@@ -2047,7 +2041,7 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 				object.invisible = stage == 0
 				if stage == 0:
 					if not object.berry_just_picked and object.anim.anim_num == 4:
-						_berry_sparkle(object, slot, requests)
+						start_effect_sprite(object, slot, FLDEFF_BERRY_TREE_GROWTH_SPARKLE, -1, false, requests)
 						object.anim.anim_num = 0
 					return
 				if object.anim.anim_num == stage - 1:
@@ -2067,7 +2061,7 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 				object.movement_state = 3
 				object.movement_delay = 0
 				object.berry_sparkling = true
-				_berry_sparkle(object, slot, requests)
+				start_effect_sprite(object, slot, FLDEFF_BERRY_TREE_GROWTH_SPARKLE, -1, false, requests)
 			3, 4:
 				object.movement_delay += 1
 				object.invisible = bool(object.movement_delay & 2)

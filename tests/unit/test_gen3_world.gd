@@ -2868,6 +2868,7 @@ func _berry_field_trace(id: StringName, stage: int, scenario: int) -> PackedStri
 	objects.camera.data._world_scripts["berries"] = [{"stage_minutes": 180, "min_yield": 2,
 		"max_yield": 3, "berry_graphics": [61, 61, 62, 62, 62], "berry_palettes": [3, 4, 4, 4, 4]}]
 	_berry_tree_anims(objects.camera.data)
+	objects.camera.data._world_scripts["map_effect_templates"] = {"23": _sparkle_template()}
 	objects.events.berries.plant(0, 1, stage)
 	var object := Gen3ObjectEvents.ObjectEvent.new()
 	object.active = true
@@ -2919,6 +2920,37 @@ static func _berry_tree_anims(data: GameData) -> void:
 
 ## Original ARM saves and RNG state cover every watering mask, the tenth
 ## regrowth, batched expiry and unseen trees; the field trace never ticks time.
+func test_berry_sparkle_draws_on_the_tree_cell_one_ahead_until_its_anim_ends() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _movement_objects(id)
+		objects.camera.data._world_scripts["map_effect_templates"] = {"23": _sparkle_template()}
+		var object := Gen3ObjectEvents.ObjectEvent.new()
+		object.active = true
+		object.current = Vector2i(12, 12)
+		object.priority = 2
+		object.subpriority = 100
+		objects.objects[0] = object
+		var requests: Array = []
+		objects.start_effect_sprite(object, 0, Gen3ObjectEvents.FLDEFF_BERRY_TREE_GROWTH_SPARKLE, -1, false, requests)
+		assert_eq(requests.map(func(request: Dictionary) -> Vector2i: return request["at"]), [object.current], str(id))
+		objects.step_movements()
+		var at: Vector2i = objects.camera.sprite_position(object.current) + objects.camera.sprite_coord_offset()
+		var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+		assert_eq(oam.map(func(part: Dictionary) -> Array: return [part["x"], part["y"], part["priority"], part["palette"]]),
+			[[at.x & 511, (at.y - 4) & 255, 2, 5]], str(id))
+		assert_eq(objects.sprites.effects[0]["subpriority"], 99)
+		objects.step_movements()
+		objects.step_movements()
+		assert_true(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_BERRY_TREE_GROWTH_SPARKLE), "END still draws")
+		objects.step_movements()
+		assert_false(objects.field_effect_active(Gen3ObjectEvents.FLDEFF_BERRY_TREE_GROWTH_SPARKLE), str(id))
+
+
+static func _sparkle_template() -> Dictionary:
+	return {"width": 16, "height": 16, "images": 5, "anims": [[0x10000, 0x10001, 0xFFFF]], "palette_tag": 0xFFFF,
+		"palette": 5}
+
+
 func test_berry_growth_records_match_the_original_engine() -> void:
 	var objects: Gen3ObjectEvents = _movement_objects(RomRegistry.EMERALD)
 	var rows: Array = []

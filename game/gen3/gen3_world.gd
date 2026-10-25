@@ -46,7 +46,7 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	for step: Array in [["shadow_templates", _shadow_templates], ["icon_template", _icon_templates],
 			["grass_palette", _ground_templates], ["ash_palette", _ash_template],
-			["shadow_templates", _surf_blob_template]]:
+			["shadow_templates", _surf_blob_template], ["grass_palette", _sparkle_template]]:
 		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
 			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
@@ -209,6 +209,19 @@ static func _surf_blob_template(rom: RomFile, layout: Dictionary, out: Dictionar
 	if row.is_empty() or int(row["palette_tag"]) != 0xFFFF:
 		return false
 	out["surf_blob_template"] = {"8": row}
+	return true
+
+
+## `FLDEFFOBJ_SPARKLE`, which only Hoenn's `FldEff_BerryTreeGrowthSparkle` draws, in palette slot 5.
+static func _sparkle_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		return true
+	var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + 22 * 4, 24)
+	var row: Dictionary = _sprite_template(rom, at, 1, 6, Vector2i(16, 16), out, graphics)
+	if row.is_empty() or int(row["palette_tag"]) != 0xFFFF:
+		return false
+	row["palette"] = 5
+	out["map_effect_templates"]["23"] = row
 	return true
 
 

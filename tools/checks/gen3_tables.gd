@@ -98,6 +98,7 @@ func _one_game() -> void:
 	_bubbles()
 	_tracks()
 	_surf_blob()
+	_berry_sparkle()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -1024,6 +1025,15 @@ func _surf_blob() -> void:
 	var expected: String = "464310fcdc95b8b737906c1244f975fe26efd70e" \
 		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "2fe3315bafefd4a2dcbff52c40d8e05944b20f97"
 	_effect_graphics({8: _r.data.world_surf_blob_graphics()}, "gen3_surf_blob", expected)
+
+
+func _berry_sparkle() -> void:
+	if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		_r.check(_r.data.world_map_effect_graphics(23).is_empty(), "FRLG's stubbed effect imports no sparkle")
+		return
+	var row: Dictionary = _r.data.world_map_effect_graphics(23)
+	if _r.check(int(row.get("palette", -1)) == 5, "the berry sparkle draws with palette slot 5"):
+		_effect_graphics({23: row}, "gen3_berry_sparkle", "9aef33124e47cb8e0668151b143509c17b58871e")
 
 
 ## Digests come from pret's PNGs, palettes and anim tables, encoded independently in tile order.
