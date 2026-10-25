@@ -150,9 +150,10 @@ play their imported affine animations through the same clock and matrix path.
 Trainer icons and emotes bounce above their objects, play their imported image animations
 and share sprite and palette slots with weather. Tall and long grass animate on entry, retain their
 settled cover while occupied, and draw separate jump-landing effects. Short grass follows Hoenn objects,
-restarts its rustle on movement and stops on jumps or departure. Remaining field effects and gate rendering
-await the field host. Script bytecode and its data are decoded and cached; script
-execution awaits the rest of the GBA world model.
+restarts its rustle on movement and stops on jumps or departure. Jump landings select dust,
+small splashes or large splashes from the terrain and play their imported animations at the landing cell.
+Remaining field effects and gate rendering await the field host. Script bytecode and its data are
+decoded and cached; script execution awaits the rest of the GBA world model.
 
 | Game | SHA-1 |
 |---|---|
