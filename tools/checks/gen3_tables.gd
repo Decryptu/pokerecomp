@@ -1439,7 +1439,7 @@ static func arm_traced(objects: Gen3ObjectEvents, action: int) -> bool:
 
 
 static func arm_traced_effect(request: Dictionary) -> bool:
-	return request["kind"] == "field_effect" and request["effect_id"] != Gen3ObjectEvents.FLDEFF_SHADOW \
+	return request["kind"] == "field_effect" and request["effect_id"] not in [Gen3ObjectEvents.FLDEFF_SHADOW, Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER] \
 		and not Gen3World.GRASS_TEMPLATES.has(request["effect_id"]) \
 		and not Gen3World.MAP_EFFECT_TEMPLATES.has(request["effect_id"])
 
