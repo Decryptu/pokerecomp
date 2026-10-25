@@ -447,8 +447,6 @@ func test_the_residual_lists_are_the_cartridge_s_own() -> void:
 		assert_false(Gen1Layout.RESIDUAL_EFFECTS_1.has(byte) or Gen1Layout.RESIDUAL_EFFECTS_2.has(byte))
 
 
-## The three routines that stand for more than one of Crystal's effects, split
-## by the move number the routine itself compares against.
 func test_a_move_that_shares_an_effect_byte_is_split_by_number() -> void:
 	## SONICBOOM and DRAGON_RAGE carry their damage where Crystal keeps it, and
 	## the two level-damage moves keep the power the cartridge gave them.
@@ -596,7 +594,6 @@ func test_the_tutors_ball_lands_unless_yellows_initial_training_stands() -> void
 	assert_false(Gen1Layout.tutorial_ball_lands(RomRegistry.YELLOW, Gen1Layout.BATTLE_TYPE_OLD_MAN, set_flag))
 
 
-## Red and Blue draw the player and the old man; Yellow adds Prof. Oak.
 func test_yellow_alone_carries_prof_oaks_back_pic() -> void:
 	assert_eq(Gen1Layout.player_backpics(Gen1Layout.RED_BLUE), ["player", "old_man"])
 	assert_eq(Gen1Layout.player_backpics(Gen1Layout.YELLOW), ["player", "old_man", "prof_oak"])

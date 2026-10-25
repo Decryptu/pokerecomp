@@ -91,8 +91,6 @@ func test_the_special_opens_the_ride_and_holds_the_world() -> void:
 	)
 
 
-## The ride reads no joypad: a press is spent and the map is nobody's until the
-## train has arrived.
 func test_a_press_does_not_end_the_ride() -> void:
 	await _open_world()
 	_run_script()

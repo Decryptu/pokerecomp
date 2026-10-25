@@ -89,9 +89,6 @@ func _initialize() -> void:
 	current_scene = _screen
 
 
-## A development save, so the party has members without a slot on disk. Both
-## screens are opened embedded, which is the shape the overworld stacks them in
-## and the one with no scene changes in it.
 func _build(data: GameData) -> Control:
 	var save: Gen2SaveData = Gen2SaveStore.create_development_save(data, 0)
 	if save == null:

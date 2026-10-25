@@ -163,8 +163,6 @@ func refresh() -> void:
 	_draw_sprites()
 
 
-## Both pics, each read out of the tilemap so an animation that blanked, shifted
-## or resized one is what shows.
 func _draw_pics() -> void:
 	var map: PackedByteArray = _bg_map()
 	_ensure_pixels()
@@ -283,7 +281,6 @@ static func claims_tile(
 	return tile >= 0 and tile < (banked if bank1 else square)
 
 
-## Both pics padded to their boxes, so a tile id indexes a fixed grid.
 func _ensure_pixels() -> void:
 	var enemy_key: Array = square_key(_view, false)
 	if enemy_key != _enemy_pixels_key:
@@ -771,8 +768,6 @@ func _new_buffer() -> PackedByteArray:
 	return out
 
 
-## Every layer above the pics is drawn with index 0 transparent: a panel is a
-## shape on the background, not a rectangle over it.
 func _show_layer(
 	into: TextureRect, indices: PackedByteArray, palette: PackedColorArray
 ) -> void:

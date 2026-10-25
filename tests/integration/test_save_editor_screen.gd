@@ -123,8 +123,6 @@ func test_saving_takes_the_position_typed_on_the_map_tab() -> void:
 	assert_true(String(_screen.get("_status").text).contains("not in this cartridge cache"))
 
 
-## A boxed Pokemon is edited where it is stored: the box tab's form writes the
-## box row, which stays a box row (no stored stats) and still validates.
 func test_the_box_tab_edits_the_selected_boxed_pokemon() -> void:
 	var save: Gen2SaveData = _save()
 	var editor: Gen2SaveEditor = Gen2SaveEditor.open(save, _data)

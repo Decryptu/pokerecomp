@@ -277,8 +277,6 @@ func test_badge_count_uses_the_gold_silver_table_when_requested() -> void:
 	assert_eq(gold_state.badge_count(false), 16)
 
 
-## Same one-index shift for the Goldenrod Underground merchant flag: pinned
-## pokecrystal has it at 86, pinned pokegold at 85.
 func test_bargain_merchant_closed_uses_the_gold_silver_flag_when_requested() -> void:
 	var state := Gen2WorldState.new()
 	state.set_engine_flag(Gen2WorldState.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED)
@@ -385,10 +383,6 @@ func test_is_crystal_profile_matches_the_game_id_and_defaults_true_for_no_data()
 	assert_false(Gen2WorldState.is_crystal_profile(silver_data))
 
 
-## engine_flag() is the same one-index shift the named *_GOLD_SILVER constants
-## spell out, for a caller holding a Crystal index and no pair. The three named
-## pairs are what pin the shift's direction here: a derived answer that
-## disagreed with any of them would be wrong in the same way twice.
 func test_engine_flag_maps_a_crystal_index_onto_the_gold_silver_table() -> void:
 	for index: int in [0, 3, 4, 15, Gen2WorldState.ENGINE_MOBILE_SYSTEM - 1]:
 		assert_eq(Gen2WorldState.engine_flag(index, true), index)
@@ -693,9 +687,6 @@ func test_count_step_spends_a_repel_step_and_stops_at_zero() -> void:
 	assert_eq(state.repel_steps(), 0)
 
 
-## The one step a Repel runs out on, which is where a renewal offer belongs.
-## Held rather than cleared by the read, so an offer landing on a step a warp or
-## a script already owns waits for one that can spend it.
 func test_the_step_that_runs_a_repel_out_is_an_edge_the_reader_holds() -> void:
 	var state := Gen2WorldState.new({}, {}, {}, {}, 0, {}, 2)
 	state.count_step()

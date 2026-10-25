@@ -117,8 +117,6 @@ func test_the_bundle_holds_the_report_and_the_log_files() -> void:
 	reader.close()
 
 
-## A downloads directory a phone hands back is not always one the game may
-## write to. Refusing there is not a failure the player should be shown.
 func test_a_folder_that_refuses_falls_back_to_the_app_directory() -> void:
 	# A directory under a file, which no platform will create.
 	var refused: String = "%s/inside-a-file" % ProjectSettings.globalize_path(
@@ -216,9 +214,6 @@ func test_an_output_path_inside_the_project_is_refused() -> void:
 		)
 
 
-## The paths a tool is supposed to be given. A sibling directory whose name
-## merely starts the same way is not inside the project, which is what the
-## separator in the comparison is for.
 func test_an_output_path_outside_the_project_is_allowed() -> void:
 	var project: String = ProjectSettings.globalize_path("res://").simplify_path()
 	for path: String in [

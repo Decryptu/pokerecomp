@@ -37,8 +37,6 @@ func test_capture_copies_the_map_tileset_cell_and_facing() -> void:
 	assert_eq(context.time_of_day, Gen2WorldPalette.TIME_NIGHT)
 
 
-## A copy, not a handle: the whole point is that a renderer cannot reach world
-## state through it once the fight has started.
 func test_the_snapshot_does_not_follow_the_world_it_was_taken_from() -> void:
 	var world: Gen2WorldAPI = _world()
 	var context: Gen2BattleWorldContext = Gen2BattleWorldContext.capture(world, 0)
@@ -48,8 +46,6 @@ func test_the_snapshot_does_not_follow_the_world_it_was_taken_from() -> void:
 	assert_eq(context.player_facing, Gen2WorldSprite.FACING_DOWN)
 
 
-## The world's own row when the caller does not name one, which is the map's
-## rather than the clock's: a dark cave is night until Flash is used.
 func test_an_unnamed_time_of_day_falls_back_to_the_maps_own_row() -> void:
 	var world: Gen2WorldAPI = _world()
 	world.set_object_time(22, Gen2WorldPalette.TIME_NIGHT)

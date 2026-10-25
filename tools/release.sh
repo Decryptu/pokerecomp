@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# The release, start to finish, and the gates in front of it.
-#
-#   tools/release.sh --gates          every check, changing nothing
-#   tools/release.sh 0.1.19           the same checks, then the version bump
-#
-# The version lives in four files and `tests/unit/test_export_presets.gd` holds
-# three of them to the fourth, so a hand edit that misses one fails a pull
-# request. Everything below fails before a tag exists instead, because a tag
-# costs eight builds and a quarter of an hour to tell you the same thing.
+# Usage: tools/release.sh --gates | <version>
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -83,6 +75,15 @@ gate_comments() {
 	echo "  comments: $total of $ceiling"
 }
 
+gate_documentation() {
+	local ceiling=771 total
+	total=$({ cat README.md AGENTS.md; find docs -name '*.md' -exec cat {} +; } \
+		| awk 'END { print NR }')
+	[ "$total" -le "$ceiling" ] \
+		|| fail "$total documentation lines, ceiling $ceiling; shorten the existing guide"
+	echo "  documentation: $total of $ceiling"
+}
+
 gate_tree() {
 	git diff --quiet && git diff --cached --quiet \
 		|| fail "the tree is dirty; commit or stash first"
@@ -93,6 +94,7 @@ gates() {
 	gate_notes
 	gate_version
 	gate_comments
+	gate_documentation
 }
 
 if [ "${1:-}" = "--gates" ]; then

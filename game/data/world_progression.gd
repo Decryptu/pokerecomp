@@ -184,7 +184,6 @@ static func _place_of(row: Dictionary) -> Array:
 	return Gen2WorldStory.place(map, row.get("cell", null))
 
 
-## The setters some condition reads, their own conditions read in turn.
 static func _setters_read(story: Gen2WorldStory, read: Dictionary) -> Array:
 	var kept: Dictionary = {}
 	var grew: bool = true
@@ -312,7 +311,6 @@ static func _reflood(state: Dictionary) -> void:
 	state["replace"] = true
 
 
-## The gates closed at a new game, with the lists holding then; others stay open.
 static func _closed_at_start(state: Dictionary) -> Dictionary:
 	var closed: Dictionary = {}
 	var gates: Array = state["plan"]["gates"]

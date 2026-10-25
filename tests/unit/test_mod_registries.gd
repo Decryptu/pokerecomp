@@ -137,9 +137,6 @@ func test_a_subscriber_sees_published_events_and_cannot_write_through_them() -> 
 	assert_eq(_seen.size(), 1)
 
 
-## Mutation is the other half of the event channel: the turn or the script has
-## already committed, so what reaches the screen is presentation and may be
-## rewritten, while the key the screen dispatches on may not.
 func test_an_event_mutator_rewrites_presentation_and_not_the_routing_key() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(host.register_event_mutator(

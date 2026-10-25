@@ -415,7 +415,6 @@ func _resolve(entry: Variant, order: int) -> Dictionary:
 	}
 
 
-## A span missing an end is no span rather than a wrong one.
 static func _resolved_span(row: Dictionary) -> Dictionary:
 	var span: Variant = row.get("span", null)
 	if span is not Dictionary:

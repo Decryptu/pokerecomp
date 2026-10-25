@@ -1,6 +1,5 @@
 extends GutTest
 
-## Whether a move connects, and the table it is decided with.
 
 
 func test_a_full_accuracy_move_cannot_miss() -> void:

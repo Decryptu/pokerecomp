@@ -1,6 +1,5 @@
 extends GutTest
 
-## Which device an event says the player is using.
 
 
 func test_each_event_kind_names_its_device() -> void:
@@ -25,10 +24,6 @@ func test_a_mouse_event_emulated_from_a_touch_reads_as_touch() -> void:
 	assert_eq(PokeInputDevice.kind_of(click), PokeInputDevice.TOUCH)
 
 
-## Android sends Back, its navigation bar and its volume rocker as key events,
-## and a phone has no keyboard of its own. Read as one they put the on-screen
-## controller away mid-game and the screen grew into the room it left, which is
-## what a player reported.
 func test_a_phone_has_no_keyboard_and_no_mouse_to_pick_up() -> void:
 	var back := InputEventKey.new()
 	back.physical_keycode = KEY_BACK

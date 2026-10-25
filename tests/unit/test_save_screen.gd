@@ -91,8 +91,6 @@ func _open_box_screen(save: Gen2SaveData, mode: int = Gen2BoxScreen.MODE_DEPOSIT
 	await get_tree().process_frame
 
 
-## Slots are created on demand, so a game with no saves lists none at all and
-## has nothing selected. The old screen preallocated three empty ones.
 func test_save_screen_shows_no_slots_before_any_save_exists() -> void:
 	await _open_save_screen()
 	var snapshot: Dictionary = _screen.save_screen_snapshot()
@@ -130,8 +128,6 @@ func test_save_screen_distinguishes_an_occupied_slot() -> void:
 	assert_eq(_screen.save_screen_snapshot()["selected_slot"], 1)
 
 
-## A console browsing without a keyboard cannot type a name, so the export
-## carries one already. It is also what the system dialogs suggest.
 func test_an_exported_slot_is_named_after_the_cartridge_the_slot_and_its_label() -> void:
 	assert_true(Gen2SaveStore.save(_save(), _data)["ok"])
 	await _open_save_screen()
@@ -219,9 +215,6 @@ func test_the_new_game_form_asks_for_a_save_name_not_a_trainer_name() -> void:
 	GameRuntime.take_pending_new_game()
 
 
-## A finished Nuzlocke is a file to look at rather than a game to walk back
-## into. The row says so, and the seam behind the missing Continue button says
-## so too, so a driver cannot open one either.
 func test_a_finished_nuzlocke_slot_is_never_continued() -> void:
 	var save: Gen2SaveData = _save()
 	save.run_rules = Gen2Rules.new()
@@ -1016,8 +1009,6 @@ func test_pc_storage_can_commit_in_memory_without_writing_slot() -> void:
 	assert_false(Gen2SaveStore.exists(_data.id, _data.sha1, save.slot))
 
 
-## Slot management. The store's own rules are covered by test_save_slots.gd;
-## these check the screen reaches them and reports what happened.
 func test_the_screen_opens_a_new_slot_at_the_lowest_free_number() -> void:
 	var write: Dictionary = Gen2SaveStore.save(_save(), _data)
 	assert_true(write["ok"], write["message"])
@@ -1036,9 +1027,6 @@ func test_the_screen_opens_a_new_slot_at_the_lowest_free_number() -> void:
 	assert_true(snapshot["new_game_form"], "and is actually on screen")
 
 
-## A free slot is not a file, so the four things that act on the file are not
-## offered on one. Cancelling back onto it leaves the slot described rather than
-## blank.
 func test_cancelling_a_new_slot_describes_it_instead_of_blanking_the_pane() -> void:
 	assert_true(Gen2SaveStore.save(_save(), _data)["ok"])
 	await _open_save_screen()

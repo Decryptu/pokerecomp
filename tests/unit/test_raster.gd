@@ -62,8 +62,6 @@ func test_an_offset_of_a_whole_map_is_the_image_itself() -> void:
 	assert_eq(_source_column(out, WIDTH - 1), WIDTH - 1)
 
 
-## The point of doing this per scanline rather than per layer: two rows of the
-## same image can be in different places at once.
 func test_each_scanline_takes_its_own_offset() -> void:
 	var offsets: PackedInt32Array = _flat(0)
 	for row: int in HEIGHT:

@@ -624,7 +624,6 @@ func test_a_pic_that_does_not_fill_its_own_size_is_refused() -> void:
 	)
 
 
-## A trainer class is drawn from the same atlas and gets the same answer.
 func test_a_defined_trainer_class_draws_its_own_pixels() -> void:
 	var pixels: PackedByteArray = _indices(7, 1)
 	assert_true(bool(Gen2ModHost.instance().register_content(

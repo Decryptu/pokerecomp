@@ -43,8 +43,6 @@ func test_an_area_gives_up_exactly_one_encounter() -> void:
 	assert_false(Gen2Nuzlocke.claim_area(section, -1, 10), "a map with no landmark claims none")
 
 
-## A catch is recorded on the area it was already spent on, so the memorial can
-## tell a route whose Pokemon was taken from one whose Pokemon got away.
 func test_a_catch_is_noted_on_the_area_it_was_already_spent_on() -> void:
 	var section: Dictionary = {}
 	Gen2Nuzlocke.claim_area(section, ROUTE_29, 16)
@@ -101,8 +99,6 @@ func test_the_memorial_is_bounded() -> void:
 	)
 
 
-## The run's own ending. Writing it into the block is what survives a reload,
-## and it is written once: a second wipe cannot rewrite where the run died.
 func test_a_run_ends_once_and_stays_ended() -> void:
 	var section: Dictionary = {}
 	assert_false(Gen2Nuzlocke.run_over(section))
@@ -131,8 +127,6 @@ func test_an_unreadable_block_is_normalized_rather_than_trusted() -> void:
 	assert_true(Gen2Nuzlocke.run_over(section))
 
 
-## The block travels with the save it describes, which is what makes a death
-## survive a reload.
 func test_the_block_round_trips_through_the_save() -> void:
 	var save: Gen2SaveData = _save([_mon(155, 12, 0, "CYNDER")])
 	save.game_id = &"crystal"
@@ -153,7 +147,6 @@ func test_the_block_round_trips_through_the_save() -> void:
 	)
 
 
-## The name a loss is mourned by, which is the one a screen prints.
 func test_a_loss_without_a_nickname_falls_back_to_its_species() -> void:
 	assert_eq(Gen2Nuzlocke.grave_name(null, {"nickname": "CYNDER"}), "CYNDER")
 	assert_eq(Gen2Nuzlocke.grave_name(null, {"species": 155}), "?", "with no cache to ask")

@@ -210,8 +210,6 @@ func test_a_frame_that_was_never_cached_draws_nothing() -> void:
 	assert_eq(_font.frame_count(), 1, "this cache holds one")
 
 
-## _LoadFontsBattleExtra replaces $60 to $78 and leaves the rest of video memory
-## alone, so which sheet a code addresses depends on the strip and the run.
 
 func test_a_battle_extra_code_is_drawn_from_that_strip() -> void:
 	var into: PackedByteArray = _canvas(1)

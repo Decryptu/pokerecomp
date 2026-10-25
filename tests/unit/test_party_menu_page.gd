@@ -333,8 +333,6 @@ func test_a_status_prints_and_fainting_wins_over_it() -> void:
 	)
 
 
-## The bar is the one thing on the page that is not black on white, so it is
-## blended in its own colour rather than drawn as ink.
 func test_the_bar_is_drawn_in_the_colour_its_fill_earns() -> void:
 	var rows: Array = _rows(1)
 	var fill_at := Vector2i(

@@ -436,7 +436,6 @@ class SettingRow extends Button:
 			return
 		_open_list()
 
-	## The choices as a sheet of rows, the current one ticked.
 	func _open_list() -> void:
 		var sheet: Gen2LauncherSheet = Gen2LauncherSheet.create(_theme, _name.text)
 		for slot: int in _choices.size():

@@ -325,7 +325,6 @@ func _add_portals(built: Dictionary) -> void:
 		_link_gate_row(built, index)
 
 
-## A story link is a one-way gate from its places to its landing.
 func _add_links(built: Dictionary) -> void:
 	if _story == null:
 		return

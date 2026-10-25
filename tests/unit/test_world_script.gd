@@ -379,8 +379,6 @@ func test_stone_table_refuses_an_unterminated_run() -> void:
 	assert_true(Gen2WorldScript.decode_stone_table(PackedByteArray([0xFF]))["ok"])
 
 
-## writecmdqueue points at data rather than script, so the reference scan has to
-## report it separately or the recursive walk would try to run the queue.
 func test_reference_scan_reports_command_queue_pointers() -> void:
 	## Crystal opcode $7d, the profile-normalised writecmdqueue.
 	var references: Dictionary = Gen2WorldScript.scan_references(

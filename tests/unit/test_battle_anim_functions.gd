@@ -19,8 +19,6 @@ func before_each() -> void:
 	_player = _make_player()
 
 
-## A player with the real sine table behind it and nothing else: no object is
-## spawned, so the pool stays empty and the callbacks are called directly.
 func _make_player(enemy_turn: bool = false) -> Gen2BattleAnimPlayer:
 	var sine := PackedByteArray()
 	for value: int in Gen2Layout.BATTLE_ANIM_SINE_WAVE:

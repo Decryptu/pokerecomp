@@ -22,8 +22,6 @@ func test_interior_is_what_textbox_is_asked_for() -> void:
 	assert_eq(_gender_box().interior(), Vector2i(5, 4))
 
 
-## One in from the corner, one row further down for the top spacing, one column
-## further right to leave room for the cursor.
 func test_text_starts_inside_the_border_with_room_for_the_cursor() -> void:
 	assert_eq(_gender_box().text_start(), Vector2i(8, 6))
 

@@ -346,7 +346,6 @@ func set_screen(screen: Gen2Screen) -> void:
 	_service_hardware = screen
 
 
-## Both views live in a screen this node may not own, so they go by hand.
 func _exit_tree() -> void:
 	if _hof != null:
 		Gen2Screen.drop_on_exit(_hof)
@@ -5423,8 +5422,6 @@ func _box_count_note() -> Dictionary:
 	]}
 
 
-## An overlay owns all 160x144 while it is up: the mart, box storage, a Pokegear
-## card and the region map are screens rather than boxes over this one.
 func _set_overlay_open(open: bool) -> void:
 	_overlay_open = open
 	_apply_layer_visibility()

@@ -64,495 +64,135 @@ download the new file and replace the old one. Saves live elsewhere and survive.
 
 ## Getting started
 
-You need Godot 4.8 or newer. Enable the hooks once per clone. The commit one
-refuses cartridge data; the push one runs the checks CI runs that need no engine.
+Use Godot 4.8 or newer. Enable the cartridge-data and release checks:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-Put dumps in `roms/`, then verify them. See [roms/README.md](roms/README.md).
+Put supported dumps in `roms/` ([instructions](roms/README.md)), then run:
 
 ```bash
 godot --headless --path . -s res://tools/verify_rom.gd
-```
-
-Matching uses SHA-1, never filenames. Unknown hashes are refused because an
-uncharacterised bank layout could produce corrupt assets. The three Generation 1
-cartridges import their species, move, type, item and trainer tables, every map
-and tileset, every map text and script, and `AnimateHallOfFame`'s induction with
-`HallOfFamePC`'s credits behind it; their START menu is the cartridge's own list
-over a one-pocket bag.
-
-| Game | SHA-1 |
-|---|---|
-| Red (USA/Europe) | `ea9bcae617fdf159b045185467ae58b2e4a48b9a` |
-| Blue (USA/Europe) | `d7037c83e1ae5b39bde3c30787637ba1d4c48ce2` |
-| Yellow (USA/Europe) | `cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1` |
-| Gold (USA/Europe) | `d8b8a3600a465308c9953dfa04f0081c05bdcb94` |
-| Silver (USA/Europe) | `49b163f7e57702bc939d642a18f591de55d92dae` |
-| Crystal (USA/Europe Rev 1) | `f2f52230b536214ef7c9924f483392993e226cfb` |
-
-Generation 3 is starting. Settings > Advanced > Dev cartridges puts these on
-the shelf. An import reads their species with Pokédex entries, moves, types,
-matchup chart, items, abilities, berry growth parameters, object graphics with
-their pictures, palettes, OAM shapes, subsprite tables, image and affine animation commands and
-step-animation positions, grass and trainer-icon effects, trainers, map headers,
-layouts, tilesets with their animation frames and timing, events, map script
-entry points, reachable
-bytecode and the texts, braille, movement lists and marts it names, the
-weather's palettes, sprite sheets and drought colour tables, wild encounters and
-front/back pictures with normal and shiny palettes. Picture
-frames and all 28 Unown forms are retained; none of these cartridges is
-playable. `tools/import_rom.gd` skips them unless given `--dev`. Static map
-previews use
-`godot --headless --path . -s res://tools/preview_world.gd -- emerald 0 9 /tmp/littleroot.png`
-and draw the map as the field loads it, with the neighbouring maps' edges and
-the border around it; a frame count after the path renders the map that many
-tileset animation frames in, and a layout cell after the count draws the
-240x160 field screen with the player standing there and the objects in view,
-the frames counted from the warp's fade in under the map's weather
-([Gen3ObjectSprites](game/gen3/gen3_object_sprites.gd): OBJ palettes, priority
-by elevation, subsprite splits, shadows, reflections and shared `SortSprites`
-order). The [field camera](game/gen3/gen3_field_camera.gd) carries each pixel step through
-background and sprite offsets and steps across map connections, spawning and
-removing objects as they enter and leave the view; its collision test answers
-as the cartridge's. Every
-held object movement runs frame by frame through
-[Gen3ObjectEvents](game/gen3/gen3_object_events.gd),
-retaining each engine's action numbers, walk cadence, jump arcs and collision
-occupancy until arrival; the nurse's bow, Cut, Rock Smash, the Acro Bike's
-wheelies and FireRed/LeafGreen's raised hand wait on the sprite's own
-[animation clock](game/gen3/gen3_sprite_anim.gd). [Gen3PlayerAvatar](game/gen3/gen3_player_avatar.gd)
-consumes ledge, surf dismount and Strength collision requests through per-frame
-movement tasks, including FireRed/LeafGreen boulder falls and switch dispatch.
-[Rotating-gate puzzles](game/gen3/gen3_player_avatar.gd) keep their orientations in
-temporary event variables and emit rotation requests. Autonomous patrols,
-wandering, rotations and player copying run through the object model.
-[Berry trees](game/gen3/gen3_berry_trees.gd) retain watering, timed growth, yield
-and regrowth; their objects run growth animations and request sparkles.
-[Trainers](game/gen3/gen3_trainer_see.gd) spot the player along each engine's
-sight path, show the exclamation mark, reveal disguises or climb out of ash,
-walk up and turn the player; FireRed and LeafGreen scroll the camera to a
-trainer above the view. Jump shadows follow each object at ground level and
-stop on landing, grass, water or reflective ground. Water and ice reflections
-follow the object's current frame, visibility and jump offsets, with bridge
-palettes and the shared [affine command clock and BIOS matrix generation](game/gen3/gen3_affine_anim.gd).
-[The weather](game/gen3/gen3_field_weather.gd) darkens, brightens and fades the field's colours through one
-[palette RAM](game/gen3/gen3_palette.gd) as each engine does: the colour maps
-rain and shade step through, Ruby, Sapphire and Emerald's drought tables, fog's
-lightened sprites, Emerald's alternating Groudon/Kyogre weather and the screen
-fades. [Weather sprites](game/gen3/gen3_weather_sprites.gd) (rain with its
-lightning and thunder, clouds, snow, both fogs, volcanic ash, the sandstorm and
-underwater bubbles) move on the cartridge's sprite clock, blend over the map
-through BLDALPHA, and hold a change of weather until they have faded out. Objects
-play their imported affine animations through the same clock and matrix path.
-Trainer icons and emotes bounce above their objects, play their imported image animations
-and share sprite and palette slots with weather. Tall and long grass animate on entry, retain their
-settled cover while occupied, and draw separate jump-landing effects. Short grass follows Hoenn objects,
-restarts its rustle on movement and stops on jumps or departure. Jump landings select dust,
-small splashes or large splashes from the terrain and play their imported animations at the landing cell.
-Remaining field effects and gate rendering await the field host. Script bytecode and its data are
-decoded and cached; script execution awaits the rest of the GBA world model.
-
-| Game | SHA-1 |
-|---|---|
-| Ruby (USA Rev 2) | `5b64eacf892920518db4ec664e62a086dd5f5bc8` |
-| Sapphire (USA Rev 2) | `89b45fb172e6b55d51fc0e61989775187f6fe63c` |
-| FireRed (USA Rev 1) | `dd5945db9b930750cb39d00c84da8571feebf417` |
-| LeafGreen (USA Rev 1) | `7862c67bdecbe21d1d69ce082ce34327e1c6ed5e` |
-| Emerald (USA) | `f3ae088181bf583e55daf962a92bb46f4f1d07b7` |
-
-## Importing
-
-```bash
 godot --headless --path . -s res://tools/import_rom.gd
+godot --path .
 ```
 
-A few seconds per game. The cache is keyed by game and hash and lives in Godot's
-`user://`, never in the project or an export. `--verify` checks without writing.
+Identity is checked by SHA-1 against [RomRegistry](game/rom/rom_registry.gd),
+never by filename. Unknown revisions are refused. The launcher also accepts
+imports through its file picker or by dropping a dump onto a cartridge bay.
 
-A cache is never migrated. An update that changes its format discards the old
-one. The shelf marks that cartridge "Update needed", and pressing it says why and
-opens the picker: import the same dump again. Saves live under their own root and
-are not touched.
+Caches live in Godot's `user://`. A format update requires reimporting the same
+dump; saves are separate and survive. `--verify` checks an import without writing.
 
-The same sheet, behind the shelf's Options button, also swaps a cartridge's
-picture for one of your own: any PNG, WebP or JPEG, scaled to fit the shell
-whatever shape it is, with a way back to the shipped art. It is kept under
-`user://` beside the saves, so an update does not ask for it again.
+Generation 3 is experimental and **not playable**. Settings > Advanced > Dev
+cartridges exposes Ruby, Sapphire, FireRed, LeafGreen and Emerald; command-line
+imports require `--dev`. See [current work](game/gen3/) for the implementation.
 
-| Data | Contents |
+## Playing
+
+Play opens the save-slot screen. New Game runs the original opening; Continue
+restores the last save. Slots support naming, editing, import and export.
+Generation 1 `.sav` imports carry the whole game; Generation 2 imports carry
+player and party only. See [save compatibility](docs/SAVES.md).
+
+Choose a mode when creating a slot; it is fixed for that run:
+
+| Mode | Rules |
 |---|---|
-| Species | Names, base stats, types, held items, egg groups, TM/HM flags |
-| Learnsets, evolutions | All 251 species' level-up moves in cartridge order; every evolution and its method |
-| Egg moves | Every species' inherited moves: 478 across 106 species on Gold and Silver, 480 across 105 on Crystal |
-| Moves, TM/HM | Power, type, accuracy, PP, effect and chance; the 57 or 60 TM, HM and tutor rows; the happiness table teaching one moves |
-| Items, types | 255 items with prices, effects, pockets and healing metadata; 28 type names |
-| Type chart | Every matchup and the two Foresight-cancelled entries |
-| Trainers, NPC trades | Class names, pics, palettes, AI flags, DVs and parties; trade records with DVs and OT data |
-| Sprites, palettes | Front/back for 251 species and 26 Unown forms; normal and shiny 15-bit colours. Red and Blue colour as a Super Game Boy does, Yellow as a Game Boy Color |
-| Font, borders, HUD | 128 glyphs, eight text-box frames, HP/EXP bars and panels |
-| Splash, title, intro | Each cartridge's opening art, tilemaps and palette runs, including Crystal's 35-entry intro section and Generation 1's `PlayIntro`, `DisplayTitleScreen` and `YellowIntro` tables |
-| Region map | Three graphics sheets, both region tilemaps, the per-tile palette map and 96 landmarks |
-| Prof Oak's PC, credits | The 19 `OakRatings` rows and their texts; `CreditsScript`'s whole command stream, or Generation 1's `CreditsOrder`, its strings, `CreditsMons` and `TheEndGfx` |
-| Overworld | Maps, tilesets, collisions, events, scripts, movement, palettes, animation and object sprites |
-| Wild encounters | Grass, water and swarm tables, 13 fishing groups, the roaming graph, rates, slots and repel checks |
-| World services | Menus, marts, fruit trees, phone contacts, special calls, bounded scripts and text, music, SFX and cries |
-| Battle animations | 278 scripts, 188 objects, 185 framesets, 216 OAM sets, 39 graphics sheets and the sine table |
+| Vanilla | Original cartridge rules |
+| Hard | All trainer AI layers, teams 15% higher, perfect DVs and full stat experience |
+| Nuzlocke | First encounter per area, mandatory nicknames, permanent fainting, wipe ends the run |
 
-Sprites stay colour indices and receive a palette at draw time, so shiny
-rendering needs no duplicate images.
+Nuzlocke deaths and claimed encounters persist immediately. Ordinary gameplay
+persists through SAVE; closing without saving discards later progress.
 
-## Running
-
-```bash
-godot --headless --path . --quit-after 30
-```
-
-The launcher is a shelf of six cartridges, and five more with the dev setting
-on. An unimported bay is drawn in the
-cartridge's own outline: drop a dump on it, or click to browse. Behind the
-seated cartridge its own title screen plays, with the lettering taken off and
-its music under the interface. Mods, settings and about are in the tabs across
-the top. Light and dark, and the same layout works
-on a phone. The clock and the charge across the top are the machine's own; a
-device whose charge cannot be read shows none rather than a full cell.
-
-<p align="center">
-  <img src="assets/brand/mods.webp" alt="The launcher's Mods page, listing installed mods" width="820">
-</p>
-
-Play opens the save screen: validated slots, naming, export and import, `.sav`
-import, party inspection, and a save editor that cannot produce a save the game
-will not load. A Red, Blue or Yellow `.sav` comes over whole (party, boxes, bag,
-map and position, flags, Pokedex, Hall of Fame); a Gold, Silver or Crystal one
-brings the player and party. [docs/SAVES.md](docs/SAVES.md) lists what each
-carries and what is refused.
-
-A new game asks which mode it is played in, then opens on the cartridge's own
-splash, GameFreak animation, intro movie and title screen, then the gender
-question and Oak's speech. Continue enters the overworld.
-
-### Vanilla, Hard and Nuzlocke
-
-Three modes, built in. No mod to install, nothing to remember to do yourself:
-the game keeps the rules. The mode is chosen when a save is created and is fixed
-for that run, because a challenge that can be switched off after a death is not
-one. Saves without a recorded mode load as Vanilla.
-
-| Mode | What changes |
-|---|---|
-| **Vanilla** | Nothing. The cartridge's own game. |
-| **Hard** | Every trainer scores with all of the game's own AI layers instead of the handful its class carries -- ten in Generation II, three in Generation I -- switches out often where the cartridge keeps that in a mask, and brings a party 15% higher with perfect DVs and full stat experience. One global rule each, so the teams are still the ones the cartridge wrote. |
-| **Nuzlocke** | The [challenge](https://bulbapedia.bulbagarden.net/wiki/Nuzlocke_Challenge)'s rules, enforced by the game. |
-
-The game enforces the Nuzlocke rules itself:
-
-- **One catch per area:** the first wild Pokemon you meet on a route, in a cave
-  or in a town is the only one you may throw a ball at there. It is spent
-  whether you catch it, beat it or run, and the ball menu then says so. The area
-  is the met location the Pokemon's own summary shows, so a whole cave is one
-  encounter: Mt. Moon's three floors, and Pokemon Tower's five. Roamers and the
-  Bug Catching Contest belong to no area and spend nothing.
-- **A faint is death:** a Pokemon that faints is released on the way out of the
-  battle and never comes back. It is written to disk the moment it happens, so
-  quitting and reopening the slot cannot undo it.
-- **Every Pokemon is nicknamed:** the YES/NO is skipped and the keyboard opens
-  outright, for a catch, a gift and a hatched egg alike.
-- **A wipe ends the run:** losing your last Pokemon heals nothing and halves no
-  money. The slot stays on the shelf marked "Run over" with what it caught and
-  what it lost, and it cannot be continued.
-
-The start menu wires every source entry:
-
-| Entry | What is there |
-|---|---|
-| Pokedex | The three source orderings, type search and the `<MON>'S NEST` area map |
-| Pokemon | The party, its submenu, all eight field moves, and ITEM to give or take |
-| Pack | Each item's own submenu: USE, GIVE, TOSS and SEL, which binds an item to SELECT |
-| Pokegear | Clock, map, phone and radio on the hardware tile grid. A tuned station keeps playing after it closes, which is how the Poke Flute channel wakes Vermilion's Snorlax |
-| Player, Save, Exit | The trainer card, the map/inventory/event/clock snapshot, and the way out |
-| Options | The cartridge's seven-row OPTION screen over the same values the launcher's settings edit |
-
-Facing something and pressing A is the other way to every field move: a cut
-tree, a whirlpool, a waterfall, a headbutt tree and open water each offer their
-move in the cartridge's own order and words. Fruit trees bear once a day, Poke
-Balls and hidden items are picked up by facing them, and the Players House PC
-opens the item PC while a Pokemon Center's opens BILL'S PC. Walking into a new
-area raises Crystal's map name sign for sixty frames, which Gold and Silver
-never had.
-
-Icons come from [Lucide](https://lucide.dev). See
-[docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
-
-### The second screen
-
-A handheld with two displays -- the AYN Thor and its kind -- puts five of those
-entries on the lower one: the Pokedex, the party, the pack, the Pokegear's map
-and the trainer card. Under them is a menu box in the frame the player chose,
-with a tab for each, drawn with the cartridge's own art.
-
-Generation I has the same five with its own START menu behind them: POKéDEX,
-POKéMON, the ITEM list, the TOWN MAP and the trainer info screen. It has no
-Pokegear, so the map tab arrives with the TOWN MAP in the bag, and the ITEM list
-is a text box with no picture to cut an icon from, so that tab wears its own
-word.
-
-It is a view. The only thing on it that takes a touch is the tab row; no page on
-it reads input at all, and none of them is a copy, so what is on the lower screen
-is the same screen the START menu opens. A tab is there exactly when that menu's
-own gate would have offered its row, so the team page appears with the starter
-and the Pokegear page with the phone call.
-
-Outside a game the panel shows a launcher page of its own: an empty cartridge
-bay, the project's name and a line saying nothing is running, on the same field
-and in the same light or dark appearance the shelf above it wears. The pages
-belong to a world, and there is no world behind the launcher.
-
-Settings > Second screen switches it off, or opens the same panel in a desktop
-window on a machine with no such hardware.
-
-## Controls
-
-The games are played with the eight buttons the hardware had. A key, a
-controller and the on-screen buttons all produce the same eight, so nothing in
-the game knows which one you used.
+### Controls
 
 | Button | Keyboard | Controller |
 |---|---|---|
-| Up, Down, Left, Right | Arrows, WASD | D-pad, left stick |
-| A | `Z`, Space | Bottom face button |
-| B | `X`, Escape | Right face button |
+| Directions | Arrows, WASD | D-pad, left stick |
+| A | Z, Space | Bottom face button |
+| B | X, Escape | Right face button |
 | START | Enter | Start |
 | SELECT | Backspace, Tab | Back |
 
-A, B, START and SELECT together is the console's own reset, from anywhere: the
-opening, a menu, a battle or the map. It returns to the save screen without
-writing anything, so what you get back is your last SAVE, and the slot counts
-how many times you have done it. The count is on the save page under Mode, which
-is what a shiny hunt is measured in. The first reset asks before it happens.
+Bindings use physical key positions and can be changed in Settings. Touch
+controls appear on touch; three quick taps restore them. A+B+START+SELECT
+resets to the save screen without saving; the first reset asks for confirmation.
 
-Keys bind by physical position, so WASD stays under the same four fingers on a
-layout that spells them differently; settings shows each binding as the key
-actually printed on it. Everything can be rebound, with as many keys and
-controller buttons as you like, and a mod's own controls rebind the same way.
+### Display and sound
 
-Any controller Godot recognises works without setup. On a touchscreen the games
-draw a d-pad, A, B, START and SELECT, which appear while you touch the screen and
-step aside on the next key press; settings can pin them on, turn them off and
-arrange them separately for upright and sideways. Three quick taps brings them
-back. The screen fills whatever window or device it is given, in either
-orientation.
+Settings > Application controls screen fill, zoom, window mode, scrolling,
+game speed and frame rate. Fill extends the map around the original 160x144
+interface; Framed keeps the hardware rectangle. Connected maps are scenery:
+only the current map runs gameplay. Use +/-, the wheel, or 0 to reset zoom.
 
-### Screen fill
+Smooth scrolling interpolates movement without changing game timing. Game speed
+changes gameplay timing while audio keeps its original pitch and tempo. Display
+frame rate follows the panel; lower caps can save battery.
 
-A window is not the Game Boy's 10:9, and the black bars around a framed screen
-are room the overworld can draw into. Settings > Application > Screen:
+Settings > Second screen opens read-only party, bag, map, Pokédex and trainer
+pages on a second display or desktop window. Availability follows the same gates
+as the game's start menu.
 
-| Screen | What it draws |
-|---|---|
-| Fill (default) | The map covers the whole window at any shape, and the maps connected to this one are drawn around it. Indoors, only the room you are in is drawn, so the S.S. Aqua's other cabins stay hidden |
-| Framed | The 160x144 screen at a whole scale, centred, with black bars, as the hardware had |
+## Mods
 
-Everything laid out on the screen (text boxes, menus, the start menu, the
-cursor) stays inside the 160x144 rectangle in the middle of it, where the
-cartridge put it. Only the surround grows.
-
-While walking, `+` and `-` zoom, `0` returns to the fitting scale, and the mouse
-wheel does the same. They count screen pixels per Game Boy pixel, so a mod
-drawing the world in 3D keeps them for its own camera.
-
-Zoom out far enough and a region is on screen at once: the connection graph
-places the maps around this one and the border block fills what no map covers.
-Those maps are a picture. Their people stand where their map puts them and
-nothing else runs: no scripts, no walking, no wild encounters, no collision.
-Only the map you are on is live, exactly as on the cartridge.
-
-### Game speed, window and frame rate
-
-Settings > Application carries four more that reach the engine:
-
-| Setting | What it does |
-|---|---|
-| Game speed | Normal, double or half. Everything counted in hardware frames runs at that multiple: walking, animations, text, battle |
-| Window | Windowed, fullscreen or borderless |
-| Scrolling | Hardware or smooth. See [Scrolling](#scrolling) |
-| Frame rate | Display, or a cap of 30, 60, 120 or 144 |
-
-<p align="center">
-  <img src="assets/brand/settings.webp" alt="Settings, Application: window, screen, scrolling, second screen and game speed" width="820">
-</p>
-
-Sound sits outside game speed. The driver is fed by the audio output's own
-demand, not by a game frame, so music, effects and cries keep the cartridge's
-tempo and pitch at every setting.
-
-Leave frame rate on Display unless you are saving battery. It is the only
-setting whose frames each reach the panel once. A cap below the panel's own rate
-is a sleep, not a refresh, so the same picture is shown for one refresh, then
-three, then two, and the overworld appears to move 0, 1 or 2 pixels however even
-the game is underneath.
-
-#### Scrolling
-
-The overworld moves two pixels once every two frames, as the hardware did and as
-a Game Boy's own screen smeared over. **Smooth** draws the frame in between one
-pixel on, so the map moves a pixel a frame, lands on the cartridge's own pixel at
-every pass boundary, and takes the same sixteen frames to cross a cell. Nothing
-in the game is timed differently either way.
-
-Under both, the pump counts the host's own frames once it has seen enough of
-them at one length to be sure of it, rather than measuring time: a hardware frame
-is 16.742 ms and a host one is the panel's, so a count taken off measured time
-slips a whole frame every 3.7 seconds against the frames the player is shown. A
-panel whose refresh divides no hardware frame, 144 Hz among them, is measured
-instead.
-
-Development shortcuts are debug-build only, along with the map and cell readout.
-That readout carries `fps` (host frames drawn), `hw` (hardware frames the pump
-spent, 59.7 a second while measuring time and the panel's own divided rate while
-counting its frames) and `worst` (the longest single frame of the last second,
-where a stutter shows and an average hides it).
-
-| Scene | Keys |
-|---|---|
-| `game/render/pic_viewer.tscn` | left/right species, `S` shiny, `B` front/back, `T` trainer classes |
-| `game/render/text_viewer.tscn` | Space advances, `F` cycles borders, `C` shows every glyph |
-| `game/battle/battle_screen.tscn` | `T` turn, A advances, `Y` switch, `R` run, `[`/`]` matchup, `G`/`H` damage; in wild battles B opens the ball selector |
-| `game/world/world_screen.tscn` | `F` fishes with an owned rod, `1`/`2`/`3` pick a rod, `P` opens the phone, `V` cycles views, F5 writes a snapshot |
-
-Zoom is not one of these: `+`, `-` and `0` are player controls and work in a
-release export.
-
-A release export offers the eight buttons and nothing else. The method behind
-each shortcut stays public, which is how `tools/preview_*.gd` drives them.
+Install and manage mods from the launcher's Mods tab. Mods are interpreted
+GDScript. [The mod guide](docs/MODS.md) covers authoring and public APIs;
+[examples](mods/examples/) demonstrate content and renderer mods.
 
 ## Tools
 
-Headless, and all against a real imported cache.
+Use a tool only for the subject being investigated. `tools/validate.gd` lists
+cartridge-check topics when called without arguments; select a topic rather
+than `all` for routine work. Arguments and preview options live in each script.
 
-```bash
-godot --headless --path . -s res://tools/validate.gd -- all
-```
-
-`tools/validate.gd` is the check suite: one topic per subject under
-`tools/checks/`, each run against every cartridge of its generation. Name topics
-or a group, or `all`; with no argument it lists them.
-
-| Group | Topics |
+| Tool | Purpose |
 |---|---|
-| `field_moves` | Cut, Surf, Whirlpool, Strength, Headbutt, Rock Smash and the faced-tile prompt chain |
-| `terrain` | Ledge hops, side walls, every map's drawn blocks, the story's map ids |
-| `johto` | Radio Tower, the Rising Badge, command queues, item balls, Route 27, the Magnet Train and long scripted scenes |
-| `kanto` | Each city, its gym and the way in, from Vermilion to Mt. Silver |
-| `art` | Both intro movies, the credits of all six cartridges, the region map, all 278 battle animations, the map name sign |
-| `tables` | TM/HM, naming, world scripts, the opening lane |
-| `trainers` | The Route 30 trainer on each profile |
-| `gen3` | [Generation 3 content and field checks](tools/checks/gen3_tables.gd) across Ruby, Sapphire, FireRed, LeafGreen and Emerald |
-| `gen1` | Red, Blue and Yellow's species, move, type, item and trainer tables, the key-item and usable-item tables behind the bag, every picture their sprite codec decodes, all 226 or 227 maps with their tilesets, the text box, shop inventory and wild encounter a map reads, every trainer and standing wild an object stands on, all 202 or 203 battle animations, the Hall of Fame's own pages, the opening from the copyright screen to the title on all three, the Cable Club from its receptionist through a trade and a Colosseum fight against another save of the same cartridge, every sound a script row plays and the rival's own theme, Yellow's follower: its emotion table, its faces, its 42 voice clips and the spawn every warp leaves it, and a new game played on the real screens from the copyright screen to the first badge on all three, every button through `press_button` and the sound driver clocked a frame a frame |
-
-The rest are previews and dumps, each driving a real screen or table:
-
-| Tool | Does |
-|---|---|
-| `dump_tables.gd <game> <table>` | Prints a decoded table: `species`, `moves`, `items`, `types`, `matchups`, `trainers`, `learnsets`, `egg_moves`, `evolutions`, `growth` or `all` |
-| `preview_pics.gd <game> <png> [kind]` | Contact sheet of `front`, `back`, `trainers`, `player_back`, `font` or `frames`, from the imported cache |
-| `preview_*.gd` | One per screen: the intro, title, credits, Hall of Fame, region map, party, marts, mail, fishing, battle switch and animations, overworld sprites and collision |
-| `preview_world_story.gd` | Map entry callbacks, event-flag visibility, facing interactions and the whole story route, in either generation |
-| `replay_world.gd [game ...] [frames]` | Records `(frame, button)` from a real run and replays it into a fresh world; the same seed and log must reach the same snapshot, party and battle outcome byte for byte, at 30 fps and at 144. One route fights: a wild battle is spent from the world's own pump and steered through its own funnel |
-| `render_audio.gd <game> <kind> <id> <frames> <prefix>` | One record or a whole table through the driver and APU: a WAV plus a per-frame register trace to diff |
-| `screenshot.gd <scene> <png> [frames] [method]` | Any scene to PNG. Opens a window, so it is not headless |
-
-```bash
-# the full walked route: Johto, the Hall of Fame, every Kanto gym, and Red
-godot --headless --path . -s res://tools/preview_world_story.gd -- crystal 24 7 2 2 1 none home story
-# Red, Blue or Yellow from the bedroom to the Hall of Fame
-godot --headless --path . -s res://tools/preview_world_story.gd -- red 0 38 3 6 1 none home story
-```
+| [validate.gd](tools/validate.gd) | Checks against imported cartridges |
+| [dump_tables.gd](tools/dump_tables.gd) | Decoded tables |
+| [preview_pics.gd](tools/preview_pics.gd) | Sprite contact sheets |
+| [preview_world.gd](tools/preview_world.gd) | Map previews |
+| [preview_world_story.gd](tools/preview_world_story.gd) | Scripted story routes |
+| [replay_world.gd](tools/replay_world.gd) | Deterministic input replay |
+| [render_audio.gd](tools/render_audio.gd) | WAV and register traces |
+| [screenshot.gd](tools/screenshot.gd) | Scene capture; requires a window |
+| [record_clip.gd](tools/record_clip.gd) | Scripted video capture |
+| [profile.gd](tools/profile.gd) | Frame costs; requires a window |
 
 ## Tests
 
-[GUT](https://github.com/bitwes/Gut) is in `addons/gut`; configuration is in
-`.gutconfig.json`. Tests use synthetic files and a known SHA-1 vector, never a
-real cartridge, so they run anywhere.
+[GUT](https://github.com/bitwes/Gut) is in `addons/gut`. Tests use synthetic
+files, never a real cartridge. Run affected tests with the shared local/CI command:
 
 ```bash
-godot --headless -s res://addons/gut/gut_cmdln.gd -gexit
+python3 tools/test.py --base origin/main
 ```
 
-That is the unit tier and the default; it runs in about a minute. The scene
-integration tier drives real screens and is slower, so it is asked for
-explicitly, which is how CI runs both:
+Use `--list` to preview selection, pass a test file to run that subject, and use
+`--full` for the complete suite. Add `--import` after introducing scripts.
+PR CI checks affected consumers; `main` checks everything. The
+[verification policy](docs/CONTRIBUTING.md#verifying) defines when engine tests,
+visual inspection and cartridge checks are appropriate.
 
-```bash
-godot --headless -s res://addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit
-```
+## Development and exports
 
-Exit code `0` means all tests passed. Run one script with `-gselect=<name>`.
+Feature scripts and scenes live together in `game/`; `autoload/` owns singletons,
+`tests/` owns synthetic fixtures and screen tests, and `tools/checks/` owns
+cartridge checks. Third-party code lives in `addons/`.
 
-## Layout
-
-| Path | Contents |
-|---|---|
-| `game/` | Feature folders with colocated scenes and scripts |
-| `autoload/` | Project singletons |
-| `assets/` | Authored or freely licensed assets; `assets/brand/` has its own README |
-| `addons/` | Third-party plugins, and this project's own Android editor plugin |
-| `tests/` | `unit/` is the fast tier, `integration/` drives real screens |
-| `tools/` | Headless developer scripts; `tools/checks/` are validate topics |
-| `roms/` | User cartridges, excluded from Git and Godot imports |
-| `mods/examples/` | Development-only example mods, excluded from exports |
-| `docs/` | Contributor notes |
-
-## Platforms
-
-Every platform uses GL Compatibility. `export_presets.cfg` covers seven presets
-for Windows, macOS, Linux, Android and iOS, x86_64 and arm64 for Windows and
-Linux, and writes into `builds/`. Install the matching export templates first,
-then:
+Install matching export templates, then use a preset from `export_presets.cfg`:
 
 ```bash
 godot --headless --path . --export-release "Linux" builds/linux/pokerecomp.x86_64
 ```
 
-The Switch has no preset, because a stock editor knows no such platform and
-would drop one from the file. `.github/workflows/release.yml` exports the pack
-and wraps it with devkitPro's `elf2nro` instead, around a template built from a
-fork of the engine pin that adds `platform/nx`; `docs/CONTRIBUTING.md` has the
-whole lane.
-
-Tests, tools and GUT are excluded, and `roms/` and the `user://` cache are not
-reachable from an export. **No signing identity is committed**: the iOS preset's
-team id is deliberately empty, because a published `.ipa` is unsigned so that a
-sideloader can sign it with the player's own Apple ID. `.github/workflows/release.yml`
-builds every target from a `v*` tag and refuses to publish an `.ipa` that carries
-a signature.
-
-A published build carries the engine, and stock export templates ship every
-renderer and every importable format whether or not this project can reach
-them: they are around nine tenths of a download.
-`tools/build_export_templates.sh` builds the same engine without the parts
-nothing here can execute, and `.github/workflows/export-templates.yml` builds
-one for every published target. `release.yml` calls it and overlays the result,
-so a name it does not carry keeps the stock template. What may go is bounded by
-the mod API rather than by the game: a mod is interpreted GDScript with the
-whole engine in front of it, so 3D, audio formats and image formats all stay in
-even though the game itself draws in 2D.
-
-The engine is the slow half of a release, so that workflow also runs on its own,
-and on a pull request that moves the flag set. iOS rebuilds the release device
-slice alone, spliced into the stock archive: that template is an Xcode project
-around several xcframeworks and the export reaches for nothing else.
-
-Android builds through gradle, because the second display is reached by a
-platform plugin and a plugin needs one. Install the Android build template from
-the editor, or pass `--install-android-build-template` alongside the export, and
-build the plugin with `tools/build_android_plugin.sh` first.
-
-iOS forbids JIT and runtime native code, so mods must be interpreted GDScript,
-not compiled extensions. The project is therefore GDScript-first. See
-[docs/MODS.md](docs/MODS.md).
+[Release automation](.github/workflows/release.yml) builds all platforms from a
+`v*` tag. [Template builds](.github/workflows/export-templates.yml) own engine
+pins and platform setup. Android needs `tools/build_android_plugin.sh` and the
+Android build template. Switch uses its fork's template and pack wrapping rather
+than a stock editor preset. iOS releases are unsigned for sideloading.
 
 ## Reporting a bug
 

@@ -565,7 +565,6 @@ func _picture(row: Dictionary) -> Rect2:
 	return box
 
 
-## The dust, the rustle and the shadow track the object that spawned them.
 func _add_carried(out: Array, owner: Dictionary, effects: Array, index: int) -> void:
 	for sprite: Dictionary in effects:
 		if not bool(sprite.get("screen", false)) and int(sprite["object_index"]) == index:

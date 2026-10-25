@@ -413,7 +413,6 @@ static func bump_reset_count(game_id: StringName, rom_sha1: String, slot: int) -
 	return counted
 
 
-## One slot copy as the object it stores, unvalidated and unmigrated.
 static func _read_document(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {"ok": false}

@@ -11,6 +11,6 @@ godot --headless --path . -s res://tools/verify_rom.gd -- roms
 ```
 
 Names do not matter: every file is matched by SHA-1 against the supported
-cartridges listed in [the README](../README.md#getting-started). Unknown
+cartridges listed in [RomRegistry](../game/rom/rom_registry.gd). Unknown
 hashes are refused rather than imported with an uncharacterised bank layout that
 could produce corrupt assets.

@@ -19,8 +19,6 @@ func after_each() -> void:
 	RomCache.clear(_directory)
 
 
-## Four sheets, each filled with one index, so which sheet a tile came from can
-## be read off the page.
 func _write_cache(with_sheets: bool = true) -> void:
 	var sheets: Dictionary = {}
 	if with_sheets:
@@ -67,7 +65,6 @@ func _data() -> GameData:
 	return GameData.open_directory(_directory)
 
 
-## The index one tile of the page draws, read back out of a buffer.
 func _drawn(page: Gen2BattleTiles, tile: int) -> int:
 	var into: PackedByteArray = PackedByteArray()
 	into.resize(PokeTiles.TILE_WIDTH * PokeTiles.TILE_HEIGHT)

@@ -115,10 +115,6 @@ func test_the_interior_is_cleared_under_the_box() -> void:
 	assert_true(_ink_in_tile(indices, Vector2i(2, 2)), "the page outside is untouched")
 
 
-## The title prints on the border's own top row, overwriting it, so a title that
-## fits inside the box cannot be told from the border it covers. A title long
-## enough to run past the right-hand corner can: column 14 is outside a box that
-## ends at 12, so ink there is the title and nothing else.
 func test_a_title_prints_only_when_the_flag_is_set() -> void:
 	var without: PackedByteArray = _blank()
 	_page.draw(_box(), OPTIONS, 0, without, WIDTH, "LONGTITLEHERE", 2)
@@ -283,7 +279,6 @@ func test_the_room_menus_upper_arrow_is_the_lower_one_turned_over() -> void:
 			assert_eq(indices[top], indices[bottom], "row %d column %d" % [row, column])
 
 
-## A box without the field draws neither, which is every other menu in the game.
 func test_no_arrows_without_the_room_menus_own_field() -> void:
 	var indices: PackedByteArray = _blank()
 	_page.draw(Gen2MenuBox.from_coords(12, 7, 19, 11, 0), [" L:10 "], -1, indices, WIDTH)

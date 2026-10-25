@@ -51,8 +51,6 @@ func test_touch_geometry_has_the_same_physical_size_in_game_and_settings() -> vo
 	window.content_scale_factor = previous_factor
 
 
-## Held upright the controller sits below the map, so the notch at the top of the
-## screen takes nothing off it while the home indicator under it still does.
 func test_only_the_screen_furniture_the_pad_stands_on_is_reserved() -> void:
 	Gen2LauncherUI.preview_insets = {"left": 0.0, "top": 59.0, "right": 0.0, "bottom": 34.0}
 	var viewport: Vector2 = get_tree().root.get_visible_rect().size
@@ -114,8 +112,6 @@ func _held() -> Dictionary:
 	return out
 
 
-## The whole point: a finger produces the same action a key does, so nothing
-## downstream knows a touchscreen was involved.
 func test_a_touch_on_the_dpad_presses_that_direction() -> void:
 	_touch(0, _dpad(Vector2.LEFT), true)
 	assert_true(_held().has(PokeButton.LEFT))
@@ -138,7 +134,6 @@ func test_lifting_a_finger_releases_only_that_button() -> void:
 	assert_false(_held().has(PokeButton.A))
 
 
-## Rolling a thumb around the d-pad without lifting is how anyone turns a corner.
 func test_sliding_across_the_dpad_swaps_the_direction() -> void:
 	_touch(0, _dpad(Vector2.LEFT), true)
 	_drag(0, _dpad(Vector2.RIGHT))
@@ -171,8 +166,6 @@ func test_two_fingers_on_one_button_hold_it_until_both_lift() -> void:
 	assert_false(_held().has(PokeButton.A))
 
 
-## A button still held when the screen changes would walk the player into a wall
-## for as long as the next screen was up.
 func test_leaving_the_tree_lets_go_of_everything() -> void:
 	_touch(0, _dpad(Vector2.UP), true)
 	await get_tree().process_frame
@@ -184,8 +177,6 @@ func test_leaving_the_tree_lets_go_of_everything() -> void:
 	add_child(_pad)
 
 
-## A battle opened over the map brings its own controller. Only the one in front
-## may draw or answer a finger, or one press would arrive twice.
 func test_only_the_frontmost_controller_answers() -> void:
 	var front := Gen2TouchPad.new()
 	front.size = AREA
@@ -215,8 +206,6 @@ func test_hiding_the_controller_lets_go_of_what_it_held() -> void:
 	assert_true(_held().is_empty())
 
 
-## In edit mode the pad is a preview being arranged, so a drag moves a cluster
-## and nothing is ever pressed.
 func test_edit_mode_drags_a_group_instead_of_pressing_it() -> void:
 	_pad.set_edit_mode(true)
 	# The arrangement the pad is placing is the window's, not the pad's own shape.

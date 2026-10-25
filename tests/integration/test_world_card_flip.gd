@@ -114,8 +114,6 @@ func test_the_special_opens_the_table_and_holds_the_world() -> void:
 	assert_false(_world_screen.interact())
 
 
-## The opening question is the table's, not the world's: a press reaches it and
-## the balance it takes is the world's own coins.
 func test_the_round_is_taken_out_of_the_coin_case() -> void:
 	await _open_world()
 	_run_script()

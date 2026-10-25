@@ -324,8 +324,6 @@ func test_the_run_block_round_trips_and_refuses_an_invented_mod_id() -> void:
 	})
 
 
-## The rules travel with the slot, not with the installation: a run recorded under
-## one set did not produce the state a different set would.
 func test_the_runs_rules_round_trip_and_are_absent_when_never_recorded() -> void:
 	var save: Gen2SaveData = _save()
 	assert_null(save.run_rules, "a save invents none")

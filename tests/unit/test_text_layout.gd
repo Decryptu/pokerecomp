@@ -212,8 +212,6 @@ func test_a_sound_marked_to_play_over_does_not_hold_the_text() -> void:
 	assert_eq(box.glyphs().size(), 2)
 
 
-## A sound belongs to the page it was reached on, at the tile it follows, and a
-## line the layout wraps does not move it.
 func test_a_sound_lands_on_its_page_at_the_tile_it_follows() -> void:
 	var fanfare: String = Gen2TextStream.sound_token(Gen2Sfx.SFX_ITEM)
 	var pages: Array = Gen2TextLayout.lay_out_pages(

@@ -84,8 +84,6 @@ func test_a_pokemon_with_nothing_to_hit_back_with_scores_low() -> void:
 	assert_lt(Gen2AISwitch.matchup_score(battle), Gen2AISwitch.BASE_SCORE)
 
 
-## A move that has already landed super effectively is worth a point off; one
-## the enemy is immune to leaves the walk with nothing found, worth two on.
 func test_the_score_reads_what_the_player_has_actually_thrown() -> void:
 	var burning: Gen2Battle = _battle(
 		_mon(Fixture.CHARMANDER, [Fixture.EMBER]),
@@ -156,8 +154,6 @@ func test_a_class_with_no_switch_bit_never_leaves() -> void:
 		assert_false(bool(Gen2AISwitch.decide(battle, 0, _rng)["switch"]))
 
 
-## The three frequencies act on the same decision at their own rates, which is
-## the whole of what separates them.
 func test_the_three_frequencies_act_at_their_own_rates() -> void:
 	var battle: Gen2Battle = _wants_out()
 	var rates: Dictionary = {}
@@ -229,7 +225,6 @@ func test_a_locked_in_enemy_neither_switches_nor_uses_an_item() -> void:
 			)
 
 
-## A wild battle has no trainer behind it, so neither half of the routine runs.
 func test_a_wild_battle_never_switches_or_uses_an_item() -> void:
 	var battle: Gen2Battle = Gen2Battle.create(
 		_data, _mon(Fixture.PIKACHU, [Fixture.THUNDERBOLT]),
@@ -257,8 +252,6 @@ func test_the_last_turn_of_perish_song_forces_a_switch() -> void:
 	assert_eq(int(choice["index"]), 1, "the one Pokémon behind it")
 
 
-## Only a count of exactly one qualifies. Two is early enough to keep fighting,
-## so the matchup half decides as usual.
 func test_perish_song_with_two_turns_left_leaves_the_matchup_to_decide() -> void:
 	var battle: Gen2Battle = _comfortable()
 	battle.enemy.substatus |= Gen2Substatus.PERISH

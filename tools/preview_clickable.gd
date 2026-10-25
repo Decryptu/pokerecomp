@@ -116,9 +116,6 @@ func _aim_at(button: Control) -> void:
 	Input.parse_input_event(motion)
 
 
-## Every button a player can see: on screen, and inside every clipping ancestor.
-## One scrolled below a fold is out of view rather than broken, so it is left
-## out; the point of the check is the buttons that look pressable.
 func _collect(node: Node, out: Array) -> void:
 	if node is Gen2LauncherButton and node.is_visible_in_tree() and _on_screen(node):
 		out.append(node)

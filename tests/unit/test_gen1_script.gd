@@ -1231,7 +1231,6 @@ func test_the_money_box_becomes_its_own_node() -> void:
 	)
 
 
-## Every other id names a menu this port hands nothing to.
 func test_any_other_text_box_answers_nothing() -> void:
 	assert_eq(
 		_decode(_text_box(Gen1Layout.MONEY_BOX_ID + 1)

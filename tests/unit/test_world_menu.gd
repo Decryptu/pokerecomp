@@ -104,7 +104,6 @@ func test_a_headerless_choice_wears_the_yes_no_menu_header() -> void:
 	assert_eq(menu.box().border_position(), Vector2i(14, 7), "_YesNoBox's own box")
 
 
-## A header that names its flags still wins, zero included.
 func test_a_loaded_header_keeps_its_own_flags() -> void:
 	var menu: Gen2WorldMenu = Gen2WorldMenu.from_input({
 		"menu_kind": &"vertical", "header": {"data_flags": 0, "default": 1},

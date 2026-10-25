@@ -8021,9 +8021,6 @@ func _restore_party(world: Gen2WorldAPI, save: Gen2SaveData, snapshot: Array) ->
 	_mirror_party(world, save)
 
 
-## A fought party over the saved one, through the adapter that owns that seam.
-## Evolution and a level up both change what the world draws and what a script
-## reads, so the summary is refreshed with it.
 func _write_party_back(world: Gen2WorldAPI, save: Gen2SaveData, party: Gen2Party) -> bool:
 	var written: Gen2SaveData = Gen2SaveBattleAdapter.from_battle_party(
 		save.game_id, save.rom_sha1, save.slot, party, save.player_name, save

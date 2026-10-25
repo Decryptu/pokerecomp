@@ -292,7 +292,6 @@ func test_generation_one_learning_shifts_the_pp_with_the_moves() -> void:
 	assert_eq(int(mon.pp[3]), int(_data.move(taught).get("pp", 0)))
 
 
-## Only the levels above the one the slot went in at are offered.
 func test_generation_one_learning_skips_the_levels_below_the_deposit() -> void:
 	var mon: Gen2SaveMon = _mon(GEODUDE)
 	mon.moves = [0, 0, 0, 0]

@@ -142,8 +142,6 @@ func _refresh() -> void:
 	_refresh_icons()
 
 
-## The icons over the drawn page, as objects with their own palettes, exactly as
-## the trainer card draws its badges over the card.
 func _refresh_icons() -> void:
 	for icon: TextureRect in _icons:
 		icon.queue_free()

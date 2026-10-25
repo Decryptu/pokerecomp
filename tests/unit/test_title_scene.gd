@@ -124,8 +124,6 @@ func test_start_or_a_answers_the_main_menu() -> void:
 	assert_false(ignored.finished())
 
 
-## The two chords, which are held states rather than presses: three buttons at
-## once, and a partial one answers nothing.
 func test_the_two_chords_are_answered_whole() -> void:
 	var deleting: Gen2TitleScene = _scene(RomRegistry.GOLD)
 	_spend(deleting, 2)

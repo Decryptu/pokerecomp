@@ -1597,9 +1597,6 @@ func test_a_timed_heal_at_full_health_fails() -> void:
 	assert_false(_first(turn.events, Gen2Battle.HP_ALREADY_FULL).is_empty())
 
 
-## The effects whose whole job is a number the move table does not hold. Every
-## one of these moves ships with a power of 1 or 10 and is worthless until the
-## step that fills it in runs, so the arithmetic is what the tests are about.
 
 func test_return_and_frustration_read_the_happiness_from_either_end() -> void:
 	# `happiness * 10 / 25`, truncating, and 255 minus it for Frustration.
@@ -2644,8 +2641,6 @@ func test_a_nightmare_is_refused_by_a_doll_and_by_a_target_out_of_sight() -> voi
 	assert_false(Gen2Substatus.has(flying.enemy.substatus, Gen2Substatus.NIGHTMARE))
 
 
-## The non-Ghost branch, which reads the *user's* own types and moves the user's
-## own three stages.
 func test_curse_trades_the_users_speed_for_its_attack_and_defense() -> void:
 	var battle: Gen2Battle = _battle()
 	var turn: Gen2Turn = _run_move(battle, Fixture.CURSE)
@@ -3251,9 +3246,6 @@ func test_roar_and_whirlwind_print_different_lines() -> void:
 	assert_eq(_of_type(blown.events, Gen2Battle.FLED_IN_FEAR).size(), 0)
 
 
-## Below the target's level it goes on the dice, and a quarter of the target's
-## level is the share that fails. A level 4 user against a level 50 target fails
-## whenever the roll lands under 12, out of the 55 it is drawn from.
 func test_a_weaker_user_rolls_against_a_quarter_of_the_targets_level() -> void:
 	var failures: int = 0
 	var samples: int = 200
@@ -3531,8 +3523,6 @@ func test_pain_split_clamps_each_side_to_its_own_maximum() -> void:
 	assert_eq(battle.player.hp, small, "filled, not overfilled")
 
 
-## The health words are written by hand, so no doll stands in the way and there is
-## nothing for one to take.
 func test_pain_split_is_refused_by_a_substitute() -> void:
 	var battle: Gen2Battle = _battle()
 	battle.player.hp = 10
@@ -3630,9 +3620,6 @@ func test_teleport_is_refused_while_the_opponent_holds_the_user() -> void:
 	assert_eq(_of_type(turn.events, Gen2Battle.MOVE_FAILED).size(), 1)
 
 
-## Below the other's level the player's half goes on the dice, drawn out of the two
-## levels summed and one more, and fails under a quarter of the other's level. A
-## level 4 user against a level 50 fails on the twelve values under 12, out of 55.
 func test_a_weaker_player_rolls_for_teleport() -> void:
 	var failures: int = 0
 	var samples: int = 200

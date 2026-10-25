@@ -204,9 +204,6 @@ func test_the_shipped_example_registers_the_setting_its_renderer_reads() -> void
 	renderer.free()
 
 
-## A slot's own settings, which is what makes its recorded walk reproducible: the
-## file is the template a new run is created from, and the run holds the values it
-## was played with from then on.
 func test_a_new_save_records_the_settings_it_was_created_with() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(_distance(host).get("ok", false)))
@@ -242,8 +239,6 @@ func test_a_save_with_no_recorded_settings_adopts_the_installation_once() -> voi
 	assert_eq(host.option(MOD, &"draw_distance"), 16)
 
 
-## A change made while a slot is played belongs to that slot: the installation is
-## left alone, so the other slots keep the walk they recorded.
 func test_a_change_during_a_run_is_kept_by_the_run() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(_distance(host).get("ok", false)))
@@ -263,8 +258,6 @@ func test_a_change_during_a_run_is_kept_by_the_run() -> void:
 	assert_eq(host.option(MOD, &"draw_distance"), 8, "the installation was left alone")
 
 
-## A development run has no slot, so there is nothing to bind and nothing to
-## invent: the installation is what it plays with.
 func test_a_run_with_no_slot_plays_the_installations_settings() -> void:
 	var host: Gen2ModHost = Gen2ModHost.instance()
 	assert_true(bool(_distance(host).get("ok", false)))

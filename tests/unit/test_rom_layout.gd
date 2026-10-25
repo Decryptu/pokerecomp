@@ -123,8 +123,6 @@ func test_the_intro_predef_palettes_are_one_run() -> void:
 	)
 
 
-## Every metatile map is a whole number of sixteen-wide rows, and the water
-## scene's own starting row is inside its map.
 func test_the_metatile_maps_are_sixteen_wide() -> void:
 	var water: int = 0
 	for row: Array in Gen2Layout.GS_INTRO_SECTION:

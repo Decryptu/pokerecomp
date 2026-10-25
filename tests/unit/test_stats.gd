@@ -1,11 +1,5 @@
 extends GutTest
 
-## The stat arithmetic, against numbers a player could look up.
-##
-## Every figure asserted here is the published one for that Pokémon at that
-## level, which is the point: the formula is easy to write in a form that is
-## almost right, and a stat that is one out is invisible until a battle turns on
-## it.
 
 
 func test_the_square_root_is_a_ceiling_not_a_floor() -> void:

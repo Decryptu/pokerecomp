@@ -1,31 +1,20 @@
 ## What this changes
 
-<!-- One or two sentences. What behaves differently after this merges. -->
+<!-- Concrete problem and resulting behavior. Keep unrelated work out. -->
 
 ## Source references
 
-<!--
-Behavior is re-derived from the pinned pret disassemblies in docs/REFERENCES.md.
-For anything that reproduces cartridge behavior, cite path plus
-symbol, one per line:
+<!-- For cartridge behavior: pinned pret path and symbol. Otherwise omit. -->
 
-  engine/battle/core.asm, DetermineMoveOrder
+## Verification
 
-Write "not source-derived" for tooling, docs, launcher or export work.
--->
-
-## How it was verified
-
-- [ ] `--headless --editor --quit` scan passes (required after adding scripts)
-- [ ] GUT suite passes
-- [ ] Screenshot attached (required for visual changes)
-- [ ] Boot smoke test passes
-
-<!-- Paste the GUT summary line, and drag any screenshots in here. -->
+<!-- State what ran and its result. Choose checks from docs/CONTRIBUTING.md#verifying.
+Use tools/test.py for affected tests. Presentation-only changes need visual inspection,
+not new tests. Do not repeat the full suite or run every cartridge topic by default.
+For new tests: name the uncovered failure mode. Explain broad validation when needed. -->
 
 ## Checklist
 
 - [ ] No ROM-derived, generated, cache or local-only file is staged
 - [ ] `git diff --cached --check` is clean
-- [ ] Defects met along the way are fixed here
-- [ ] Docs updated if a contract in `docs/` changed
+- [ ] Docs updated if a contract changed

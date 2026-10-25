@@ -128,8 +128,6 @@ func _tile_is_blank(indices: PackedByteArray, at: Vector2i) -> bool:
 	return true
 
 
-## Page 2 replaces the status box with the leaders' faces, and the top half of
-## the card is untouched between them.
 func test_the_badge_page_keeps_the_top_half_and_changes_the_bottom() -> void:
 	var page_one: PackedByteArray = _page.draw(_card())
 	_page.load_page_tiles(_data, Gen2TrainerCardPage.PAGE_2)
@@ -145,7 +143,6 @@ func _at(map: PackedInt32Array, cell: Vector2i) -> int:
 	return map[cell.y * Gen2TrainerCardPage.COLUMNS + cell.x]
 
 
-## Which tile cells differ between two drawn pages.
 func _changed_tiles(before: PackedByteArray, after: PackedByteArray) -> Array:
 	var tile: int = Gen2TrainerCardPage.TILE
 	var out: Array = []

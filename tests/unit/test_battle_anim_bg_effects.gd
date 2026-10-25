@@ -112,8 +112,6 @@ func test_only_crystal_has_the_second_lcd_stat_window() -> void:
 	assert_eq(_background().ly_override_start, 0x2F)
 
 
-## The other code-level split: Crystal rewinds the tilemap push and pokegold
-## leaves whichever third was in flight.
 func test_only_crystal_rewinds_the_tilemap_push() -> void:
 	_background().bg_map_third = 2
 	_run(_effect(HIDE_MON))

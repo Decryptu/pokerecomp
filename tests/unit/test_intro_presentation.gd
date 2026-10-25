@@ -66,7 +66,6 @@ func test_rotate_three_right_is_three_eights_ending_on_white() -> void:
 	assert_eq(_motion.bgp(), 0x00, "and the byte stays after the routine returns")
 
 
-## Tables 06, 05, 04, read backwards, so it ends on the identity.
 func test_rotate_three_left_ends_on_the_identity() -> void:
 	_motion.push_rotate_three_left()
 	var trace: Array[int] = _bgp_trace()
@@ -75,8 +74,6 @@ func test_rotate_three_left_ends_on_the_identity() -> void:
 	assert_eq(trace[16], Gen2IntroPresentation.BGP_NORMAL)
 
 
-## Four steps of eight. Right runs the table forward from all-dark to the
-## identity; Left runs it back the other way.
 func test_the_four_palette_fades_are_thirty_two_frames_each() -> void:
 	_motion.push_rotate_four_right()
 	var right: Array[int] = _bgp_trace()

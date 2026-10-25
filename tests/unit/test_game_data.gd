@@ -695,7 +695,6 @@ func test_a_generation_one_species_starts_with_its_base_moves() -> void:
 	assert_eq(data.starting_moves(2), [], "a species with no such row starts empty")
 
 
-## The dex entry travels on the species, so a number with no species has none.
 func test_a_dex_entry_comes_back_with_its_numbers_coerced() -> void:
 	_write_cache()
 	var data: GameData = GameData.open_directory(_directory)
@@ -715,8 +714,6 @@ func test_both_dex_order_tables_come_back_as_species_numbers() -> void:
 	assert_eq(data.dex_order_alpha()[0], Gen2Layout.SPECIES_COUNT)
 
 
-## A table that is not the full species range would list a species number of
-## zero, which the listing treats as its end, so it is dropped whole.
 func test_a_short_dex_order_table_is_dropped() -> void:
 	_write_cache()
 	RomCache.write_json(RomCache.dex_orders_path(_directory), {"new": [1, 2, 3]})

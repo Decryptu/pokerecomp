@@ -32,8 +32,6 @@ func test_the_autoload_is_reachable_without_the_global_name() -> void:
 	assert_same(_runtime, get_tree().root.get_node("/root/InputRuntime"))
 
 
-## A synthesised press has to arrive both at the event handlers and at the polled
-## state, or a screen would see the button and the walk would not.
 func test_a_pressed_button_reaches_the_polled_input_state() -> void:
 	_runtime.press(PokeButton.A)
 	await _settle()
@@ -81,7 +79,6 @@ func test_the_active_device_follows_the_events() -> void:
 	assert_eq(_runtime.device(), PokeInputDevice.TOUCH)
 
 
-## A knocked desk should not hide the interface a pad player is looking at.
 func test_mouse_motion_alone_does_not_change_the_device() -> void:
 	_runtime._input(InputEventJoypadButton.new())
 	_runtime._input(InputEventMouseMotion.new())
@@ -254,8 +251,6 @@ func test_a_held_direction_lets_go_the_moment_the_key_does() -> void:
 	assert_eq(_spend(120), 0, "and so does the menu")
 
 
-## Four buttons at once is a state no single press says, so the chord is polled
-## and reported once per press of it.
 func test_the_reset_chord_is_reported_once_while_it_is_held() -> void:
 	var fired: Array = []
 	_runtime.reset_chord_pressed.connect(func() -> void: fired.append(true))
@@ -364,8 +359,6 @@ func test_a_reset_counts_against_the_open_slot_and_reaches_the_file() -> void:
 	RomCache.clear(directory)
 
 
-## Nothing to count against is answered rather than invented: a development run
-## with no slot open still resets, it just records nothing.
 func test_a_reset_with_no_slot_counts_nothing() -> void:
 	var runtime: Gen2GameRuntime = Gen2GameRuntime.instance()
 	var slot: int = runtime.selected_save_slot

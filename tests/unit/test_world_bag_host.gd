@@ -106,8 +106,6 @@ func test_an_unknown_item_is_refused() -> void:
 	assert_eq(result["reason"], &"unknown_item")
 
 
-## The commit boundary is optional: a toss with no save behind it still changes
-## the live world, which is what a screen without one does.
 func test_a_toss_without_a_save_still_changes_the_world() -> void:
 	assert_true(bool(Gen2WorldBagHost.toss(_world, null, POTION, 1, false)["ok"]))
 	assert_eq(_world.state.item_quantity(POTION), 4)

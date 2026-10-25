@@ -1150,7 +1150,6 @@ func _talk(world: Gen2WorldAPI, cell: Vector2i) -> Array:
 	return results
 
 
-## Answers everything the script asks for but a choice, as the screen does.
 func _settle(world: Gen2WorldAPI) -> Array:
 	var out: Array = []
 	for _step: int in STEP_CAP:

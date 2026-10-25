@@ -645,10 +645,6 @@ func _draw_blue(page: Dictionary, into: PackedByteArray) -> void:
 	draw_stats(into, width, STAT_NAMES_AT, page.get("stats", {}))
 
 
-## A registered page's own lower half. The mod answers placements and this writes
-## them with the screen's font and the same divider the pink and blue pages
-## stand, so a page it draws cannot reach the upper half or the front pic.
-## Anything outside the lower ten rows is dropped rather than clipped.
 func _draw_registered(
 	page: Dictionary, into: PackedByteArray, index: int,
 	divider: int = Gen2BattleTiles.STATS_DIVIDER

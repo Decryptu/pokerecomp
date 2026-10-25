@@ -66,9 +66,6 @@ func _build() -> void:
 	actions.add_child(reset)
 
 
-## A loaded mod's own controls, in their own group under the eight. Absent
-## entirely when no mod registered one, so a player with no mods sees the page
-## they always saw.
 func _build_mod_actions() -> void:
 	var actions: Array = Gen2ModHost.instance().actions()
 	if actions.is_empty():

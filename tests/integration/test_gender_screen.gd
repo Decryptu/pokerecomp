@@ -74,8 +74,6 @@ func test_a_cartridge_without_the_text_has_no_gender_screen() -> void:
 	assert_false(absent.open(GameData.open_directory(Fixture.directory())))
 
 
-## The page is a real 160x144 buffer with the question in the text box and the
-## menu over it, so both can be read back without a window.
 func test_the_page_draws_the_question_and_the_menu() -> void:
 	var page := Gen2GenderScreenPage.from_data(GameData.open_directory(Fixture.directory()))
 	var indices: PackedByteArray = page.draw(QUESTION, 0)

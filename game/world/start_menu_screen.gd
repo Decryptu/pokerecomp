@@ -3154,7 +3154,6 @@ func set_screen(screen: Gen2Screen) -> void:
 	_render_hardware()
 
 
-## Frees the overlay, since it lives in a screen this node does not own.
 func _exit_tree() -> void:
 	if _view != null:
 		Gen2Screen.drop_on_exit(_view)

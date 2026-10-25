@@ -50,7 +50,6 @@ func _write_scripts() -> void:
 	_dump[DUMMY_BODY] = 0xFF
 
 
-## 188 rows whose four table indexes are all in range.
 func _write_objects() -> void:
 	for index: int in Gen2Layout.BATTLE_ANIM_OBJECT_COUNT:
 		var row: int = OBJECTS + index * Gen2Layout.BATTLE_ANIM_OBJECT_SIZE

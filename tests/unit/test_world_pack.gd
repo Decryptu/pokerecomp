@@ -455,8 +455,6 @@ func test_a_reordered_map_lists_its_pocket_the_new_way() -> void:
 		[ITEM_POTION, ITEM_ANTIDOTE])
 
 
-## _is_permutation: a list that dropped or repeated a row would change what is
-## owned rather than where it sits.
 func test_an_order_that_is_not_a_permutation_is_refused() -> void:
 	var state := Gen2WorldState.new({}, {}, {ITEM_ANTIDOTE: 1, ITEM_POTION: 1})
 	assert_eq(

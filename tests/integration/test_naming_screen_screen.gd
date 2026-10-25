@@ -82,8 +82,6 @@ func test_ending_with_nothing_typed_reports_an_empty_name() -> void:
 	assert_eq(_closed, [""])
 
 
-## The page is a real 160x144 buffer, so the screen can be photographed and read
-## back without a window.
 func test_the_page_is_drawn_at_the_hardware_size() -> void:
 	var page := Gen2NamingScreenPage.from_data(GameData.open_directory(Fixture.directory()))
 	assert_true(page.ready(), "every naming sheet is in the cache")

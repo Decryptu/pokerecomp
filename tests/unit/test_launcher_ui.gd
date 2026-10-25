@@ -372,9 +372,6 @@ func test_a_card_pads_its_child_and_carries_no_shadow_unless_it_floats() -> void
 	floating.free()
 
 
-## The one control every setting is drawn as. Left and right move the value in
-## place, which is what makes a page of them one focus stop per setting rather
-## than one per answer.
 func test_a_setting_row_steps_its_value_and_reports_the_index() -> void:
 	var chosen: Array[int] = []
 	var row: Gen2LauncherUI.SettingRow = Gen2LauncherUI.choice(
@@ -394,8 +391,6 @@ func test_a_setting_row_steps_its_value_and_reports_the_index() -> void:
 	assert_eq(chosen, [1, 0] as Array[int], "a step that changes nothing reports nothing")
 
 
-## A two-answer setting wears a switch rather than a chevron, and the switch is
-## drawn by the row rather than being a second thing to focus inside it.
 func test_a_switch_row_flips_on_a_press_and_carries_no_focus_of_its_own() -> void:
 	var flips: Array[bool] = []
 	var row: Gen2LauncherUI.SettingRow = Gen2LauncherUI.switch(

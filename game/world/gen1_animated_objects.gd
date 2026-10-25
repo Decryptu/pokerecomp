@@ -120,7 +120,6 @@ func run(from: int = 0) -> void:
 		oam_offset += 1
 
 
-## False once the buffer is full.
 func _update_frame(struct: PackedByteArray, index: int) -> bool:
 	var frame: Dictionary = _advance_duration(struct)
 	var set_id: int = int(frame["set"])

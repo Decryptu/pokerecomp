@@ -508,9 +508,6 @@ func _font() -> Gen2Font:
 	return _glyphs
 
 
-## Replaces the page with the one the cursor names. Every branch builds the
-## overworld's own screen the way the overworld builds it, less the signal
-## connections: nothing here can close a page.
 func _build_page() -> void:
 	if _screen == null:
 		return
@@ -709,7 +706,6 @@ func _build_town_map() -> Node:
 	return map
 
 
-## What a page with no screen object of its own answers with.
 func _shown_page(node_name: String, picture: Image) -> Node:
 	if picture == null:
 		return null

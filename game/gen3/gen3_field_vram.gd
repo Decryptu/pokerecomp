@@ -133,7 +133,6 @@ static func entry(tile: Dictionary) -> int:
 		| (int(tile["palette"]) << 12)
 
 
-## One tilemap word's 8x8 tile as faded colours; colour 0 is transparent.
 func _draw_tile(layer: PackedInt32Array, size: Vector2i, origin: Vector2i, word: int) -> void:
 	var bounds := Rect2i(Vector2i.ZERO, size)
 	if not bounds.intersects(Rect2i(origin, Vector2i(8, 8))):

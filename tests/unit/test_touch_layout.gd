@@ -74,8 +74,6 @@ func test_the_dpad_reads_by_dominant_axis() -> void:
 	assert_eq(layout.direction_at(centre + Vector2(reach, 0), PORTRAIT), PokeButton.RIGHT)
 
 
-## A corner gives one direction, not two: nothing in either game moves
-## diagonally, and a press that walked twice would be wrong in a menu as well.
 func test_a_corner_of_the_dpad_gives_one_direction() -> void:
 	var layout: PokeTouchLayout = _layout()
 	for area: Rect2 in [PORTRAIT, LANDSCAPE]:
@@ -127,7 +125,6 @@ func test_scale_grows_every_group() -> void:
 	assert_gt(layout.group_size(PokeTouchLayout.GROUP_PAD).x, before.x)
 
 
-## The one way an options screen could hand back a layout nobody can press.
 func test_a_group_cannot_be_dragged_off_the_area() -> void:
 	var layout: PokeTouchLayout = _layout()
 	layout.set_anchor(
@@ -228,8 +225,6 @@ func test_a_layout_from_before_a_and_b_came_apart_is_split() -> void:
 	)
 
 
-## A layout that already names the two is left alone, so a migration cannot run
-## twice and walk the pair apart.
 func test_a_layout_that_already_names_a_and_b_is_not_split_again() -> void:
 	var stored: Dictionary = {
 		"portrait": {"face": [0.10, 0.10], "a": [0.30, 0.60], "b": [0.50, 0.40]},
@@ -245,7 +240,6 @@ func test_a_layout_that_already_names_a_and_b_is_not_split_again() -> void:
 	)
 
 
-## The whole point of the split: each is dragged on its own.
 func test_a_and_b_are_placed_separately() -> void:
 	var layout: PokeTouchLayout = _layout()
 	var before: Vector2 = layout.anchor(

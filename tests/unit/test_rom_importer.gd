@@ -750,7 +750,6 @@ func _write_stats_tiles(data: PackedByteArray) -> void:
 	)
 
 
-## The four bar palettes, whose values are the check on where they are.
 func _write_bar_palettes(data: PackedByteArray) -> void:
 	for index: int in Gen2Layout.BAR_PALETTE_NAMES.size():
 		var at: int = Gen2Layout.bar_palette_offset(_layout, index)
@@ -810,7 +809,6 @@ func _lit_tile(pixels: int) -> PackedByteArray:
 	return out
 
 
-## 1bpp tiles that all have ink and none of which repeats another.
 func _write_hud(data: PackedByteArray, at: int, tiles: int) -> void:
 	for tile: int in tiles:
 		var bytes: PackedByteArray = PackedByteArray()
@@ -825,9 +823,6 @@ func test_battle_graphics_that_count_up_verify() -> void:
 	assert_true(result["ok"], result["message"])
 
 
-## The stats screen's own run, checked the same way: its tints are the page
-## palettes' colour 1, so a run right in one half and wrong in the other is not
-## the run.
 func test_a_stats_page_palette_that_is_not_the_pinned_one_fails() -> void:
 	var data: PackedByteArray = _battle_dump()
 	data[Gen2Layout.stats_page_tint_offset(_layout, 1)] = 0x00
@@ -836,8 +831,6 @@ func test_a_stats_page_palette_that_is_not_the_pinned_one_fails() -> void:
 	assert_string_contains(String(result["message"]), "Stats page tint 1")
 
 
-## A palette table one table out still decodes into colours, so the check is the
-## values rather than the shape.
 func test_a_battle_object_palette_that_is_not_the_pinned_one_fails() -> void:
 	var data: PackedByteArray = _battle_dump()
 	data[int(_layout["battle_object_palettes"])] = 0x00
@@ -1335,8 +1328,6 @@ func test_an_egg_move_census_that_disagrees_with_the_layout_fails() -> void:
 	assert_string_contains(result["message"], "egg moves")
 
 
-## Crystal's revision differs from Gold's in these two lists and in nothing else
-## this check can see, so reading a Crystal dump with the Gold pins has to fail.
 func test_the_gold_lists_are_refused_for_crystal() -> void:
 	var crystal: RomFile = RomFile.from_bytes(_egg_move_dump(), RomRegistry.CRYSTAL)
 	assert_false(RomImporter.verify_egg_moves(crystal, _layout)["ok"])
@@ -1461,7 +1452,6 @@ func test_a_table_that_does_not_open_on_form_a_twice_fails() -> void:
 	assert_false(RomImporter.verify_unown_words(_rom(data), _layout)["ok"])
 
 
-## And the words following their own table is what says it is the right length.
 func test_words_that_do_not_follow_their_table_fail() -> void:
 	var data: PackedByteArray = _unown_dump()
 	var table: int = int(_layout["unown_words"])

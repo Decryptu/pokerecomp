@@ -174,7 +174,6 @@ func test_the_player_panel_draws_the_trainer_pic() -> void:
 	)
 
 
-## An induction's panels read no joypad at all, so neither A nor B moves one on.
 func test_no_key_advances_an_induction_panel() -> void:
 	await _open_world(2)
 	_world_screen.open_hall_of_fame()

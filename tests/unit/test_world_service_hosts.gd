@@ -460,8 +460,6 @@ func _set_special_script(special: int) -> void:
 	_save.world = _world.snapshot()
 
 
-## The five Day-Care specials, staged the same way and answered from the same
-## run of stubs. The role is what tells the one screen which routine it is.
 func test_the_five_day_care_specials_each_stage_their_own_role() -> void:
 	var roles: Dictionary = {
 		Gen2WorldScriptRunner.SPECIAL_DAY_CARE_MAN: &"man",
@@ -645,8 +643,6 @@ func test_an_elevator_that_cannot_place_itself_leaves_the_script_running() -> vo
 	assert_eq(complete["results"][0]["status"], &"complete", JSON.stringify(complete))
 
 
-## The same list with the backup warp standing on one of its rows, which is every
-## ordinary ride.
 func test_an_elevator_places_itself_on_the_backup_warps_floor() -> void:
 	_set_elevator_script()
 	_world.backup_warp = {

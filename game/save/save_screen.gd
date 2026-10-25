@@ -582,9 +582,6 @@ func _challenge_title(save: Gen2SaveData) -> String:
 	)
 
 
-## The Nuzlocke's own record: how many areas have given up their encounter, what
-## the run has lost, and its verdict. Drawn for a Nuzlocke and nothing else, so
-## an ordinary slot's pane is exactly what it was.
 func _add_nuzlocke_summary(body: VBoxContainer, save: Gen2SaveData) -> void:
 	if save.run_rules == null or not save.run_rules.is_nuzlocke():
 		return

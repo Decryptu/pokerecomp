@@ -106,8 +106,6 @@ func test_selecting_a_missing_tab_is_refused() -> void:
 	assert_eq(tabs.selected_kind(), Gen2WorldStartMenu.ITEM_PLAYER)
 
 
-## A gate opening mid-walk changes the signature, which is what makes a host
-## redraw the row rather than leave a tab the player has just earned off it.
 func test_the_signature_follows_the_tab_set_and_the_chosen_tab() -> void:
 	var before: String = _tabs(0, false, false).signature()
 	assert_ne(before, _tabs(1, false, false).signature(), "a starter adds a tab")
