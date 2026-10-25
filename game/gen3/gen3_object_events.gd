@@ -967,13 +967,16 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 	if ripple:
 		position = object.pixel_position + Vector2i(8, 14) - camera.screen_origin() - camera.sprite_coord_offset()
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
-		"passes": 0, "end": -1, "follow": false, "map_effect": true, "info": info,
+		"passes": 0, "end": -1, "follow": effect == 15, "map_effect": true, "info": info,
 		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
 		"priority": 3 if ripple else (2 if ash else object.priority),
 		"subpriority": 151 if ripple else ((object.subpriority - 1) & 0xFF if ash else 0),
 		"palette": sprites.load_effect_palette(info)}
-	if not ash and not ripple:
+	if not ash and effect not in [5, 15]:
 		sprite["elevation"] = object.previous_elevation
+	if effect == 15:
+		sprite["y_offset"] = (int(graphics_info(object.graphics_id).get("height", 0)) >> 1) - 4
+		requests.append({"kind": "sound", "name": "puddle"})
 	requests.append(request)
 	_effect_sprites.append(sprite)
 	return sprite
@@ -1592,6 +1595,8 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
 	if kind != "finish_step":
 		_update_reflection(object, slot)
+	if kind != "spawn" and not landing:
+		_ground_puddle(object, slot, requests)
 	if kind == "finish_step":
 		_ground_ripple(object, slot, requests)
 	if landing:
@@ -1631,6 +1636,13 @@ func _ground_short_grass(object: ObjectEvent, slot: int, covering: bool, request
 	object.in_short_grass = inside
 	if start and _ground_effects_visible(object):
 		_start_grass(object, slot, 41, false, requests)
+
+
+## `GetGroundEffectFlags_Puddle` tests both u8 behaviors; only a landing filters the finish-step splash.
+func _ground_puddle(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if (object.current_behavior & 0xFF) == 0x16 and (object.previous_behavior & 0xFF) == 0x16 \
+			and _ground_effects_visible(object):
+		start_effect_sprite(object, slot, 15, -1, true, requests)
 
 
 ## `GetGroundEffectFlags_Ripple` takes u8; `DoRippleFieldEffect` places ripples at pos1 feet without pos2.
