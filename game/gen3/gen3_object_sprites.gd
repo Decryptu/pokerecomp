@@ -329,7 +329,7 @@ static func _field_effect_off_screen(top_left: Vector2i, size: Vector2i) -> bool
 
 
 func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
-	if int(effect["request"]["effect_id"]) in [15, Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER, Gen3ObjectEvents.FLDEFF_SAND_PILE]:
+	if int(effect["request"]["effect_id"]) in [15, Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER, Gen3ObjectEvents.FLDEFF_SAND_PILE, Gen3ObjectEvents.FLDEFF_HOT_SPRINGS_WATER]:
 		_update_linked_effect(objects, effect)
 	var anim: Gen3SpriteAnim = effect["anim"]
 	var info: Dictionary = effect["info"]
@@ -346,13 +346,14 @@ func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	effect["subpriority"] = sub
 
 
-## `UpdateSandPileFieldEffect` restarts an ended animation only when pos1 changes; linked effects ignore pos2.
+## `UpdateSandPileFieldEffect` restarts on pos1 changes; `UpdateHotSpringsWaterFieldEffect` draws one subpriority ahead.
 func _update_linked_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	var request: Dictionary = effect["request"]
 	var object: Gen3ObjectEvents.ObjectEvent = objects.by_identity(int(request["local_id"]),
 		int(request["map_number"]), int(request["map_group"]))
 	var height: int = int(objects.graphics_info(object.graphics_id).get("height", 0))
-	var position: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1) + int(effect["y_offset"])) \
+	var offset: int = (height >> 1) - 8 if int(request["effect_id"]) == Gen3ObjectEvents.FLDEFF_HOT_SPRINGS_WATER else int(effect["y_offset"])
+	var position: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1) + offset) \
 		- objects.camera.screen_origin() - objects.camera.sprite_coord_offset()
 	effect["position"] = Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768))
 	if int(request["effect_id"]) == Gen3ObjectEvents.FLDEFF_SAND_PILE and effect["last_position"] != effect["position"]:
@@ -360,7 +361,7 @@ func _update_linked_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> voi
 		if (effect["anim"] as Gen3SpriteAnim).ended:
 			(effect["anim"] as Gen3SpriteAnim).start(0)
 	if int(request["effect_id"]) != 15:
-		effect["subpriority"] = object.subpriority
+		effect["subpriority"] = (object.subpriority - int(int(request["effect_id"]) == Gen3ObjectEvents.FLDEFF_HOT_SPRINGS_WATER)) & 0xFF
 
 
 ## `UpdateGrassFieldEffectSubpriority` raises grass behind the first overlapping object's feet.

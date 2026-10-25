@@ -56,6 +56,7 @@ const JUMP_SHAPES: Dictionary = {
 const FLDEFF_SHADOW: int = 3
 const FLDEFF_FEET_IN_FLOWING_WATER: int = 34
 const FLDEFF_SAND_PILE: int = 39
+const FLDEFF_HOT_SPRINGS_WATER: int = 42
 const DISPLAY_WIDTH: int = 240
 const DISPLAY_HEIGHT: int = 160
 const MOVEMENT_TYPE_INVISIBLE: int = 0x4C
@@ -279,6 +280,7 @@ class ObjectEvent:
 	var in_short_grass: bool = false
 	var in_flowing_water: bool = false
 	var in_sand_pile: bool = false
+	var in_hot_springs: bool = false
 	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a walk started and the pause
 	## flags `FreezeObjectEvent` backs up.
 	var anim := Gen3SpriteAnim.new()
@@ -975,12 +977,12 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 	if ripple:
 		position = object.pixel_position + Vector2i(8, 14) - camera.screen_origin() - camera.sprite_coord_offset()
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
-		"passes": 0, "end": -1, "follow": effect in [15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE], "map_effect": true, "info": info,
+		"passes": 0, "end": -1, "follow": effect in [15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER], "map_effect": true, "info": info,
 		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
 		"priority": 3 if ripple else (2 if ash else object.priority),
 		"subpriority": 151 if ripple else ((object.subpriority - 1) & 0xFF if ash else 0),
 		"palette": sprites.load_effect_palette(info)}
-	if not ash and effect not in [5, 15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE]:
+	if not ash and effect not in [5, 15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER]:
 		sprite["elevation"] = object.previous_elevation
 	if sprite["follow"]:
 		_init_linked_map_effect(object, sprite, requests)
@@ -991,7 +993,8 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 
 func _init_linked_map_effect(object: ObjectEvent, sprite: Dictionary, requests: Array) -> void:
 	var effect: int = int(sprite["request"]["effect_id"])
-	sprite["y_offset"] = (int(graphics_info(object.graphics_id).get("height", 0)) >> 1) - (2 if effect == FLDEFF_SAND_PILE else 4)
+	var offset: int = 2 if effect == FLDEFF_SAND_PILE else (8 if effect == FLDEFF_HOT_SPRINGS_WATER else 4)
+	sprite["y_offset"] = (int(graphics_info(object.graphics_id).get("height", 0)) >> 1) - offset
 	if effect == 15:
 		requests.append({"kind": "sound", "name": "puddle"})
 	elif effect == FLDEFF_SAND_PILE:
@@ -1042,6 +1045,8 @@ func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 		return object == null or not object.in_flowing_water
 	if int(sprite["request"]["effect_id"]) == FLDEFF_SAND_PILE:
 		return object == null or not object.in_sand_pile
+	if int(sprite["request"]["effect_id"]) == FLDEFF_HOT_SPRINGS_WATER:
+		return object == null or not object.in_hot_springs
 	if sprite.has("anim") and not (sprite["anim"] as Gen3SpriteAnim).anims.is_empty():
 		return (sprite["anim"] as Gen3SpriteAnim).ended
 	return int(sprite["end"]) >= 0 and int(sprite["passes"]) >= int(sprite["end"])
@@ -1631,6 +1636,7 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 	if landing:
 		_jump_landing(object, slot, requests)
 	_ground_short_grass(object, slot, covering, requests)
+	_ground_hot_springs(object, slot, covering, requests)
 	_ground_grass(object, slot, kind, covering, requests)
 	requests.append({"kind": kind, "object_id": slot})
 
@@ -1672,6 +1678,14 @@ func _ground_sand_pile(object: ObjectEvent, slot: int, covering: bool, requests:
 	object.in_sand_pile = inside
 	if start and _ground_effects_visible(object):
 		start_effect_sprite(object, slot, FLDEFF_SAND_PILE, -1, true, requests)
+
+
+func _ground_hot_springs(object: ObjectEvent, slot: int, covering: bool, requests: Array) -> void:
+	var inside: bool = covering and (object.current_behavior & 0xFF) == 0x28 and (object.previous_behavior & 0xFF) == 0x28
+	var start: bool = inside and not object.in_hot_springs
+	object.in_hot_springs = inside
+	if start and _ground_effects_visible(object):
+		start_effect_sprite(object, slot, FLDEFF_HOT_SPRINGS_WATER, -1, true, requests)
 
 
 ## `GetGroundEffectFlags_ShallowFlowingWater`: both cells must share water or log terrain; jump filters reset it.

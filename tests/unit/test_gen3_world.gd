@@ -1820,6 +1820,59 @@ func test_sand_pile_settles_restarts_on_motion_and_releases_with_terrain_or_iden
 		assert_eq(objects.sprites.palette.sprite_index(0x1004), 0xFF, "landing dust releases the shared palette last")
 
 
+func test_hot_springs_water_follows_until_terrain_jump_or_identity_releases_it() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _landing_objects(id, 0x128)
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3006)
+		objects.camera.data._world_scripts["map_effect_templates"]["42"] = {"width": 16, "height": 16,
+			"images": 5, "anims": [[0x40000, 0xFFFF]], "palette_tag": 0x1005, "palette_offset": 9}
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.step_movements()
+		assert_true(objects.field_effect_active(42), str(id))
+		if not objects.field_effect_active(42):
+			continue
+		var water: Dictionary = objects.sprites.effects.filter(
+			func(effect: Dictionary) -> bool: return effect["request"]["effect_id"] == 42)[0]
+		for frame: int in 16:
+			objects.step_movements()
+		assert_true((water["anim"] as Gen3SpriteAnim).ended)
+		assert_true(objects.field_effect_active(42), "the static water survives animation END")
+		object.invisible = true
+		object.x2 = 11
+		object.jump_y = -12
+		objects.step_movements()
+		assert_eq(water["subpriority"], (object.subpriority - 1) & 255)
+		var at: Vector2i = object.pixel_position - objects.camera.screen_origin()
+		var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+		assert_eq([oam[0]["x"], oam[0]["y"]], [at.x & 511, at.y & 255], "water ignores pos2 and parent visibility")
+		objects.set_held_movement(object, 0x13 if objects._frlg else 0x0B)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(42), "leaving hot water clears the latch on begin-step")
+		assert_eq(objects.sprites.palette.sprite_index(0x1005), 0xFF)
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3001)
+		for frame: int in 15:
+			objects.step_movements()
+		objects.clear_held_movement(object)
+		objects.set_held_movement(object, 0x12 if objects._frlg else 0x0A)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(42), "entry waits for both occupied cells")
+		for frame: int in 15:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(42))
+		objects.clear_held_movement(object)
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3128)
+		objects.set_held_movement(object, 0x51 if objects._frlg else 0x45)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(42), "jump takeoff clears the covering")
+		for frame: int in 15:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(42), "landing restores the covering")
+		object.local_id += 1
+		objects.step_movements()
+		assert_false(objects.field_effect_active(42), "reused slots do not retain linked water")
+
+
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 	var data: GameData = objects.camera.data
