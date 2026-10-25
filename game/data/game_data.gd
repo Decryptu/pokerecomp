@@ -423,8 +423,8 @@ func world_grass_graphics(effect: int) -> Dictionary:
 	return _world_effect_graphics("grass_templates", effect)
 
 
-func world_landing_graphics(effect: int) -> Dictionary:
-	return _world_effect_graphics("landing_templates", effect)
+func world_map_effect_graphics(effect: int) -> Dictionary:
+	return _world_effect_graphics("map_effect_templates", effect)
 
 
 func world_ash_graphics() -> Dictionary:
