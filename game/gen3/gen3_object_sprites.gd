@@ -154,7 +154,6 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 	return out
 
 
-## The first free sprite slot past the objects', from the end as `CreateSpriteAtEnd` looks or from the start.
 func effect_slot(reverse: bool = true) -> int:
 	# `CreateReflectionEffectSprites` reserves the final two sprites for the shared distortion matrices.
 	var slots: Array = range(SPRITE_COUNT - 3, Gen3ObjectEvents.COUNT - 1, -1) if reverse \
@@ -328,6 +327,13 @@ static func _field_effect_off_screen(top_left: Vector2i, size: Vector2i) -> bool
 	return x >= 256 or x2 < -16 or y >= 176 or y2 < -16
 
 
+func field_effect_off_screen(objects: Gen3ObjectEvents, effect: Dictionary) -> bool:
+	var info: Dictionary = effect["info"]
+	var size := Vector2i(int(info["width"]), int(info["height"]))
+	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
+	return _field_effect_off_screen(center - size / 2, size)
+
+
 func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	if int(effect["request"]["effect_id"]) in [15, Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER, Gen3ObjectEvents.FLDEFF_SAND_PILE, Gen3ObjectEvents.FLDEFF_HOT_SPRINGS_WATER]:
 		_update_linked_effect(objects, effect)
@@ -336,7 +342,7 @@ func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	var size := Vector2i(int(info["width"]), int(info["height"]))
 	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
 	var linked_hidden: bool = int(effect["request"]["effect_id"]) == 41 and effect.get("invisible", false)
-	effect["invisible"] = linked_hidden or _field_effect_off_screen(center - size / 2, size)
+	effect["invisible"] = linked_hidden or field_effect_off_screen(objects, effect)
 	if not effect.has("elevation") or int(effect["request"]["effect_id"]) == 41:
 		return
 	var add: int = 4 if int(effect["request"]["effect_id"]) == 4 and anim.cmd_index == 0 else 0

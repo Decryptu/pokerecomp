@@ -65,8 +65,7 @@ const PAYLOAD_KEY: String = "payload"
 const PAYLOAD_SPAN: int = 2
 const BYTES_KEY: String = "bytes"
 
-## Incompatible caches are discarded and re-imported from the owner's dump.
-const FORMAT_VERSION: int = 192
+const FORMAT_VERSION: int = 193
 
 ## What [method state] answers. Stale is told from missing because an older
 ## build's import needs the same dump again, not a first import.

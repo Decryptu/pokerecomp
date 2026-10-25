@@ -1,10 +1,7 @@
 extends SceneTree
 
-## The real-cache check suite. Every topic runs its generation's cartridges
-## against a freshly imported cache; expected values come from the pinned pret
-## sources and are named in each topic's own file. A topic is a script
-## under `tools/checks/` with `func run(r) -> void`, found by its file name; add one
-## there rather than writing another entry point.
+## Checks imported caches against pinned pret values in each topic. Reimport stale caches first.
+## Topics are scripts under `tools/checks/` with `func run(r) -> void`, found by file name.
 ##   Godot --headless --path . -s res://tools/validate.gd -- all cut surf
 
 const CheckRun := preload("res://tools/lib/check_run.gd")

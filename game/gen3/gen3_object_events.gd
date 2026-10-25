@@ -57,6 +57,7 @@ const FLDEFF_SHADOW: int = 3
 const FLDEFF_FEET_IN_FLOWING_WATER: int = 34
 const FLDEFF_SAND_PILE: int = 39
 const FLDEFF_HOT_SPRINGS_WATER: int = 42
+const FLDEFF_BUBBLES: int = 53
 const DISPLAY_WIDTH: int = 240
 const DISPLAY_HEIGHT: int = 160
 const MOVEMENT_TYPE_INVISIBLE: int = 0x4C
@@ -960,6 +961,7 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 	var ash: bool = effect == ASH_PUFF
 	var ripple: bool = effect == 5
 	var sand: bool = effect == FLDEFF_SAND_PILE
+	var bubbles: bool = effect == FLDEFF_BUBBLES
 	var info: Dictionary = camera.data.world_ash_graphics() if ash else camera.data.world_map_effect_graphics(15 if effect == FLDEFF_FEET_IN_FLOWING_WATER else effect)
 	var sprite_slot: int = sprites.effect_slot()
 	if info.is_empty() or sprite_slot < 0:
@@ -973,16 +975,16 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 		anim.seek(2)
 	var request: Dictionary = _effect_request(object, slot, effect)
 	request["at"] = object.current
-	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 8 if ash or effect == 14 else 12)
+	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 0 if bubbles else (8 if ash or effect == 14 else 12))
 	if ripple:
 		position = object.pixel_position + Vector2i(8, 14) - camera.screen_origin() - camera.sprite_coord_offset()
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
 		"passes": 0, "end": -1, "follow": effect in [15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER], "map_effect": true, "info": info,
 		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
-		"priority": 3 if ripple else (2 if ash else object.priority),
-		"subpriority": 151 if ripple else ((object.subpriority - 1) & 0xFF if ash else 0),
+		"priority": 1 if bubbles else (3 if ripple else (2 if ash else object.priority)),
+		"subpriority": 82 if bubbles else (151 if ripple else ((object.subpriority - 1) & 0xFF if ash else 0)),
 		"palette": sprites.load_effect_palette(info)}
-	if not ash and effect not in [5, 15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER]:
+	if not ash and effect not in [FLDEFF_BUBBLES, 5, 15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER]:
 		sprite["elevation"] = object.previous_elevation
 	if sprite["follow"]:
 		_init_linked_map_effect(object, sprite, requests)
@@ -1041,6 +1043,8 @@ func _step_effect_sprites(requests: Array) -> void:
 
 
 func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
+	if int(sprite["request"]["effect_id"]) == FLDEFF_BUBBLES and sprites.field_effect_off_screen(self, sprite):
+		return true
 	if int(sprite["request"]["effect_id"]) == FLDEFF_FEET_IN_FLOWING_WATER:
 		return object == null or not object.in_flowing_water
 	if int(sprite["request"]["effect_id"]) == FLDEFF_SAND_PILE:
@@ -1638,6 +1642,8 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 	_ground_short_grass(object, slot, covering, requests)
 	_ground_hot_springs(object, slot, covering, requests)
 	_ground_grass(object, slot, kind, covering, requests)
+	if kind == "finish_step":
+		_ground_seaweed(object, slot, requests)
 	requests.append({"kind": kind, "object_id": slot})
 
 
@@ -1718,6 +1724,13 @@ func _ground_ripple(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var behavior: int = object.current_behavior & 0xFF
 	if (behavior in [0x10, 0x16] or (not _frlg and behavior == 0x14)) and _ground_effects_visible(object):
 		start_effect_sprite(object, slot, 5, -1, false, requests)
+
+
+## `UpdateBubblesFieldEffect` masks (data[0] + 0x80) with 0x100 each callback, so its zero start never rises.
+func _ground_seaweed(object: ObjectEvent, slot: int, requests: Array) -> void:
+	var behavior: int = object.current_behavior & 0xFF
+	if (behavior == 0x22 or (not _frlg and behavior == 0x2A)) and _ground_effects_visible(object):
+		start_effect_sprite(object, slot, FLDEFF_BUBBLES, -1, false, requests)
 
 
 ## `GetGroundEffectFlags_JumpLanding` selects the first matching u8 terrain predicate, then normal dust.
