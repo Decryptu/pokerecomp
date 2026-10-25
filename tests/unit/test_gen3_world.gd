@@ -1549,10 +1549,10 @@ func test_short_grass_covering_filter_stops_at_takeoff_and_restarts_on_landing()
 ## OAM masks distant coordinates back onto the display unless field effects apply their own visibility gate.
 ## Existing grass screenshots stay near the camera and miss the wrap through both hardware coordinate masks.
 func test_map_effects_outside_the_camera_do_not_wrap_back_onto_the_screen() -> void:
-	for behavior: int in [2, 3, 7, 0, 0x10, 0x16, -1]:
+	for behavior: int in [2, 3, 7, 0, 0x10, 0x14, 0x16, -1]:
 		var objects: Gen3ObjectEvents = _landing_objects(RomRegistry.EMERALD, maxi(behavior, 0))
 		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
-		for row: Dictionary in objects.camera.data._world_scripts["landing_templates"].values():
+		for row: Dictionary in objects.camera.data._world_scripts["map_effect_templates"].values():
 			row["anims"] = [[0x80000, 0x80001, 0xFFFF]]
 		objects.step_movements()
 		if behavior == -1:
@@ -1602,7 +1602,8 @@ func test_jump_impacts_select_terrain_and_outlive_the_jumper() -> void:
 			elif behavior in [0x16, 0x116, 0x17] or (not objects._frlg and behavior in [0x1B, 0x1C]):
 				effect = 16
 			assert_true(objects.field_effect_active(effect), "%s terrain %x" % [id, behavior])
-			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin()).filter(
+				func(part: Dictionary) -> bool: return part["priority"] == object.priority)
 			assert_eq(oam.size(), 1)
 			if oam.is_empty():
 				continue
@@ -1614,20 +1615,59 @@ func test_jump_impacts_select_terrain_and_outlive_the_jumper() -> void:
 			for frame: int in 6:
 				objects.step_movements()
 			assert_true(objects.field_effect_active(effect), "shortened cached animations reach END on pass seven")
-			assert_eq(objects.sprites.oam(objects, Vector2i.ZERO), oam, "impacts remain on their landing cell")
+			assert_eq(objects.sprites.oam(objects, Vector2i.ZERO).filter(
+				func(part: Dictionary) -> bool: return part["priority"] == object.priority), oam,
+				"impacts remain on their landing cell")
 			objects.step_movements()
 			assert_false(objects.field_effect_active(effect), "the callback after END frees the impact")
 			assert_false(objects.sprites.palette.sprite_tags.has(12), "the last impact releases its palette")
+
+
+func test_ripples_start_on_finish_step_and_remain_at_the_sprite_feet_until_end() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		for behavior: int in [0x10, 0x14, 0x16, 0x17, 0x110]:
+			var objects: Gen3ObjectEvents = _landing_objects(id, behavior)
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
+			objects.step_movements()
+			assert_false(objects.field_effect_active(5), "spawning on water leaves it still")
+			objects.set_held_movement(object, 0x13 if objects._frlg else 0x0B)
+			for frame: int in 15:
+				objects.step_movements()
+				assert_false(objects.field_effect_active(5), "ripples wait for the tile center")
+			object.x2 = 9
+			object.jump_y = -12
+			objects.step_movements()
+			var expected: bool = behavior != 0x17 and (behavior != 0x14 or not objects._frlg)
+			assert_eq(objects.field_effect_active(5), expected, "%s %x" % [id, behavior])
+			if not expected or not objects.field_effect_active(5):
+				continue
+			var effect: Dictionary = objects.sprites.effects[0]
+			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+			var at: Vector2i = object.pixel_position - objects.camera.screen_origin()
+			assert_eq([oam[0]["x"], oam[0]["y"], oam[0]["priority"], effect["subpriority"]],
+				[at.x & 511, (at.y + 6) & 255, 3, 151], "pos2 and the object's elevation never displace ripples")
+			object.active = false
+			object.pixel_position += Vector2i(16, 16)
+			for frame: int in 6:
+				objects.step_movements()
+			assert_true(objects.field_effect_active(5), "END remains drawn until the following callback")
+			assert_eq(objects.sprites.oam(objects, Vector2i.ZERO), oam)
+			objects.step_movements()
+			assert_false(objects.field_effect_active(5))
+			assert_eq(objects.sprites.palette.sprite_index(0x1005), 0xFF)
 
 
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 	var data: GameData = objects.camera.data
 	data._world_scripts["surfable_behaviors"] = [0x10]
-	data._world_scripts["landing_templates"] = {}
-	for effect: int in [10, 14, 16]:
-		data._world_scripts["landing_templates"][str(effect)] = {"width": 16, "height": 16 if effect == 14 else 8,
-			"images": 5, "anims": [[0x30000, 0x30001, 0xFFFF]], "palette_tag": 0x1004, "palette_offset": 9}
+	data._world_scripts["map_effect_templates"] = {}
+	for effect: int in [5, 10, 14, 16]:
+		data._world_scripts["map_effect_templates"][str(effect)] = {"width": 16, "height": 16 if effect in [5, 14] else 8,
+			"images": 5, "anims": [[0x30000, 0x30001, 0xFFFF]],
+			"palette_tag": 0x1005 if effect == 5 else 0x1004, "palette_offset": 9}
 	data._world_scripts["ash_template"] = {"49": {"width": 16, "height": 16, "images": 5,
 		"anims": [[0x80000, 0x80001, 0xFFFF]], "palette_tag": 0x100D, "palette_offset": 9}}
 	return objects

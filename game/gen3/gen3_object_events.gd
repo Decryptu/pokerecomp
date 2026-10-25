@@ -927,7 +927,7 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 ## `FieldEffectStart`: effects run after objects this frame; followed effects stop when their object is gone.
 func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
 		requests: Array) -> Dictionary:
-	if effect == ASH_PUFF or Gen3World.LANDING_TEMPLATES.has(effect):
+	if effect == ASH_PUFF or Gen3World.MAP_EFFECT_TEMPLATES.has(effect):
 		return _start_map_effect(object, slot, effect, requests)
 	var request: Dictionary = _effect_request(object, slot, effect)
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
@@ -951,10 +951,10 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 	return sprite
 
 
-## Map-anchored effects share the image clock; ash keeps the trainer caller's subpriority minus one.
 func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Array) -> Dictionary:
 	var ash: bool = effect == ASH_PUFF
-	var info: Dictionary = camera.data.world_ash_graphics() if ash else camera.data.world_landing_graphics(effect)
+	var ripple: bool = effect == 5
+	var info: Dictionary = camera.data.world_ash_graphics() if ash else camera.data.world_map_effect_graphics(effect)
 	var sprite_slot: int = sprites.effect_slot()
 	if info.is_empty() or sprite_slot < 0:
 		return {}
@@ -964,12 +964,15 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 	var request: Dictionary = _effect_request(object, slot, effect)
 	request["at"] = object.current
 	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 8 if ash or effect == 14 else 12)
+	if ripple:
+		position = object.pixel_position + Vector2i(8, 14) - camera.screen_origin() - camera.sprite_coord_offset()
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
 		"passes": 0, "end": -1, "follow": false, "map_effect": true, "info": info,
 		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
-		"priority": 2 if ash else object.priority, "subpriority": (object.subpriority - 1) & 0xFF if ash else 0,
+		"priority": 3 if ripple else (2 if ash else object.priority),
+		"subpriority": 151 if ripple else ((object.subpriority - 1) & 0xFF if ash else 0),
 		"palette": sprites.load_effect_palette(info)}
-	if not ash:
+	if not ash and not ripple:
 		sprite["elevation"] = object.previous_elevation
 	requests.append(request)
 	_effect_sprites.append(sprite)
@@ -1589,6 +1592,8 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
 	if kind != "finish_step":
 		_update_reflection(object, slot)
+	if kind == "finish_step":
+		_ground_ripple(object, slot, requests)
 	if landing:
 		_jump_landing(object, slot, requests)
 	_ground_short_grass(object, slot, covering, requests)
@@ -1626,6 +1631,13 @@ func _ground_short_grass(object: ObjectEvent, slot: int, covering: bool, request
 	object.in_short_grass = inside
 	if start and _ground_effects_visible(object):
 		_start_grass(object, slot, 41, false, requests)
+
+
+## `GetGroundEffectFlags_Ripple` takes u8; `DoRippleFieldEffect` places ripples at pos1 feet without pos2.
+func _ground_ripple(object: ObjectEvent, slot: int, requests: Array) -> void:
+	var behavior: int = object.current_behavior & 0xFF
+	if (behavior in [0x10, 0x16] or (not _frlg and behavior == 0x14)) and _ground_effects_visible(object):
+		start_effect_sprite(object, slot, 5, -1, false, requests)
 
 
 ## `GetGroundEffectFlags_JumpLanding` selects the first matching u8 terrain predicate, then normal dust.
