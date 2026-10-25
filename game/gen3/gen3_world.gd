@@ -14,7 +14,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
 ## Effect id: template index, frame count. `gFieldEffectObjectTemplatePointers`.
-const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5], 10: [9, 3], 14: [12, 4], 15: [13, 2], 16: [14, 3], 39: [29, 3]}
+const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5], 10: [9, 3], 14: [12, 4], 15: [13, 2], 16: [14, 3], 39: [29, 3], 42: [31, 1]}
 const GRASS_TEMPLATES: Dictionary = {4: [4, 5], 12: [10, 4], 17: [15, 4], 18: [16, 6], 41: [30, 2]}
 
 
@@ -175,7 +175,7 @@ static func _ground_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 		var specs: Dictionary = GRASS_TEMPLATES if grass else MAP_EFFECT_TEMPLATES
 		for effect: int in specs:
 			var spec: Array = specs[effect]
-			var grass_palette: bool = grass or effect == 5
+			var grass_palette: bool = grass or effect in [5, 42]
 			var palette: int = int(layout["grass_palette" if grass_palette else "general_palette"])
 			if not rom.in_bounds(palette, Gen3Layout.PALETTE_BYTES):
 				return false
