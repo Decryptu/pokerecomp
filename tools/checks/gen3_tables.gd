@@ -95,6 +95,7 @@ func _one_game() -> void:
 	_puddles()
 	_sand_pile()
 	_hot_springs()
+	_bubbles()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -1000,6 +1001,13 @@ func _hot_springs() -> void:
 	var expected: String = "b2da3d1cfbe9f2bccf8f60c22d9b4b87bb18f759" \
 		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "8d8ebc1b413109ae036a313ae4fbaa4218af6dcf"
 	_effect_graphics({42: _r.data.world_map_effect_graphics(42)}, "gen3_hot_springs", expected)
+
+
+## pret's bubbles PNGs, general_0.pal and sAnim_Bubbles, encoded independently in tile order.
+func _bubbles() -> void:
+	var expected: String = "2150c71d3ed3c3bddeb12022ac3c742a15d4fd2a" \
+		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "d2d1cedc5e1ad53c8bb3b9223b2de7ba715eeac6"
+	_effect_graphics({53: _r.data.world_map_effect_graphics(53)}, "gen3_bubbles", expected)
 
 
 func _effect_graphics(rows: Dictionary, topic: String, expected: String) -> void:

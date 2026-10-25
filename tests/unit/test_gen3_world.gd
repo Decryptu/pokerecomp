@@ -1873,6 +1873,49 @@ func test_hot_springs_water_follows_until_terrain_jump_or_identity_releases_it()
 		assert_false(objects.field_effect_active(42), "reused slots do not retain linked water")
 
 
+func test_seaweed_bubbles_start_at_step_end_and_release_at_end_or_offscreen() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		for behavior: int in [0x22, 0x2A, 0x122, 0x21]:
+			var objects: Gen3ObjectEvents = _landing_objects(id, behavior)
+			objects.camera.data._world_scripts["map_effect_templates"]["53"] = {"width": 16, "height": 32,
+				"images": 5, "anims": [[0x30000, 0x30001, 0xFFFF]], "palette_tag": 0x1004, "palette_offset": 9}
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
+			objects.step_movements()
+			assert_false(objects.field_effect_active(53), "spawning never stirs seaweed")
+			objects.set_held_movement(object, 0x13 if objects._frlg else 0x0B)
+			for frame: int in 15:
+				objects.step_movements()
+				assert_false(objects.field_effect_active(53), "entry waits for finish-step")
+			object.invisible = true
+			object.x2 = 9
+			object.jump_y = -12
+			objects.step_movements()
+			var expected: bool = behavior != 0x21 and (behavior != 0x2A or not objects._frlg)
+			assert_eq(objects.field_effect_active(53), expected, "%s %x" % [id, behavior])
+			if not expected or not objects.field_effect_active(53):
+				continue
+			var bubbles: Dictionary = objects.sprites.effects[0]
+			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+			var at: Vector2i = objects.camera.sprite_position(object.current) + objects.camera.sprite_coord_offset()
+			assert_eq([oam[0]["x"], oam[0]["y"], oam[0]["priority"], bubbles["subpriority"]],
+				[at.x & 511, (at.y - 16) & 255, 1, 82])
+			object.active = false
+			for frame: int in 6:
+				objects.step_movements()
+			assert_true(objects.field_effect_active(53), "END remains drawn until the next callback")
+			assert_eq(objects.sprites.oam(objects, Vector2i.ZERO), oam, "bubbles ignore removed objects and keep the cartridge's stationary Y")
+			objects.step_movements()
+			assert_false(objects.field_effect_active(53))
+			assert_eq(objects.sprites.palette.sprite_index(0x1004), 0xFF)
+			objects.start_effect_sprite(object, 0, 53, -1, false, [])
+			objects.camera.pixel_offset = Vector2i(-512, -256)
+			objects.camera.pos = Vector2i(32, 16)
+			objects.step_movements()
+			assert_false(objects.field_effect_active(53), "offscreen bubbles stop instead of wrapping or retaining a slot")
+
+
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 	var data: GameData = objects.camera.data
