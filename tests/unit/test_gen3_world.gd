@@ -1530,7 +1530,7 @@ func test_short_grass_follows_steps_restarts_and_hides_with_its_object() -> void
 
 func test_short_grass_covering_filter_stops_at_takeoff_and_restarts_on_landing() -> void:
 	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
-		var objects: Gen3ObjectEvents = _grass_objects(id, 7)
+		var objects: Gen3ObjectEvents = _landing_objects(id, 7)
 		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
 		objects.step_movements()
 		objects.camera.grid.set_metatile_entry(13, 12, 0x3007)
@@ -1538,8 +1538,12 @@ func test_short_grass_covering_filter_stops_at_takeoff_and_restarts_on_landing()
 		objects.step_movements()
 		assert_false(object.in_short_grass)
 		assert_false(objects.field_effect_active(41))
-		for frame: int in 15:
+		for frame: int in 14:
 			objects.step_movements()
+		var effects: Array = objects.step_movements().filter(func(request: Dictionary) -> bool:
+			return request["kind"] == "field_effect")
+		assert_eq(effects.map(func(request: Dictionary) -> int: return int(request["effect_id"])), [10, 41],
+			"landing dust reserves its sprite and palette before the short-grass overlay")
 		assert_true(object.in_short_grass)
 		assert_true(objects.field_effect_active(41), "finish-step rechecks both occupied cells")
 		object.active = false
@@ -1549,12 +1553,17 @@ func test_short_grass_covering_filter_stops_at_takeoff_and_restarts_on_landing()
 
 ## OAM masks distant coordinates back onto the display unless field effects apply their own visibility gate.
 ## Existing grass screenshots stay near the camera and miss the wrap through both hardware coordinate masks.
-func test_grass_effects_outside_the_camera_do_not_wrap_back_onto_the_screen() -> void:
-	for behavior: int in [2, 3, 7]:
-		var objects: Gen3ObjectEvents = _grass_objects(RomRegistry.EMERALD, behavior)
+func test_map_effects_outside_the_camera_do_not_wrap_back_onto_the_screen() -> void:
+	for behavior: int in [2, 3, 7, 0, 0x10, 0x16, -1]:
+		var objects: Gen3ObjectEvents = _landing_objects(RomRegistry.EMERALD, maxi(behavior, 0))
 		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		for row: Dictionary in objects.camera.data._world_scripts["landing_templates"].values():
+			row["anims"] = [[0x80000, 0x80001, 0xFFFF]]
 		objects.step_movements()
-		if behavior != 7:
+		if behavior == -1:
+			objects.start_effect_sprite(object, 0, 49, -1, false, [])
+			objects.step_movements()
+		elif behavior != 7:
 			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
 			objects.set_held_movement(object, 0x45)
 			for frame: int in 16:
@@ -1568,13 +1577,65 @@ func test_grass_effects_outside_the_camera_do_not_wrap_back_onto_the_screen() ->
 			object.x2 = 512
 			object.jump_y = 256
 		objects.step_movements()
-		assert_true(objects.sprites.oam(objects, origin).is_empty(), "every grass template must cull before OAM wrapping")
+		assert_true(objects.sprites.oam(objects, origin).is_empty(), "every map effect must cull before OAM wrapping")
 		objects.camera.pixel_offset = Vector2i.ZERO
 		objects.camera.pos = Vector2i.ZERO
 		object.x2 = 0
 		object.jump_y = 0
 		objects.step_movements()
 		assert_false(objects.sprites.oam(objects, origin).is_empty(), "offscreen culling never destroys a live effect")
+
+
+## Held jumps must select the terrain's impact and draw it through END; grass-only cases miss water and dust.
+func test_jump_impacts_select_terrain_and_outlive_the_jumper() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		for behavior: int in [0, 0x16, 0x10, 0x17, 0x1B, 0x1C, 0x110, 0x116]:
+			var objects: Gen3ObjectEvents = _landing_objects(id, behavior)
+			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
+			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+			object.ground_on_spawn = false
+			objects.set_held_movement(object, 0x45 + (12 if objects._frlg else 0))
+			for frame: int in 15:
+				objects.step_movements()
+				assert_false(objects.field_effect_active(10) or objects.field_effect_active(14)
+					or objects.field_effect_active(16), "impacts start only on landing")
+			objects.step_movements()
+			var effect: int = 10
+			if behavior in [0x10, 0x110]:
+				effect = 14
+			elif behavior in [0x16, 0x116, 0x17] or (not objects._frlg and behavior in [0x1B, 0x1C]):
+				effect = 16
+			assert_true(objects.field_effect_active(effect), "%s terrain %x" % [id, behavior])
+			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+			assert_eq(oam.size(), 1)
+			if oam.is_empty():
+				continue
+			var position: Vector2i = objects.camera.sprite_position(object.current) + objects.camera.sprite_coord_offset()
+			assert_eq(Vector2i(oam[0]["x"], oam[0]["y"]), Vector2i(position.x & 511, (position.y + (0 if effect == 14 else 8)) & 255))
+			assert_eq(oam[0]["priority"], object.priority)
+			object.active = false
+			object.current += Vector2i(1, 1)
+			for frame: int in 6:
+				objects.step_movements()
+			assert_true(objects.field_effect_active(effect), "shortened cached animations reach END on pass seven")
+			assert_eq(objects.sprites.oam(objects, Vector2i.ZERO), oam, "impacts remain on their landing cell")
+			objects.step_movements()
+			assert_false(objects.field_effect_active(effect), "the callback after END frees the impact")
+			assert_false(objects.sprites.palette.sprite_tags.has(12), "the last impact releases its palette")
+
+
+func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
+	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
+	var data: GameData = objects.camera.data
+	data._world_scripts["surfable_behaviors"] = [0x10]
+	data._world_scripts["landing_templates"] = {}
+	for effect: int in [10, 14, 16]:
+		data._world_scripts["landing_templates"][str(effect)] = {"width": 16, "height": 16 if effect == 14 else 8,
+			"images": 5, "anims": [[0x30000, 0x30001, 0xFFFF]], "palette_tag": 0x1004, "palette_offset": 9}
+	data._world_scripts["ash_template"] = {"49": {"width": 16, "height": 16, "images": 5,
+		"anims": [[0x80000, 0x80001, 0xFFFF]], "palette_tag": 0x100D, "palette_offset": 9}}
+	return objects
 
 
 func _grass_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:

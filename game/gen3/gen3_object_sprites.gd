@@ -77,7 +77,6 @@ func init_palettes(type: int) -> void:
 		patch(int(tags[slot]), slot)
 
 
-## `PatchObjectPalette`: `LoadPalette` into OBJ palette [param slot].
 func patch(tag: int, slot: int) -> void:
 	palette.load(data.world_object_palette(tag), Gen3Palette.OBJ_OFFSET + slot * 16)
 
@@ -329,14 +328,14 @@ static func _field_effect_off_screen(top_left: Vector2i, size: Vector2i) -> bool
 	return x >= 256 or x2 < -16 or y >= 176 or y2 < -16
 
 
-func update_grass(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
+func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	var anim: Gen3SpriteAnim = effect["anim"]
 	var info: Dictionary = effect["info"]
 	var size := Vector2i(int(info["width"]), int(info["height"]))
 	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
 	var linked_hidden: bool = int(effect["request"]["effect_id"]) == 41 and effect.get("invisible", false)
 	effect["invisible"] = linked_hidden or _field_effect_off_screen(center - size / 2, size)
-	if int(effect["request"]["effect_id"]) == 41:
+	if not effect.has("elevation") or int(effect["request"]["effect_id"]) == 41:
 		return
 	var add: int = 4 if int(effect["request"]["effect_id"]) == 4 and anim.cmd_index == 0 else 0
 	var sub: int = subpriority_at(center.y + size.y / 2, int(effect["elevation"]), add)

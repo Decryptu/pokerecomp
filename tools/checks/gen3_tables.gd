@@ -90,6 +90,7 @@ func _one_game() -> void:
 	_icons()
 	_grass()
 	_ash()
+	_landings()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -964,6 +965,15 @@ func _ash() -> void:
 	_effect_graphics({49: _r.data.world_ash_graphics()}, "gen3_ash", "fc4d7099756e877970810d38ffb485ff25c95cfc")
 
 
+func _landings() -> void:
+	var rows: Dictionary = {}
+	for effect: int in Gen3World.LANDING_TEMPLATES:
+		rows[effect] = _r.data.world_landing_graphics(effect)
+	var expected: String = "20a4dee92102ba58c01e5c5bd0398ff4068e83e9" \
+		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "d04f9e073f43081670b23ac009ae53445a643438"
+	_effect_graphics(rows, "gen3_landings", expected)
+
+
 func _effect_graphics(rows: Dictionary, topic: String, expected: String) -> void:
 	var data: GameData = _r.data
 	var lines := PackedStringArray()
@@ -1415,7 +1425,9 @@ static func arm_traced(objects: Gen3ObjectEvents, action: int) -> bool:
 
 
 static func arm_traced_effect(request: Dictionary) -> bool:
-	return request["kind"] == "field_effect" and request["effect_id"] not in [Gen3ObjectEvents.FLDEFF_SHADOW, 4, 12, 17, 18]
+	return request["kind"] == "field_effect" and request["effect_id"] != Gen3ObjectEvents.FLDEFF_SHADOW \
+		and not Gen3World.GRASS_TEMPLATES.has(request["effect_id"]) \
+		and not Gen3World.LANDING_TEMPLATES.has(request["effect_id"])
 
 
 func _held_action_trace(objects: Gen3ObjectEvents, action: int, offset: int, index: int) -> PackedStringArray:

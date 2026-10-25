@@ -927,8 +927,8 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 ## `FieldEffectStart`: effects run after objects this frame; followed effects stop when their object is gone.
 func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
 		requests: Array) -> Dictionary:
-	if effect == ASH_PUFF:
-		return _start_ash(object, slot, requests)
+	if effect == ASH_PUFF or Gen3World.LANDING_TEMPLATES.has(effect):
+		return _start_map_effect(object, slot, effect, requests)
 	var request: Dictionary = _effect_request(object, slot, effect)
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
 	if effect == FLDEFF_SHADOW or effect in icon_effects():
@@ -951,23 +951,26 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 	return sprite
 
 
-## `FldEff_AshPuff` / `FldEff_PopOutOfAsh`: map-anchored, with the trainer caller's subpriority minus one.
-func _start_ash(object: ObjectEvent, slot: int, requests: Array) -> Dictionary:
-	var info: Dictionary = camera.data.world_ash_graphics()
+## Map-anchored effects share the image clock; ash keeps the trainer caller's subpriority minus one.
+func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Array) -> Dictionary:
+	var ash: bool = effect == ASH_PUFF
+	var info: Dictionary = camera.data.world_ash_graphics() if ash else camera.data.world_landing_graphics(effect)
 	var sprite_slot: int = sprites.effect_slot()
 	if info.is_empty() or sprite_slot < 0:
 		return {}
 	var anim := Gen3SpriteAnim.new()
 	anim.anims = info["anims"]
 	anim.images = info["images"]
-	var request: Dictionary = _effect_request(object, slot, ASH_PUFF)
+	var request: Dictionary = _effect_request(object, slot, effect)
 	request["at"] = object.current
-	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 8)
+	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 8 if ash or effect == 14 else 12)
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
 		"passes": 0, "end": -1, "follow": false, "map_effect": true, "info": info,
 		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
-		"priority": 2, "subpriority": (object.subpriority - 1) & 0xFF,
+		"priority": 2 if ash else object.priority, "subpriority": (object.subpriority - 1) & 0xFF if ash else 0,
 		"palette": sprites.load_effect_palette(info)}
+	if not ash:
+		sprite["elevation"] = object.previous_elevation
 	requests.append(request)
 	_effect_sprites.append(sprite)
 	return sprite
@@ -995,8 +998,8 @@ func _step_effect_sprites(requests: Array) -> void:
 			if sprite.has("anim"):
 				sprites.free_effect_palette(sprite)
 		else:
-			if sprite.get("grass", false):
-				sprites.update_grass(self, sprite)
+			if sprite.get("grass", false) or sprite.get("map_effect", false):
+				sprites.update_field_effect(self, sprite)
 			if sprite.has("y_velocity"):
 				sprite["y_offset"] += sprite["y_velocity"]
 				sprite["y_velocity"] = int(sprite["y_velocity"]) + 1 if sprite["y_offset"] != 0 else 0
@@ -1558,16 +1561,14 @@ func _advance_jump(object: ObjectEvent, parameter: int, slot: int, requests: Arr
 	if object.movement_frame != duration:
 		return false
 	object.jump_y = 0
-	_finish_motion(object, slot, requests)
-	if not special and not object.disable_jump_landing_effect:
-		_grass_landing(object, slot, requests)
+	_finish_motion(object, slot, requests, not special and not object.disable_jump_landing_effect)
 	object.has_shadow = object.has_shadow and special
 	return true
 
 
-func _finish_motion(object: ObjectEvent, slot: int, requests: Array) -> void:
+func _finish_motion(object: ObjectEvent, slot: int, requests: Array, landing: bool = false) -> void:
 	_shift_coords(object, object.current)
-	_ground(object, slot, "finish_step", requests)
+	_ground(object, slot, "finish_step", requests, true, landing)
 
 
 static func _shift_coords(object: ObjectEvent, at: Vector2i) -> void:
@@ -1576,7 +1577,8 @@ static func _shift_coords(object: ObjectEvent, at: Vector2i) -> void:
 
 
 ## `DoGroundEffects_*`; a jump's start and halfway shift set `disableCoveringGroundEffects` ([param covering]).
-func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, covering: bool = true) -> void:
+func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, covering: bool = true,
+		landing: bool = false) -> void:
 	if not object.fixed_priority:
 		update_elevation(object)
 		object.subsprite_table = Gen3ObjectSprites.ELEVATION_SUBSPRITE_TABLE[object.previous_elevation]
@@ -1588,6 +1590,8 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
 	if kind != "finish_step":
 		_update_reflection(object, slot)
+	if landing:
+		_jump_landing(object, slot, requests)
 	_ground_short_grass(object, slot, covering, requests)
 	_ground_grass(object, slot, kind, covering, requests)
 	requests.append({"kind": kind, "object_id": slot})
@@ -1625,9 +1629,21 @@ func _ground_short_grass(object: ObjectEvent, slot: int, covering: bool, request
 		_start_grass(object, slot, 41, false, requests)
 
 
-func _grass_landing(object: ObjectEvent, slot: int, requests: Array) -> void:
+## `GetGroundEffectFlags_JumpLanding` selects the first matching u8 terrain predicate, then normal dust.
+func _jump_landing(object: ObjectEvent, slot: int, requests: Array) -> void:
+	if not _ground_effects_visible(object):
+		return
 	var effect: int = _grass_effect(object.current_behavior)
-	if effect < 0 or not _ground_effects_visible(object):
+	if effect < 0:
+		var behavior: int = object.current_behavior & 0xFF
+		var impact: int = 10
+		if behavior == 0x16:
+			impact = 16
+		elif camera.data.world_surfable(behavior):
+			impact = 14
+		elif behavior == 0x17 or (not _frlg and behavior in [0x1B, 0x1C]):
+			impact = 16
+		start_effect_sprite(object, slot, impact, -1, false, requests)
 		return
 	_start_grass(object, slot, 12 if effect == 4 else 18, false, requests)
 	if effect == 4 and not _effect_sprites.any(func(row: Dictionary) -> bool:

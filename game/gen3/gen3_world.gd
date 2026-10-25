@@ -14,6 +14,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
 ## Effect id: template index, frame count. `gFieldEffectObjectTemplatePointers`.
+const LANDING_TEMPLATES: Dictionary = {10: [9, 3], 14: [12, 4], 16: [14, 3]}
 const GRASS_TEMPLATES: Dictionary = {4: [4, 5], 12: [10, 4], 17: [15, 4], 18: [16, 6], 41: [30, 2]}
 
 
@@ -44,7 +45,7 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	if layout.has("icon_template") and not _icon_templates(rom, layout, object_graphics, graphics):
 		return {}
-	if layout.has("grass_palette") and not _grass_templates(rom, layout, object_graphics, graphics):
+	if layout.has("grass_palette") and not _ground_templates(rom, layout, object_graphics, graphics):
 		return {}
 	if layout.has("ash_palette") and not _ash_template(rom, layout, object_graphics, graphics):
 		return {}
@@ -167,22 +168,25 @@ static func _shadow_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 	return true
 
 
-static func _grass_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
-	var palette: int = int(layout["grass_palette"])
-	if not rom.in_bounds(palette, Gen3Layout.PALETTE_BYTES):
-		return false
-	graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
-	var rows: Dictionary = {}
-	for effect: int in GRASS_TEMPLATES:
-		var spec: Array = GRASS_TEMPLATES[effect]
-		var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + int(spec[0]) * 4, 24)
-		var size := Vector2i(16, 8 if effect == 12 else 16)
-		var row: Dictionary = _sprite_template(rom, at, 1, int(spec[1]), size, out, graphics)
-		if row.is_empty() or int(row["palette_tag"]) != 0x1005:
+static func _ground_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	for table: String in ["grass_templates", "landing_templates"]:
+		var grass: bool = table == "grass_templates"
+		var palette: int = int(layout["grass_palette" if grass else "general_palette"])
+		if not rom.in_bounds(palette, Gen3Layout.PALETTE_BYTES):
 			return false
-		row["palette_offset"] = palette
-		rows[str(effect)] = row
-	out["grass_templates"] = rows
+		graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
+		var rows: Dictionary = {}
+		var specs: Dictionary = GRASS_TEMPLATES if grass else LANDING_TEMPLATES
+		for effect: int in specs:
+			var spec: Array = specs[effect]
+			var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + int(spec[0]) * 4, 24)
+			var size := Vector2i(16, 8 if effect in [10, 12, 16] else 16)
+			var row: Dictionary = _sprite_template(rom, at, 1, int(spec[1]), size, out, graphics)
+			if row.is_empty() or int(row["palette_tag"]) != (0x1005 if grass else 0x1004):
+				return false
+			row["palette_offset"] = palette
+			rows[str(effect)] = row
+		out[table] = rows
 	return true
 
 
@@ -214,8 +218,8 @@ static func _icon_templates(rom: RomFile, layout: Dictionary, out: Dictionary, g
 		row["anim"] = [0, 4, 2, 1, 3][index] if frlg else index % 2
 		row["palette"] = 2 if rom.id == RomRegistry.EMERALD and heart else 0
 		rows[str(effects[index])] = row
-	if layout.has("icon_palette"):
-		var at: int = int(layout["icon_palette"])
+	if not frlg and layout.has("general_palette"):
+		var at: int = int(layout["general_palette"])
 		if not rom.in_bounds(at, Gen3Layout.PALETTE_BYTES):
 			return false
 		graphics["object_palettes"][str(at)] = {"bytes": Array(rom.slice(at, Gen3Layout.PALETTE_BYTES))}
