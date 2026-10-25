@@ -93,6 +93,7 @@ func _one_game() -> void:
 	_landings()
 	_ripples()
 	_puddles()
+	_sand_pile()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -986,6 +987,12 @@ func _puddles() -> void:
 	var expected: String = "97e1b843b375c6f5622560b0aab958499b485533" \
 		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "433f1c62634644abf53353992f3f3b3d3f1421c8"
 	_effect_graphics({15: _r.data.world_map_effect_graphics(15)}, "gen3_puddles", expected)
+
+
+func _sand_pile() -> void:
+	var expected: String = "f666281e47db8e9258a7a3703ac887238871af44" \
+		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "f9371882031b52394a46ce03775a2c631d088690"
+	_effect_graphics({39: _r.data.world_map_effect_graphics(39)}, "gen3_sand_pile", expected)
 
 
 func _effect_graphics(rows: Dictionary, topic: String, expected: String) -> void:

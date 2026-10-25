@@ -14,7 +14,7 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
 ## Effect id: template index, frame count. `gFieldEffectObjectTemplatePointers`.
-const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5], 10: [9, 3], 14: [12, 4], 15: [13, 2], 16: [14, 3]}
+const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5], 10: [9, 3], 14: [12, 4], 15: [13, 2], 16: [14, 3], 39: [29, 3]}
 const GRASS_TEMPLATES: Dictionary = {4: [4, 5], 12: [10, 4], 17: [15, 4], 18: [16, 6], 41: [30, 2]}
 
 
@@ -181,7 +181,7 @@ static func _ground_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 				return false
 			graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
 			var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + int(spec[0]) * 4, 24)
-			var size := Vector2i(16, 8 if effect in [10, 12, 15, 16] else 16)
+			var size := Vector2i(16, 8 if effect in [10, 12, 15, 16, 39] else 16)
 			var row: Dictionary = _sprite_template(rom, at, 2 if effect == 15 else 1, int(spec[1]), size, out, graphics)
 			if row.is_empty() or int(row["palette_tag"]) != (0x1005 if grass_palette else 0x1004):
 				return false

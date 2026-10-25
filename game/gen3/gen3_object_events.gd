@@ -55,6 +55,7 @@ const JUMP_SHAPES: Dictionary = {
 }
 const FLDEFF_SHADOW: int = 3
 const FLDEFF_FEET_IN_FLOWING_WATER: int = 34
+const FLDEFF_SAND_PILE: int = 39
 const DISPLAY_WIDTH: int = 240
 const DISPLAY_HEIGHT: int = 160
 const MOVEMENT_TYPE_INVISIBLE: int = 0x4C
@@ -277,6 +278,7 @@ class ObjectEvent:
 	var has_reflection: bool = false
 	var in_short_grass: bool = false
 	var in_flowing_water: bool = false
+	var in_sand_pile: bool = false
 	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a walk started and the pause
 	## flags `FreezeObjectEvent` backs up.
 	var anim := Gen3SpriteAnim.new()
@@ -955,6 +957,7 @@ func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: in
 func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Array) -> Dictionary:
 	var ash: bool = effect == ASH_PUFF
 	var ripple: bool = effect == 5
+	var sand: bool = effect == FLDEFF_SAND_PILE
 	var info: Dictionary = camera.data.world_ash_graphics() if ash else camera.data.world_map_effect_graphics(15 if effect == FLDEFF_FEET_IN_FLOWING_WATER else effect)
 	var sprite_slot: int = sprites.effect_slot()
 	if info.is_empty() or sprite_slot < 0:
@@ -964,28 +967,38 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 	anim.images = info["images"]
 	if effect == FLDEFF_FEET_IN_FLOWING_WATER:
 		anim.start(1)
+	if sand:
+		anim.seek(2)
 	var request: Dictionary = _effect_request(object, slot, effect)
 	request["at"] = object.current
 	var position: Vector2i = camera.sprite_position(object.current) + Vector2i(8, 8 if ash or effect == 14 else 12)
 	if ripple:
 		position = object.pixel_position + Vector2i(8, 14) - camera.screen_origin() - camera.sprite_coord_offset()
 	var sprite: Dictionary = {"request": request, "sprite_slot": sprite_slot, "anim": anim,
-		"passes": 0, "end": -1, "follow": effect in [15, FLDEFF_FEET_IN_FLOWING_WATER], "map_effect": true, "info": info,
+		"passes": 0, "end": -1, "follow": effect in [15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE], "map_effect": true, "info": info,
 		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
 		"priority": 3 if ripple else (2 if ash else object.priority),
 		"subpriority": 151 if ripple else ((object.subpriority - 1) & 0xFF if ash else 0),
 		"palette": sprites.load_effect_palette(info)}
-	if not ash and effect not in [5, 15, FLDEFF_FEET_IN_FLOWING_WATER]:
+	if not ash and effect not in [5, 15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE]:
 		sprite["elevation"] = object.previous_elevation
-	if effect in [15, FLDEFF_FEET_IN_FLOWING_WATER]:
-		sprite["y_offset"] = (int(graphics_info(object.graphics_id).get("height", 0)) >> 1) - 4
-		if effect == 15:
-			requests.append({"kind": "sound", "name": "puddle"})
-	if effect == FLDEFF_FEET_IN_FLOWING_WATER:
-		sprite["last_cell"] = Vector2i(-1, -1)
+	if sprite["follow"]:
+		_init_linked_map_effect(object, sprite, requests)
 	requests.append(request)
 	_effect_sprites.append(sprite)
 	return sprite
+
+
+func _init_linked_map_effect(object: ObjectEvent, sprite: Dictionary, requests: Array) -> void:
+	var effect: int = int(sprite["request"]["effect_id"])
+	sprite["y_offset"] = (int(graphics_info(object.graphics_id).get("height", 0)) >> 1) - (2 if effect == FLDEFF_SAND_PILE else 4)
+	if effect == 15:
+		requests.append({"kind": "sound", "name": "puddle"})
+	elif effect == FLDEFF_SAND_PILE:
+		var position: Vector2i = object.pixel_position + Vector2i(8, 14) - camera.screen_origin() - camera.sprite_coord_offset()
+		sprite["last_position"] = Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768))
+	else:
+		sprite["last_cell"] = Vector2i(-1, -1)
 
 
 func icon_effects() -> Array:
@@ -1027,6 +1040,8 @@ func _step_effect_sprites(requests: Array) -> void:
 func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 	if int(sprite["request"]["effect_id"]) == FLDEFF_FEET_IN_FLOWING_WATER:
 		return object == null or not object.in_flowing_water
+	if int(sprite["request"]["effect_id"]) == FLDEFF_SAND_PILE:
+		return object == null or not object.in_sand_pile
 	if sprite.has("anim") and not (sprite["anim"] as Gen3SpriteAnim).anims.is_empty():
 		return (sprite["anim"] as Gen3SpriteAnim).ended
 	return int(sprite["end"]) >= 0 and int(sprite["passes"]) >= int(sprite["end"])
@@ -1607,6 +1622,7 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 			if Gen3ObjectSprites.ELEVATION_PRIORITY[object.previous_elevation] == 1 else Gen3ObjectSprites.LONG_GRASS_TABLE
 	if kind != "finish_step":
 		_update_reflection(object, slot)
+	_ground_sand_pile(object, slot, covering, requests)
 	_ground_flowing_water(object, slot, covering, requests)
 	if kind != "spawn" and not landing:
 		_ground_puddle(object, slot, requests)
@@ -1619,7 +1635,6 @@ func _ground(object: ObjectEvent, slot: int, kind: String, requests: Array, cove
 	requests.append({"kind": kind, "object_id": slot})
 
 
-## Ground-effect predicates take u8 even on FRLG's nine-bit map attributes.
 func _grass_effect(behavior: int) -> int:
 	behavior &= 0xFF
 	if behavior == 2 or (_frlg and behavior == 0xD1):
@@ -1648,6 +1663,15 @@ func _ground_short_grass(object: ObjectEvent, slot: int, covering: bool, request
 	object.in_short_grass = inside
 	if start and _ground_effects_visible(object):
 		_start_grass(object, slot, 41, false, requests)
+
+
+## `GetGroundEffectFlags_SandHeap`: FRLG's deep-sand predicate is always false.
+func _ground_sand_pile(object: ObjectEvent, slot: int, covering: bool, requests: Array) -> void:
+	var inside: bool = not _frlg and covering and (object.current_behavior & 0xFF) == 6 and (object.previous_behavior & 0xFF) == 6
+	var start: bool = inside and not object.in_sand_pile
+	object.in_sand_pile = inside
+	if start and _ground_effects_visible(object):
+		start_effect_sprite(object, slot, FLDEFF_SAND_PILE, -1, true, requests)
 
 
 ## `GetGroundEffectFlags_ShallowFlowingWater`: both cells must share water or log terrain; jump filters reset it.
