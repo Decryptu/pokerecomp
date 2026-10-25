@@ -1,9 +1,7 @@
 class_name RomCache
 extends RefCounted
 
-## Decoded cartridge data under `user://`, never inside the project. One directory
-## per dump, named by game and hash, so two revisions never share a cache. Pixel
-## data is raw colour indices, which the renderer wants, rather than images.
+## Decoded cartridge data in `user://`, keyed by game/hash; pixels remain raw colour indices.
 
 const ROOT: String = "user://rom_cache"
 const MANIFEST: String = "manifest.json"
@@ -67,9 +65,8 @@ const PAYLOAD_KEY: String = "payload"
 const PAYLOAD_SPAN: int = 2
 const BYTES_KEY: String = "bytes"
 
-## Bumped whenever the on-disk shape changes. An older cache is discarded rather
-## than migrated, since re-importing the owner's dump costs seconds.
-const FORMAT_VERSION: int = 189
+## Incompatible caches are discarded and re-imported from the owner's dump.
+const FORMAT_VERSION: int = 190
 
 ## What [method state] answers. Stale is told from missing because an older
 ## build's import needs the same dump again, not a first import.

@@ -75,7 +75,7 @@ record why.
 
 ## Source lookup guide
 
-The two repositories use closely related paths. Check the matching path in
+Crystal and Gold/Silver use closely related paths. Check the matching path in
 `pokegold` when behavior differs between Gold and Silver and Crystal.
 
 | Behavior | Primary source paths |

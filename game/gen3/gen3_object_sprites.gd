@@ -329,6 +329,8 @@ static func _field_effect_off_screen(top_left: Vector2i, size: Vector2i) -> bool
 
 
 func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
+	if int(effect["request"]["effect_id"]) == 15:
+		_update_splash(objects, effect)
 	var anim: Gen3SpriteAnim = effect["anim"]
 	var info: Dictionary = effect["info"]
 	var size := Vector2i(int(info["width"]), int(info["height"]))
@@ -342,6 +344,17 @@ func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	if int(effect["request"]["effect_id"]) in [4, 17]:
 		sub = _grass_subpriority(objects, effect["position"], size, sub)
 	effect["subpriority"] = sub
+
+
+## `FldEff_Splash` captures priority and height once; `UpdateSplashFieldEffect` follows pos1 without pos2.
+func _update_splash(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
+	var request: Dictionary = effect["request"]
+	var object: Gen3ObjectEvents.ObjectEvent = objects.by_identity(int(request["local_id"]),
+		int(request["map_number"]), int(request["map_group"]))
+	var height: int = int(objects.graphics_info(object.graphics_id).get("height", 0))
+	var position: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1) + int(effect["y_offset"])) \
+		- objects.camera.screen_origin() - objects.camera.sprite_coord_offset()
+	effect["position"] = Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768))
 
 
 ## `UpdateGrassFieldEffectSubpriority` raises grass behind the first overlapping object's feet.

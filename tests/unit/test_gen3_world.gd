@@ -1643,8 +1643,10 @@ func test_ripples_start_on_finish_step_and_remain_at_the_sprite_feet_until_end()
 			assert_eq(objects.field_effect_active(5), expected, "%s %x" % [id, behavior])
 			if not expected or not objects.field_effect_active(5):
 				continue
-			var effect: Dictionary = objects.sprites.effects[0]
-			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin())
+			var effect: Dictionary = objects.sprites.effects.filter(
+				func(row: Dictionary) -> bool: return row["request"]["effect_id"] == 5)[0]
+			var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin()).filter(
+				func(part: Dictionary) -> bool: return part["priority"] == 3)
 			var at: Vector2i = object.pixel_position - objects.camera.screen_origin()
 			assert_eq([oam[0]["x"], oam[0]["y"], oam[0]["priority"], effect["subpriority"]],
 				[at.x & 511, (at.y + 6) & 255, 3, 151], "pos2 and the object's elevation never displace ripples")
@@ -1659,12 +1661,75 @@ func test_ripples_start_on_finish_step_and_remain_at_the_sprite_feet_until_end()
 			assert_eq(objects.sprites.palette.sprite_index(0x1005), 0xFF)
 
 
+func test_puddle_splashes_follow_pos1_at_step_ends_and_stop_with_the_object() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
+			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _landing_objects(id, 0x116)
+		var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
+		objects.camera.grid.set_metatile_entry(13, 12, 0x3016)
+		objects.camera.grid.set_metatile_entry(14, 12, 0x3016)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(15), "spawn does not splash")
+		objects.set_held_movement(object, 0x13 if objects._frlg else 0x0B)
+		var requests: Array = objects.step_movements()
+		assert_true(objects.field_effect_active(15), str(id))
+		assert_has(requests, {"kind": "sound", "name": "puddle"})
+		if not objects.field_effect_active(15):
+			continue
+		var splash: Dictionary = objects.sprites.effects.filter(
+			func(effect: Dictionary) -> bool: return effect["request"]["effect_id"] == 15)[0]
+		var priority: int = object.priority
+		object.x2 = 9
+		object.jump_y = -12
+		object.invisible = true
+		objects.step_movements()
+		var at: Vector2i = object.pixel_position - objects.camera.screen_origin()
+		var oam: Array = objects.sprites.oam(objects, objects.camera.screen_origin()).filter(
+			func(part: Dictionary) -> bool: return part["priority"] == priority)
+		assert_eq([oam[0]["x"], oam[0]["y"], splash["subpriority"]],
+			[at.x & 511, (at.y + 8) & 255, 0], "splash ignores pos2 and the parent's invisibility")
+		for frame: int in 5:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(15), "END is drawn until the next callback")
+		objects.step_movements()
+		assert_false(objects.field_effect_active(15))
+		for frame: int in 8:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(15), "finish-step splashes again")
+		object.active = false
+		objects.step_movements()
+		assert_false(objects.field_effect_active(15), "identity removal stops a linked splash")
+		assert_eq(objects.sprites.palette.sprite_index(0x1004), 0xFF)
+		object.active = true
+		objects.clear_held_movement(object)
+		objects.set_held_movement(object, 0x45 + (12 if objects._frlg else 0))
+		objects.step_movements()
+		assert_true(objects.field_effect_active(15), "jump takeoff keeps the begin-step puddle effect")
+		for frame: int in 15:
+			objects.step_movements()
+		assert_false(objects.field_effect_active(15), "jump landing filters the finish-step splash")
+		assert_true(objects.field_effect_active(16))
+		objects.clear_held_movement(object)
+		objects.set_held_movement(object, 0x13 if objects._frlg else 0x0B)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(15), "leaving a puddle requires both occupied cells")
+		for frame: int in 15:
+			objects.step_movements()
+		objects.clear_held_movement(object)
+		objects.set_held_movement(object, 0x12 if objects._frlg else 0x0A)
+		objects.step_movements()
+		assert_false(objects.field_effect_active(15), "entering a puddle waits until the tile center")
+		for frame: int in 15:
+			objects.step_movements()
+		assert_true(objects.field_effect_active(15))
+
+
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:
 	var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 	var data: GameData = objects.camera.data
 	data._world_scripts["surfable_behaviors"] = [0x10]
 	data._world_scripts["map_effect_templates"] = {}
-	for effect: int in [5, 10, 14, 16]:
+	for effect: int in [5, 10, 14, 15, 16]:
 		data._world_scripts["map_effect_templates"][str(effect)] = {"width": 16, "height": 16 if effect in [5, 14] else 8,
 			"images": 5, "anims": [[0x30000, 0x30001, 0xFFFF]],
 			"palette_tag": 0x1005 if effect == 5 else 0x1004, "palette_offset": 9}
