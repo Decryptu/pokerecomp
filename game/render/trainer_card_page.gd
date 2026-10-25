@@ -592,8 +592,7 @@ func _gen1_edge(
 	_put(map, at + Vector2i(width + 1, 0), right)
 
 
-## `_CGB_TrainerCard`'s counterpart: `BlkPacket_TrainerCard`'s ten blocks over
-## palette 0.
+## `_CGB_TrainerCard`'s counterpart: `BlkPacket_TrainerCard`'s ten blocks over palette 0.
 func gen1_attributes() -> PackedInt32Array:
 	var map := PackedInt32Array()
 	map.resize(COLUMNS * ROWS)

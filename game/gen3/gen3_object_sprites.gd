@@ -335,19 +335,20 @@ func field_effect_off_screen(objects: Gen3ObjectEvents, effect: Dictionary) -> b
 
 
 func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
-	if int(effect["request"]["effect_id"]) in [15, Gen3ObjectEvents.FLDEFF_FEET_IN_FLOWING_WATER, Gen3ObjectEvents.FLDEFF_SAND_PILE, Gen3ObjectEvents.FLDEFF_HOT_SPRINGS_WATER]:
+	var id: int = int(effect["request"]["effect_id"])
+	if id in Gen3ObjectEvents.LINKED_EFFECTS:
 		_update_linked_effect(objects, effect)
 	var anim: Gen3SpriteAnim = effect["anim"]
 	var info: Dictionary = effect["info"]
 	var size := Vector2i(int(info["width"]), int(info["height"]))
 	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
-	var linked_hidden: bool = int(effect["request"]["effect_id"]) == 41 and effect.get("invisible", false)
-	effect["invisible"] = linked_hidden or field_effect_off_screen(objects, effect)
-	if not effect.has("elevation") or int(effect["request"]["effect_id"]) == 41:
+	var hidden: bool = (id == 41 or id in Gen3ObjectEvents.TRACK_EFFECTS) and effect.get("invisible", false)
+	effect["invisible"] = hidden or field_effect_off_screen(objects, effect)
+	if not effect.has("elevation") or id == 41:
 		return
-	var add: int = 4 if int(effect["request"]["effect_id"]) == 4 and anim.cmd_index == 0 else 0
+	var add: int = 4 if id == 4 and anim.cmd_index == 0 else 0
 	var sub: int = subpriority_at(center.y + size.y / 2, int(effect["elevation"]), add)
-	if int(effect["request"]["effect_id"]) in [4, 17]:
+	if id in [4, 17]:
 		sub = _grass_subpriority(objects, effect["position"], size, sub)
 	effect["subpriority"] = sub
 
