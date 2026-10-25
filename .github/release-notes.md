@@ -3,13 +3,12 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3 objects now play cartridge affine animations, including scaling and rotation during scripted movements, with the correct expanded sprite drawing area.
-- Generation 3 imports preserve every object graphics record's affine animation tables.
-- Generation 3 cartridges remain unplayable while field integration continues.
+- Generation 3 field objects now display trainer reaction icons and emotes, tall and long grass, short-grass overlays, and buried-trainer ash puffs.
+- Generation 3 jumps now produce terrain-specific landing dust and splashes, while completed steps on supported water terrain leave ripples.
 
-## Fixed
+## Changed
 
-- Generation 3 camera scrolling follows the player's pixel movement between map cells, keeping the background and sprites aligned.
+- Generation 3 cartridges remain experimental and unplayable while field integration continues.
 
 ## Updating this release
 
