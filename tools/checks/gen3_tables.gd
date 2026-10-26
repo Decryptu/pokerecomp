@@ -99,6 +99,7 @@ func _one_game() -> void:
 	_tracks()
 	_surf_blob()
 	_cut_grass()
+	_secret_power()
 	_berry_sparkle()
 	_field_move_streaks()
 	_spinda_spots()
@@ -1029,6 +1030,17 @@ func _cut_grass() -> void:
 	_effect_graphics({58: _r.data.world_cut_grass_graphics()}, "gen3_cut_grass", "a71609eba89483bda583499bc461c183d4ec2133")
 
 
+## pret's Emerald and Ruby Secret Power PNGs (Ruby's grayscale ones inverted, as gbagfx reads them) encode alike.
+func _secret_power() -> void:
+	if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		_r.check(_r.data.world_secret_power_graphics(Gen3SecretPower.FLDEFF_CAVE).is_empty(), "FRLG imports no Secret Power")
+		return
+	var rows: Dictionary = {}
+	for effect: int in [Gen3SecretPower.FLDEFF_CAVE, Gen3SecretPower.FLDEFF_TREE, Gen3SecretPower.FLDEFF_SHRUB]:
+		rows[effect] = _r.data.world_secret_power_graphics(effect)
+	_effect_graphics(rows, "gen3_secret_power", "9b5bea6511b79cc7b64231a78add18cd01c7ac22")
+
+
 func _berry_sparkle() -> void:
 	if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
 		_r.check(_r.data.world_map_effect_graphics(23).is_empty(), "FRLG's stubbed effect imports no sparkle")
@@ -1661,11 +1673,11 @@ func _graphics_hash(record: Dictionary) -> String:
 ## Exact bytecode streams from pret handlers, with operand boundaries checked by executing the matching ARM
 ## builds; all map, standard, trainer and native roots.
 const SCRIPT_DIGESTS: Dictionary = {
-	&"ruby": "35573e1d144659df9b18056080b7d67609816c34",
-	&"sapphire": "33448c15566cb87985d2e473344feb23aced588d",
+	&"ruby": "6bbf6c8cc6929bf87aa304c8b51a3fd48fe36a99",
+	&"sapphire": "4b8ed0dc774e75004154b11bcd5273d83ebfe110",
 	&"firered": "287f4afe8f34b99285d0765f3a0fd84d0a470e80",
 	&"leafgreen": "8ca3097b0433a71e9c2ad0176fa4e64de3aeba15",
-	&"emerald": "46e46812eae1baea26a252013666d527f861e115",
+	&"emerald": "4aaaad2c416dba158bb26318fb0a848a09f12d25",
 }
 
 
@@ -1712,11 +1724,11 @@ func _script_data_operands(data: GameData, offset: int, row: Dictionary) -> void
 ## Every record starts on a label of the byte-matching pret build and ends where its source list or string
 ## does; movements and marts reassembled from source.
 const SCRIPT_DATA_DIGESTS: Dictionary = {
-	&"ruby": "adf843177e3fc84a9e67199835af88391b0052eb",
-	&"sapphire": "cbf6d27dddc0ea9a396d63d1bafeeffc75d522ce",
+	&"ruby": "fb39b2bf2b615188d7da52398663229abb3c6f61",
+	&"sapphire": "6727102aae1c65ce5ec81d54e4093c96ab1b2ac9",
 	&"firered": "2e0b76b0898635673fb7b72ba33036e9077a6b25",
 	&"leafgreen": "e313963370453f727d429f456889d46b7070d2d8",
-	&"emerald": "af983f0e20df5e19ce9bcab85d6d44631b6c1eb1",
+	&"emerald": "ff7d2c7b894f085267e197e47ffce75af9faa419",
 }
 
 

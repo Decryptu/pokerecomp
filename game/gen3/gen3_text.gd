@@ -88,8 +88,7 @@ static func unit_width(id: StringName, data: PackedByteArray, at: int) -> int:
 	return 1 + int(EXT_CTRL_CODES[ext][1]) if ext < count else 0
 
 
-## Bytes from [param offset] through EOS, or -1 when no EOS ends a string of readable units within [param
-## limit]. An argument byte of $FF is not an end.
+## Bytes from [param offset] through EOS, or -1 without one ending readable units in [param limit]; argument $FF is none.
 static func span(id: StringName, data: PackedByteArray, offset: int, limit: int) -> int:
 	if offset < 0:
 		return -1

@@ -1,8 +1,7 @@
 class_name Gen3EventData
 extends RefCounted
 
-## `event_data.c`: the event flags and vars. Flag 0 has no storage, so it reads clear and ignores writes; a
-## var below `VARS_START` has none either, and `VarGet` answers it with the id itself.
+## `event_data.c`'s flags and vars: flag 0 reads clear and ignores writes; `VarGet` returns an id below `VARS_START` itself.
 
 const VARS_START: int = 0x4000
 const TEMP_FLAGS_COUNT: int = 0x20
@@ -28,6 +27,9 @@ var weather: int = 0
 var weather_cycle_stage: int = 0
 ## `IncrementGameStat`'s counters by `GAME_STAT_*`.
 var stats: Dictionary = {}
+## `gSaveBlock1Ptr->secretBases[].secretBaseId`, the player's first, and secret_base.c's `sCurSecretBaseId`.
+var secret_bases: Array[int] = []
+var current_secret_base: int = 0
 ## script.c's `sLockFieldControls`.
 var controls_locked: bool = false
 var _flags: Dictionary = {}

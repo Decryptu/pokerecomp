@@ -116,8 +116,7 @@ const FIGURE_8_Y: Array[int] = [
 const GRAPHICS_FALLBACK: Dictionary = {&"ruby": 5, &"sapphire": 5, &"firered": 16, &"leafgreen": 16, &"emerald": 5}
 const OBJ_EVENT_GFX_BARD: int = 69
 const VAR_FARAWAY_ISLAND_STEP_COUNTER: int = 0x403A
-## `gSineTable`: sin(i * pi / 128) in Q8.8, truncated toward zero, as pret's `trig.c` lists it; its 320 entries
-## run a quarter turn past the circle so that index + 64 reads the cosine.
+## `trig.c`'s `gSineTable`: sin(i * pi / 128) in Q8.8, truncated; 320 entries, so index + 64 reads the cosine.
 static var SINE: PackedInt32Array = _sine_table()
 ## `MOVEMENT_ACTION_*`: [Hoenn id, FRLG id, motion, parameter].
 const MOTION_FAMILIES: Array = [
@@ -351,6 +350,7 @@ var sprites: Gen3ObjectSprites
 ## `FLDEFF_FIELD_MOVE_SHOW_MON`; its task runs from [method Gen3PlayerAvatar.step_movement_tasks].
 var field_move_mon: Gen3FieldMoveMon
 var cut_grass: Gen3CutGrass
+var secret_power: Gen3SecretPower
 ## Task effects in `sActiveList` until their task calls `FieldEffectActiveListRemove`.
 var task_effects: Array[int] = []
 var objects: Array[ObjectEvent] = []
@@ -398,6 +398,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	sprites.init_palettes(0)
 	field_move_mon = Gen3FieldMoveMon.new(sprites)
 	cut_grass = Gen3CutGrass.new(self)
+	secret_power = Gen3SecretPower.new(self)
 	load_templates()
 
 
@@ -470,8 +471,7 @@ func remove_outside_view() -> void:
 			_deactivate(object)
 
 
-## `GetObjectEventGraphicsInfo`: a var id reads its var, Emerald's bard the current Mauville man, and an id
-## past the table [constant GRAPHICS_FALLBACK].
+## `GetObjectEventGraphicsInfo`: var ids read their var, Emerald's bard the Mauville man, past the table the fallback.
 func graphics_info(graphics_id: int) -> Dictionary:
 	var id: int = graphics_id & 0xFF
 	if id >= OBJ_EVENT_GFX_VARS:
@@ -585,7 +585,6 @@ static func set_direction(object: ObjectEvent, direction: int) -> void:
 	object.movement_direction = direction
 
 
-## `ObjectEventTurn`.
 static func turn(object: ObjectEvent, direction: int) -> void:
 	set_direction(object, direction)
 	if not object.inanimate:
@@ -929,6 +928,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	_step_effect_sprites(requests)
 	requests.append_array(field_move_mon.animate())
 	requests.append_array(cut_grass.animate())
+	requests.append_array(secret_power.animate())
 	sprites.step_reflections(self)
 	return requests
 
@@ -1120,6 +1120,8 @@ func field_effect_active(effect: int) -> bool:
 		return field_move_mon.active
 	if effect == Gen3CutGrass.FLDEFF_CUT_GRASS:
 		return cut_grass.active
+	if secret_power.active and effect == int(secret_power.sprite["effect"]):
+		return true
 	if effect in task_effects:
 		return true
 	return _effect_sprites.any(func(sprite: Dictionary) -> bool:
@@ -1345,7 +1347,6 @@ func _start_step_anim(object: ObjectEvent, motion: int, direction: int, paramete
 		object.anim.seek(0)
 
 
-## Without a step table only the anim number changes.
 static func _set_step_anim(object: ObjectEvent, number: int) -> void:
 	if object.inanimate:
 		return

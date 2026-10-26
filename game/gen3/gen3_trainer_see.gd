@@ -169,8 +169,7 @@ func _approach_distance(object: Gen3ObjectEvents.ObjectEvent) -> int:
 	return 0
 
 
-## `GetTrainerApproachDistance{South,North,West,East}` to the player's destination. FRLG's south sight needs a
-## free slot for the camera past three.
+## `GetTrainerApproachDistance*` to the player's destination; FRLG's south sight needs a free camera slot past three.
 func _sight(object: Gen3ObjectEvents.ObjectEvent, direction: int) -> int:
 	var player: Vector2i = avatar.object().current
 	var reach: int = object.trainer_range

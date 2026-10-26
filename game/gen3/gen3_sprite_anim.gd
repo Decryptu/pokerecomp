@@ -125,8 +125,7 @@ func _flip(word: int) -> void:
 		v_flip = bool(word >> 23 & 1)
 
 
-## `JumpToTopOfAnimLoop`: back to the command after the previous `ANIMCMD_LOOP`, or the first, reading index
-## -1 as the cartridge does before it stops at 0.
+## `JumpToTopOfAnimLoop`: to the command after the previous `ANIMCMD_LOOP`, else the first, reading index -1 first.
 func _jump_to_loop_top() -> void:
 	if loop_counter == 0:
 		return

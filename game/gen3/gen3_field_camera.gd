@@ -18,8 +18,7 @@ var number: int = -1
 var header: Dictionary = {}
 var grid: Gen3MapGrid
 var pos := Vector2i.ZERO
-## `gCamera`: whether the last [method move] crossed into another map, and the old [member pos] less the one
-## the new map gave before the step was added.
+## `gCamera`: whether the last [method move] crossed maps, and the old [member pos] less the new map's before the step.
 var crossed: bool = false
 var shift := Vector2i.ZERO
 ## `mapView`: the 15x14 words [method save_view] copied, empty once cleared.

@@ -1109,8 +1109,7 @@ func _sandstorm_finish(weather: Gen3FieldWeather) -> bool:
 	return true
 
 
-## `CreateSandstormSprites` and `CreateSwirlSandstormSprites`: the swirls rise from under the screen, each after
-## its own delay, on the sheet's 32x32 frame.
+## `CreateSandstormSprites`/`CreateSwirlSandstormSprites`: swirls rise from below the screen after own delays, 32x32.
 func _create_sandstorm(weather: Gen3FieldWeather) -> void:
 	if not sandstorm_created:
 		weather.load_sprite_palette(sheets.get("sandstorm_palette", PackedByteArray()))

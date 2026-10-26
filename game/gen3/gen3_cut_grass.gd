@@ -163,7 +163,7 @@ func start(player: Gen3ObjectEvents.ObjectEvent) -> Array:
 		var reach: int = _side / 2
 		_fix_long_grass(player.current - Vector2i(reach, reach + 1))
 	_start_blades(info, palette)
-	return [{"kind": "sound", "name": "cut"}]
+	return [{"kind": "sound", "name": "m_cut"}]
 
 
 func _mow(at: Vector2i, mowed: Dictionary) -> void:

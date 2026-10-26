@@ -446,6 +446,10 @@ func world_cut_grass_graphics() -> Dictionary:
 	return _world_effect_graphics("cut_grass_template", Gen3CutGrass.FLDEFF_CUT_GRASS)
 
 
+func world_secret_power_graphics(effect: int) -> Dictionary:
+	return _world_effect_graphics("secret_power_templates", effect)
+
+
 ## The show-mon banner's tiles, palette and tilemap in one run, as [Gen3FieldMoveMon] splits them.
 func world_field_move_streaks(outdoors: bool) -> PackedByteArray:
 	var offsets: Array = _scripts().get("field_move_streaks", []) if generation == RomRegistry.GEN3 else []

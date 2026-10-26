@@ -291,8 +291,7 @@ const TERMINATORS: Array[int] = [2, 3, 5, 12, 13, 0x5E, 0x5F, 0xB9]
 ## DoWarp's map load replaces the context; these scripts often have no end.
 const WARPS: Array[int] = [0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0xD1, 0xD7, 0xE0]
 
-## Operands naming data a handler reads, by index and table; `loadword 0` and trainerbattle words but a continuation
-## are texts.
+## Operands naming data a handler reads, by index and table; `loadword 0` and trainerbattle words but a continuation are texts.
 const DATA_OPERANDS: Dictionary = {
 	"message": [0, "texts"], "messageautoscroll": [0, "texts"],
 	"messageinstant": [0, "texts"], "pokenavcall": [0, "texts"],
