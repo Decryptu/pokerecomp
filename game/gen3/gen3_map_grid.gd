@@ -189,6 +189,12 @@ func attributes_at(x: int, y: int) -> int:
 	return Gen3World.metatile_attributes(secondary if id >= _split else primary, id)
 
 
+## FRLG's `METATILE_ATTRIBUTE_TERRAIN`; `TestMetatileAttributeBit`'s table maps `TILE_TERRAIN_*` to one bit each.
+func terrain_at(x: int, y: int) -> int:
+	var attributes: int = attributes_at(x, y)
+	return (attributes >> 9) & 0x1F if attributes >= 0 else 0
+
+
 func layer_type_at(x: int, y: int) -> int:
 	return _layer_types[metatile_id_at(x, y)]
 

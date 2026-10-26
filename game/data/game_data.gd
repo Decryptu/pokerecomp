@@ -368,6 +368,13 @@ func world_standard_script_offset(index: int) -> int:
 	return int(offsets[index]) if index < offsets.size() else -1
 
 
+## A script C code starts by its pret label, from [code]native_scripts[/code] in [Gen3Layout]; -1 when absent.
+func world_native_script_offset(name: String) -> int:
+	if generation != RomRegistry.GEN3:
+		return -1
+	return int(_scripts().get("native", {}).get(name, -1))
+
+
 ## `ranged` and `facing` for one `MOVEMENT_TYPE_*`; empty past the cartridge's.
 func world_movement_type(type: int) -> Dictionary:
 	if generation != RomRegistry.GEN3 or type < 0:
@@ -433,6 +440,10 @@ func world_ash_graphics() -> Dictionary:
 
 func world_surf_blob_graphics() -> Dictionary:
 	return _world_effect_graphics("surf_blob_template", 8)
+
+
+func world_cut_grass_graphics() -> Dictionary:
+	return _world_effect_graphics("cut_grass_template", Gen3CutGrass.FLDEFF_CUT_GRASS)
 
 
 ## The show-mon banner's tiles, palette and tilemap in one run, as [Gen3FieldMoveMon] splits them.

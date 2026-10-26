@@ -377,8 +377,10 @@ static func read(rom: RomFile, layout: Dictionary, headers: Dictionary) -> Dicti
 	var trainers: Array = layout.get("trainer_battle_scripts", [])
 	if standard.is_empty() or trainers.size() != 5:
 		return {}
+	var native: Dictionary = layout.get("native_scripts", {})
 	var pending: Array = standard.duplicate()
 	pending.append_array(trainers)
+	pending.append_array(native.values())
 	_roots(headers, pending)
 	var instructions: Dictionary = {}
 	while not pending.is_empty():
@@ -396,7 +398,8 @@ static func read(rom: RomFile, layout: Dictionary, headers: Dictionary) -> Dicti
 	var data: Dictionary = _data(rom, layout, instructions)
 	if data.is_empty() or not _valid_boundaries(instructions, data):
 		return {}
-	var out: Dictionary = {"instructions": instructions, "standard": standard, "trainer_battle": trainers}
+	var out: Dictionary = {"instructions": instructions, "standard": standard, "trainer_battle": trainers,
+		"native": native}
 	out.merge(data)
 	return out
 

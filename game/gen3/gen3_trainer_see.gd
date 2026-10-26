@@ -1,9 +1,8 @@
 class_name Gen3TrainerSee
 extends RefCounted
 
-## `trainer_see.c`: trainers spotting the player, their approach and the buried-trainer reveal. [method
-## run_tasks] is the tasks' share of `RunTasks`; battle setup and the scripts that start and wait on the
-## approach stay with their hosts, which read [member approaching].
+## `trainer_see.c`: sighting, approach and buried reveals; [method run_tasks] is their `RunTasks` share. Battle
+## setup and the scripts around the approach stay with hosts, which read [member approaching].
 
 enum TrainerType { NONE, NORMAL, SEE_ALL_DIRECTIONS, BURIED }
 ## `sTrainerSeeFuncList`; the last three are FireRed/LeafGreen's camera scroll.

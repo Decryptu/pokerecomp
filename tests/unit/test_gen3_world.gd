@@ -926,7 +926,7 @@ func _task_avatar(id: StringName, kind: int, direction: int, hold_state: int, lo
 
 
 func _task_frame(avatar: Gen3PlayerAvatar, prefix: Array) -> String:
-	var values: Array = prefix + [avatar.flags, int(avatar.prevent_step), int(avatar.controls_locked)]
+	var values: Array = prefix + [avatar.flags, int(avatar.prevent_step), int(avatar.objects.events.controls_locked)]
 	var origins: Array[Vector2i] = [Vector2i(12, 12),
 		Vector2i(12, 12) + Gen3FieldCamera.DIRECTIONS[int(prefix[1])], Vector2i(20, 20)]
 	for slot: int in 3:
@@ -955,7 +955,7 @@ func test_strength_landing_hides_boulder_reveals_floor_and_releases_occupancy() 
 		objects.events.flag_set(0x125)
 		assert_eq(boulder.trainer_type, 0x25)
 		assert_eq(avatar.begin_collision_movement(4)["collision"], Gen3PlayerAvatar.Collision.PUSHED_BOULDER)
-		assert_true(avatar.controls_locked)
+		assert_true(avatar.objects.events.controls_locked)
 		assert_eq(avatar.begin_collision_movement(4)["collision"], Gen3PlayerAvatar.Collision.IMPASSABLE)
 		var effects: Array = []
 		for frame: int in 33:
@@ -970,7 +970,7 @@ func test_strength_landing_hides_boulder_reveals_floor_and_releases_occupancy() 
 					"the dust rises from the cell the boulder leaves")
 				assert_eq(objects.collision_at(avatar.object(), 13, 12, 4), Gen3ObjectEvents.Collision.OBJECT_EVENT)
 		assert_false(avatar.prevent_step)
-		assert_false(avatar.controls_locked)
+		assert_false(avatar.objects.events.controls_locked)
 		assert_false(boulder.active)
 		assert_eq(avatar.object().current, Vector2i(12, 12))
 		assert_true(objects.events.flag_get(0x25))
@@ -1001,7 +1001,7 @@ func test_strength_switch_dispatch_preserves_all_matching_coordinate_rows() -> v
 					scripts.append(int(effect["offset"]))
 			avatar.objects.step_movements()
 		assert_eq(scripts, [] if id == RomRegistry.EMERALD else [0xD00, 0])
-		assert_false(avatar.controls_locked)
+		assert_false(avatar.objects.events.controls_locked)
 		assert_true(avatar.objects.objects[1].active)
 
 
@@ -1190,7 +1190,7 @@ func test_shadow_oam_tracks_ground_and_keeps_spawn_geometry() -> void:
 	object.subpriority = 149
 	object.fixed_priority = true
 	object.has_shadow = true
-	object.ground_on_spawn = false
+	object.trigger_ground_effects = false
 	object.frozen = true
 	object.anim.tiles = [1, 32]
 	object.jump_y = -12
@@ -1359,7 +1359,7 @@ func test_emote_movement_draws_and_releases_its_bouncing_sprite() -> void:
 		object.pixel_position = Vector2i(80, 80)
 		object.current = Vector2i(12, 12)
 		object.previous = object.current
-		object.ground_on_spawn = false
+		object.trigger_ground_effects = false
 		object.invisible = true
 		object.frozen = true
 		object.jump_y = -12
@@ -1418,7 +1418,7 @@ func test_grass_keeps_its_last_image_until_departure_and_releases_shared_palette
 			assert_eq(objects.sprites.palette.sprite_index(0x1005), 0xFF)
 			object.current = Vector2i(12, 12)
 			object.previous = object.current
-			object.ground_on_spawn = true
+			object.trigger_ground_effects = true
 			objects.step_movements()
 			objects.camera.grid.set_metatile_entry(12, 12, 0x3000)
 			objects.step_movements()
@@ -1438,7 +1438,7 @@ func test_grass_jump_landing_and_covering_filter_follow_the_held_movement() -> v
 			var behavior: int = 3 if mode == 3 else 2
 			var objects: Gen3ObjectEvents = _grass_objects(id, behavior)
 			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
-			object.ground_on_spawn = false
+			object.trigger_ground_effects = false
 			object.disable_jump_landing_effect = mode == 1
 			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
 			var action: int = 0x3D if mode == 2 else 0x45
@@ -1598,7 +1598,7 @@ func test_jump_impacts_select_terrain_and_outlive_the_jumper() -> void:
 			var objects: Gen3ObjectEvents = _landing_objects(id, behavior)
 			objects.camera.grid.set_metatile_entry(13, 12, 0x3000 | behavior)
 			var object: Gen3ObjectEvents.ObjectEvent = objects.objects[0]
-			object.ground_on_spawn = false
+			object.trigger_ground_effects = false
 			objects.set_held_movement(object, 0x45 + (12 if objects._frlg else 0))
 			for frame: int in 15:
 				objects.step_movements()
@@ -1930,7 +1930,7 @@ func test_surf_mount_poses_shows_the_mon_then_jumps_onto_the_blob() -> void:
 		assert_eq(marks.slice(0, 5), [[1, T.MOUNT_POSE], [2, T.MOUNT_SHOW_MON], [4, T.MOUNT_JUMP], [34, true],
 			[86, T.MOUNT_END]], str(id))
 		assert_eq(marks[-1][1], T.NONE)
-		assert_eq([player.current, avatar.flags, avatar.prevent_step, avatar.controls_locked, player.frozen],
+		assert_eq([player.current, avatar.flags, avatar.prevent_step, avatar.objects.events.controls_locked, player.frozen],
 			[Vector2i(12, 13), Gen3PlayerAvatar.Flag.SURFING, false, false, false], str(id))
 		assert_eq(player.field_effect_sprite["bob"], Gen3ObjectEvents.Bob.PLAYER_AND_MON)
 		assert_false(objects.field_effect_active(Gen3PlayerAvatar.FLDEFF_USE_SURF))
@@ -1963,7 +1963,71 @@ func test_field_move_task_poses_shows_the_mon_then_runs_the_move() -> void:
 			expected.append_array([[start + 30, "cry"], [start + 82, T.MOVE_RUN], [start + 83, "rock_smash"],
 				[start + 83, "script_enable"], [start + 83, T.NONE]])
 			assert_eq(marks, expected, "%s map type %d" % [id, map_type])
-			assert_eq([avatar.prevent_step, avatar.controls_locked, objects.field_effect_active(37)], [false, true, false])
+			assert_eq([avatar.prevent_step, avatar.objects.events.controls_locked, objects.field_effect_active(37)], [false, true, false])
+
+
+## fldeff_cut.c: Emerald's Hyper Cutter reaches the ring past passable cells and fixes long-grass roots, Ruby
+## re-reads the 3x3 behaviors, FRLG reads terrain. Blade offsets come from pret's `gSineTable` and
+## `CutGrassSpriteCallback2`; the first blade's end callback unlocks the field and frees the palette.
+func test_cut_grass_mows_the_square_and_spins_the_blades() -> void:
+	var tall: Array[Vector2i] = [Vector2i(12, 12), Vector2i(13, 11), Vector2i(14, 12), Vector2i(10, 12)]
+	var mowed: Dictionary = {RomRegistry.RUBY: [true, true, false, false],
+		RomRegistry.FIRERED: [true, true, false, false], RomRegistry.EMERALD: [true, true, true, false]}
+	for id: StringName in mowed:
+		var avatar: Gen3PlayerAvatar = _surfing_avatar(id, false, Gen3PlayerAvatar.Flag.ON_FOOT)
+		var objects: Gen3ObjectEvents = avatar.objects
+		var data: GameData = objects.camera.data
+		_streak_runs(data)
+		data._world_scripts["cut_grass_template"] = {"58": {"width": 8, "height": 8, "images": 5,
+			"anims": [[0x1E0000, 0xFFFE]], "palette_tag": 0x1000, "palette_offset": 9}}
+		objects.camera.header["map_type"] = 3
+		var grid: Gen3MapGrid = objects.camera.grid
+		grid.blocks.fill(0x1001)
+		grid._behaviors[0x00D] = 2
+		grid._behaviors[0x015] = 3
+		var attributes := PackedByteArray()
+		attributes.resize(64)
+		attributes.encode_u32(0x00D * 4, 1 << 9)
+		grid.primary = {"metatile_count": 16, "attribute_size": 4, "metatiles": {"bytes": PackedByteArray()},
+			"attributes": {"bytes": attributes}, "metatile_tail": {"bytes": PackedByteArray()},
+			"attribute_tail": {"bytes": PackedByteArray()}}
+		for cell: Vector2i in tall:
+			grid.set_metatile_entry(cell.x, cell.y, 0x100D)
+		grid.set_metatile_entry(11, 12, 0x1401)
+		var reach: int = 2 if id == RomRegistry.EMERALD else 1
+		grid.set_metatile_entry(12, 11 - reach, 0x1015)
+		grid.set_metatile_entry(12, 13 + reach, 0x1208)
+		assert_eq(objects.cut_grass.set_up(avatar.object(), Gen3CutGrass.ABILITY_HYPER_CUTTER), 1, str(id))
+		objects.step_movements()
+		assert_true(avatar.use_field_move(1, 25, 0, 0xFF0000))
+		var marks: Array = []
+		var offsets: Array = []
+		for frame: int in range(1, 130):
+			for request: Dictionary in avatar.step_movement_tasks() + objects.step_movements():
+				if request.get("name", "") == "cut" or (request["kind"] == "spawn" and request["object_id"] == 0):
+					marks.append([frame, request.get("name", "spawn")])
+			var blades: Array[Dictionary] = objects.cut_grass.blades
+			if frame in [87, 115]:
+				offsets.append_array([blades[0]["position"] - blades[0]["origin"],
+					blades[3]["position"] - blades[3]["origin"]])
+			if frame == 115:
+				var corner: Vector2i = Gen3ObjectSprites.corner(avatar.object(),
+					objects.graphics_info(avatar.object().graphics_id), objects.camera.screen_origin())
+				assert_eq(blades[0]["origin"], Vector2i(corner.x & 0x1FF, corner.y & 0xFF) + Vector2i(8, 20))
+				assert_eq(objects.sprites.oam(objects, objects.camera.screen_origin()).filter(
+					func(part: Dictionary) -> bool: return part["size"] == Vector2i(8, 8)).size(), 8)
+				assert_true(objects.events.controls_locked)
+			if frame == 116:
+				marks.append([frame, objects.events.controls_locked, objects.field_effect_active(58)])
+		assert_eq(marks, [[86, "cut"], [86, "spawn"], [116, false, false]], str(id))
+		assert_eq(offsets, [Vector2i(0, 8), Vector2i(5, -6), Vector2i(-85, 84), Vector2i(120, 0)])
+		assert_eq(tall.map(func(cell: Vector2i) -> bool: return grid.metatile_id_at(cell.x, cell.y) == 0x001),
+			mowed[id], str(id))
+		var roots: Array = [grid.metatile_id_at(12, 12 - reach), grid.metatile_id_at(12, 13 + reach)]
+		assert_eq(roots, [0x001, 0x208] if id == RomRegistry.FIRERED else [0x208, 0x001], str(id))
+		assert_eq(objects.sprites.palette.sprite_index(0x1000), 0xFF)
+		assert_true(objects.sprites.pics.is_empty())
+		assert_eq(objects.events.stats.get(18, 0), 1)
 
 
 static func _streak_runs(data: GameData) -> void:
@@ -3326,7 +3390,7 @@ func test_reflections_follow_ground_lifetime_and_sprite_visibility() -> void:
 		object.anim.h_flip = true
 		object.anim.v_flip = true
 		objects.camera.grid.set_metatile_entry(object.current.x, object.current.y + 1, 0x23 if objects._frlg else 0x20)
-		object.ground_on_spawn = true
+		object.trigger_ground_effects = true
 		objects.step_movements()
 		reflection = objects.sprites.oam(objects, Vector2i.ZERO)[-1]
 		assert_false(reflection.has("matrix"), "ice uses the unscaled sprite")

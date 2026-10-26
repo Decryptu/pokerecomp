@@ -143,23 +143,21 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 	3, 1,
 ]
 
-## gStdScripts and BattleSetup_ConfigureTrainerBattle's five helper entry points come from nm on the matching
-## pret builds, including Sapphire's shifted scripts. `gInitialMovementTypeFacingDirections` follows
-## `gRangedMovementTypes` directly. `gObjectEventGraphicsInfoPointers` is the dump's pointer run of
-## `NUM_OBJ_EVENT_GFX` graphics infos; Emerald's `gMauvilleOldManGraphicsInfoPointers` follows it.
+## gStdScripts and the five trainer-battle entry points come from nm on the matching pret builds (Sapphire's
+## scripts shift). `gInitialMovementTypeFacingDirections` follows `gRangedMovementTypes`; the graphics-info
+## pointers run `NUM_OBJ_EVENT_GFX` long, Emerald's `gMauvilleOldManGraphicsInfoPointers` after them.
 
-## `shadow_templates`: `gFieldEffectObjectTemplatePointers`, found by matching pret's four tiled shadow PNGs
-## to their dump bytes and pointer runs; surfability matches pret's 240-byte table, retaining its ROM tail.
-## Weather palettes, `Gen3WeatherSprites.SHEETS` and drought tables each match one run of pret's bytes.
-## `icon_template`: trainer_see.c's template, located through the unique tiled emotion PNGs and image pointers.
-## General/grass/ash palettes match pret general_0/general_1/ash.pal (Ruby 00/01/02.pal).
-## `field_move_streaks`/`_indoors` (tiles, palette, tilemap) and `spinda_spots` (36-byte rows) match pret's bytes.
+## The rest each match one run of pret's bytes: `gFieldEffectObjectTemplatePointers` and trainer_see.c's icon
+## template through their tiled PNGs and pointer runs, surfability (240 bytes, keeping its ROM tail), weather
+## palettes, sheets and drought tables, general/grass/ash palettes (Ruby's 00-02.pal), the field-move streaks,
+## Spinda's spots, the template with `sOamData_CutGrass`'s 0x1401, and `native_scripts`, which only C starts.
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
 	"object_palettes": 0x373794, "object_palette_tags": 0x3739B4,
 	"player_reflection_palettes": 0x37388C, "special_reflection_palettes": 0x3738FC,
 	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8, "icon_template": 0x39B528,
 	"spinda_spots": 0x1FCB9C, "field_move_streaks": 0x39E92C, "field_move_streaks_indoors": 0x39EDCC,
+	"cut_grass_template": 0x3C161C,
 	"general_palette": 0x3694A0, "ash_palette": 0x36CA60, "grass_palette": 0x3694C0,
 	"weather_palette": 0x397100, "weather_sheets": 0x397120, "drought_palette_pointers": 0x396FC0,
 	"object_graphics": 0x36DC70, "object_graphics_count": 218,
@@ -215,6 +213,7 @@ const SAPPHIRE: Dictionary = {
 	"player_reflection_palettes": 0x37381C, "special_reflection_palettes": 0x37388C,
 	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68, "icon_template": 0x39B370,
 	"spinda_spots": 0x1FCB2C, "field_move_streaks": 0x39E774, "field_move_streaks_indoors": 0x39EC14,
+	"cut_grass_template": 0x3C1678,
 	"general_palette": 0x369430, "ash_palette": 0x36C9F0, "grass_palette": 0x369450,
 	"weather_palette": 0x396F48, "weather_sheets": 0x396F68, "drought_palette_pointers": 0x396E08,
 	"object_graphics": 0x36DC00, "object_graphics_count": 218,
@@ -270,6 +269,7 @@ const FIRERED: Dictionary = {
 	"player_reflection_palettes": 0x3A5278, "special_reflection_palettes": 0x3A52E8,
 	"surfable_behaviors": 0x352FE8, "shadow_templates": 0x3A0080, "icon_template": 0x3C73F8,
 	"spinda_spots": 0x2526CC, "field_move_streaks": 0x3CB660, "field_move_streaks_indoors": 0x3CBB00,
+	"cut_grass_template": 0x3D41BC,
 	"general_palette": 0x399018, "ash_palette": 0x39C5F8, "grass_palette": 0x399038,
 	"weather_palette": 0x3C2D50, "weather_sheets": 0x3C2D70,
 	"object_graphics": 0x39FE20, "object_graphics_count": 152, "step_anims": 0x3A3708,
@@ -324,6 +324,7 @@ const LEAFGREEN: Dictionary = {
 	"player_reflection_palettes": 0x3A5258, "special_reflection_palettes": 0x3A52C8,
 	"surfable_behaviors": 0x352FC8, "shadow_templates": 0x3A0060, "icon_template": 0x3C7234,
 	"spinda_spots": 0x2526A8, "field_move_streaks": 0x3CB49C, "field_move_streaks_indoors": 0x3CB93C,
+	"cut_grass_template": 0x3D3FF8,
 	"general_palette": 0x398FF8, "ash_palette": 0x39C5D8, "grass_palette": 0x399018,
 	"weather_palette": 0x3C2B8C, "weather_sheets": 0x3C2BAC,
 	"object_graphics": 0x39FE00, "object_graphics_count": 152, "step_anims": 0x3A36E8,
@@ -378,6 +379,8 @@ const EMERALD: Dictionary = {
 	"player_reflection_palettes": 0x50BD00, "special_reflection_palettes": 0x50BD78,
 	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8, "icon_template": 0x5507B4,
 	"spinda_spots": 0x31E2F0, "field_move_streaks": 0x55AE50, "field_move_streaks_indoors": 0x55B2F0,
+	"cut_grass_template": 0x57C66C,
+	"native_scripts": {"hide_mew_when_grass_cut": 0x267EDB},
 	"general_palette": 0x4F77B8, "ash_palette": 0x4FACB8, "grass_palette": 0x4F77D8,
 	"weather_palette": 0x54C270, "weather_sheets": 0x54C290, "drought_colors": 0x54014C,
 	"object_graphics": 0x505620, "object_graphics_count": 239, "step_anims": 0x5094AC,

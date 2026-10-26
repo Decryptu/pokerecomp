@@ -28,6 +28,8 @@ var weather: int = 0
 var weather_cycle_stage: int = 0
 ## `IncrementGameStat`'s counters by `GAME_STAT_*`.
 var stats: Dictionary = {}
+## script.c's `sLockFieldControls`.
+var controls_locked: bool = false
 var _flags: Dictionary = {}
 var _vars: Dictionary = {}
 

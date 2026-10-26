@@ -195,10 +195,9 @@ const STATE_MOTIONS: Array = [
 	[0x5E, 0x6C, Motion.AFFINE, 1],
 	[0x5F, 0x6D, Motion.AFFINE, 0],
 ]
-## Rows past [constant MOTION_FAMILIES] and [constant STATE_MOTIONS]: [Ruby id, Emerald id, FRLG id (-1
-## absent), motion, parameter, options]. A `family` row is four actions, south to east; an ANIM parameter is
-## its anim number, the family's first, or -1 for the current one. `step` is the first anim of a row's step
-## anim when not its pace's or duration's.
+## Rows past [constant MOTION_FAMILIES]/[constant STATE_MOTIONS]: [Ruby, Emerald, FRLG id (-1 absent), motion,
+## parameter, options]. A `family` is four actions, south to east; an ANIM parameter is its anim, the family's
+## first, or -1 for the current one; `step` is a row's first step anim when not its pace's or duration's.
 const MORE_ACTIONS: Array = [
 	[0x39, 0x39, 0x45, Motion.ANIM, -1, {}],
 	[0x4F, 0x4F, 0x5B, Motion.ANIM, ANIM_STD_COUNT, {"direction": Direction.SOUTH}],
@@ -330,7 +329,8 @@ class ObjectEvent:
 	var palette_num: int = 0
 	var off_screen: bool = false
 	var sprite_invisible: bool = false
-	var ground_on_spawn: bool = true
+	## `triggerGroundEffectsOnMove`, which the next update's `DoGroundEffects_OnSpawn` consumes.
+	var trigger_ground_effects: bool = true
 	var player_copyable_movement: int = 0
 	var berry_initialized: bool = false
 	var berry_sparkling: bool = false
@@ -351,6 +351,7 @@ var events: Gen3EventData
 var sprites: Gen3ObjectSprites
 ## `FLDEFF_FIELD_MOVE_SHOW_MON`; its task runs from [method Gen3PlayerAvatar.step_movement_tasks].
 var field_move_mon: Gen3FieldMoveMon
+var cut_grass: Gen3CutGrass
 ## Task effects in `sActiveList` until their task calls `FieldEffectActiveListRemove`.
 var task_effects: Array[int] = []
 var objects: Array[ObjectEvent] = []
@@ -397,6 +398,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	sprites.effects = _effect_sprites
 	sprites.init_palettes(0)
 	field_move_mon = Gen3FieldMoveMon.new(sprites)
+	cut_grass = Gen3CutGrass.new(self)
 	load_templates()
 
 
@@ -905,9 +907,9 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 		if not object.active:
 			continue
 		_init_movement_type(object, slot, requests)
-		if object.ground_on_spawn:
+		if object.trigger_ground_effects:
 			_ground(object, slot, "spawn", requests)
-			object.ground_on_spawn = false
+			object.trigger_ground_effects = false
 		if object.enable_anim:
 			object.anim.paused = false
 			object.disable_anim = false
@@ -929,6 +931,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 		_step_disguise_effect(objects[slot], slot, requests)
 	_step_effect_sprites(requests)
 	requests.append_array(field_move_mon.animate())
+	requests.append_array(cut_grass.animate())
 	sprites.step_reflections(self)
 	return requests
 
@@ -1119,6 +1122,8 @@ func icon_effects() -> Array:
 func field_effect_active(effect: int) -> bool:
 	if effect == FLDEFF_FIELD_MOVE_SHOW_MON:
 		return field_move_mon.active
+	if effect == Gen3CutGrass.FLDEFF_CUT_GRASS:
+		return cut_grass.active
 	if effect in task_effects:
 		return true
 	return _effect_sprites.any(func(sprite: Dictionary) -> bool:

@@ -1,10 +1,8 @@
 class_name Gen3WeatherSprites
 extends RefCounted
 
-## `field_weather_effect.c`'s sprite weathers: the rain, thunderstorm and downpour (Ruby's light, medium and heavy
-## rain) with the lightning and its thunder, and the clouds, snow, horizontal fog (and underwater), volcanic ash,
-## sandstorm, diagonal fog and underwater bubbles with their blend ramps. [method animate] is `AnimateSprites`'
-## pass over every weather sprite.
+## `field_weather_effect.c`'s sprite weathers (rain kinds, lightning, clouds, snow, fogs, ash, sandstorm, bubbles)
+## and their blend ramps; [method animate] is `AnimateSprites`' pass over every weather sprite.
 
 ## Emitted where `UpdateThunderSound` plays SE_THUNDER, or SE_THUNDER2 when [param second].
 signal thunder(second: bool)
