@@ -319,6 +319,9 @@ class ObjectEvent:
 	var direction_sequence_index: int = 0
 	var movement_delay: int = 0
 	var pixel_position := Vector2i.ZERO
+	## `coordOffsetEnabled` cleared: the sprite stands at its own screen [member screen_position], as Fly's bird sets it.
+	var screen_fixed: bool = false
+	var screen_position := Vector2i.ZERO
 	var jump_y: int = 0
 	var priority: int = 2
 	var subpriority: int = 0
@@ -351,6 +354,7 @@ var sprites: Gen3ObjectSprites
 var field_move_mon: Gen3FieldMoveMon
 var cut_grass: Gen3CutGrass
 var secret_power: Gen3SecretPower
+var fly: Gen3Fly
 ## Task effects in `sActiveList` until their task calls `FieldEffectActiveListRemove`.
 var task_effects: Array[int] = []
 var objects: Array[ObjectEvent] = []
@@ -399,6 +403,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	field_move_mon = Gen3FieldMoveMon.new(sprites)
 	cut_grass = Gen3CutGrass.new(self)
 	secret_power = Gen3SecretPower.new(self)
+	fly = Gen3Fly.new(self)
 	load_templates()
 
 
@@ -583,6 +588,21 @@ static func set_direction(object: ObjectEvent, direction: int) -> void:
 	if not object.facing_locked:
 		object.facing = direction
 	object.movement_direction = direction
+
+
+static func move_to_map_coords(object: ObjectEvent, cell: Vector2i) -> void:
+	object.current = cell
+	object.previous = cell
+	object.pixel_position = cell * 16
+	object.single_movement_active = false
+	object.trigger_ground_effects = true
+	object.has_shadow = false
+	object.has_reflection = false
+	object.in_short_grass = false
+	object.in_flowing_water = false
+	object.in_sand_pile = false
+	object.in_hot_springs = false
+	clear_held_movement(object)
 
 
 static func turn(object: ObjectEvent, direction: int) -> void:
@@ -929,6 +949,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	requests.append_array(field_move_mon.animate())
 	requests.append_array(cut_grass.animate())
 	requests.append_array(secret_power.animate())
+	fly.animate()
 	sprites.step_reflections(self)
 	return requests
 

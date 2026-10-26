@@ -35,8 +35,7 @@ static func load(primary: Dictionary, secondary: Dictionary, palettes: Gen3Palet
 	return vram
 
 
-## One `UpdateTilesetAnimations` frame's copies. Battle Dome's palette goes into the unfaded colours and is
-## blended with the running fade (`BlendAnimPalette_BattleDome_FloorLights`).
+## One `UpdateTilesetAnimations` frame's copies; Battle Dome's palette lands unfaded under the running fade.
 func step() -> void:
 	for copy: Dictionary in Gen3TilesetAnims.step(_animation):
 		var key: String = str(copy["frame"])
@@ -208,8 +207,7 @@ func _draw_tile(layer: PackedInt32Array, size: Vector2i, origin: Vector2i, word:
 				layer[(origin.y + y) * size.x + origin.x + x] = palette.faded_color(bank + index)
 
 
-## The OBJ layer: each pixel's colour, priority (-1 for none) and semi-transparency, drawn last entry first so
-## the first entry with a pixel owns it. OAM coordinates wrap at 512 across and 256 down.
+## The OBJ layer's colour, priority (-1 none) and semi-transparency per pixel; the first entry owns it, OAM wrapping 512x256.
 static func _draw_oam(oam: Array, size: Vector2i, colors: Gen3Palette) -> Dictionary:
 	var color := PackedInt32Array()
 	color.resize(size.x * size.y)

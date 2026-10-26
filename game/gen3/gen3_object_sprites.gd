@@ -106,6 +106,8 @@ func _patch_reflection(sets: String, tag: int, slot: int) -> void:
 ## `UpdateOamCoords` against the screen at backup pixel [param origin].
 static func corner(object: Gen3ObjectEvents.ObjectEvent, info: Dictionary, origin: Vector2i) -> Vector2i:
 	var center := Vector2i(-(int(info.get("width", 0)) >> 1), -(int(info.get("height", 0)) >> 1))
+	if object.screen_fixed:
+		return object.screen_position + Vector2i(object.x2, object.jump_y) + center
 	return object.pixel_position + Vector2i(8, 16 + center.y) + Vector2i(object.x2, object.jump_y) + center - origin
 
 
@@ -282,11 +284,15 @@ func _shadow_entry(objects: Gen3ObjectEvents, shadow: Dictionary, origin: Vector
 
 
 func _pic_entry(pic: Dictionary) -> Dictionary:
-	var at: Vector2i = pic["position"] - pic["size"] / 2
+	var double: bool = pic.get("double_size", false)
+	var at: Vector2i = pic["position"] - pic["size"] / (1 if double else 2)
 	var priority: int = int(pic["priority"])
-	return {"y": at.y & 0xFF, "key": (priority << 8) | int(pic["subpriority"]),
-		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": pic.get("flip", Vector2i.ZERO), "priority": priority,
-			"palette": int(pic["palette"]), "size": pic["size"], "tiles": pic["tiles"]}}
+	var part: Dictionary = {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": pic.get("flip", Vector2i.ZERO),
+		"priority": priority, "palette": int(pic["palette"]), "size": pic["size"], "tiles": pic["tiles"]}
+	if pic.has("matrix"):
+		part.merge({"matrix": pic["matrix"], "double_size": double})
+	return {"y": at.y & 0xFF, "key": (priority << 8) | int(pic["subpriority"]), "part": part,
+		"invisible": pic.get("invisible", false)}
 
 
 func load_effect_palette(info: Dictionary) -> int:

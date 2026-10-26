@@ -446,6 +446,10 @@ func world_cut_grass_graphics() -> Dictionary:
 	return _world_effect_graphics("cut_grass_template", Gen3CutGrass.FLDEFF_CUT_GRASS)
 
 
+func world_fly_bird_graphics() -> Dictionary:
+	return _world_effect_graphics("fly_bird_template", Gen3Fly.FLDEFFOBJ_BIRD)
+
+
 func world_secret_power_graphics(effect: int) -> Dictionary:
 	return _world_effect_graphics("secret_power_templates", effect)
 

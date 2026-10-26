@@ -2293,6 +2293,65 @@ func _secret_power_avatar(cave: bool) -> Gen3PlayerAvatar:
 	return avatar
 
 
+## Fly out: the player mounts 18 frames after `SE_M_FLY` starts the swoop, and `WarpFadeOutScreen` follows the
+## bird's 32-frame swoop (FRLG: on at 2 a frame with the rider from 72). Fly in drops the player off along
+## `FlyInFieldEffect_JumpOffBird`'s arc and restores the flags, facing south.
+func test_fly_carries_the_player_off_and_sets_it_down() -> void:
+	for id: StringName in [RomRegistry.EMERALD, RomRegistry.FIRERED]:
+		var avatar: Gen3PlayerAvatar = _fly_avatar(id)
+		var objects: Gen3ObjectEvents = avatar.objects
+		var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+		var palette: Gen3Palette = objects.sprites.palette
+		objects.fly.fly_out(avatar, 25, 0, 0xFF0000, Gen3FieldWeather.Fade.TO_BLACK)
+		var marks: Dictionary = {}
+		for frame: int in range(1, 400):
+			for request: Dictionary in avatar.step_movement_tasks() + objects.step_movements():
+				if request.get("name", "") == "m_fly":
+					marks["swoop"] = frame
+			palette.update_fade()
+			palette.transfer()
+			if player.screen_fixed and not marks.has("mount"):
+				marks["mount"] = frame
+			if palette.fade_active and not marks.has("fade"):
+				marks["fade"] = frame
+		var frlg: bool = id == RomRegistry.FIRERED
+		assert_eq([marks["mount"] - marks["swoop"], marks["fade"] - marks["swoop"]], [18, 46 if frlg else 32], str(id))
+		assert_eq([objects.field_effect_active(Gen3Fly.FLDEFF_USE_FLY), player.graphics_id, avatar.prevent_step],
+			[false, avatar.graphics_for(Gen3PlayerAvatar.State.SURFING), true], str(id))
+		Gen3ObjectEvents.move_to_map_coords(player, Vector2i(12, 12))
+		player.screen_fixed = false
+		avatar.flags = Gen3PlayerAvatar.Flag.ON_FOOT | Gen3PlayerAvatar.Flag.CONTROLLABLE
+		objects.fly.fly_in(avatar)
+		var jumps: Array = []
+		for frame: int in range(1, 300):
+			var step: int = objects.fly.step
+			avatar.step_movement_tasks()
+			objects.step_movements()
+			if step == Gen3Fly.Step.IN_JUMP_OFF:
+				jumps.append(player.jump_y)
+		assert_eq(jumps, Gen3Fly.JUMP_OFF, str(id))
+		assert_eq([objects.field_effect_active(Gen3Fly.FLDEFF_FLY_IN), objects.fly.bird, player.screen_fixed,
+			player.facing, player.graphics_id, avatar.flags, avatar.prevent_step],
+			[false, {}, false, Gen3ObjectEvents.Direction.SOUTH, avatar.graphics_for(Gen3PlayerAvatar.State.NORMAL),
+			Gen3PlayerAvatar.Flag.ON_FOOT | Gen3PlayerAvatar.Flag.CONTROLLABLE, false], str(id))
+
+
+func _fly_avatar(id: StringName) -> Gen3PlayerAvatar:
+	var avatar: Gen3PlayerAvatar = _surfing_avatar(id, false, Gen3PlayerAvatar.Flag.ON_FOOT)
+	var objects: Gen3ObjectEvents = avatar.objects
+	var data: GameData = objects.camera.data
+	_streak_runs(data)
+	objects.camera.header["map_type"] = 3
+	var size: int = 64 if id == RomRegistry.FIRERED else 32
+	data._world_scripts["fly_bird_template"] = {"26": {"width": size, "height": size, "images": 5,
+		"anims": [[0x10000, 0xFFFF], [0x10001, 0xFFFF], [0x10002, 0xFFFF], [0x10003, 0xFFFF], [0x10004, 0xFFFF]],
+		"palette_tag": 0xFFFF}}
+	var weather := Gen3FieldWeather.new(data, objects.sprites.palette, objects.events)
+	weather.start()
+	objects.sprites.weather = weather
+	return avatar
+
+
 ## fldeff_cut.c: Emerald's Hyper Cutter reaches the ring past passable cells and fixes long-grass roots, Ruby
 ## re-reads the 3x3 behaviors, FRLG reads terrain. Blade offsets come from pret's `gSineTable` and
 ## `CutGrassSpriteCallback2`; the first blade's end callback unlocks the field and frees the palette.

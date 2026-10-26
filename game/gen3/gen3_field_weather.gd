@@ -326,8 +326,7 @@ func _fade_in_step(index: int) -> bool:
 	return true
 
 
-## `ApplyColorMap`: a positive index through the contrast maps, a negative one through the drought tables
-## (which FireRed and LeafGreen leave out, writing nothing), zero a plain copy.
+## `ApplyColorMap`: positive indices use the contrast maps, negative the drought tables (FRLG writes nothing), zero copies.
 func apply_color_map(first_slot: int, count: int, index: int) -> void:
 	if index == 0:
 		palette.copy_unfaded(first_slot * 16, count * 16)
@@ -684,8 +683,7 @@ func resume_paused() -> void:
 	set_current_and_next(_saved_or_abnormal())
 
 
-## Emerald's abnormal weather starts or keeps its task and answers with the weather it is on; any other weather
-## ends the task and resets it to start on the downpour.
+## Emerald's abnormal weather starts or keeps its task, answering its weather; any other ends it, reset to the downpour.
 func _saved_or_abnormal() -> int:
 	var weather: int = events.weather
 	if not _emerald:
