@@ -1,8 +1,8 @@
 class_name Gen3PlayerAvatar
 extends RefCounted
 
-## `field_player_avatar.c`: initialization, state transitions and queries, collision decisions, Strength, surf
-## dismount tasks and rotating-gate puzzles.
+## `field_player_avatar.c`: initialization, state transitions and queries, collision decisions, Strength, the surf
+## mount and dismount tasks and rotating-gate puzzles.
 
 enum Flag { ON_FOOT = 1, MACH_BIKE = 2, ACRO_BIKE = 4, SURFING = 8,
 	UNDERWATER = 16, CONTROLLABLE = 32, FORCED_MOVE = 64, DASH = 128 }
@@ -11,7 +11,12 @@ enum Collision { NONE, OUTSIDE_RANGE, IMPASSABLE, ELEVATION_MISMATCH, OBJECT_EVE
 	STOP_SURFING, LEDGE_JUMP, PUSHED_BOULDER, DIRECTIONAL_STAIR_WARP, WHEELIE_HOP,
 	ISOLATED_VERTICAL_RAIL, ISOLATED_HORIZONTAL_RAIL, VERTICAL_RAIL, HORIZONTAL_RAIL,
 	ROTATING_GATE = 8 }
-enum Task { NONE, PUSH_WAIT, PUSH_MOVE, SURF_WAIT, SURF_JUMP }
+enum Task { NONE, PUSH_WAIT, PUSH_MOVE, SURF_WAIT, SURF_JUMP, MOUNT_INIT, MOUNT_POSE, MOUNT_SHOW_MON, MOUNT_JUMP,
+	MOUNT_END, MOVE_INIT, MOVE_POSE, MOVE_SHOW_MON, MOVE_RUN }
+const FLDEFF_USE_SURF: int = 9
+## The sounds of `StartCutTreeFieldEffect` and `FieldMove_RockSmash`, which then re-enable the script.
+const FIELD_MOVE_SOUNDS: Dictionary = {2: "cut", 37: "rock_smash"}
+const MAP_TYPE_UNDERWATER: int = 5
 const MOVEMENT_TYPE_PLAYER: int = 0xB
 ## `sPlayerAvatarGfxIds`; FRLG's graphics-state indices differ from Hoenn's.
 const HOENN_GRAPHICS: Array = [[0, 89], [1, 90], [63, 91], [2, 92], [111, 112],
@@ -66,6 +71,9 @@ var controls_locked: bool = false
 var task: Task = Task.NONE
 var _task_direction: int = 0
 var _boulder_id: int = -1
+var _shown_mon: Array = []
+var _mount_cell: Vector2i = Vector2i.ZERO
+var _field_move: int = 0
 var _frlg: bool = false
 var _gate_map: String = ""
 var _gates: Array = []
@@ -130,7 +138,7 @@ func transition(transition_flags: int) -> void:
 		Gen3ObjectEvents.turn(player, player.movement_direction)
 		set_state_mask(STATE_FLAGS[shown])
 		if state == State.SURFING:
-			player.field_effect_sprite = objects.start_surf_blob(object_id)
+			player.field_effect_sprite = objects.start_surf_blob(object_id, player.current)
 			set_surf_bob(Gen3ObjectEvents.Bob.PLAYER_AND_MON)
 		elif state == State.UNDERWATER:
 			player.field_effect_sprite = objects.start_underwater_bob(object_id)
@@ -277,7 +285,7 @@ func begin_collision_movement(direction: int) -> Dictionary:
 
 
 ## `RunTasks` precedes `AnimateSprites`: call this once per field frame, after [method Gen3TrainerSee.run_tasks],
-## then [method Gen3ObjectEvents.step_movements].
+## then [method Gen3ObjectEvents.step_movements]. The show-mon task, created after these, runs last.
 func step_movement_tasks() -> Array:
 	var requests: Array = []
 	match task:
@@ -289,6 +297,11 @@ func step_movement_tasks() -> Array:
 			_start_dismount(requests)
 		Task.SURF_JUMP:
 			_finish_dismount(requests)
+		Task.MOUNT_INIT, Task.MOUNT_POSE, Task.MOUNT_SHOW_MON, Task.MOUNT_JUMP, Task.MOUNT_END:
+			_step_mount(requests)
+		Task.MOVE_INIT, Task.MOVE_POSE, Task.MOVE_SHOW_MON, Task.MOVE_RUN:
+			_step_field_move(requests)
+	objects.field_move_mon.run_task()
 	return requests
 
 
@@ -355,6 +368,123 @@ func _finish_dismount(requests: Array) -> void:
 	task = Task.NONE
 
 
+## `FldEff_UseSurf`; the request is `Overworld_ChangeMusicTo(MUS_SURF)`, which FRLG may skip for the map's music.
+func use_surf(species: int, personality: int, ot_id: int) -> Array:
+	_shown_mon = [species, personality, ot_id]
+	task = Task.MOUNT_INIT
+	objects.task_effects.append(FLDEFF_USE_SURF)
+	return [{"kind": "surf_music"}]
+
+
+## `Task_SurfFieldEffect`: pose, show the mon, then jump onto the blob in front.
+func _step_mount(requests: Array) -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	match task:
+		Task.MOUNT_INIT:
+			controls_locked = true
+			objects.freeze_except_player()
+			prevent_step = true
+			set_state_mask(Flag.SURFING)
+			_mount_cell = player.current + Gen3FieldCamera.DIRECTIONS[player.movement_direction]
+			task = Task.MOUNT_POSE
+		Task.MOUNT_POSE:
+			if Gen3ObjectEvents.movement_overridden(player) \
+					and Gen3ObjectEvents.clear_held_movement_if_finished(player) == 0:
+				return
+			_start_pose()
+			task = Task.MOUNT_SHOW_MON
+		Task.MOUNT_SHOW_MON:
+			if Gen3ObjectEvents.held_movement_status(player) == 0:
+				return
+			_show_mon(true)
+			task = Task.MOUNT_JUMP
+		Task.MOUNT_JUMP:
+			if objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FIELD_MOVE_SHOW_MON):
+				return
+			objects.set_graphics_id(player, graphics_for(State.SURFING))
+			Gen3ObjectEvents.clear_held_movement_if_finished(player)
+			objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x46 if _frlg else 0x3A,
+				player.movement_direction))
+			player.field_effect_sprite = objects.start_surf_blob(object_id, _mount_cell)
+			task = Task.MOUNT_END
+		Task.MOUNT_END:
+			_finish_mount(requests)
+
+
+## `SetPlayerAvatarFieldMove` (FRLG's `StartPlayerAvatarSummonMonForFieldMoveAnim`) held in its direction.
+func _start_pose() -> void:
+	objects.set_graphics_id(object(), graphics_for(State.FIELD_MOVE))
+	object().anim.start(0)
+	objects.set_held_movement(object(), 0x45 if _frlg else Gen3ObjectEvents.START_ANIM_IN_DIRECTION)
+
+
+func _show_mon(no_ducking: bool) -> void:
+	objects.field_move_mon.start(int(_shown_mon[0]), int(_shown_mon[1]), int(_shown_mon[2]),
+		int(objects.camera.header["map_type"]) in Gen3ObjectEvents.OUTDOOR_MAP_TYPES, no_ducking)
+
+
+## `CreateFieldMoveTask` (FRLG's `CreateFieldEffectShowMon`); false for an effect whose move function is not modeled.
+func use_field_move(effect: int, species: int, personality: int, ot_id: int) -> bool:
+	if not FIELD_MOVE_SOUNDS.has(effect):
+		return false
+	_field_move = effect
+	_shown_mon = [species, personality, ot_id]
+	task = Task.MOVE_INIT
+	objects.task_effects.append(effect)
+	return true
+
+
+## `Task_DoFieldMove_*`: underwater skips the pose; afterwards the player faces the same way in its state's graphics.
+func _step_field_move(requests: Array) -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	match task:
+		Task.MOVE_INIT:
+			controls_locked = true
+			prevent_step = true
+			if Gen3ObjectEvents.movement_overridden(player) \
+					and Gen3ObjectEvents.clear_held_movement_if_finished(player) == 0:
+				return
+			if int(objects.camera.header["map_type"]) == MAP_TYPE_UNDERWATER:
+				_show_mon(false)
+				task = Task.MOVE_SHOW_MON
+			else:
+				_start_pose()
+				task = Task.MOVE_POSE
+		Task.MOVE_POSE:
+			if Gen3ObjectEvents.held_movement_status(player) == 1:
+				_show_mon(false)
+				task = Task.MOVE_SHOW_MON
+		Task.MOVE_SHOW_MON:
+			if objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FIELD_MOVE_SHOW_MON):
+				return
+			objects.set_graphics_id(player, graphics_by_current_state())
+			if player.facing >= 1 and player.facing <= 4:
+				player.anim.start(player.facing - 1)
+			task = Task.MOVE_RUN
+		Task.MOVE_RUN:
+			requests.append({"kind": "sound", "name": FIELD_MOVE_SOUNDS[_field_move]})
+			objects.task_effects.erase(_field_move)
+			requests.append({"kind": "script_enable"})
+			prevent_step = false
+			task = Task.NONE
+
+
+func _finish_mount(requests: Array) -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	if Gen3ObjectEvents.clear_held_movement_if_finished(player) == 0:
+		return
+	prevent_step = false
+	flags &= ~Flag.CONTROLLABLE
+	objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0, player.movement_direction))
+	set_surf_bob(Gen3ObjectEvents.Bob.PLAYER_AND_MON)
+	objects.unfreeze_all()
+	controls_locked = false
+	objects.task_effects.erase(FLDEFF_USE_SURF)
+	if _frlg:
+		requests.append({"kind": "refresh_help_context"})
+	task = Task.NONE
+
+
 ## `RotatingGate_InitPuzzle` resets bytes in temp vars; graphics initialization reloads without resetting them.
 func load_rotating_gates(reset: bool = false) -> void:
 	_gate_map = "%d:%d" % [objects.camera.group, objects.camera.number]
@@ -410,8 +540,7 @@ func _gate_has_arm(gate: int, info: int) -> bool:
 	return arm >= 0 and int(GATE_ARMS[int(_gates[gate][2])][arm * 2 + info % 2]) != 0
 
 
-## `RotatingGate_CanRotate` blocks collision 1 only, including its cartridge bug that permits arms through
-## cells with collision 2 or 3.
+## `RotatingGate_CanRotate` blocks collision 1 only, its bug letting arms through collision 2 or 3.
 func _gate_can_rotate(gate: int, center: Vector2i, rotation: int) -> bool:
 	var arms: Array = GATE_ARMS[int(_gates[gate][2])]
 	for arm: int in arms.size():

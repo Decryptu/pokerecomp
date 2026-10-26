@@ -98,6 +98,9 @@ func _one_game() -> void:
 	_bubbles()
 	_tracks()
 	_surf_blob()
+	_berry_sparkle()
+	_field_move_streaks()
+	_spinda_spots()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -1024,6 +1027,36 @@ func _surf_blob() -> void:
 	var expected: String = "464310fcdc95b8b737906c1244f975fe26efd70e" \
 		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "2fe3315bafefd4a2dcbff52c40d8e05944b20f97"
 	_effect_graphics({8: _r.data.world_surf_blob_graphics()}, "gen3_surf_blob", expected)
+
+
+func _berry_sparkle() -> void:
+	if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		_r.check(_r.data.world_map_effect_graphics(23).is_empty(), "FRLG's stubbed effect imports no sparkle")
+		return
+	var row: Dictionary = _r.data.world_map_effect_graphics(23)
+	if _r.check(int(row.get("palette", -1)) == 5, "the berry sparkle draws with palette slot 5"):
+		_effect_graphics({23: row}, "gen3_berry_sparkle", "9aef33124e47cb8e0668151b143509c17b58871e")
+
+
+## pret's streak PNGs as tiles and colours, then their `.bin` tilemaps, indoors then outdoors; all games agree.
+func _field_move_streaks() -> void:
+	var lines := PackedStringArray()
+	for outdoors: bool in [false, true]:
+		lines.append(_r.data.world_field_move_streaks(outdoors).hex_encode())
+	_r.digest_matches("gen3_field_move_streaks", lines, "84ba4b8096e5e59cff6f32bb31c59954d0346b83")
+
+
+## pret's Spinda front PNG with `DRAW_SPINDA_SPOTS` transliterated over an 8 KB pic buffer, frame 0 kept.
+func _spinda_spots() -> void:
+	var lines := PackedStringArray()
+	for personality: int in [0, 0x12345678, 0xFFFFFFFF, 0x0F0F0F0F, 0xF0F0F0F0]:
+		var digest := HashingContext.new()
+		digest.start(HashingContext.HASH_SHA1)
+		digest.update(Gen3FieldMoveMon.front_pic_tiles(_r.data, 327, personality))
+		lines.append(digest.finish().hex_encode())
+	var expected: String = "77421fb580790e06b122f83ab60d0394239ab82c" \
+		if _r.data.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE] else "f8c0d46b2682294c11fd3c251784e3c4a7307bb7"
+	_r.digest_matches("gen3_spinda_spots", lines, expected)
 
 
 ## Digests come from pret's PNGs, palettes and anim tables, encoded independently in tile order.
@@ -2045,8 +2078,7 @@ func _approach_finishes(see: Gen3TrainerSee) -> bool:
 	return false
 
 
-## `gBerries` fields agree with berry.c; stage selections come from each byte-matching build's graphics and
-## palette pointer tables.
+## `gBerries` fields agree with berry.c; stages come from each matching build's graphics and palette pointers.
 func _berries() -> void:
 	var data: GameData = _r.data
 	var lines := PackedStringArray()

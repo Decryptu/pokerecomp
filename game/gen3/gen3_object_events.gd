@@ -54,6 +54,7 @@ const JUMP_SHAPES: Dictionary = {
 	Jump.ACRO_FAR: {"distance": 2, "arc": 0, "shadow": true, "wheelie": true},
 }
 const FLDEFF_SHADOW: int = 3
+const FLDEFF_FIELD_MOVE_SHOW_MON: int = 6
 const FLDEFF_SURF_BLOB: int = 8
 const FLDEFF_DUST: int = 10
 const UNDERWATER_BOB: int = -1
@@ -61,6 +62,7 @@ enum Bob { NONE, PLAYER_AND_MON, JUST_MON }
 ## `surfBlobDirectionAnims`, by movement direction.
 const SURF_BLOB_ANIMS: Array[int] = [0, 0, 1, 2, 3, 0, 0, 1, 1]
 const FLDEFF_SAND_FOOTPRINTS: int = 13
+const FLDEFF_BERRY_TREE_GROWTH_SPARKLE: int = 23
 const FLDEFF_DEEP_SAND_FOOTPRINTS: int = 24
 const FLDEFF_FEET_IN_FLOWING_WATER: int = 34
 const FLDEFF_BIKE_TIRE_TRACKS: int = 35
@@ -73,8 +75,8 @@ const TRACK_EFFECTS: Array[int] = [FLDEFF_SAND_FOOTPRINTS, FLDEFF_DEEP_SAND_FOOT
 const BIKE_TRACK_ANIMS: Array[int] = [1, 2, 7, 8, 1, 2, 6, 5, 5, 8, 3, 4, 6, 7, 3, 4]
 enum Tracks { NONE, FOOT, BIKE_TIRE }
 ## Map effect: y below the cell's corner, priority (-1: the object's), subpriority (-1: one ahead of it).
-const MAP_EFFECT_PLACEMENT: Dictionary = {5: [0, 3, 151], 13: [8, 2, 149], 14: [8, -1, 0], 24: [8, 2, 149],
-	35: [8, 2, 149], 49: [8, 2, -1], 53: [0, 1, 82]}
+const MAP_EFFECT_PLACEMENT: Dictionary = {5: [0, 3, 151], 13: [8, 2, 149], 14: [8, -1, 0], 23: [4, -1, -1],
+	24: [8, 2, 149], 35: [8, 2, 149], 49: [8, 2, -1], 53: [0, 1, 82]}
 const DISPLAY_WIDTH: int = 240
 const DISPLAY_HEIGHT: int = 160
 const MOVEMENT_TYPE_INVISIBLE: int = 0x4C
@@ -237,8 +239,7 @@ const MORE_ACTIONS: Array = [
 ## `MovementAction_PauseSpriteAnim` runs every frame while the completed hold remains set.
 const PAUSE_AFTER: Array[int] = [Motion.FACE, Motion.WALK, Motion.IN_PLACE, Motion.JUMP, Motion.ANIM, Motion.FIGURE_8]
 
-## `MetatileBehavior_Is*Blocked` by the side each blocks. Ruby, Sapphire and Emerald add the two-sided rows
-## and the secret base's breakable door.
+## `MetatileBehavior_Is*Blocked` by side; Hoenn adds the two-sided rows and the secret base's breakable door.
 const BLOCKED_SIDES: Dictionary = {
 	Direction.SOUTH: [0x33, 0x36, 0x37], Direction.NORTH: [0x32, 0x34, 0x35],
 	Direction.WEST: [0x31, 0x35, 0x37], Direction.EAST: [0x30, 0x34, 0x36],
@@ -249,8 +250,7 @@ const HOENN_BLOCKED_SIDES: Dictionary = {
 }
 ## `GetOppositeDirection`, diagonals included.
 const OPPOSITE: Array[int] = [Direction.NONE, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, 8, 7, 6, 5]
-## FRLG's `ShouldInitObjectEventStateFromTemplate` holds CUT_TREE/ROCK_SMASH_ROCK back near connections,
-## setting their temporary hide flags.
+## FRLG's `ShouldInitObjectEventStateFromTemplate` hides CUT_TREE/ROCK_SMASH_ROCK near connections by temp flag.
 const FRLG_OBSTACLES: Array[int] = [95, 96]
 const FRLG_HIDE_FLAGS: Vector2i = Vector2i(0x11, 0x1F)
 ## `IsMapTypeOutdoors`: route, town, underwater, city and ocean route.
@@ -299,8 +299,7 @@ class ObjectEvent:
 	var in_flowing_water: bool = false
 	var in_sand_pile: bool = false
 	var in_hot_springs: bool = false
-	## The sprite: its image animation, `x2` (`jump_y` is `y2`), the affine anim a walk started and the pause
-	## flags `FreezeObjectEvent` backs up.
+	## The sprite's anims, `x2` (`jump_y` is `y2`) and the pause flags `FreezeObjectEvent` backs up.
 	var anim := Gen3SpriteAnim.new()
 	var x2: int = 0
 	var affine := Gen3AffineAnim.new()
@@ -350,6 +349,10 @@ var _player_tile_center: bool = false
 var camera: Gen3FieldCamera
 var events: Gen3EventData
 var sprites: Gen3ObjectSprites
+## `FLDEFF_FIELD_MOVE_SHOW_MON`; its task runs from [method Gen3PlayerAvatar.step_movement_tasks].
+var field_move_mon: Gen3FieldMoveMon
+## Task effects in `sActiveList` until their task calls `FieldEffectActiveListRemove`.
+var task_effects: Array[int] = []
 var objects: Array[ObjectEvent] = []
 ## `gSaveBlock1Ptr->objectEventTemplates` for the camera's map.
 var templates: Array = []
@@ -393,6 +396,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	sprites = Gen3ObjectSprites.new(camera.data, palettes)
 	sprites.effects = _effect_sprites
 	sprites.init_palettes(0)
+	field_move_mon = Gen3FieldMoveMon.new(sprites)
 	load_templates()
 
 
@@ -869,9 +873,8 @@ func template_by_id(local_id: int, number: int, group: int) -> Dictionary:
 	return {}
 
 
-## FRLG's `HandleBoulderFallThroughHole` and `HandleBoulderActivateVictoryRoadSwitch`. Reveal flags use the
-## template's u16 trainer field, not the object's truncated trainer type. Switches ignore elevation and
-## variable gates and visit all coordinate rows in order.
+## FRLG's `HandleBoulderFallThroughHole`/`ActivateVictoryRoadSwitch`: reveal flags read the template's u16 trainer
+## field, not the truncated type; switches ignore elevation and variable gates and visit every row in order.
 func boulder_landing(object: ObjectEvent) -> Array:
 	var requests: Array = []
 	if not _frlg:
@@ -925,6 +928,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	for slot: int in COUNT:
 		_step_disguise_effect(objects[slot], slot, requests)
 	_step_effect_sprites(requests)
+	requests.append_array(field_move_mon.animate())
 	sprites.step_reflections(self)
 	return requests
 
@@ -956,7 +960,8 @@ func _init_movement_type(object: ObjectEvent, slot: int, requests: Array) -> voi
 
 func start_effect_sprite(object: ObjectEvent, slot: int, effect: int, passes: int, follow: bool,
 		requests: Array) -> Dictionary:
-	if effect in [ASH_PUFF, FLDEFF_FEET_IN_FLOWING_WATER] or Gen3World.MAP_EFFECT_TEMPLATES.has(effect):
+	if effect in [ASH_PUFF, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_BERRY_TREE_GROWTH_SPARKLE] \
+			or Gen3World.MAP_EFFECT_TEMPLATES.has(effect):
 		return _start_map_effect(object, slot, effect, requests)
 	var request: Dictionary = _effect_request(object, slot, effect)
 	var sprite: Dictionary = {"request": request, "passes": 0, "end": passes, "follow": follow}
@@ -1027,7 +1032,7 @@ func _init_linked_map_effect(object: ObjectEvent, sprite: Dictionary, requests: 
 
 
 ## `FldEff_SurfBlob`: off the active list at once, alive until [method destroy_effect_sprite].
-func start_surf_blob(slot: int) -> Dictionary:
+func start_surf_blob(slot: int, at: Vector2i) -> Dictionary:
 	var object: ObjectEvent = objects[slot]
 	var info: Dictionary = camera.data.world_surf_blob_graphics()
 	var sprite_slot: int = sprites.effect_slot()
@@ -1038,7 +1043,7 @@ func start_surf_blob(slot: int) -> Dictionary:
 	anim.images = info["images"]
 	var sprite: Dictionary = {"request": _effect_request(object, slot, FLDEFF_SURF_BLOB), "sprite_slot": sprite_slot,
 		"anim": anim, "info": info, "map_effect": true, "unlisted": true, "passes": 0, "end": -1, "follow": false,
-		"position": camera.sprite_position(object.current) + Vector2i(8, 8), "priority": object.priority,
+		"position": camera.sprite_position(at) + Vector2i(8, 8), "priority": object.priority,
 		"subpriority": 150, "palette": 0, "bob": Bob.NONE, "velocity": 0 if _frlg else -1, "timer": 0,
 		"interval": 0, "last_cell": Vector2i(-1, -1), "y2": 0}
 	_effect_sprites.append(sprite)
@@ -1112,6 +1117,10 @@ func icon_effects() -> Array:
 
 
 func field_effect_active(effect: int) -> bool:
+	if effect == FLDEFF_FIELD_MOVE_SHOW_MON:
+		return field_move_mon.active
+	if effect in task_effects:
+		return true
 	return _effect_sprites.any(func(sprite: Dictionary) -> bool:
 		return sprite["request"]["effect_id"] == effect and not sprite.get("unlisted", false))
 
@@ -1456,8 +1465,7 @@ func _start_anim_in_direction(object: ObjectEvent, direction: int, anim: int, op
 	set_direction(object, direction)
 
 
-## FRLG's `MovementAction_RaiseHand*_Step1` and the head shake: stop on the anim's end, hop twice and hold 81
-## frames, or sway one sine period.
+## FRLG's `MovementAction_RaiseHand*_Step1`, head shake: end with the anim, hop twice, hold 81, or sway once.
 func _advance_start_anim(object: ObjectEvent, mode: int) -> bool:
 	var data: PackedInt32Array = object.sprite_data
 	if mode == 2:
@@ -1583,8 +1591,7 @@ func _run_levitate_tasks() -> void:
 		task["timer"] = (int(task["timer"]) + 1) & 0xFFFF
 
 
-## `MovementAction_LockAnim_Step0`/`UnlockAnim_Step0` over 16 ids: a new id takes the first free slot, and an
-## id already held changes nothing.
+## `MovementAction_LockAnim_Step0`/`UnlockAnim_Step0`: 16 ids, a new one in the first free slot, repeats ignored.
 func _lock_anim(object: ObjectEvent) -> void:
 	if _locked_anims == null:
 		var ids := PackedInt32Array()
@@ -2028,15 +2035,7 @@ func _set_berry_graphics(object: ObjectEvent) -> void:
 	object.anim.start(stage - 1)
 
 
-func _berry_sparkle(object: ObjectEvent, slot: int, requests: Array) -> void:
-	var request: Dictionary = _effect_request(object, slot, 23)
-	request["x"] = object.current.x
-	request["y"] = object.current.y
-	requests.append(request)
-
-
-## `MovementType_BerryTreeGrowth`: each TRUE callback runs the next state in the same frame; the two sparkle
-## phases each spend timer values 1 through 65.
+## `MovementType_BerryTreeGrowth`: a TRUE callback runs the next state at once; each sparkle phase spends timers 1-65.
 func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 	while true:
 		match object.movement_state:
@@ -2047,7 +2046,7 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 				object.invisible = stage == 0
 				if stage == 0:
 					if not object.berry_just_picked and object.anim.anim_num == 4:
-						_berry_sparkle(object, slot, requests)
+						start_effect_sprite(object, slot, FLDEFF_BERRY_TREE_GROWTH_SPARKLE, -1, false, requests)
 						object.anim.anim_num = 0
 					return
 				if object.anim.anim_num == stage - 1:
@@ -2067,7 +2066,7 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 				object.movement_state = 3
 				object.movement_delay = 0
 				object.berry_sparkling = true
-				_berry_sparkle(object, slot, requests)
+				start_effect_sprite(object, slot, FLDEFF_BERRY_TREE_GROWTH_SPARKLE, -1, false, requests)
 			3, 4:
 				object.movement_delay += 1
 				object.invisible = bool(object.movement_delay & 2)
@@ -2083,8 +2082,7 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 					object.berry_sparkling = false
 
 
-## `MovementType_CopyPlayer*`: latch the entry facing once, and resume holds through the shared executor. The
-## field input host supplies T_TILE_CENTER.
+## `MovementType_CopyPlayer*` latches the entry facing once; the field input host supplies T_TILE_CENTER.
 func _step_copy_player(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var player: ObjectEvent = _player_event()
 	if player == null and object.movement_state != 2:
@@ -2143,8 +2141,7 @@ func _is_faraway_mew(object: ObjectEvent) -> bool:
 		and object.graphics_id == 229
 
 
-## `faraway_island.c`: rock escape precedes distance avoidance; the step counter selects candidates without
-## consuming the random stream.
+## `faraway_island.c`: rocks before distance; the step counter picks candidates without consuming the RNG.
 func _mew_direction(player: ObjectEvent) -> int:
 	var mew: ObjectEvent = null
 	for candidate: ObjectEvent in objects:

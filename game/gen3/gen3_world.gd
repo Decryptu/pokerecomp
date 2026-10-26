@@ -46,7 +46,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 		return {}
 	for step: Array in [["shadow_templates", _shadow_templates], ["icon_template", _icon_templates],
 			["grass_palette", _ground_templates], ["ash_palette", _ash_template],
-			["shadow_templates", _surf_blob_template]]:
+			["shadow_templates", _surf_blob_template], ["grass_palette", _sparkle_template],
+			["field_move_streaks", _field_move_streaks], ["spinda_spots", _spinda_spots]]:
 		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
 			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
@@ -76,8 +77,7 @@ static func _movement_types(rom: RomFile, layout: Dictionary) -> Array:
 	return out
 
 
-## `gBerries` has 43 padded 28-byte records. Hoenn's graphics lookup also accepts ID 44: its pic and palette
-## pointers run into the following tables.
+## `gBerries`' 43 padded 28-byte records; Hoenn's graphics also take ID 44, its pointers read past the table.
 static func _berries(rom: RomFile, layout: Dictionary, object_graphics: Dictionary, graphics: Dictionary) -> Array:
 	var at: int = int(layout["berries"])
 	if not rom.in_bounds(at, 43 * 28):
@@ -209,6 +209,51 @@ static func _surf_blob_template(rom: RomFile, layout: Dictionary, out: Dictionar
 	if row.is_empty() or int(row["palette_tag"]) != 0xFFFF:
 		return false
 	out["surf_blob_template"] = {"8": row}
+	return true
+
+
+## `FLDEFFOBJ_SPARKLE`, which only Hoenn's `FldEff_BerryTreeGrowthSparkle` draws, in palette slot 5.
+static func _sparkle_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		return true
+	var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + 22 * 4, 24)
+	var row: Dictionary = _sprite_template(rom, at, 1, 6, Vector2i(16, 16), out, graphics)
+	if row.is_empty() or int(row["palette_tag"]) != 0xFFFF:
+		return false
+	row["palette"] = 5
+	out["map_effect_templates"]["23"] = row
+	return true
+
+
+## `FieldMoveShowMon*Effect_LoadGfx`'s tiles, palette and tilemap: only copied tiles, tile 0 (BG0's fill) blank.
+static func _field_move_streaks(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	graphics["field_move_streaks"] = {}
+	out["field_move_streaks"] = []
+	for outdoors: int in 2:
+		var at: int = int(layout["field_move_streaks" if outdoors else "field_move_streaks_indoors"])
+		var size: int = Gen3FieldMoveMon.TILE_BYTES[outdoors]
+		var length: int = size + Gen3Layout.PALETTE_BYTES + Gen3FieldMoveMon.TILEMAP_WORDS * 2
+		if not rom.in_bounds(at, length) or rom.slice(at, GbaTiles.TILE_BYTES).count(0) != GbaTiles.TILE_BYTES:
+			return false
+		for word: int in Gen3FieldMoveMon.TILEMAP_WORDS:
+			var entry: int = rom.u16le(at + size + Gen3Layout.PALETTE_BYTES + word * 2)
+			if entry & 0x3FF >= size / GbaTiles.TILE_BYTES or entry >> 12 != 0:
+				return false
+		graphics["field_move_streaks"][str(at)] = {"bytes": Array(rom.slice(at, length))}
+		out["field_move_streaks"].append(at)
+	return true
+
+
+static func _spinda_spots(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var at: int = int(layout["spinda_spots"])
+	if not rom.in_bounds(at, Gen3FieldMoveMon.SPINDA_SPOT_BYTES * 4):
+		return false
+	for spot: int in 4:
+		var x: int = rom.u8(at + spot * Gen3FieldMoveMon.SPINDA_SPOT_BYTES)
+		if x < 8 or x + 23 > 64:
+			return false
+	graphics["spinda_spots"] = {str(at): {"bytes": Array(rom.slice(at, Gen3FieldMoveMon.SPINDA_SPOT_BYTES * 4))}}
+	out["spinda_spots"] = at
 	return true
 
 

@@ -24,8 +24,7 @@ var layout_height: int = 0
 var blocks := PackedInt32Array()
 var primary: Dictionary = {}
 var secondary: Dictionary = {}
-## FireRed and LeafGreen tile the layout's own border size from the layout's origin; Ruby, Sapphire and
-## Emerald read a 2x2 by coordinate parity.
+## FRLG tile the layout's own border from its origin; Ruby, Sapphire and Emerald read a 2x2 by coordinate parity.
 var _sized_border: bool = false
 var _border := PackedByteArray()
 var _border_width: int = 2

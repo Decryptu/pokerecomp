@@ -51,6 +51,8 @@ var effects: Array[Dictionary] = []
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
 var reflections: Array[Dictionary] = []
+## `CreateMonPicSprite` sprites: centre `position`, `priority`, `subpriority`, `palette` and 64x64 `tiles`.
+var pics: Array[Dictionary] = []
 var _reflection_anim := Gen3AffineAnim.new()
 var _ruby: bool = false
 var _order: Array[int] = []
@@ -139,6 +141,8 @@ func oam(objects: Gen3ObjectEvents, origin: Vector2i) -> Array:
 	for reflection: Dictionary in reflections:
 		var entry: Dictionary = _reflection_entry(objects, reflection, origin)
 		entries[int(reflection["sprite_slot"])] = entry
+	for pic: Dictionary in pics:
+		entries[int(pic["sprite_slot"])] = _pic_entry(pic)
 	if weather != null:
 		entries.merge(weather.sprites.oam_entries(weather.contrast_slot, weather.picture_slot))
 	_sort(entries)
@@ -169,7 +173,7 @@ func effect_slot(reverse: bool = true) -> int:
 
 func taken_slots() -> Array:
 	var out: Array = range(Gen3ObjectEvents.COUNT)
-	for row: Dictionary in effects + reflections:
+	for row: Dictionary in effects + reflections + pics:
 		out.append(int(row.get("sprite_slot", -1)))
 	return out
 
@@ -275,6 +279,14 @@ func _shadow_entry(objects: Gen3ObjectEvents, shadow: Dictionary, origin: Vector
 	return {"y": at.y & 0xFF, "key": (object.priority << 8) | 148,
 		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i.ZERO, "priority": object.priority,
 			"palette": 0, "size": size, "tiles": data.world_sprite_image(int(frame[0]), int(frame[1]))}}
+
+
+func _pic_entry(pic: Dictionary) -> Dictionary:
+	var at: Vector2i = pic["position"] - Gen3FieldMoveMon.PIC_SIZE / 2
+	var priority: int = int(pic["priority"])
+	return {"y": at.y & 0xFF, "key": (priority << 8) | int(pic["subpriority"]),
+		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i.ZERO, "priority": priority,
+			"palette": int(pic["palette"]), "size": Gen3FieldMoveMon.PIC_SIZE, "tiles": pic["tiles"]}}
 
 
 func load_effect_palette(info: Dictionary) -> int:
