@@ -2163,7 +2163,7 @@ func test_field_move_task_poses_shows_the_mon_then_runs_the_move() -> void:
 			var expected: Array = [[1, T.MOVE_SHOW_MON if map_type != 3 else T.MOVE_POSE]]
 			if map_type == 3:
 				expected.append([start, T.MOVE_SHOW_MON])
-			expected.append_array([[start + 30, "cry"], [start + 82, T.MOVE_RUN], [start + 83, "rock_smash"],
+			expected.append_array([[start + 30, "cry"], [start + 82, T.MOVE_RUN], [start + 83, "m_rock_throw"],
 				[start + 83, "script_enable"], [start + 83, T.NONE]])
 			assert_eq(marks, expected, "%s map type %d" % [id, map_type])
 			assert_eq([avatar.prevent_step, avatar.objects.events.controls_locked, objects.field_effect_active(37)], [false, true, false])
@@ -2227,6 +2227,72 @@ func test_waterfall_shows_the_mon_then_climbs_until_off_the_falls() -> void:
 		assert_gt(end, 83, "the climb waits for the banner")
 
 
+## `SetUpFieldMove_SecretPower` wants no base of the player's own and a spot to the north. The entrance sprite sits
+## at `AdjustSecretPowerSpritePixelOffsets` (Emerald's bike column 16); the cave opens on its 20th frame, the tree on its 40th.
+func test_secret_power_opens_the_entrance_then_resumes_the_script() -> void:
+	var frlg: Gen3PlayerAvatar = _surfing_avatar(RomRegistry.FIRERED, false, Gen3PlayerAvatar.Flag.ON_FOOT)
+	assert_false(frlg.use_field_move(Gen3SecretPower.FLDEFF_USE_CAVE, 25, 0, 0xFF0000), "FRLG's script is empty")
+	for cave: bool in [true, false]:
+		var avatar: Gen3PlayerAvatar = _secret_power_avatar(cave)
+		var objects: Gen3ObjectEvents = avatar.objects
+		var grid: Gen3MapGrid = objects.camera.grid
+		var spot: int = grid.metatile_id_at(12, 11)
+		var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+		var events: Gen3EventData = objects.events
+		assert_eq(objects.secret_power.set_up(player), -1, "facing south")
+		Gen3ObjectEvents.set_direction(player, Gen3ObjectEvents.Direction.NORTH)
+		events.secret_bases = [7]
+		assert_eq(objects.secret_power.set_up(player), -1, "the player owns a base")
+		events.secret_bases = [0, 0x1234]
+		assert_eq(objects.secret_power.set_up(player), 100 if cave else 200)
+		assert_eq([events.current_secret_base, events.var_get(0x800D), events.var_get(0x4054)], [0x1234, 1, 1])
+		assert_true(avatar.use_field_move(Gen3SecretPower.FLDEFF_USE_CAVE if cave else Gen3SecretPower.FLDEFF_USE_TREE,
+			25, 0, 0xFF0000))
+		var marks: Array = []
+		var start: int = -1
+		for frame: int in range(1, 200):
+			for request: Dictionary in avatar.step_movement_tasks() + objects.step_movements():
+				if request["kind"] in ["sound", "script_enable"]:
+					marks.append([frame, request.get("name", request["kind"])])
+			if start < 0 and objects.secret_power.active:
+				start = frame
+				var corner: Vector2i = Gen3ObjectSprites.corner(player, objects.graphics_info(player.graphics_id),
+					objects.camera.screen_origin())
+				assert_eq(objects.secret_power.sprite["position"] - Vector2i(corner.x & 0x1FF, corner.y & 0xFF),
+					Vector2i(8 if cave else 16, 8))
+				assert_eq(objects.secret_power.sprite["flip"], Vector2i(int(not cave), 0))
+			if start > 0 and grid.metatile_id_at(12, 11) != spot and marks.size() == 1:
+				marks.append([frame, "open"])
+		assert_eq(marks.map(func(mark: Array) -> Array: return [mark[0] - start, mark[1]]),
+			[[0, "m_rock_throw"], [20, "open"], [42, "script_enable"]] if cave
+			else [[0, "m_scratch"], [40, "open"], [41, "script_enable"]])
+		assert_eq([grid.metatile_id_at(12, 11), grid.collision_at(12, 11)], [0x1A1 if cave else 0x037, 3])
+		assert_eq([objects.field_effect_active(55), objects.field_effect_active(56), objects.sprites.pics.size(),
+			objects.sprites.palette.sprite_index(0x1003 if cave else 0x1008)], [false, false, 0, 0xFF])
+
+
+## Ruby on foot before a red cave, or Emerald on the Mach Bike before a right tree, with a base event in front.
+func _secret_power_avatar(cave: bool) -> Gen3PlayerAvatar:
+	var avatar: Gen3PlayerAvatar = _surfing_avatar(RomRegistry.RUBY if cave else RomRegistry.EMERALD, false,
+		Gen3PlayerAvatar.Flag.ON_FOOT if cave else Gen3PlayerAvatar.Flag.MACH_BIKE)
+	var objects: Gen3ObjectEvents = avatar.objects
+	var data: GameData = objects.camera.data
+	_streak_runs(data)
+	data._world_scripts["native"] = {"cave_use_secret_power": 100, "tree_use_secret_power": 200}
+	data._world_scripts["secret_power_templates"] = {}
+	for effect: int in [Gen3SecretPower.FLDEFF_CAVE, Gen3SecretPower.FLDEFF_TREE]:
+		data._world_scripts["secret_power_templates"][str(effect)] = {"width": 16, "height": 16, "images": 5,
+			"anims": [[0x80000, 0x80001, 0xFFFF], [], [0x480000, 0x480001, 0xFFFF]], "palette_offset": 9,
+			"palette_tag": 0x1003 if effect == Gen3SecretPower.FLDEFF_CAVE else 0x1008}
+	data._world_headers["0:0"]["events"]["backgrounds"] = [{"kind": 8, "x": 5, "y": 4, "secret_base_id": 0x1234}]
+	objects.camera.header["map_type"] = 3
+	var spot: int = 0x1A0 if cave else 0x027
+	objects.camera.grid._behaviors[spot] = 0x90 if cave else Gen3SecretPower.MB_TREE_RIGHT
+	objects.camera.grid.set_metatile_entry(12, 11, 0x1000 | spot)
+	objects.events.secret_bases = [0, 0x1234]
+	return avatar
+
+
 ## fldeff_cut.c: Emerald's Hyper Cutter reaches the ring past passable cells and fixes long-grass roots, Ruby
 ## re-reads the 3x3 behaviors, FRLG reads terrain. Blade offsets come from pret's `gSineTable` and
 ## `CutGrassSpriteCallback2`; the first blade's end callback unlocks the field and frees the palette.
@@ -2265,7 +2331,7 @@ func test_cut_grass_mows_the_square_and_spins_the_blades() -> void:
 		var offsets: Array = []
 		for frame: int in range(1, 130):
 			for request: Dictionary in avatar.step_movement_tasks() + objects.step_movements():
-				if request.get("name", "") == "cut" or (request["kind"] == "spawn" and request["object_id"] == 0):
+				if request.get("name", "") == "m_cut" or (request["kind"] == "spawn" and request["object_id"] == 0):
 					marks.append([frame, request.get("name", "spawn")])
 			var blades: Array[Dictionary] = objects.cut_grass.blades
 			if frame in [87, 115]:
@@ -2280,7 +2346,7 @@ func test_cut_grass_mows_the_square_and_spins_the_blades() -> void:
 				assert_true(objects.events.controls_locked)
 			if frame == 116:
 				marks.append([frame, objects.events.controls_locked, objects.field_effect_active(58)])
-		assert_eq(marks, [[86, "cut"], [86, "spawn"], [116, false, false]], str(id))
+		assert_eq(marks, [[86, "m_cut"], [86, "spawn"], [116, false, false]], str(id))
 		assert_eq(offsets, [Vector2i(0, 8), Vector2i(5, -6), Vector2i(-85, 84), Vector2i(120, 0)])
 		assert_eq(tall.map(func(cell: Vector2i) -> bool: return grid.metatile_id_at(cell.x, cell.y) == 0x001),
 			mowed[id], str(id))

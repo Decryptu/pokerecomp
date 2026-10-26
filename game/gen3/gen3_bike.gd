@@ -153,8 +153,7 @@ func move(direction: int, new_keys: int, held_keys: int, requests: Array) -> voi
 		_acro_transition(_acro_input(new_keys, held_keys), requests)
 
 
-## `GetMachBikeTransition`: `MACH_TRANS_KEEP_MOVING` indexes `TrySpeedUp` and `MACH_TRANS_START_MOVING`
-## `TrySlowDown`, so letting go or turning while rolling slows down the old way.
+## `GetMachBikeTransition`: KEEP_MOVING indexes `TrySpeedUp`, START_MOVING `TrySlowDown`; letting go slows that way.
 func _move_mach(requests: Array) -> void:
 	var moving: int = avatar.object().movement_direction
 	var rolling: bool = speed != Speed.STANDING

@@ -49,7 +49,7 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 			["grass_palette", _ground_templates], ["ash_palette", _ash_template],
 			["shadow_templates", _surf_blob_template], ["grass_palette", _sparkle_template],
 			["field_move_streaks", _field_move_streaks], ["spinda_spots", _spinda_spots],
-			["cut_grass_template", _cut_grass_template]]:
+			["cut_grass_template", _cut_grass_template], ["secret_power_templates", _secret_power_templates]]:
 		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
 			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
@@ -227,6 +227,26 @@ static func _cut_grass_template(rom: RomFile, layout: Dictionary, out: Dictionar
 	return true
 
 
+## The cave, tree and shrub `SpriteTemplate`s in a row, then the cave's (0x1003) and plants' (0x1008) palettes.
+static func _secret_power_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var at: int = int(layout["secret_power_templates"])
+	var rows: Dictionary = {}
+	for index: int in 3:
+		var effect: int = Gen3SecretPower.FLDEFF_CAVE + index
+		var tag: int = 0x1003 if index == 0 else 0x1008
+		var sprite_palette: int = at + 72 + int(index > 0) * 8
+		var palette: int = Gen3Layout.read_pointer(rom, sprite_palette, Gen3Layout.PALETTE_BYTES, 2)
+		var row: Dictionary = _sprite_template(rom, at + index * 24, 4 if index == 1 else 1, 5, Vector2i(16, 16), out,
+			graphics)
+		if row.is_empty() or palette < 0 or int(row["palette_tag"]) != tag or rom.u16le(sprite_palette + 4) != tag:
+			return false
+		graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
+		row["palette_offset"] = palette
+		rows[str(effect)] = row
+	out["secret_power_templates"] = rows
+	return true
+
+
 ## `FLDEFFOBJ_SPARKLE`, which only Hoenn's `FldEff_BerryTreeGrowthSparkle` draws, in palette slot 5.
 static func _sparkle_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
 	if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
@@ -307,7 +327,7 @@ static func _sprite_template(rom: RomFile, at: int, anim_count: int, image_count
 	var images: int = Gen3Layout.read_pointer(rom, at + 12, image_count * 8)
 	if oam < 0 or anims < 0 or images < 0 or rom.u16le(at) != 0xFFFF:
 		return {}
-	var sequences: Array = _anim_table(rom, anims)
+	var sequences: Array = _anim_table(rom, anims, anim_count)
 	if sequences.size() != anim_count:
 		return {}
 	_read_images(rom, images, image_count - 1, out, graphics)
@@ -526,9 +546,10 @@ static func _step_anims(rom: RomFile, layout: Dictionary, tables: Dictionary, ou
 	return rom.in_bounds(at, 8)
 
 
-static func _anim_table(rom: RomFile, at: int) -> Array:
+## Up to [param count] sequences, or until a word is no sequence pointer; tables can run into the next one.
+static func _anim_table(rom: RomFile, at: int, count: int = -1) -> Array:
 	var out: Array = []
-	while true:
+	while out.size() != count:
 		var sequence: int = Gen3Layout.read_pointer(rom, at + out.size() * 4, 4)
 		var words: Array = [] if sequence < 0 else _anim_sequence(rom, sequence)
 		if words.is_empty():

@@ -62,10 +62,11 @@ const FLDEFF_USE_SURF: int = 9
 const FLDEFF_USE_STRENGTH: int = 40
 const FLDEFF_USE_WATERFALL: int = 43
 ## The sounds of `StartCutTreeFieldEffect` and `FieldMove_RockSmash`, which then re-enable the script.
-const FIELD_MOVE_SOUNDS: Dictionary = {2: "cut", 37: "rock_smash"}
+const FIELD_MOVE_SOUNDS: Dictionary = {2: "m_cut", 37: "m_rock_throw"}
 ## The modeled `CreateFieldMoveTask` effects and the `GAME_STAT_USED_*` their `FldEff_Use*` counts, or -1.
 const FIELD_MOVE_STATS: Dictionary = {Gen3CutGrass.FLDEFF_USE_CUT_ON_GRASS: 18, Gen3CutGrass.FLDEFF_USE_CUT_ON_TREE: 18,
-	37: 19, FLDEFF_USE_STRENGTH: -1}
+	37: 19, FLDEFF_USE_STRENGTH: -1, Gen3SecretPower.FLDEFF_USE_CAVE: -1, Gen3SecretPower.FLDEFF_USE_TREE: -1,
+	Gen3SecretPower.FLDEFF_USE_SHRUB: -1}
 const MB_WATERFALL: int = 0x13
 ## Ruby's `ShouldDoBrailleStrengthEffect` spots and `DoBrailleStrengthEffect`'s chamber entrance, in backup cells.
 const DESERT_RUINS: Vector2i = Vector2i(24, 6)
@@ -600,8 +601,7 @@ func _start_mat(spin: bool, requests: Array) -> void:
 	_step_mat(requests)
 
 
-## The jump mat hops twice in place. The spin mat turns the player a lap at a time, pausing longer after each,
-## until the fourth lap faces it away; it then backs off the mat.
+## The jump mat hops twice; the spin mat turns a lap at a time, pausing longer each lap, then backs off after the fourth.
 func _step_mat(requests: Array) -> void:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	if task == Task.MAT_JUMP:
@@ -683,7 +683,7 @@ func _start_push(requests: Array) -> void:
 	objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x25 if frlg else 0x1D, _task_direction))
 	objects.set_held_movement(boulder, Gen3ObjectEvents.direction_action(0x08 if frlg else 0x04, _task_direction))
 	objects.start_effect_sprite(boulder, _boulder_id, Gen3ObjectEvents.FLDEFF_DUST, -1, false, requests)
-	requests.append({"kind": "sound", "name": "strength"})
+	requests.append({"kind": "sound", "name": "m_strength"})
 	task = Task.PUSH_MOVE
 
 
@@ -779,9 +779,9 @@ func _show_mon(no_ducking: bool) -> void:
 		int(objects.camera.header["map_type"]) in Gen3ObjectEvents.OUTDOOR_MAP_TYPES, no_ducking)
 
 
-## `CreateFieldMoveTask` (FRLG's `CreateFieldEffectShowMon`); false for an effect whose move function is not modeled.
+## `CreateFieldMoveTask` (FRLG's `CreateFieldEffectShowMon`); false for an unmodeled effect or FRLG's empty Secret Power.
 func use_field_move(effect: int, species: int, personality: int, ot_id: int) -> bool:
-	if not FIELD_MOVE_STATS.has(effect):
+	if not FIELD_MOVE_STATS.has(effect) or (frlg and Gen3SecretPower.USE_EFFECTS.has(effect)):
 		return false
 	if FIELD_MOVE_STATS[effect] >= 0:
 		objects.events.increment_stat(FIELD_MOVE_STATS[effect])
@@ -826,6 +826,8 @@ func _step_field_move(requests: Array) -> void:
 					requests.append_array(objects.cut_grass.start(player))
 				FLDEFF_USE_STRENGTH:
 					requests.append_array(_start_strength())
+				Gen3SecretPower.FLDEFF_USE_CAVE, Gen3SecretPower.FLDEFF_USE_TREE, Gen3SecretPower.FLDEFF_USE_SHRUB:
+					objects.secret_power.start(_field_move, player, flags & (Flag.MACH_BIKE | Flag.ACRO_BIKE) != 0)
 				_:
 					requests.append_array([{"kind": "sound", "name": FIELD_MOVE_SOUNDS[_field_move]}, {"kind": "script_enable"}])
 			prevent_step = false

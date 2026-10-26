@@ -148,14 +148,17 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 ## The rest each match one run of pret's bytes: `gFieldEffectObjectTemplatePointers` and trainer_see.c's icon
 ## template through their tiled PNGs and pointer runs, surfability (240 bytes, keeping its ROM tail), weather
 ## palettes, sheets and drought tables, general/grass/ash palettes (Ruby's 00-02.pal), the field-move streaks,
-## Spinda's spots, the template with `sOamData_CutGrass`'s 0x1401, and `native_scripts`, which only C starts.
+## Spinda's spots, the template with `sOamData_CutGrass`'s 0x1401, the Secret Power templates followed by their
+## 0x1003 and 0x1008 palettes, and `native_scripts`, which only C starts (`lockall`, `dofieldeffect`, `waitstate`).
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
 	"object_palettes": 0x373794, "object_palette_tags": 0x3739B4,
 	"player_reflection_palettes": 0x37388C, "special_reflection_palettes": 0x3738FC,
 	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8, "icon_template": 0x39B528,
 	"spinda_spots": 0x1FCB9C, "field_move_streaks": 0x39E92C, "field_move_streaks_indoors": 0x39EDCC,
-	"cut_grass_template": 0x3C161C,
+	"cut_grass_template": 0x3C161C, "secret_power_templates": 0x3D2630,
+	"native_scripts": {"cave_use_secret_power": 0x1A2D06, "tree_use_secret_power": 0x1A2D5E,
+		"shrub_use_secret_power": 0x1A2DB6},
 	"general_palette": 0x3694A0, "ash_palette": 0x36CA60, "grass_palette": 0x3694C0,
 	"weather_palette": 0x397100, "weather_sheets": 0x397120, "drought_palette_pointers": 0x396FC0,
 	"object_graphics": 0x36DC70, "object_graphics_count": 218,
@@ -211,7 +214,9 @@ const SAPPHIRE: Dictionary = {
 	"player_reflection_palettes": 0x37381C, "special_reflection_palettes": 0x37388C,
 	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68, "icon_template": 0x39B370,
 	"spinda_spots": 0x1FCB2C, "field_move_streaks": 0x39E774, "field_move_streaks_indoors": 0x39EC14,
-	"cut_grass_template": 0x3C1678,
+	"cut_grass_template": 0x3C1678, "secret_power_templates": 0x3D268C,
+	"native_scripts": {"cave_use_secret_power": 0x1A2C96, "tree_use_secret_power": 0x1A2CEE,
+		"shrub_use_secret_power": 0x1A2D46},
 	"general_palette": 0x369430, "ash_palette": 0x36C9F0, "grass_palette": 0x369450,
 	"weather_palette": 0x396F48, "weather_sheets": 0x396F68, "drought_palette_pointers": 0x396E08,
 	"object_graphics": 0x36DC00, "object_graphics_count": 218,
@@ -377,8 +382,9 @@ const EMERALD: Dictionary = {
 	"player_reflection_palettes": 0x50BD00, "special_reflection_palettes": 0x50BD78,
 	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8, "icon_template": 0x5507B4,
 	"spinda_spots": 0x31E2F0, "field_move_streaks": 0x55AE50, "field_move_streaks_indoors": 0x55B2F0,
-	"cut_grass_template": 0x57C66C,
-	"native_scripts": {"hide_mew_when_grass_cut": 0x267EDB},
+	"cut_grass_template": 0x57C66C, "secret_power_templates": 0x58E600,
+	"native_scripts": {"hide_mew_when_grass_cut": 0x267EDB, "cave_use_secret_power": 0x275A86,
+		"tree_use_secret_power": 0x275ADF, "shrub_use_secret_power": 0x275B38},
 	"general_palette": 0x4F77B8, "ash_palette": 0x4FACB8, "grass_palette": 0x4F77D8,
 	"weather_palette": 0x54C270, "weather_sheets": 0x54C290, "drought_colors": 0x54014C,
 	"object_graphics": 0x505620, "object_graphics_count": 239, "step_anims": 0x5094AC,

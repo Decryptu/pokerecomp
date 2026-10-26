@@ -285,7 +285,7 @@ func _pic_entry(pic: Dictionary) -> Dictionary:
 	var at: Vector2i = pic["position"] - pic["size"] / 2
 	var priority: int = int(pic["priority"])
 	return {"y": at.y & 0xFF, "key": (priority << 8) | int(pic["subpriority"]),
-		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i.ZERO, "priority": priority,
+		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": pic.get("flip", Vector2i.ZERO), "priority": priority,
 			"palette": int(pic["palette"]), "size": pic["size"], "tiles": pic["tiles"]}}
 
 
