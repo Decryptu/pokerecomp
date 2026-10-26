@@ -28,8 +28,7 @@ const REVEAL_TRAINER: Array[int] = [0x59, 0x67]
 
 var objects: Gen3ObjectEvents
 var avatar: Gen3PlayerAvatar
-## `gApproachingTrainers`: each trainer the last check found, with its slot, script offset (-1 for Trainer
-## Hill's shared script) and sight distance.
+## `gApproachingTrainers`: slot, script offset (-1 for Trainer Hill's shared script) and sight distance.
 var approaching: Array[Dictionary] = []
 ## Emerald's `gApproachingTrainerId` and `gTrainerApproachedPlayer`.
 var approaching_id: int = 0
@@ -68,8 +67,7 @@ func check_trainers(two_usable_mons: bool = true, facility_flag: Callable = Call
 	return approached_player
 
 
-## `DoTrainerApproach` (`EndTrainerApproach` before Emerald): the current trainer's task starts and runs at
-## once, from the script.
+## `DoTrainerApproach` (`EndTrainerApproach` before Emerald): the trainer's task starts and runs at once.
 func start_approach() -> Array:
 	var requests: Array = []
 	var task: Dictionary = {}
@@ -235,8 +233,7 @@ static func _ready(object: Gen3ObjectEvents.ObjectEvent) -> bool:
 		or Gen3ObjectEvents.clear_held_movement_if_finished(object) != 0
 
 
-## `Task_RunTrainerSeeFuncList`, or `Task_SetBuriedTrainerMovement` for a reveal, which runs one step a frame
-## from `sTrainerSeeFuncList2`.
+## `Task_RunTrainerSeeFuncList`, or for a reveal `Task_SetBuriedTrainerMovement`, one `sTrainerSeeFuncList2` step a frame.
 func _run(task: Dictionary, requests: Array) -> void:
 	var object: Gen3ObjectEvents.ObjectEvent = objects.objects[int(task["slot"])]
 	if task["buried"]:
@@ -371,8 +368,7 @@ func _wait_buried(task: Dictionary, _object: Gen3ObjectEvents.ObjectEvent, _requ
 	return false
 
 
-## FRLG's `SpawnSpecialObjectEventParameterized` at the player's view focus; `camera_follow` asks the host's
-## camera to follow that object.
+## FRLG's `SpawnSpecialObjectEventParameterized` at the view focus; `camera_follow` asks the host's camera to follow.
 func _camera_spawn(task: Dictionary, _object: Gen3ObjectEvents.ObjectEvent, requests: Array) -> bool:
 	task["camera_steps"] = 0
 	var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()

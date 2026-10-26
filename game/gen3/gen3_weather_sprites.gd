@@ -688,8 +688,7 @@ func _wait(drop: Raindrop) -> void:
 		drop.counter = _s16(drop.counter - 1)
 
 
-## The fogs', ash's and sandstorm's column (`data[0]`, the ash's `data[2]`) laid from [param base], wrapping to
-## the left once past the screen.
+## The fogs', ash's and sandstorm's column (`data[0]`; ash's `data[2]`) from [param base], wrapping past the screen.
 static func _tile_column(sprite: WeatherSprite, base: int) -> void:
 	var column: int = sprite.data[2] if sprite.callback == Callback.ASH else sprite.data[0]
 	sprite.x = _s16(base + 32 + column * 64)
@@ -908,8 +907,7 @@ func _fog_horizontal_finish(weather: Gen3FieldWeather) -> bool:
 	return true
 
 
-## `CreateSpriteAtEnd` for twenty 64x64 sprites, each at its row's height with its column and row in `data[0]` and
-## `data[1]`.
+## `CreateSpriteAtEnd` for twenty 64x64 sprites at their rows' heights, column and row in `data[0]`/`data[1]`.
 func _create_tiled(sheet: String, priority: int, callback: int, subpriority: int,
 		anims: Array = STILL_ANIMS) -> Array:
 	var out: Array = []

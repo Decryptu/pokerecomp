@@ -1,8 +1,7 @@
 class_name GbaHeader
 extends RefCounted
 
-## The Game Boy Advance header at $A0-$BF, [RomHeader]'s twin: what a dump
-## claims to be, as pret's Makefiles write it with `gbafix`.
+## The GBA header at $A0-$BF, [RomHeader]'s twin: what a dump claims to be, as pret's `gbafix` writes it.
 
 const TITLE: int = 0xA0
 const TITLE_LENGTH: int = 12

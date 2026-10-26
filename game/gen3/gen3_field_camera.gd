@@ -43,8 +43,7 @@ func sprite_coord_offset() -> Vector2i:
 	return Vector2i(_s16(pixel_offset.x), _s16(pixel_offset.y - PAN_Y - 8))
 
 
-## `SetSpritePosToMapCoords` for backup-map [param cell]: with [method sprite_coord_offset] added, the cell's
-## corner on the screen.
+## `SetSpritePosToMapCoords`: backup-map [param cell]'s screen corner, less [method sprite_coord_offset].
 func sprite_position(cell: Vector2i) -> Vector2i:
 	var delta: Vector2i = -pixel_offset - movement_offset + Vector2i(signi(movement_offset.x), signi(movement_offset.y)) * 16
 	return Vector2i(_s16(((cell.x - pos.x) << 4) + _s16(delta.x)), _s16(((cell.y - pos.y) << 4) + _s16(delta.y)))

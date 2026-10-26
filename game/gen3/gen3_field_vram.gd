@@ -60,10 +60,11 @@ func draw(grid: Gen3MapGrid, cells: Rect2i) -> Image:
 ## [Gen3ObjectSprites] [param oam]. The first entry with a pixel owns it, over each layer at its priority or
 ## below. The field's BLDCNT (`gOverworldBackgroundLayerFlags[1..3]`, `BLDCNT_TGT2_OBJ`, alpha blend) names no
 ## first target, so only a semi-transparent sprite's pixel blends, by [param bldalpha], with the BG layer under
-## it; over the backdrop it draws as it is.
-func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array = [], bldalpha: int = 0) -> Image:
+## it; over the backdrop it draws as it is. [param overlay] is [method Gen3FieldMoveMon.screen]'s BG0 and windows.
+func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array = [], bldalpha: int = 0,
+		overlay: Dictionary = {}) -> Image:
 	var layers: Array[PackedInt32Array] = []
-	for layer: int in 3:
+	for layer: int in 4:
 		var pixels := PackedInt32Array()
 		pixels.resize(size.x * size.y)
 		pixels.fill(-1)
@@ -76,7 +77,10 @@ func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array
 			if layer_type < LAYER_TYPES:
 				_draw_metatile(layers, size, Vector2i(x, y) * 16 - origin,
 					grid.metatile(grid.metatile_id_at(x, y)), layer_type)
+	if overlay.has("bg0_map"):
+		_draw_bg0(layers[3], size, overlay)
 	var sprites: Dictionary = _draw_oam(oam, size, palette)
+	_mask_windows(layers, sprites, size, overlay)
 	var weights := Vector2i(mini(bldalpha & 0x1F, 16), mini((bldalpha >> 8) & 0x1F, 16))
 	var backdrop: int = palette.faded_color(0)
 	var image: Image = Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
@@ -96,11 +100,70 @@ static func _compose(layers: Array[PackedInt32Array], sprites: Dictionary, pixel
 			top = sprites["color"][pixel]
 			if not sprites["blend"][pixel]:
 				return top
-		if priority > 0 and layers[3 - priority][pixel] >= 0:
+		if layers[3 - priority][pixel] >= 0:
 			if top < 0:
 				return layers[3 - priority][pixel]
 			return _alpha(top, layers[3 - priority][pixel], weights)
 	return top if top >= 0 else backdrop
+
+
+func _draw_bg0(layer: PackedInt32Array, size: Vector2i, overlay: Dictionary) -> void:
+	var words: PackedInt32Array = overlay["bg0_map"]
+	var data: PackedByteArray = overlay["bg0_tiles"]
+	var scroll: Vector2i = overlay["bg0_scroll"]
+	for y: int in size.y:
+		for x: int in size.x:
+			var at := Vector2i((x + scroll.x) & 0xFF, (y + scroll.y) & 0xFF)
+			var word: int = words[(at.y / 8) * 32 + at.x / 8]
+			var from := Vector2i(7 - at.x % 8 if word & 0x400 else at.x % 8, 7 - at.y % 8 if word & 0x800 else at.y % 8)
+			var offset: int = (word & 0x3FF) * GbaTiles.TILE_BYTES + from.y * 4 + from.x / 2
+			var index: int = (data[offset] >> ((from.x % 2) * 4)) & 15 if offset < data.size() else 0
+			if index != 0:
+				layer[y * size.x + x] = palette.faded_color((word >> 12) * 16 + index)
+
+
+## WIN0 over WIN1 over WINOUT: a pixel keeps only the layers its region's WININ or WINOUT bits enable.
+static func _mask_windows(layers: Array[PackedInt32Array], sprites: Dictionary, size: Vector2i,
+		overlay: Dictionary) -> void:
+	if not overlay.has("winin"):
+		return
+	var spans: Array[Vector4i] = []
+	for window: String in ["win0", "win1"]:
+		var across: Vector2i = _window_span(int(overlay[window + "h"]), 240)
+		var down: Vector2i = _window_span(int(overlay[window + "v"]), 160)
+		spans.append(Vector4i(across.x, across.y, down.x, down.y))
+	var winin: int = int(overlay["winin"])
+	for y: int in size.y:
+		for x: int in size.x:
+			var bits: int = int(overlay["winout"]) & 0x1F
+			if _in_window(spans[0], x, y):
+				bits = winin & 0x1F
+			elif _in_window(spans[1], x, y):
+				bits = (winin >> 8) & 0x1F
+			var pixel: int = y * size.x + x
+			for layer: int in 4:
+				if not bits & (1 << (3 - layer)):
+					layers[layer][pixel] = -1
+			if not bits & 0x10:
+				sprites["priority"][pixel] = -1
+
+
+## WINnH/WINnV as start and end, clamped as mGBA does: an end to the screen's edge, a start past both to 0.
+static func _window_span(register: int, limit: int) -> Vector2i:
+	var span := Vector2i((register >> 8) & 0xFF, register & 0xFF)
+	if span.x > limit and span.x > span.y:
+		span.x = 0
+	if span.y > limit:
+		span = Vector2i(mini(span.x, limit), limit)
+	return span
+
+
+static func _in_window(span: Vector4i, x: int, y: int) -> bool:
+	return _in_span(x, span.x, span.y) and _in_span(y, span.z, span.w)
+
+
+static func _in_span(at: int, start: int, end: int) -> bool:
+	return at >= start and at < end if start <= end else at >= start or at < end
 
 
 ## The GBA's alpha blend: each channel's weighted sum in sixteenths, held at 31.

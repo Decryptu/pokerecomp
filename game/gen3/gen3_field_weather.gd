@@ -205,8 +205,7 @@ func set_current_and_next_no_delay(weather: int) -> void:
 	ready_for_init = true
 
 
-## One `RunTasks` pass of the weather's tasks: Emerald's alternating weather (priority 0) and then the weather
-## task (priority 80).
+## One `RunTasks` pass: Emerald's alternating weather (priority 0), then the weather task (priority 80).
 func run_tasks() -> void:
 	if locked:
 		return
@@ -270,8 +269,7 @@ func _main(weather: int) -> void:
 		sprites.main(self)
 
 
-## The sprite weathers' Finish holds the change until their sprites are gone; every other weather's returns
-## FALSE at once.
+## The sprite weathers' Finish holds the change until their sprites are gone; every other weather's returns FALSE at once.
 func _finish(weather: int) -> bool:
 	return sprites.finish(self) if Gen3WeatherSprites.has_sprites(weather) else false
 
@@ -363,8 +361,7 @@ static func drought_index(color: int) -> int:
 	return ((color >> 1) & 0xF) | ((color >> 2) & 0xF0) | ((color >> 3) & 0xF00)
 
 
-## `ApplyColorMapWithBlend`. Unlike [method apply_color_map] it never gives the weather's sprite slot the
-## contrast map.
+## `ApplyColorMapWithBlend`. Unlike [method apply_color_map] it never gives the weather's sprite slot the contrast map.
 func _apply_color_map_with_blend(first_slot: int, count: int, index: int, coeff: int, color: int) -> void:
 	for slot: int in range(first_slot, first_slot + count):
 		if types[slot] == ColorMap.NONE:
@@ -445,8 +442,7 @@ func apply_to_palette(slot: int) -> void:
 	apply_color_map(slot, 1, color_map_index)
 
 
-## `FadeScreen`. The weathers that keep their own palettes fade in through [method run_tasks] instead of a
-## palette fade.
+## `FadeScreen`. The weathers that keep their own palettes fade in through [method run_tasks] instead of a palette fade.
 func fade_screen(mode: int, delay: int) -> void:
 	if mode < Fade.FROM_BLACK or mode > Fade.TO_WHITE:
 		return
@@ -617,8 +613,7 @@ func _drought_state_init() -> void:
 	drought_frame_delay = 5
 
 
-## `DroughtStateRun`: up a stage every six frames to 6, then follow the sine between 1 and 5; state 2 (ramping
-## back down to 3) has no setter.
+## `DroughtStateRun`: a stage up every six frames to 6, then the sine from 1 to 5; nothing sets state 2.
 func _drought_state_run() -> void:
 	match drought_state:
 		0:

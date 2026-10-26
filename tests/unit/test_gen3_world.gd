@@ -1882,6 +1882,103 @@ func test_hot_springs_water_follows_until_terrain_jump_or_identity_releases_it()
 		assert_false(objects.field_effect_active(42), "reused slots do not retain linked water")
 
 
+## Digests of a Python transliteration of pret's `FieldMoveShowMon*Effect` tasks and `SpriteCB_FieldMoveMon*`
+## callbacks, over registers, BG0's screen block and the picture's x, outdoors then indoors, Hoenn then FRLG.
+func test_field_move_banner_matches_the_original_tasks() -> void:
+	var expected: Array = ["bf0571e494f49b39660ccb0463d6e7462f885b14", "126aaadfed56a1e1216299b392bfb893e635eeaf",
+		"c527e6dec76a1f91a230c5dab1a4b73070ffe5d4", "ac3dffad7e5e2be2ab9265ca175e6116e15bd121"]
+	for outdoors: bool in [true, false]:
+		for id: StringName in [RomRegistry.EMERALD, RomRegistry.FIRERED]:
+			var objects: Gen3ObjectEvents = _field_objects(id)
+			_streak_runs(objects.camera.data)
+			var mon: Gen3FieldMoveMon = objects.field_move_mon
+			assert_true(mon.start(25, 0, 0xFF0000, outdoors))
+			var lines := PackedStringArray()
+			var cries: int = 0
+			for frame: int in range(1, 200):
+				mon.run_task()
+				cries += mon.animate().size()
+				var registers: Array = ["win0h", "win0v", "win1h", "win1v", "winin", "winout"].map(
+					func(key: String) -> int: return mon.registers[key])
+				var screen: String = ",".join(Array(mon.bg0_map)).sha1_text().left(8)
+				lines.append(",".join([frame, int(mon.active), mon.state] + registers + [mon.bg0_scroll.x,
+					mon.bg0_scroll.y, mon.sprite["position"].x, screen, cries]))
+			assert_eq(("\n".join(lines) + "\n").sha1_text(), expected.pop_front(), "%s outdoors %s" % [id, outdoors])
+			assert_true(objects.sprites.pics.is_empty(), "the picture is destroyed with the task")
+
+
+## `Task_SurfFieldEffect`: the banner starts once the pose's anim wait finishes, cries on its 31st frame and
+## lasts 82; the jump follows it, and control returns when the jump lands.
+func test_surf_mount_poses_shows_the_mon_then_jumps_onto_the_blob() -> void:
+	for id: StringName in [RomRegistry.EMERALD, RomRegistry.FIRERED]:
+		var avatar: Gen3PlayerAvatar = _surfing_avatar(id, false, 0)
+		var objects: Gen3ObjectEvents = avatar.objects
+		_streak_runs(objects.camera.data)
+		objects.camera.header["map_type"] = 3
+		var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+		assert_eq(avatar.use_surf(25, 0, 0xFF0000), [{"kind": "surf_music"}])
+		var marks: Array = []
+		var task: int = avatar.task
+		for frame: int in range(1, 200):
+			var requests: Array = avatar.step_movement_tasks() + objects.step_movements()
+			if avatar.task != task:
+				task = avatar.task
+				marks.append([frame, task])
+			marks.append_array(requests.filter(func(request: Dictionary) -> bool: return request["kind"] == "cry") \
+				.map(func(request: Dictionary) -> Array: return [frame, request["no_ducking"]]))
+		var T := Gen3PlayerAvatar.Task
+		assert_eq(marks.slice(0, 5), [[1, T.MOUNT_POSE], [2, T.MOUNT_SHOW_MON], [4, T.MOUNT_JUMP], [34, true],
+			[86, T.MOUNT_END]], str(id))
+		assert_eq(marks[-1][1], T.NONE)
+		assert_eq([player.current, avatar.flags, avatar.prevent_step, avatar.controls_locked, player.frozen],
+			[Vector2i(12, 13), Gen3PlayerAvatar.Flag.SURFING, false, false, false], str(id))
+		assert_eq(player.field_effect_sprite["bob"], Gen3ObjectEvents.Bob.PLAYER_AND_MON)
+		assert_false(objects.field_effect_active(Gen3PlayerAvatar.FLDEFF_USE_SURF))
+
+
+## `Task_DoFieldMove_*` for Rock Smash: pose, the banner once the pose's anim wait finishes, face again, then the
+## sound and the script. Underwater the banner starts at once.
+func test_field_move_task_poses_shows_the_mon_then_runs_the_move() -> void:
+	for id: StringName in [RomRegistry.EMERALD, RomRegistry.FIRERED]:
+		for map_type: int in [3, Gen3PlayerAvatar.MAP_TYPE_UNDERWATER]:
+			var avatar: Gen3PlayerAvatar = _surfing_avatar(id, false, 0)
+			var objects: Gen3ObjectEvents = avatar.objects
+			_streak_runs(objects.camera.data)
+			objects.camera.header["map_type"] = map_type
+			assert_false(avatar.use_field_move(40, 25, 0, 0xFF0000), "Strength awaits Ruby's braille branch")
+			assert_true(avatar.use_field_move(37, 25, 0, 0xFF0000))
+			var marks: Array = []
+			for frame: int in range(1, 120):
+				var task: int = avatar.task
+				for request: Dictionary in avatar.step_movement_tasks() + objects.step_movements():
+					if request["kind"] in ["cry", "sound", "script_enable"]:
+						marks.append([frame, request.get("name", request["kind"])])
+				if avatar.task != task:
+					marks.append([frame, avatar.task])
+			var T := Gen3PlayerAvatar.Task
+			var start: int = 3 if map_type == 3 else 1
+			var expected: Array = [[1, T.MOVE_SHOW_MON if map_type != 3 else T.MOVE_POSE]]
+			if map_type == 3:
+				expected.append([start, T.MOVE_SHOW_MON])
+			expected.append_array([[start + 30, "cry"], [start + 82, T.MOVE_RUN], [start + 83, "rock_smash"],
+				[start + 83, "script_enable"], [start + 83, T.NONE]])
+			assert_eq(marks, expected, "%s map type %d" % [id, map_type])
+			assert_eq([avatar.prevent_step, avatar.controls_locked, objects.field_effect_active(37)], [false, true, false])
+
+
+static func _streak_runs(data: GameData) -> void:
+	data._sections["gba_graphics"] = true
+	var runs: Dictionary = {}
+	for side: int in 2:
+		var run := PackedByteArray()
+		run.resize(Gen3FieldMoveMon.TILE_BYTES[side] + Gen3Layout.PALETTE_BYTES)
+		for word: int in Gen3FieldMoveMon.TILEMAP_WORDS:
+			run.append_array([(word * 7 + 1) & 0xFF, ((word * 7 + 1) >> 8) & 0x0F])
+		runs[str(side + 1)] = {"bytes": run}
+	data._world_scripts["field_move_streaks"] = [1, 2]
+	data._world_tilesets["field_move_streaks"] = runs
+
+
 func test_seaweed_bubbles_start_at_step_end_and_release_at_end_or_offscreen() -> void:
 	for id: StringName in [RomRegistry.RUBY, RomRegistry.SAPPHIRE, RomRegistry.FIRERED,
 			RomRegistry.LEAFGREEN, RomRegistry.EMERALD]:

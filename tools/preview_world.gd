@@ -2,8 +2,8 @@ extends SceneTree
 
 ## Renders imported map blocks or the real field screen. `live help` prints [constant KIND_HELP].
 ##   Godot --headless --path . -s res://tools/preview_world.gd -- gold 1 1 /tmp/w.png
-## GBA: game group map path [frames [x y [weather [held_action [avatar_flags]]]]] from the warp's fade in; a held
-## action starts at frame 120, and avatar flags 8 surf. `emerald 0 34 /tmp/w.png 128 20 100 5 11` walks right in rain.
+## GBA: game group map path [frames [x y [weather [held_action [avatar_flags [species]]]]]]; an action or banner
+## starts 120 frames into the fade in, flags 8 surf. `emerald 0 34 /tmp/w.png 128 20 100 5 11` walks right in rain.
 ##   Godot --path . -s res://tools/preview_world.gd -- crystal 26 2 /tmp/out.png \
 ##       live [kind] [x y] [WxH] [touch] [framed] [zoom=<n>] [view=<mod id>]
 
@@ -1857,7 +1857,7 @@ func _draw_marker(image: Image, cell_x: int, cell_y: int, color: Color) -> void:
 
 func _preview_gba(data: GameData, args: PackedStringArray) -> void:
 	var options: Array[int] = []
-	for index: int in range(4, 10):
+	for index: int in range(4, 11):
 		options.append(int(args[index]) if index < args.size() else -1)
 	var group: int = int(args[1])
 	var number: int = int(args[2])
@@ -1876,7 +1876,8 @@ func _preview_gba(data: GameData, args: PackedStringArray) -> void:
 			vram.step()
 		image = vram.draw(grid, Rect2i(0, 0, grid.width, grid.height))
 	else:
-		image = _preview_gba_screen(data, group, number, vram, frames, at, options[3], options[4], maxi(options[5], 0))
+		image = _preview_gba_screen(data, group, number, vram, frames, at, options[3], options[4], maxi(options[5], 0),
+			options[6])
 	var error: int = image.save_png(path) if image != null else ERR_CANT_CREATE
 	if error != OK:
 		push_error("Could not write %s (error %d)." % [path, error])
@@ -1886,7 +1887,7 @@ func _preview_gba(data: GameData, args: PackedStringArray) -> void:
 ## The field screen [param frames] frames after the player spawns on layout cell [param at], under the map's
 ## weather or, when not negative, [param override].
 func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3FieldVram, frames: int,
-		at: Vector2i, override: int, action: int, avatar_flags: int) -> Image:
+		at: Vector2i, override: int, action: int, avatar_flags: int, species: int) -> Image:
 	var camera: Gen3FieldCamera = Gen3FieldCamera.open(data, group, number, at)
 	var events := Gen3EventData.new(data.id)
 	var objects := Gen3ObjectEvents.new(camera, events, vram.palette)
@@ -1913,6 +1914,10 @@ func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3Fiel
 		weather.run_tasks()
 		if frame == 120 and action >= 0:
 			objects.set_held_movement(avatar.object(), action)
+		if frame == 120 and species > 0:
+			objects.field_move_mon.start(species, 0, 0xFF0000,
+				int(camera.header["map_type"]) in Gen3ObjectEvents.OUTDOOR_MAP_TYPES)
+		avatar.step_movement_tasks()
 		var previous: Vector2i = avatar.object().pixel_position
 		objects.step_movements()
 		if camera.update(avatar.object().pixel_position - previous) != Vector2i.ZERO:
@@ -1922,4 +1927,4 @@ func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3Fiel
 		vram.step()
 		vram.palette.transfer()
 	return vram.draw_screen(camera.grid, camera.screen_origin(), Vector2i(240, 160),
-		objects.sprites.oam(objects, camera.screen_origin()), weather.bldalpha)
+		objects.sprites.oam(objects, camera.screen_origin()), weather.bldalpha, objects.field_move_mon.screen())

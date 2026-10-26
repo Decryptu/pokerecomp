@@ -1,8 +1,7 @@
 class_name Gen3Text
 extends RefCounted
 
-## pret's English `charmap.txt`, the same on all five. A code with no glyph stays bracketed as hex rather than
-## decoding to a wrong character.
+## pret's English `charmap.txt`, the same on all five; a code with no glyph stays bracketed hex.
 
 ## Tile runs that draw one word, spelled like Generation 2's `<PKMN>`: `PKMN` is $53 $54 and `POKEBLOCK`, in
 ## the berry descriptions, $55 to $59.

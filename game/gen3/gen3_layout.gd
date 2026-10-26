@@ -1,8 +1,7 @@
 class_name Gen3Layout
 extends RefCounted
 
-## Dump offsets of each Generation 3 cartridge's tables. An offset is a ROM pointer less [constant ROM_BASE];
-## table evidence is recorded below.
+## Each Generation 3 cartridge's table offsets: ROM pointers less [constant ROM_BASE], evidence recorded below.
 
 const ROM_BASE: int = 0x08000000
 const ROM_WINDOW: int = 0x02000000
@@ -21,13 +20,13 @@ const UNOWN_B: int = 413
 const UNOWN_FORMS: int = 28
 const CASTFORM: int = 385
 const DEOXYS: int = 410
+const SPINDA: int = 308
 
 const SPECIES_NAME_SIZE: int = 11
 const MOVE_NAME_SIZE: int = 13
 const TYPE_NAME_SIZE: int = 7
 
-## agbcc pads every struct to four bytes: `SpeciesInfo` is 26 bytes in 28, `BattleMove` 9 in 12 and
-## `Evolution` 6 in 8.
+## agbcc pads every struct to four bytes: `SpeciesInfo` is 26 bytes in 28, `BattleMove` 9 in 12 and `Evolution` 6 in 8.
 const SPECIES_INFO_SIZE: int = 28
 const INFO_HP: int = 0x00
 const INFO_ATTACK: int = 0x01
@@ -154,11 +153,13 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 ## Weather palettes, `Gen3WeatherSprites.SHEETS` and drought tables each match one run of pret's bytes.
 ## `icon_template`: trainer_see.c's template, located through the unique tiled emotion PNGs and image pointers.
 ## General/grass/ash palettes match pret general_0/general_1/ash.pal (Ruby 00/01/02.pal).
+## `field_move_streaks`/`_indoors` (tiles, palette, tilemap) and `spinda_spots` (36-byte rows) match pret's bytes.
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
 	"object_palettes": 0x373794, "object_palette_tags": 0x3739B4,
 	"player_reflection_palettes": 0x37388C, "special_reflection_palettes": 0x3738FC,
 	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8, "icon_template": 0x39B528,
+	"spinda_spots": 0x1FCB9C, "field_move_streaks": 0x39E92C, "field_move_streaks_indoors": 0x39EDCC,
 	"general_palette": 0x3694A0, "ash_palette": 0x36CA60, "grass_palette": 0x3694C0,
 	"weather_palette": 0x397100, "weather_sheets": 0x397120, "drought_palette_pointers": 0x396FC0,
 	"object_graphics": 0x36DC70, "object_graphics_count": 218,
@@ -213,6 +214,7 @@ const SAPPHIRE: Dictionary = {
 	"object_palettes": 0x373724, "object_palette_tags": 0x373944,
 	"player_reflection_palettes": 0x37381C, "special_reflection_palettes": 0x37388C,
 	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68, "icon_template": 0x39B370,
+	"spinda_spots": 0x1FCB2C, "field_move_streaks": 0x39E774, "field_move_streaks_indoors": 0x39EC14,
 	"general_palette": 0x369430, "ash_palette": 0x36C9F0, "grass_palette": 0x369450,
 	"weather_palette": 0x396F48, "weather_sheets": 0x396F68, "drought_palette_pointers": 0x396E08,
 	"object_graphics": 0x36DC00, "object_graphics_count": 218,
@@ -267,6 +269,7 @@ const FIRERED: Dictionary = {
 	"object_palettes": 0x3A51C8, "object_palette_tags": 0x3A53A0,
 	"player_reflection_palettes": 0x3A5278, "special_reflection_palettes": 0x3A52E8,
 	"surfable_behaviors": 0x352FE8, "shadow_templates": 0x3A0080, "icon_template": 0x3C73F8,
+	"spinda_spots": 0x2526CC, "field_move_streaks": 0x3CB660, "field_move_streaks_indoors": 0x3CBB00,
 	"general_palette": 0x399018, "ash_palette": 0x39C5F8, "grass_palette": 0x399038,
 	"weather_palette": 0x3C2D50, "weather_sheets": 0x3C2D70,
 	"object_graphics": 0x39FE20, "object_graphics_count": 152, "step_anims": 0x3A3708,
@@ -320,6 +323,7 @@ const LEAFGREEN: Dictionary = {
 	"object_palettes": 0x3A51A8, "object_palette_tags": 0x3A5380,
 	"player_reflection_palettes": 0x3A5258, "special_reflection_palettes": 0x3A52C8,
 	"surfable_behaviors": 0x352FC8, "shadow_templates": 0x3A0060, "icon_template": 0x3C7234,
+	"spinda_spots": 0x2526A8, "field_move_streaks": 0x3CB49C, "field_move_streaks_indoors": 0x3CB93C,
 	"general_palette": 0x398FF8, "ash_palette": 0x39C5D8, "grass_palette": 0x399018,
 	"weather_palette": 0x3C2B8C, "weather_sheets": 0x3C2BAC,
 	"object_graphics": 0x39FE00, "object_graphics_count": 152, "step_anims": 0x3A36E8,
@@ -373,6 +377,7 @@ const EMERALD: Dictionary = {
 	"object_palettes": 0x50BBC8, "object_palette_tags": 0x50BE38,
 	"player_reflection_palettes": 0x50BD00, "special_reflection_palettes": 0x50BD78,
 	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8, "icon_template": 0x5507B4,
+	"spinda_spots": 0x31E2F0, "field_move_streaks": 0x55AE50, "field_move_streaks_indoors": 0x55B2F0,
 	"general_palette": 0x4F77B8, "ash_palette": 0x4FACB8, "grass_palette": 0x4F77D8,
 	"weather_palette": 0x54C270, "weather_sheets": 0x54C290, "drought_colors": 0x54014C,
 	"object_graphics": 0x505620, "object_graphics_count": 239, "step_anims": 0x5094AC,

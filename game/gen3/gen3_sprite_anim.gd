@@ -70,8 +70,7 @@ func animate() -> void:
 		_continue()
 
 
-## An anim number past the imported table reads `ANIMCMD_END`; the cartridge reads whatever words follow the
-## table.
+## An anim number past the imported table reads `ANIMCMD_END`; the cartridge reads whatever words follow the table.
 func _cmd(index: int) -> int:
 	var sequence: Array = anims[anim_num] if anim_num < anims.size() else []
 	return int(sequence[index]) if index >= 0 and index < sequence.size() else END

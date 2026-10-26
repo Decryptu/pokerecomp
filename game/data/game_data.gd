@@ -435,6 +435,19 @@ func world_surf_blob_graphics() -> Dictionary:
 	return _world_effect_graphics("surf_blob_template", 8)
 
 
+## The show-mon banner's tiles, palette and tilemap in one run, as [Gen3FieldMoveMon] splits them.
+func world_field_move_streaks(outdoors: bool) -> PackedByteArray:
+	var offsets: Array = _scripts().get("field_move_streaks", []) if generation == RomRegistry.GEN3 else []
+	if offsets.size() != 2:
+		return PackedByteArray()
+	return _gba_graphics_record("field_move_streaks", int(offsets[int(outdoors)])).get("bytes", PackedByteArray())
+
+
+func world_spinda_spots() -> PackedByteArray:
+	var at: int = int(_scripts().get("spinda_spots", -1)) if generation == RomRegistry.GEN3 else -1
+	return _gba_graphics_record("spinda_spots", at).get("bytes", PackedByteArray())
+
+
 func world_icon_graphics(effect: int) -> Dictionary:
 	return _world_effect_graphics("icon_templates", effect)
 

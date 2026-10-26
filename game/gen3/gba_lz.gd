@@ -1,8 +1,7 @@
 class_name GbaLz
 extends RefCounted
 
-## BIOS LZ77 (0x10): high flags first; final references finish past size, as
-## pokeruby's tilesets.mk -overflow reproduces.
+## BIOS LZ77 (0x10): high flags first; final references finish past size, as pokeruby's tilesets.mk -overflow reproduces.
 static func decompress(data: PackedByteArray, offset: int, limit: int = 0x8000) -> PackedByteArray:
 	if offset < 0 or offset + 4 > data.size() or data[offset] != 0x10:
 		return PackedByteArray()
