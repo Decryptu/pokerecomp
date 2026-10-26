@@ -34,10 +34,10 @@ The authoritative model, versions and validation live in
 | Red, Blue, Yellow | Player, party, twelve boxes, Day-Care, bag/PC items, currency, Pokédex, map/position, supported flags and progress, Hall of Fame; Yellow's Pikachu/minigame fields |
 | Gold, Silver, Crystal | Player and party only; no world or PC-box transfer |
 
-Cartridge export requires an existing valid SRAM image. It patches supported
-fields and preserves other bytes; it never constructs an entire cartridge save
-from project state. Mod-only species/items/moves are refused rather than
-truncated to cartridge bytes. Back up the original image before replacement.
+The save screen's Export .sav patches a chosen valid SRAM image into a new file:
+supported fields change, other bytes stay, and no whole save is built from
+project state. Mod-only species/items/moves are refused, never truncated to
+cartridge bytes. Keep the original image if you write over it.
 
 Generation 2 accepts 32 KiB plus optional trailing emulator RTC data, validates
 markers/checksums and selects primary then backup. Export repairs and updates

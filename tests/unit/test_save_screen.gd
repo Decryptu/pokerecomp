@@ -253,6 +253,22 @@ func test_save_screen_rejects_an_invalid_sram_without_creating_a_slot() -> void:
 	DirAccess.remove_absolute(path)
 
 
+## A cartridge save the adapter refuses leaves the chosen path untouched rather than a partial file.
+func test_a_refused_cartridge_export_writes_no_file() -> void:
+	assert_true(Gen2SaveStore.save(_save(), _data)["ok"])
+	await _open_save_screen()
+	assert_true(_screen.select_slot(1))
+	var base: String = "user://save-screen-base.sav"
+	var target: String = "user://save-screen-export.sav"
+	var file: FileAccess = FileAccess.open(base, FileAccess.WRITE)
+	file.store_buffer(PackedByteArray([0x01, 0x02, 0x03]))
+	file.close()
+	assert_false(_screen.export_sav_path(base, target))
+	assert_eq(_screen.save_screen_snapshot()["status"], "The save was not exported.")
+	assert_false(FileAccess.file_exists(target))
+	DirAccess.remove_absolute(base)
+
+
 func test_party_screen_exposes_saved_hp_status_and_empty_positions() -> void:
 	var save: Gen2SaveData = _save()
 	await _open_party_screen(save)
