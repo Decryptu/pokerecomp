@@ -1945,7 +1945,7 @@ func test_field_move_task_poses_shows_the_mon_then_runs_the_move() -> void:
 			var objects: Gen3ObjectEvents = avatar.objects
 			_streak_runs(objects.camera.data)
 			objects.camera.header["map_type"] = map_type
-			assert_false(avatar.use_field_move(40, 25, 0, 0xFF0000), "Strength awaits Ruby's braille branch")
+			assert_false(avatar.use_field_move(38, 25, 0, 0xFF0000), "Dig awaits the warp model")
 			assert_true(avatar.use_field_move(37, 25, 0, 0xFF0000))
 			var marks: Array = []
 			for frame: int in range(1, 120):
@@ -1964,6 +1964,64 @@ func test_field_move_task_poses_shows_the_mon_then_runs_the_move() -> void:
 				[start + 83, "script_enable"], [start + 83, T.NONE]])
 			assert_eq(marks, expected, "%s map type %d" % [id, map_type])
 			assert_eq([avatar.prevent_step, avatar.objects.events.controls_locked, objects.field_effect_active(37)], [false, true, false])
+
+
+## Ruby's `StartStrengthFieldEffect` opens the Desert Ruins chamber from a braille spot (pret's
+## `DoBrailleStrengthEffect`) and unlocks the field without the script; elsewhere, and on Emerald, the script resumes.
+func test_strength_opens_rubys_sealed_chamber_from_the_braille_spot() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
+		var avatar: Gen3PlayerAvatar = _surfing_avatar(id, false, Gen3PlayerAvatar.Flag.ON_FOOT)
+		var objects: Gen3ObjectEvents = avatar.objects
+		_streak_runs(objects.camera.data)
+		objects.camera.header["map_type"] = 3
+		objects.camera.group = 24
+		objects.camera.number = 6
+		avatar.object().current = Vector2i(17, 30)
+		assert_true(avatar.use_field_move(Gen3PlayerAvatar.FLDEFF_USE_STRENGTH, 25, 0, 0xFF0000))
+		var ends: Array = []
+		for frame: int in 90:
+			for request: Dictionary in avatar.step_movement_tasks() + objects.step_movements():
+				if request["kind"] in ["sound", "script_enable"]:
+					ends.append(request.get("name", request["kind"]))
+		var grid: Gen3MapGrid = objects.camera.grid
+		var opened: bool = id == RomRegistry.RUBY
+		assert_eq(ends, ["bang"] if opened else ["script_enable"], str(id))
+		assert_eq([grid.metatile_id_at(15, 26), grid.collision_at(14, 27), grid.collision_at(15, 27)],
+			[0x22B, 3, 0] if opened else [0x010, 0, 0], str(id))
+		assert_eq([objects.events.flag_get(Gen3PlayerAvatar.FLAG_SYS_BRAILLE_STRENGTH), objects.events.controls_locked],
+			[opened, not opened], str(id))
+		assert_true(objects.events.stats.is_empty(), "Strength counts no game stat")
+
+
+## `Task_UseWaterfall`: the banner starts at once with no pose, then the player walks slowly north, again on each
+## waterfall cell landed on; control returns on the first step that lands off one.
+func test_waterfall_shows_the_mon_then_climbs_until_off_the_falls() -> void:
+	for id: StringName in [RomRegistry.EMERALD, RomRegistry.FIRERED]:
+		var avatar: Gen3PlayerAvatar = _surfing_avatar(id, false)
+		var objects: Gen3ObjectEvents = avatar.objects
+		_streak_runs(objects.camera.data)
+		objects.camera.header["map_type"] = 3
+		var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+		for y: int in [10, 11]:
+			objects.camera.grid.set_metatile_entry(12, y, 0x1000 | Gen3PlayerAvatar.MB_WATERFALL)
+		avatar.use_waterfall(25, 0, 0xFF0000)
+		assert_eq([avatar.prevent_step, objects.events.controls_locked, avatar.task],
+			[true, true, Gen3PlayerAvatar.Task.WATERFALL_SHOW_MON])
+		var rides: Array = []
+		var end: int = -1
+		for frame: int in range(1, 300):
+			avatar.step_movement_tasks()
+			objects.step_movements()
+			if player.movement_action == Gen3ObjectEvents.direction_action(0x08 if id == RomRegistry.FIRERED else 0x04,
+					Gen3ObjectEvents.Direction.NORTH) and player.current not in rides:
+				rides.append(player.current)
+			if end < 0 and avatar.task == Gen3PlayerAvatar.Task.NONE:
+				end = frame
+		assert_eq(rides, [Vector2i(12, 11), Vector2i(12, 10), Vector2i(12, 9)], str(id))
+		assert_eq(player.current, Vector2i(12, 9))
+		assert_eq([avatar.prevent_step, objects.events.controls_locked, objects.field_effect_active(43)],
+			[false, false, false], str(id))
+		assert_gt(end, 83, "the climb waits for the banner")
 
 
 ## fldeff_cut.c: Emerald's Hyper Cutter reaches the ring past passable cells and fixes long-grass roots, Ruby
