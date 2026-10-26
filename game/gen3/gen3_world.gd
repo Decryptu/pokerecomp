@@ -49,7 +49,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 			["grass_palette", _ground_templates], ["ash_palette", _ash_template],
 			["shadow_templates", _surf_blob_template], ["grass_palette", _sparkle_template],
 			["field_move_streaks", _field_move_streaks], ["spinda_spots", _spinda_spots],
-			["cut_grass_template", _cut_grass_template], ["secret_power_templates", _secret_power_templates]]:
+			["cut_grass_template", _cut_grass_template], ["secret_power_templates", _secret_power_templates],
+			["shadow_templates", _fly_bird_template]]:
 		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
 			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
@@ -244,6 +245,17 @@ static func _secret_power_templates(rom: RomFile, layout: Dictionary, out: Dicti
 		row["palette_offset"] = palette
 		rows[str(effect)] = row
 	out["secret_power_templates"] = rows
+	return true
+
+
+static func _fly_bird_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + Gen3Fly.FLDEFFOBJ_BIRD * 4, 24)
+	var frames: int = 5 if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 1
+	var row: Dictionary = _sprite_template(rom, at, frames, frames, Vector2i(32, 32) * (2 if frames == 5 else 1), out,
+		graphics)
+	if row.is_empty() or int(row["palette_tag"]) != 0xFFFF:
+		return false
+	out["fly_bird_template"] = {str(Gen3Fly.FLDEFFOBJ_BIRD): row}
 	return true
 
 

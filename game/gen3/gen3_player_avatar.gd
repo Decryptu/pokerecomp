@@ -656,6 +656,7 @@ func step_movement_tasks() -> Array:
 			_step_waterfall()
 		Task.MAT_JUMP, Task.MAT_SPIN_TURN, Task.MAT_SPIN_DELAY, Task.MAT_SPIN_LEAVE:
 			_step_mat(requests)
+	objects.fly.run_task(requests)
 	objects.field_move_mon.run_task()
 	return requests
 
@@ -747,7 +748,7 @@ func _step_mount(requests: Array) -> void:
 			if Gen3ObjectEvents.movement_overridden(player) \
 					and Gen3ObjectEvents.clear_held_movement_if_finished(player) == 0:
 				return
-			_start_pose()
+			start_pose()
 			task = Task.MOUNT_SHOW_MON
 		Task.MOUNT_SHOW_MON:
 			if Gen3ObjectEvents.held_movement_status(player) == 0:
@@ -768,7 +769,7 @@ func _step_mount(requests: Array) -> void:
 
 
 ## `SetPlayerAvatarFieldMove` (FRLG's `StartPlayerAvatarSummonMonForFieldMoveAnim`) held in its direction.
-func _start_pose() -> void:
+func start_pose() -> void:
 	objects.set_graphics_id(object(), graphics_for(State.FIELD_MOVE))
 	object().anim.start(0)
 	objects.set_held_movement(object(), 0x45 if frlg else Gen3ObjectEvents.START_ANIM_IN_DIRECTION)
@@ -806,7 +807,7 @@ func _step_field_move(requests: Array) -> void:
 				_show_mon(false)
 				task = Task.MOVE_SHOW_MON
 			else:
-				_start_pose()
+				start_pose()
 				task = Task.MOVE_POSE
 		Task.MOVE_POSE:
 			if Gen3ObjectEvents.held_movement_status(player) == 1:

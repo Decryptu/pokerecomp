@@ -65,7 +65,7 @@ const PAYLOAD_KEY: String = "payload"
 const PAYLOAD_SPAN: int = 2
 const BYTES_KEY: String = "bytes"
 
-const FORMAT_VERSION: int = 200
+const FORMAT_VERSION: int = 201
 
 ## What [method state] answers. Stale is told from missing because an older
 ## build's import needs the same dump again, not a first import.

@@ -138,8 +138,7 @@ func reset_fade() -> void:
 	fade_finishing_counter = 0
 
 
-## `UpdateNormalPaletteFade`: the BG half and the OBJ half on alternate calls, the delay counted before the BG
-## half, and four more calls after the target before the fade ends (`IsSoftwarePaletteFadeFinishing`).
+## `UpdateNormalPaletteFade`: BG and OBJ halves alternate, the delay before BG; it ends four calls past the target.
 func _update_normal_fade() -> int:
 	if not fade_active:
 		return Status.DONE

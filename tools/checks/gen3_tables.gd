@@ -100,6 +100,7 @@ func _one_game() -> void:
 	_surf_blob()
 	_cut_grass()
 	_secret_power()
+	_fly_bird()
 	_berry_sparkle()
 	_field_move_streaks()
 	_spinda_spots()
@@ -1039,6 +1040,12 @@ func _secret_power() -> void:
 	for effect: int in [Gen3SecretPower.FLDEFF_CAVE, Gen3SecretPower.FLDEFF_TREE, Gen3SecretPower.FLDEFF_SHRUB]:
 		rows[effect] = _r.data.world_secret_power_graphics(effect)
 	_effect_graphics(rows, "gen3_secret_power", "9b5bea6511b79cc7b64231a78add18cd01c7ac22")
+
+
+func _fly_bird() -> void:
+	var frlg: bool = _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	_effect_graphics({Gen3Fly.FLDEFFOBJ_BIRD: _r.data.world_fly_bird_graphics()}, "gen3_fly_bird",
+		"5ee64883c1e596d376b83df3ef20d5583fe4db00" if frlg else "f8ea8a4bae3d9aed35a1b8d2f15b65d22c55c597")
 
 
 func _berry_sparkle() -> void:
