@@ -16,6 +16,7 @@ var _slots: Array = []
 var _new_game_challenge: StringName = Gen2Rules.CHALLENGE_VANILLA
 var _pending_replace_action: StringName = &""
 var _pending_import_path: String = ""
+var _pending_sav_base: String = ""
 
 var _shell: Gen2LauncherShell = null
 var _page: VBoxContainer = null
@@ -27,6 +28,8 @@ var _name_input: LineEdit = null
 var _export_dialog: Gen2LauncherFilePicker = null
 var _slot_import_dialog: Gen2LauncherFilePicker = null
 var _file_dialog: Gen2LauncherFilePicker = null
+var _sav_base_dialog: Gen2LauncherFilePicker = null
+var _sav_export_dialog: Gen2LauncherFilePicker = null
 ## `MysteryGift`'s own screen, a main-menu row on the cartridge: the exchange
 ## happens with no file loaded, like its SRAM block outside the checksummed save.
 var _mystery_gift: Gen2MysteryGiftScreen = null
@@ -158,6 +161,33 @@ func import_sav_path(path: String, slot: int = -1) -> bool:
 	return true
 
 
+## The selected slot patched into a copy of the cartridge save at [param base_path]; a refusal writes nothing.
+func export_sav_path(base_path: String, path: String) -> bool:
+	if _data == null:
+		_set_status(&"error", "Save export unavailable.", "No imported cartridge cache is selected.")
+		return false
+	var loaded: Dictionary = Gen2SaveStore.load_result(_data.id, _data.sha1, _selected_slot, _data)
+	if not loaded["ok"]:
+		_set_status(&"error", "The save was not exported.", String(loaded["message"]))
+		return false
+	var raw: PackedByteArray = FileAccess.get_file_as_bytes(base_path)
+	if raw.is_empty():
+		_set_status(&"error", "The save was not exported.", "The cartridge save to start from could not be read.")
+		return false
+	var exported: Dictionary = Gen2SramAdapter.export_bytes(loaded["save"], raw, _data)
+	if not exported["ok"]:
+		_set_status(&"error", "The save was not exported.", String(exported["message"]))
+		return false
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		_set_status(&"error", "The save was not exported.", "The file could not be written.")
+		return false
+	file.store_buffer(exported["raw"])
+	file.close()
+	_set_status(&"success", "Exported slot %d as a cartridge save." % (_selected_slot + 1), path)
+	return true
+
+
 func save_screen_snapshot() -> Dictionary:
 	return {
 		"game_id": String(_data.id) if _data != null else "",
@@ -241,6 +271,24 @@ func _build_ui() -> void:
 		PackedStringArray(["*.json; pokerecomp save"]),
 	)
 	_slot_import_dialog.file_selected.connect(_import_slot_file)
+	_sav_base_dialog = _picker(
+		"Choose the cartridge save to write into",
+		FileDialog.FILE_MODE_OPEN_FILE,
+		PackedStringArray(["*.sav; Cartridge save", "*; All files"]),
+	)
+	_sav_base_dialog.file_selected.connect(func(path: String) -> void:
+		_pending_sav_base = path
+		_sav_export_dialog.current_file = export_file_name().get_basename() + ".sav"
+		_sav_export_dialog.show_picker(Vector2i(900, 600))
+	)
+	_sav_export_dialog = _picker(
+		"Export this slot as a cartridge save",
+		FileDialog.FILE_MODE_SAVE_FILE,
+		PackedStringArray(["*.sav; Cartridge save"]),
+	)
+	_sav_export_dialog.file_selected.connect(func(path: String) -> void:
+		export_sav_path(_pending_sav_base, path)
+	)
 
 
 func _picker(
@@ -396,9 +444,7 @@ func _refresh_details() -> void:
 		_add_slot_management(body)
 
 
-## Naming, export, deletion and the editor. Kept below the play actions,
-## because these are about the slot as a file rather than the game in it, and
-## only the last of them is reversible.
+## Naming, export, deletion and the editor: the slot as a file, kept below the play actions.
 func _add_slot_management(body: VBoxContainer) -> void:
 	body.add_child(Gen2LauncherUI.caption(_palette, "This slot as a file"))
 	var name_row: HFlowContainer = Gen2LauncherUI.actions()
@@ -429,6 +475,10 @@ func _add_slot_management(body: VBoxContainer) -> void:
 	file_row.add_child(_action("Import", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
 		_slot_import_dialog.show_picker(Vector2i(900, 600))
 	))
+	if _data != null and RomRegistry.generation_for(_data.id) != RomRegistry.GEN3:
+		file_row.add_child(_action("Export .sav", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
+			_sav_base_dialog.show_picker(Vector2i(900, 600))
+		))
 	file_row.add_child(_action("Delete", Gen2LauncherButton.Variant.DANGER, &"trash", _request_delete))
 
 
