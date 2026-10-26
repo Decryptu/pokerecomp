@@ -48,9 +48,8 @@ func _init(field_objects: Gen3ObjectEvents, player_avatar: Gen3PlayerAvatar) -> 
 		_wait_buried, _camera_spawn, _camera_up, _camera_down])
 
 
-## `CheckForTrainersWantingBattle` (Ruby's `CheckTrainers`): an approach task for each trainer that sees the
-## player. Emerald keeps looking for a second while the party has two usable Pokémon. [param facility_flag]
-## answers Emerald's Battle Pyramid and Trainer Hill trainer flags by slot.
+## `CheckForTrainersWantingBattle` (Ruby's `CheckTrainers`): an approach for each trainer seeing the player, Emerald's
+## for a second with two usable Pokémon. [param facility_flag] answers its Pyramid and Trainer Hill flags by slot.
 func check_trainers(two_usable_mons: bool = true, facility_flag: Callable = Callable()) -> bool:
 	approaching.clear()
 	approaching_id = 0
@@ -97,8 +96,7 @@ func prepare_second_trainer() -> bool:
 	return true
 
 
-## Tasks by priority, buried reveals (0) before approaches (0x50), including reveals the last object callbacks
-## queued. `script_enable` asks the waiting script to resume.
+## Tasks by priority: reveals (0), the last object callbacks' too, before approaches (0x50); `script_enable` resumes.
 func run_tasks() -> Array:
 	var requests: Array = []
 	for slot: int in objects.buried_reveals:
@@ -195,9 +193,8 @@ func _sight(object: Gen3ObjectEvents.ObjectEvent, direction: int) -> int:
 	return distance
 
 
-## `CheckPathBetweenTrainerAndPlayer`: the cells short of the player, then the player's cell with the
-## trainer's range cleared. Emerald starts past the trainer and ignores only an out-of-range bit; Ruby and
-## FRLG include the trainer's own cell, and Ruby's mask blocks on nothing but that bit.
+## `CheckPathBetweenTrainerAndPlayer`: the cells short of the player, then its cell with range cleared. Emerald starts
+## past the trainer, ignoring only an out-of-range bit; Ruby and FRLG test its cell, Ruby blocking on that bit alone.
 func _clear_path(object: Gen3ObjectEvents.ObjectEvent, distance: int, direction: int) -> int:
 	if distance == 0:
 		return 0

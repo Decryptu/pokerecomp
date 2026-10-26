@@ -876,7 +876,7 @@ func _avatar_task_trace(id: StringName) -> String:
 					for frame: int in range(1, 41):
 						var held: Gen3ObjectEvents.ObjectEvent = avatar.object() if kind == 1 else avatar.objects.objects[1]
 						if frame == 4 and hold_state > 0 and (held.single_movement_active
-								or held.movement_action == (0x19 if avatar._frlg else 0x11)):
+								or held.movement_action == (0x19 if avatar.frlg else 0x11)):
 							Gen3ObjectEvents.clear_held_movement(held)
 							held.single_movement_active = false
 						avatar.step_movement_tasks()
@@ -901,7 +901,7 @@ func _task_avatar(id: StringName, kind: int, direction: int, hold_state: int, lo
 		object.map_group = 0
 		object.map_number = 0
 		object.graphics_id = 97
-		if slot == 1 and not avatar._frlg:
+		if slot == 1 and not avatar.frlg:
 			object.graphics_id = 87
 		object.current = Vector2i(12, 12) + Gen3FieldCamera.DIRECTIONS[direction] if slot == 1 else Vector2i(20, 20)
 		object.previous = object.current
@@ -914,14 +914,14 @@ func _task_avatar(id: StringName, kind: int, direction: int, hold_state: int, lo
 		objects.objects[1].current_elevation = 1
 	var held: Gen3ObjectEvents.ObjectEvent = avatar.object() if kind == 1 else objects.objects[1]
 	if hold_state in [1, 2]:
-		objects.set_held_movement(held, 0x19 if avatar._frlg else 0x11)
+		objects.set_held_movement(held, 0x19 if avatar.frlg else 0x11)
 		held.held_movement_finished = hold_state == 2
 	elif hold_state == 3:
 		held.single_movement_active = true
 	if kind == 1 and hold_state == 1:
-		objects.set_held_movement(objects.objects[2], 0x1C if avatar._frlg else 0x14)
+		objects.set_held_movement(objects.objects[2], 0x1C if avatar.frlg else 0x14)
 	objects.events.flag_set(Gen3EventData.STRENGTH_FLAG[id])
-	avatar.begin_collision_movement(direction)
+	avatar.collide(avatar.check_collision(direction), direction, [])
 	return avatar
 
 
@@ -954,10 +954,10 @@ func test_strength_landing_hides_boulder_reveals_floor_and_releases_occupancy() 
 			"anims": [[0x10000, 0xFFFF]], "palette_tag": 0x1004, "palette_offset": 9}}
 		objects.events.flag_set(0x125)
 		assert_eq(boulder.trainer_type, 0x25)
-		assert_eq(avatar.begin_collision_movement(4)["collision"], Gen3PlayerAvatar.Collision.PUSHED_BOULDER)
-		assert_true(avatar.objects.events.controls_locked)
-		assert_eq(avatar.begin_collision_movement(4)["collision"], Gen3PlayerAvatar.Collision.IMPASSABLE)
-		var effects: Array = []
+		avatar.step(4, 0, 0)
+		assert_eq([avatar.task, avatar.objects.events.controls_locked], [Gen3PlayerAvatar.Task.PUSH_WAIT, true])
+		var effects: Array = avatar.step(4, 0, 0)
+		assert_eq(effects, [], "the push holds the next step")
 		for frame: int in 33:
 			effects.append_array(avatar.step_movement_tasks())
 			objects.step_movements()
@@ -993,7 +993,8 @@ func test_strength_switch_dispatch_preserves_all_matching_coordinate_rows() -> v
 			{"x": 7, "y": 5, "elevation": 0, "variable": 0, "value": 0, "script_offset": 0},
 		]
 		avatar.objects.camera.data._world_headers["0:0"]["events"]["coords"] = coords
-		assert_eq(avatar.begin_collision_movement(4)["collision"], Gen3PlayerAvatar.Collision.PUSHED_BOULDER)
+		avatar.step(4, 0, 0)
+		assert_eq(avatar.task, Gen3PlayerAvatar.Task.PUSH_WAIT)
 		var scripts: Array = []
 		for frame: int in 33:
 			for effect: Dictionary in avatar.step_movement_tasks():
@@ -1010,7 +1011,7 @@ func _boulder_avatar(id: StringName, entry: int) -> Gen3PlayerAvatar:
 	objects.camera.header = {"layout_id": 1}
 	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
 	var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
-	template.merge({"local_id": 1, "graphics_id": 97 if avatar._frlg else 87,
+	template.merge({"local_id": 1, "graphics_id": 97 if avatar.frlg else 87,
 		"x": 6, "y": 5, "elevation": 3, "trainer_type": 0x125, "flag": 0x25}, true)
 	objects.camera.data._world_headers["0:0"]["events"]["objects"] = [template]
 	objects.load_templates()
@@ -1020,24 +1021,226 @@ func _boulder_avatar(id: StringName, entry: int) -> Gen3PlayerAvatar:
 	return avatar
 
 
-## A ledge is a two-cell held jump, while another held action remains owned by
-## its caller. Replacing it or clearing a finished hold here changes scripted
-## motion; only the input model consumes ledge collision requests.
+## A ledge is a two-cell held jump that counts `GAME_STAT_JUMPED_DOWN_LEDGES`; `PlayerStep` leaves an unfinished
+## hold alone and clears a finished one, so a held direction jumps again on landing.
 func test_ledge_collision_starts_two_cell_jump_without_stealing_a_hold() -> void:
 	var objects: Gen3ObjectEvents = _field_objects(RomRegistry.EMERALD)
 	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
 	objects.camera.grid.set_metatile_entry(13, 12, 0x3C38)
-	assert_eq(avatar.begin_collision_movement(4)["requests"],
-		[{"kind": "jumped_ledge"}, {"kind": "sound", "name": "ledge"}])
-	assert_eq(avatar.object().player_copyable_movement, 8)
+	objects.camera.grid.set_metatile_entry(15, 12, 0x3C38)
+	assert_eq(avatar.step(4, 0, 0), [{"kind": "sound", "name": "ledge"}])
+	assert_eq([avatar.object().player_copyable_movement, objects.events.stats], [8, {43: 1}])
 	for frame: int in 32:
 		objects.step_movements()
+		if frame == 10:
+			assert_eq(avatar.step(4, 0, 0), [])
 	assert_eq(avatar.object().current, Vector2i(14, 12))
 	assert_eq(avatar.object().pixel_position, Vector2i(224, 192))
-	objects.camera.grid.set_metatile_entry(15, 12, 0x3C38)
-	avatar.begin_collision_movement(4)
 	assert_true(avatar.object().held_movement_finished)
-	assert_eq(avatar.object().movement_action, 0x0F)
+	assert_eq(avatar.step(4, 0, 0), [{"kind": "sound", "name": "ledge"}])
+	assert_eq([avatar.object().movement_action, avatar.object().held_movement_finished, objects.events.stats],
+		[0x0F, false, {43: 2}])
+
+
+## `PlayerStep` turns in place before it walks, runs only with the shoes where the map allows it (Ruby by map
+## type), and bumps walls, silently from an arrow warp. A bump gives way to a new direction, which walks at once,
+## and on Emerald to the cell ahead opening.
+func test_player_step_turns_walks_runs_and_bumps() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
+		var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+		objects.camera.header = {"allow_running": false, "map_type": 8}
+		_field_frames(avatar, Gen3Bike.KEY_DOWN, 1)
+		assert_eq([player.movement_action, player.player_copyable_movement, avatar.running_state],
+			[avatar.action(&"in_place_fast", 1), Gen3PlayerAvatar.Copy.FACE, Gen3PlayerAvatar.Running.TURN_DIRECTION])
+		assert_eq(avatar.flags & Gen3PlayerAvatar.Flag.CONTROLLABLE, Gen3PlayerAvatar.Flag.CONTROLLABLE)
+		_field_frames(avatar, Gen3Bike.KEY_DOWN, 8)
+		assert_eq([player.current, player.movement_action, avatar.flags & Gen3PlayerAvatar.Flag.CONTROLLABLE],
+			[Vector2i(12, 13), avatar.action(&"walk_normal", 1), 0])
+		objects.events.flag_set(Gen3PlayerAvatar.FLAG_SYS_B_DASH[id])
+		_field_frames(avatar, Gen3Bike.KEY_DOWN | Gen3Bike.KEY_B, 16)
+		assert_eq(player.movement_action, avatar.action(&"walk_normal", 1), str(id))
+		objects.camera.header = {"allow_running": true, "map_type": 1}
+		_field_frames(avatar, Gen3Bike.KEY_DOWN | Gen3Bike.KEY_B, 16)
+		assert_eq([player.current, player.movement_action, avatar.flags & Gen3PlayerAvatar.Flag.DASH],
+			[Vector2i(12, 15), avatar.action(&"run", 1), Gen3PlayerAvatar.Flag.DASH], str(id))
+		objects.camera.grid.set_metatile_entry(12, 16, 0x3400)
+		_field_frames(avatar, 0, 8)
+		var bumps: Array = _field_frames(avatar, Gen3Bike.KEY_DOWN, 2)
+		assert_eq([bumps, player.movement_action], [[{"kind": "sound", "name": "wall_hit"}],
+			avatar.action(&"in_place_slow", 1)], str(id))
+		objects.camera.grid.set_metatile_entry(12, 16, 0x3000)
+		_field_frames(avatar, Gen3Bike.KEY_DOWN, 1)
+		assert_eq(player.movement_action == avatar.action(&"walk_normal", 1), id == RomRegistry.EMERALD,
+			"%s: an opened cell interrupts Emerald's bump" % id)
+		_field_frames(avatar, 0, 40)
+		objects.camera.grid.set_metatile_entry(player.current.x, player.current.y + 1, 0x3400)
+		player.current_behavior = 0x65
+		assert_eq(_field_frames(avatar, Gen3Bike.KEY_DOWN, 1), [], "%s: no bump sound on a south arrow warp" % id)
+		_field_frames(avatar, Gen3Bike.KEY_LEFT, 1)
+		assert_eq(player.movement_action, avatar.action(&"walk_normal", 3), "%s: a new direction breaks the bump" % id)
+
+
+## Ice slides in the movement direction until a wall hands the step back to the d-pad; FRLG's spin tiles turn a
+## spinning player at each one, with the sound on every step, until the stop tile.
+func test_forced_movement_slides_on_ice_and_spins_to_the_stop_tile() -> void:
+	for id: StringName in [RomRegistry.EMERALD, RomRegistry.FIRERED]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 1, 0)
+		var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+		var grid: Gen3MapGrid = objects.camera.grid
+		var ice: int = 0x3023 if id == RomRegistry.FIRERED else 0x3020
+		for y: int in [13, 14]:
+			grid.set_metatile_entry(12, y, ice)
+		grid.set_metatile_entry(12, 15, 0x3400)
+		_field_frames(avatar, Gen3Bike.KEY_DOWN, 1)
+		_field_frames(avatar, 0, 16)
+		var slides: Array = []
+		for frame: int in 24:
+			_field_frames(avatar, Gen3Bike.KEY_LEFT, 1)
+			if player.held_movement_active and player.movement_action not in slides:
+				slides.append(player.movement_action)
+		assert_eq(player.current, Vector2i(10, 14), str(id))
+		assert_eq(slides, [avatar.action(&"walk_fast", 1), avatar.action(&"walk_normal", 3)],
+			"%s: one slide, then the wall hands the step back to the d-pad" % id)
+		assert_eq(avatar.flags & Gen3PlayerAvatar.Flag.FORCED_MOVE, 0)
+	var objects: Gen3ObjectEvents = _field_objects(RomRegistry.FIRERED)
+	var spinner: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
+	objects.camera.grid.set_metatile_entry(13, 12, 0x3057)
+	objects.camera.grid.set_metatile_entry(13, 14, 0x3054)
+	objects.camera.grid.set_metatile_entry(15, 14, 0x3058)
+	var sounds: Array = []
+	var actions: Array = []
+	for frame: int in 60:
+		sounds.append_array(_field_frames(spinner, Gen3Bike.KEY_RIGHT if frame == 0 else 0, 1))
+		if actions.is_empty() or actions[-1] != spinner.object().movement_action:
+			actions.append(spinner.object().movement_action)
+	assert_eq(spinner.object().current, Vector2i(15, 14))
+	assert_eq(sounds.count({"kind": "sound", "name": "m_razor_wind2"}), 4, "a sound for each spin step")
+	assert_eq(actions.filter(func(action: int) -> bool: return action >= 0), [0x13, 0x94, 0x97, 0x03])
+
+
+## A secret base jump mat hops the player twice in place, then hands control back through the transition flags;
+## the spin mat turns it four laps, pausing longer after each, then backs it off the way it came.
+func test_secret_base_mats_hop_twice_and_spin_four_laps() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 1, 0)
+		objects.camera.grid.set_metatile_entry(12, 13, 0x30BB)
+		var hops: Array = _field_frames(avatar, Gen3Bike.KEY_DOWN, 1)
+		hops.append_array(_field_frames(avatar, 0, 60))
+		assert_eq(hops.count({"kind": "sound", "name": "ledge"}), 2, str(id))
+		assert_eq([avatar.task, avatar.prevent_step, avatar.object().current], [Gen3PlayerAvatar.Task.NONE, false,
+			Vector2i(12, 13)])
+		assert_eq(avatar.flags & Gen3PlayerAvatar.Flag.CONTROLLABLE, Gen3PlayerAvatar.Flag.CONTROLLABLE,
+			"the mat returns control")
+		objects.camera.grid.set_metatile_entry(12, 14, 0x30BC)
+		var spin: Array = _field_frames(avatar, Gen3Bike.KEY_DOWN, 17)
+		assert_eq([spin, objects.events.controls_locked], [[{"kind": "sound", "name": "warp_in"}], true])
+		var faces: Array = [avatar.object().movement_action]
+		var frames: int = 17
+		while avatar.task != Gen3PlayerAvatar.Task.NONE and frames < 400:
+			_field_frames(avatar, Gen3Bike.KEY_DOWN, 1)
+			frames += 1
+			if avatar.object().movement_action <= 3 and faces[-1] != avatar.object().movement_action:
+				faces.append(avatar.object().movement_action)
+		assert_eq(faces, [2, 1, 3, 0, 2, 1, 3, 0, 2, 1, 3, 0, 2, 1, 3, 0, 2, 1], str(id))
+		assert_eq([frames, objects.events.controls_locked, avatar.object().movement_action],
+			[82, false, avatar.action(&"walk_slow", 2)], str(id))
+
+
+## `GetMachBikeTransition`: holding a direction climbs through the three paces; letting go rolls on, a pace slower
+## each cell, before the bike stands. Riding south on a muddy slope below full speed slides back down.
+func test_mach_bike_accelerates_rolls_on_and_slips_on_mud() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 8), 1, 0)
+		assert_eq(avatar.bike.get_on_off(Gen3PlayerAvatar.Flag.MACH_BIKE), [{"kind": "cycling_music"}])
+		assert_eq([avatar.flags & 0x0F, avatar.object().graphics_id],
+			[Gen3PlayerAvatar.Flag.MACH_BIKE, avatar.graphics_for(Gen3PlayerAvatar.State.MACH_BIKE)])
+		var paces: Array = []
+		for frame: int in 80:
+			var cell: Vector2i = avatar.object().current
+			_field_frames(avatar, Gen3Bike.KEY_DOWN if frame < 40 else 0, 1)
+			if avatar.object().current != cell:
+				paces.append(avatar.object().movement_action)
+		assert_eq(paces, [0x08, 0x15, 0x2D, 0x2D, 0x2D, 0x2D, 0x2D, 0x15, 0x08], str(id))
+		assert_eq([avatar.object().current, avatar.object().movement_action, avatar.bike.speed], [Vector2i(12, 17), 0, 0])
+		var muddy: Gen3PlayerAvatar = Gen3PlayerAvatar.open(_field_objects(id), Vector2i(12, 12), 2, 0)
+		muddy.bike.get_on_off(Gen3PlayerAvatar.Flag.MACH_BIKE)
+		muddy.objects.camera.grid.set_metatile_entry(12, 11, 0x30D0)
+		_field_frames(muddy, Gen3Bike.KEY_UP, 24)
+		assert_eq([muddy.object().current, muddy.object().movement_action], [Vector2i(12, 12),
+			muddy.action(&"walk_fast", 1)], "%s: a slow start slides back off the mud" % id)
+		assert_eq(muddy.bike.get_on_off(0), [{"kind": "special_map_music"}])
+		assert_eq(muddy.flags & 0x0F, Gen3PlayerAvatar.Flag.ON_FOOT)
+
+
+## The Acro Bike: B alone pops a wheelie that turns to bunny hops after forty frames; a new direction with B within
+## four frames jumps sideways, or turns round in place when it is the opposite way.
+func test_acro_bike_wheelies_hops_and_jumps() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.EMERALD]:
+		var objects: Gen3ObjectEvents = _field_objects(id)
+		var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 4, 0)
+		var wheelie: int = 0x62 if id == RomRegistry.RUBY else 0x64
+		avatar.bike.get_on_off(Gen3PlayerAvatar.Flag.ACRO_BIKE)
+		_field_frames(avatar, Gen3Bike.KEY_B, 1)
+		assert_eq([avatar.object().movement_action, avatar.bike.state], [wheelie + 4 + 3, Gen3Bike.Acro.WHEELIE_STANDING])
+		var hops: Array = _field_frames(avatar, Gen3Bike.KEY_B, 41, Gen3Bike.KEY_B)
+		assert_eq([avatar.bike.state, avatar.object().movement_action], [Gen3Bike.Acro.BUNNY_HOP, wheelie + 12 + 3])
+		assert_eq(hops, [{"kind": "sound", "name": "bike_hop"}])
+		_field_frames(avatar, 0, 40)
+		assert_eq(avatar.bike.state, Gen3Bike.Acro.NORMAL)
+		var jump: Array = _field_frames(avatar, Gen3Bike.KEY_UP | Gen3Bike.KEY_B, 1)
+		assert_eq([jump, avatar.object().movement_action, avatar.object().facing_locked],
+			[[{"kind": "sound", "name": "bike_hop"}], avatar.action(&"jump", 2), true], str(id))
+		_field_frames(avatar, 0, 40)
+		assert_eq([avatar.object().current, avatar.object().facing], [Vector2i(12, 11), 4], "a sideways jump faces on")
+		_field_frames(avatar, Gen3Bike.KEY_LEFT | Gen3Bike.KEY_B, 1)
+		assert_eq(avatar.object().movement_action, 0x4D, "a reversed jump turns round in place")
+
+
+## FRLG's bike: off B, a pull-down cell rolls it south at the fastest pace, turning south for a frame between cells
+## because no input differs from south; B holds it, and the d-pad climbs the road at walking pace. Level ground
+## rides at the current's pace, cracked ice at the fast one.
+func test_frlg_bike_rolls_down_cycling_road_unless_b_holds_it() -> void:
+	var objects: Gen3ObjectEvents = _field_objects(RomRegistry.FIRERED)
+	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 2, 0)
+	var grid: Gen3MapGrid = objects.camera.grid
+	for y: int in range(8, 16):
+		grid.set_metatile_entry(12, y, 0x30D0)
+	avatar.bike.get_on_off(Gen3PlayerAvatar.Flag.MACH_BIKE)
+	_field_frames(avatar, Gen3Bike.KEY_B, 20)
+	assert_eq(avatar.object().current, Vector2i(12, 12), "B holds the bike on the slope")
+	_field_frames(avatar, Gen3Bike.KEY_UP | Gen3Bike.KEY_B, 1)
+	assert_eq([avatar.object().current, avatar.object().movement_action],
+		[Vector2i(12, 11), avatar.action(&"walk_normal", 2)])
+	_field_frames(avatar, 0, 16)
+	_field_frames(avatar, 0, 1)
+	assert_eq(avatar.object().movement_action, avatar.action(&"walk_faster", 1))
+	_field_frames(avatar, 0, 12)
+	assert_eq(avatar.object().current, Vector2i(12, 14), "each pulled cell faces south again for a frame")
+	var rider: Gen3PlayerAvatar = Gen3PlayerAvatar.open(_field_objects(RomRegistry.FIRERED), Vector2i(12, 12), 4, 0)
+	rider.bike.get_on_off(Gen3PlayerAvatar.Flag.MACH_BIKE)
+	rider.objects.camera.grid.set_metatile_entry(13, 12, 0x3027)
+	_field_frames(rider, Gen3Bike.KEY_RIGHT, 1)
+	assert_eq(rider.object().movement_action, rider.action(&"walk_fast", 4), "cracked ice rides fast")
+	_field_frames(rider, Gen3Bike.KEY_RIGHT, 8)
+	assert_eq(rider.object().movement_action, rider.action(&"ride_current", 4))
+
+
+## The field's frame: `DoCB1_Overworld`'s input, then `CB2_Overworld`'s tasks and objects, holding [param held].
+func _field_frames(avatar: Gen3PlayerAvatar, held: int, frames: int, previous: int = 0) -> Array:
+	var requests: Array = []
+	for frame: int in frames:
+		avatar.update_tile_state()
+		requests.append_array(avatar.step(Gen3Bike.dpad_direction(held), held & ~previous, held))
+		previous = held
+		requests.append_array(avatar.step_movement_tasks())
+		requests.append_array(avatar.objects.step_movements(avatar.flags & Gen3PlayerAvatar.Flag.DASH != 0,
+			avatar.tile_state == Gen3PlayerAvatar.Tile.CENTER))
+	return requests.filter(func(request: Dictionary) -> bool: return request["kind"] == "sound")
 
 
 ## The ARM lookup uses active local IDs, not the player bit or map identity;
@@ -2222,7 +2425,7 @@ func test_surf_blob_bobs_the_player_and_stays_behind_on_dismount() -> void:
 		var dismount: Gen3PlayerAvatar = _surfing_avatar(id, true)
 		var blob: Dictionary = dismount.object().field_effect_sprite
 		var at: Vector2i = blob["position"]
-		var requests: Array = dismount.begin_collision_movement(Gen3ObjectEvents.Direction.SOUTH)["requests"]
+		var requests: Array = dismount.step(Gen3ObjectEvents.Direction.SOUTH, 0, 0)
 		for frame: int in 40:
 			requests.append_array(dismount.step_movement_tasks())
 			requests.append_array(dismount.objects.step_movements())
@@ -2377,8 +2580,9 @@ func test_rotating_gate_collision_turns_shared_vars_once_and_preserves_static_qu
 		objects.camera.grid.blocks[13 + 32 * 14] = 0x3000 | (collision << 10)
 		avatar.load_rotating_gates(true)
 		avatar.object().current = at + Vector2i(1, 0)
-		assert_eq(avatar.begin_collision_movement(3)["requests"], [{"kind": "rotate_gate", "gate": 0,
-			"orientation": 1, "rotation": 2}])
+		var requests: Array = []
+		avatar.collide(avatar.check_collision(3), 3, requests)
+		assert_eq(requests, [{"kind": "rotate_gate", "gate": 0, "orientation": 1, "rotation": 2}])
 		assert_eq(avatar.gate_orientation(0), 2)
 	objects.camera.group = 0
 	assert_eq(avatar.rotating_gate_collision(3, at), {"collision": 0, "requests": []})

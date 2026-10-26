@@ -1,8 +1,7 @@
 class_name Gen3FieldMoveMon
 extends RefCounted
 
-## `FldEff_FieldMoveShowMon`'s banner task ([method run_task], in `RunTasks`, then its VBlank's register writes)
-## and mon sprite ([method animate], in `AnimateSprites`), outdoors or indoors.
+## `FldEff_FieldMoveShowMon`'s banner task ([method run_task], then VBlank's writes) and mon sprite ([method animate]).
 
 enum Slide { DUMMY, ON, WAIT, OFF }
 ## The `CpuCopy16` lengths of `FieldMoveShowMon*Effect_LoadGfx`, indoors then outdoors.

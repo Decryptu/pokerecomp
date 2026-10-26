@@ -574,9 +574,8 @@ func _drought_main() -> void:
 			_drought_state_run()
 
 
-## `LoadDroughtWeatherPalettes`: Ruby and Sapphire sum one table a call (the first from RGB(1, 1, 1), each
-## later one onto the one before) and Emerald's are in ROM, finishing on the first call. FireRed and LeafGreen's
-## loader does nothing, so they never finish.
+## `LoadDroughtWeatherPalettes`: Ruby sums one table a call (the first from RGB(1, 1, 1), each later onto the last);
+## Emerald's are in ROM, done on the first call; FRLG's loader does nothing, so never finishes.
 func _load_drought_tables() -> bool:
 	if drought_load_index >= 32:
 		return false

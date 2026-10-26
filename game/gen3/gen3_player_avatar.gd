@@ -1,8 +1,8 @@
 class_name Gen3PlayerAvatar
 extends RefCounted
 
-## `field_player_avatar.c`: initialization, state transitions and queries, collision decisions, Strength, the surf
-## mount and dismount tasks and rotating-gate puzzles; `field_effect.c`'s field-move and Waterfall tasks.
+## `field_player_avatar.c`: state, `PlayerStep`, collisions, the Strength, surf, dismount and secret base mat tasks
+## and rotating gates; `field_effect.c`'s field-move and Waterfall tasks. [Gen3Bike] rides the bikes.
 
 enum Flag { ON_FOOT = 1, MACH_BIKE = 2, ACRO_BIKE = 4, SURFING = 8,
 	UNDERWATER = 16, CONTROLLABLE = 32, FORCED_MOVE = 64, DASH = 128 }
@@ -12,7 +12,52 @@ enum Collision { NONE, OUTSIDE_RANGE, IMPASSABLE, ELEVATION_MISMATCH, OBJECT_EVE
 	ISOLATED_VERTICAL_RAIL, ISOLATED_HORIZONTAL_RAIL, VERTICAL_RAIL, HORIZONTAL_RAIL,
 	ROTATING_GATE = 8 }
 enum Task { NONE, PUSH_WAIT, PUSH_MOVE, SURF_WAIT, SURF_JUMP, MOUNT_INIT, MOUNT_POSE, MOUNT_SHOW_MON, MOUNT_JUMP,
-	MOUNT_END, MOVE_INIT, MOVE_POSE, MOVE_SHOW_MON, MOVE_RUN, WATERFALL_SHOW_MON, WATERFALL_WAIT, WATERFALL_RIDE }
+	MOUNT_END, MOVE_INIT, MOVE_POSE, MOVE_SHOW_MON, MOVE_RUN, WATERFALL_SHOW_MON, WATERFALL_WAIT, WATERFALL_RIDE,
+	MAT_JUMP, MAT_SPIN_TURN, MAT_SPIN_DELAY, MAT_SPIN_LEAVE }
+enum Running { NOT_MOVING, TURN_DIRECTION, MOVING }
+enum Tile { NOT_MOVING, TRANSITION, CENTER }
+enum Copy { NONE, FACE, WALK, SPIN, JUMP_2 = 8 }
+enum Forced { SLIP, WALK, CURRENT, SLIDE, SPIN, MAT_JUMP, MAT_SPIN, MUDDY_SLOPE }
+## `Get*MovementAction` families by name: Hoenn's id, FRLG's (-1 absent).
+const ACTIONS: Dictionary = {&"face": [0x00, 0x00], &"walk_slow": [0x04, 0x0C], &"walk_normal": [0x08, 0x10],
+	&"jump_2": [0x0C, 0x14], &"walk_fast": [0x15, 0x1D], &"in_place_slow": [0x19, 0x21],
+	&"in_place_normal": [0x1D, 0x25], &"in_place_fast": [0x21, 0x29], &"ride_current": [0x29, 0x31],
+	&"walk_faster": [0x2D, 0x35], &"run": [0x35, 0x3D], &"run_slow": [-1, 0x41], &"jump": [0x42, 0x4E],
+	&"jump_in_place": [0x46, 0x52], &"spin": [-1, 0x94]}
+## `PlayerAnimIsMultiFrameStationary`'s action ranges, Ruby's acro rows two below Emerald's.
+const STATIONARY: Dictionary = {&"ruby": [[0, 3], [0x10, 0x14], [0x19, 0x28], [0x62, 0x6D], [0x7A, 0x7D]],
+	&"emerald": [[0, 3], [0x10, 0x14], [0x19, 0x28], [0x64, 0x6F], [0x7C, 0x7F]],
+	&"firered": [[0, 7], [0x18, 0x1C], [0x21, 0x30], [0x70, 0x7B], [0x88, 0x8B]]}
+## `sForcedMovementTestFuncs` by behavior: the forced movement and its direction (0: the movement direction).
+const HOENN_FORCED: Dictionary = {0x48: [Forced.SLIP, 0], 0x20: [Forced.SLIP, 0],
+	0x43: [Forced.WALK, 1], 0x42: [Forced.WALK, 2], 0x41: [Forced.WALK, 3], 0x40: [Forced.WALK, 4],
+	0x53: [Forced.CURRENT, 1], 0x52: [Forced.CURRENT, 2], 0x51: [Forced.CURRENT, 3], 0x50: [Forced.CURRENT, 4],
+	0x47: [Forced.SLIDE, 1], 0x46: [Forced.SLIDE, 2], 0x45: [Forced.SLIDE, 3], 0x44: [Forced.SLIDE, 4],
+	0x13: [Forced.CURRENT, 1], 0xBB: [Forced.MAT_JUMP, 0], 0xBC: [Forced.MAT_SPIN, 0], 0xD0: [Forced.MUDDY_SLOPE, 1]}
+## FRLG's list adds the spin tiles and drops the mats, which are stubs there, and the muddy slope.
+const FRLG_FORCED: Dictionary = {0x48: [Forced.SLIP, 0], 0x23: [Forced.SLIP, 0],
+	0x43: [Forced.WALK, 1], 0x42: [Forced.WALK, 2], 0x41: [Forced.WALK, 3], 0x40: [Forced.WALK, 4],
+	0x53: [Forced.CURRENT, 1], 0x52: [Forced.CURRENT, 2], 0x51: [Forced.CURRENT, 3], 0x50: [Forced.CURRENT, 4],
+	0x54: [Forced.SPIN, 4], 0x55: [Forced.SPIN, 3], 0x56: [Forced.SPIN, 2], 0x57: [Forced.SPIN, 1],
+	0x47: [Forced.SLIDE, 1], 0x46: [Forced.SLIDE, 2], 0x45: [Forced.SLIDE, 3], 0x44: [Forced.SLIDE, 4],
+	0x13: [Forced.CURRENT, 1]}
+const MB_STOP_SPINNING: int = 0x58
+const HOENN_ARROW_WARPS: Array = [[0x65, 0x6D, 0x1C], [0x64, 0x1B], [0x63], [0x62]]
+const MB_WARP_DOOR: int = 0x69
+const FRLG_STAIR_WARPS: Dictionary = {3: [0x6D, 0x6F], 4: [0x6C, 0x6E]}
+## `PlayerAvatar_SecretBaseMatSpinStep1`'s turns by movement direction and `Step2`'s delays by completed laps.
+const MAT_SPIN_TURNS: Array[int] = [3, 4, 2, 1]
+const MAT_SPIN_DELAYS: Array[int] = [0x10, 0x10, 0x11, 0x12, 0x13]
+const HOENN_NO_RUNNING: Array[int] = [0x0A, 0x03, 0x28, 0x74, 0x75, 0x76, 0x77]
+const MB_FORTREE_BRIDGE: int = 0x78
+const FRLG_NO_RUNNING: int = 0x0A
+const MB_ROCK_STAIRS: int = 0x2A
+const MAP_TYPE_INDOOR: int = 8
+const FLAG_SYS_B_DASH: Dictionary = {
+	&"ruby": 0x860, &"sapphire": 0x860, &"firered": 0x82F, &"leafgreen": 0x82F, &"emerald": 0x8C0,
+}
+const GAME_STAT_JUMPED_DOWN_LEDGES: int = 43
+const LOCALID_FARAWAY_ISLAND_MEW: int = 1
 const FLDEFF_USE_SURF: int = 9
 const FLDEFF_USE_STRENGTH: int = 40
 const FLDEFF_USE_WATERFALL: int = 43
@@ -79,14 +124,20 @@ var objects: Gen3ObjectEvents
 var object_id: int = -1
 var gender: int = 0
 var flags: int = 0
+var running_state: Running = Running.NOT_MOVING
+var tile_state: Tile = Tile.NOT_MOVING
 var prevent_step: bool = false
 var task: Task = Task.NONE
+var bike: Gen3Bike
+var frlg: bool = false
+var _transition_flags: int = 0
+var _last_spin_tile: int = 0
 var _task_direction: int = 0
 var _boulder_id: int = -1
 var _shown_mon: Array = []
 var _mount_cell: Vector2i = Vector2i.ZERO
 var _field_move: int = 0
-var _frlg: bool = false
+var _mat_count: int = 0
 var _gate_map: String = ""
 var _gates: Array = []
 
@@ -98,7 +149,8 @@ static func open(field_objects: Gen3ObjectEvents, at: Vector2i, direction: int, 
 	var avatar := Gen3PlayerAvatar.new()
 	avatar.objects = field_objects
 	avatar.gender = player_gender
-	avatar._frlg = field_objects.camera.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	avatar.frlg = field_objects.camera.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	avatar.bike = Gen3Bike.new(avatar, field_objects.camera.data.id)
 	var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
 	template.merge({"local_id": Gen3ObjectEvents.LOCALID_PLAYER,
 		"graphics_id": avatar.graphics_for(State.NORMAL), "movement_type": MOVEMENT_TYPE_PLAYER,
@@ -121,7 +173,7 @@ func track_camera() -> void:
 
 
 func graphics_for(state: int) -> int:
-	if _frlg:
+	if frlg:
 		return int(FRLG_GRAPHICS[state][gender]) if FRLG_GRAPHICS.has(state) else -1
 	return int(HOENN_GRAPHICS[state][gender]) if state >= 0 and state < HOENN_GRAPHICS.size() else -1
 
@@ -130,18 +182,22 @@ func set_state_mask(mask: int) -> void:
 	flags = ((flags & (Flag.DASH | Flag.FORCED_MOVE | Flag.CONTROLLABLE)) | mask) & 0xFF
 
 
-## `SetPlayerAvatarTransitionFlags`, run by `InitObjectEventsLocal` after [method open]. The bikes' riding state and
-## the Acro Bike's bumpy-slope hop await the bike model; FRLG's surf transition skips a player already surfing.
-func transition(transition_flags: int) -> void:
+## `SetPlayerAvatarTransitionFlags`, after [method open]; FRLG's surf transition skips a player already surfing.
+func transition(added: int) -> void:
+	_transition_flags |= added
+	_do_transition()
+
+
+func _do_transition() -> void:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	for state: int in State.FIELD_MOVE + 1:
-		if not transition_flags & (1 << state):
+		if not _transition_flags & (1 << state):
 			continue
 		if state == State.FIELD_MOVE:
 			flags |= Flag.CONTROLLABLE
 			continue
-		var shown: int = State.MACH_BIKE if _frlg and state == State.ACRO_BIKE else state
-		if _frlg and (state == State.UNDERWATER or (state == State.SURFING and flags & Flag.SURFING)):
+		var shown: int = State.MACH_BIKE if frlg and state == State.ACRO_BIKE else state
+		if frlg and (state == State.UNDERWATER or (state == State.SURFING and flags & Flag.SURFING)):
 			continue
 		objects.set_graphics_id(player, graphics_for(shown))
 		Gen3ObjectEvents.turn(player, player.movement_direction)
@@ -151,6 +207,13 @@ func transition(transition_flags: int) -> void:
 			set_surf_bob(Gen3ObjectEvents.Bob.PLAYER_AND_MON)
 		elif state == State.UNDERWATER:
 			player.field_effect_sprite = objects.start_underwater_bob(object_id)
+		elif state != State.NORMAL:
+			bike.clear_state()
+			if frlg:
+				_last_spin_tile = 0
+			elif state == State.ACRO_BIKE:
+				bike.handle_bumpy_slope_jump()
+	_transition_flags = 0
 
 
 func set_surf_bob(state: int) -> void:
@@ -179,15 +242,13 @@ func check_collision(direction: int) -> Dictionary:
 		return _result(Collision.IMPASSABLE)
 	var at: Vector2i = object().current
 	var behavior: int = objects.camera.grid.behavior_at(at.x, at.y) & 0xFF
-	if _frlg and ((direction == Gen3ObjectEvents.Direction.WEST and behavior in [0x6D, 0x6F])
-			or (direction == Gen3ObjectEvents.Direction.EAST and behavior in [0x6C, 0x6E])):
+	if frlg and behavior in FRLG_STAIR_WARPS.get(direction, []):
 		return _result(Collision.DIRECTIONAL_STAIR_WARP)
 	at += Gen3FieldCamera.DIRECTIONS[direction]
 	return collision_at(object(), at, direction)
 
 
-## `CheckForObjectEventCollision`. Emerald's static query skips dismounts, ledges and boulders. The input host
-## consumes effects once to start tasks and update game statistics.
+## `CheckForObjectEventCollision`, its effects left to [method collide]; Emerald's static query skips them.
 func collision_at(probe: Gen3ObjectEvents.ObjectEvent, at: Vector2i, direction: int,
 		static_only: bool = false) -> Dictionary:
 	if direction < 1 or direction > 4:
@@ -205,7 +266,7 @@ func collision_at(probe: Gen3ObjectEvents.ObjectEvent, at: Vector2i, direction: 
 			if boulder >= 0:
 				return _result(Collision.PUSHED_BOULDER,
 					[{"kind": "push_boulder", "object_id": boulder, "direction": direction}])
-	if collision == Collision.NONE and not _frlg:
+	if collision == Collision.NONE and not frlg:
 		var gate_result: Dictionary = rotating_gate_collision(direction, at, static_only)
 		if gate_result["collision"] == Collision.ROTATING_GATE:
 			return gate_result
@@ -225,13 +286,13 @@ func _pushable_boulder(at: Vector2i, direction: int) -> int:
 	if not objects.events.flag_get(Gen3EventData.STRENGTH_FLAG[objects.events.game]):
 		return -1
 	var slot: int = objects.at_position(at)
-	if slot < 0 or objects.objects[slot].graphics_id != (97 if _frlg else 87):
+	if slot < 0 or objects.objects[slot].graphics_id != (97 if frlg else 87):
 		return -1
 	var boulder: Gen3ObjectEvents.ObjectEvent = objects.objects[slot]
 	var target: Vector2i = boulder.current + Gen3FieldCamera.DIRECTIONS[direction]
 	var behavior: int = objects.camera.grid.behavior_at(target.x, target.y)
 	# FRLG's fall warp bypasses both ordinary collision and the door test.
-	if _frlg and behavior == 0x66:
+	if frlg and behavior == 0x66:
 		return slot
 	if objects.collision_at(boulder, target.x, target.y, direction) == Collision.NONE and (behavior & 0xFF) != 0x60:
 		return slot
@@ -248,7 +309,7 @@ func facing_fishable_water() -> bool:
 			or objects.collision_at(player, at.x, at.y, player.facing) != Collision.ELEVATION_MISMATCH:
 		return false
 	var grid: Gen3MapGrid = objects.camera.grid
-	if _frlg:
+	if frlg:
 		return grid.terrain_at(at.x, at.y) == TERRAIN_WATER
 	return grid.behavior_at(at.x, at.y) in HOENN_FISHABLE
 
@@ -257,42 +318,325 @@ static func _result(collision: int, requests: Array = []) -> Dictionary:
 	return {"collision": collision, "requests": requests}
 
 
-## `PlayerNotOnBikeCollide`'s collision branch starts its task at once; walks and stairs stay with the input host.
-func begin_collision_movement(direction: int) -> Dictionary:
-	if prevent_step:
-		return _result(Collision.IMPASSABLE)
-	var result: Dictionary = check_collision(direction)
-	var requests: Array = result["requests"].duplicate()
-	match int(result["collision"]):
-		Collision.PUSHED_BOULDER:
-			requests.clear()
-			_boulder_id = int(result["requests"][0]["object_id"])
-			_task_direction = direction
-			prevent_step = true
-			objects.events.controls_locked = true
-			task = Task.PUSH_WAIT
-		Collision.STOP_SURFING:
-			requests.clear()
-			_task_direction = direction
-			prevent_step = true
-			objects.events.controls_locked = true
-			flags = (flags & ~Flag.SURFING) | Flag.ON_FOOT
-			if _frlg:
-				objects.freeze_except_player()
-			requests.append({"kind": "restore_field_music"})
-			task = Task.SURF_WAIT
-			_start_dismount(requests)
-		Collision.LEDGE_JUMP:
+## `UpdatePlayerAvatarTransitionState`, before [method step]: a step's last frame, and a turn's, is `T_TILE_CENTER`.
+func update_tile_state() -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	tile_state = Tile.NOT_MOVING
+	if not Gen3ObjectEvents.movement_overridden(player):
+		return
+	var stationary: bool = _stationary(player.movement_action)
+	if Gen3ObjectEvents.held_movement_status(player) == 0:
+		if not stationary:
+			tile_state = Tile.TRANSITION
+	elif not stationary or running_state == Running.TURN_DIRECTION:
+		tile_state = Tile.CENTER
+
+
+func _stationary(action_id: int) -> bool:
+	var game: StringName = &"firered" if frlg else (&"emerald" if objects.events.game == RomRegistry.EMERALD else &"ruby")
+	for span: Array in STATIONARY[game]:
+		if action_id >= int(span[0]) and action_id <= int(span[1]):
+			return true
+	return false
+
+
+## `PlayerStep` for the d-pad's `DIR_*` and the GBA key masks; its warp arrow awaits the warp model.
+func step(direction: int, new_keys: int, held_keys: int) -> Array:
+	var requests: Array = []
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	if prevent_step or (frlg and _continue_spin(requests)):
+		return requests
+	if not frlg:
+		bike.update_history(held_keys)
+	if _special_anim_holds(player, direction):
+		return requests
+	player.inanimate = false
+	player.disable_anim = false
+	player.facing_locked = false
+	flags &= ~Flag.DASH
+	_do_transition()
+	if _forced_movement(requests):
+		return requests
+	if flags & (Flag.MACH_BIKE | Flag.ACRO_BIKE):
+		bike.move(direction, new_keys, held_keys, requests)
+	else:
+		_move_on_foot(direction, held_keys, requests)
+	if running_state == Running.MOVING:
+		flags &= ~Flag.CONTROLLABLE
+	return requests
+
+
+## `TryInterruptObjectEventSpecialAnim`: a bump yields to a new direction, Emerald's also to an open cell ahead.
+func _special_anim_holds(player: Gen3ObjectEvents.ObjectEvent, direction: int) -> bool:
+	if not Gen3ObjectEvents.movement_overridden(player) or Gen3ObjectEvents.clear_held_movement_if_finished(player) != 0:
+		return false
+	var bump: int = action(&"in_place_slow", Gen3ObjectEvents.Direction.SOUTH)
+	if not player.held_movement_active or player.movement_action < bump or player.movement_action > bump + 3:
+		return true
+	if objects.events.game == RomRegistry.EMERALD:
+		if direction == 0 or (player.movement_direction == direction and collision_at(player,
+				player.current + Gen3FieldCamera.DIRECTIONS[direction], direction, true)["collision"] != Collision.NONE):
+			return true
+	elif direction == 0 or player.movement_direction == direction:
+		return true
+	Gen3ObjectEvents.clear_held_movement(player)
+	return false
+
+
+## `TryDoMetatileBehaviorForcedMovement`: once a step has cleared `CONTROLLABLE`, the cell stood on moves the player.
+func _forced_movement(requests: Array) -> bool:
+	var behavior: int = object().current_behavior
+	var table: Dictionary = FRLG_FORCED if frlg else HOENN_FORCED
+	if flags & Flag.CONTROLLABLE or not table.has(behavior):
+		cancel_forced_movement()
+		return false
+	if frlg:
+		_last_spin_tile = behavior
+	return _force(table[behavior], requests)
+
+
+func _force(row: Array, requests: Array) -> bool:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	var direction: int = int(row[1])
+	match int(row[0]):
+		Forced.SLIP:
+			player.disable_anim = true
+			return _forced_step(player.movement_direction, &"walk_fast", requests)
+		Forced.WALK:
+			return _forced_step(direction, &"walk_normal", requests)
+		Forced.CURRENT:
+			return _forced_step(direction, &"ride_current", requests)
+		Forced.SLIDE:
+			player.disable_anim = true
+			player.facing_locked = true
+			return _forced_step(direction, &"walk_fast", requests)
+		Forced.SPIN:
+			requests.append({"kind": "sound", "name": "m_razor_wind2"})
+			return _forced_step(direction, &"spin", requests)
+		Forced.MAT_JUMP, Forced.MAT_SPIN:
+			_start_mat(int(row[0]) == Forced.MAT_SPIN, requests)
+			return true
+	if player.movement_direction == Gen3ObjectEvents.Direction.NORTH and bike.player_speed() >= Gen3Bike.Speed.FASTEST:
+		return false
+	bike.update_counter_speed(0)
+	player.facing_locked = true
+	return _forced_step(Gen3ObjectEvents.Direction.SOUTH, &"walk_fast", requests)
+
+
+## `DoForcedMovement`: a wall ends the forced movement, while a ledge or a task-starting collision keeps it.
+func _forced_step(direction: int, family: StringName, requests: Array) -> bool:
+	var collision: int = collide(check_collision(direction), direction, requests)
+	flags |= Flag.FORCED_MOVE
+	if collision != Collision.NONE:
+		cancel_forced_movement()
+		if collision < Collision.STOP_SURFING:
+			return false
+		if collision == Collision.LEDGE_JUMP:
+			jump_ledge(direction, requests)
+		flags |= Flag.FORCED_MOVE
+	else:
+		set_anim(action(family, direction), Copy.SPIN if family == &"spin" else Copy.WALK)
+	running_state = Running.MOVING
+	return true
+
+
+## FRLG's `TryUpdatePlayerSpinDirection`: a spinning player takes each spin tile's turn until a stop tile.
+func _continue_spin(requests: Array) -> bool:
+	if not flags & Flag.FORCED_MOVE or int(FRLG_FORCED.get(_last_spin_tile, [-1])[0]) != Forced.SPIN:
+		return false
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	if player.held_movement_finished:
+		if player.current_behavior == MB_STOP_SPINNING:
+			return false
+		if int(FRLG_FORCED.get(player.current_behavior, [-1])[0]) == Forced.SPIN:
+			_last_spin_tile = player.current_behavior
+		Gen3ObjectEvents.clear_held_movement(player)
+		_force(FRLG_FORCED[_last_spin_tile], requests)
+	return true
+
+
+## `MovePlayerNotOnBike`: Emerald bumps Faraway Island's Mew silently, and FRLG faces a stair warp.
+func _move_on_foot(direction: int, held_keys: int, requests: Array) -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	if direction == 0:
+		running_state = Running.NOT_MOVING
+		face(player.facing)
+		return
+	if direction != player.movement_direction and running_state != Running.MOVING:
+		running_state = Running.TURN_DIRECTION
+		set_anim(action(&"in_place_fast", direction), Copy.FACE)
+		return
+	running_state = Running.MOVING
+	var collision: int = collide(check_collision(direction), direction, requests)
+	if collision == Collision.LEDGE_JUMP:
+		jump_ledge(direction, requests)
+	elif collision == Collision.OBJECT_EVENT and colliding_with_mew(direction):
+		set_anim(action(&"in_place_slow", direction), Copy.WALK)
+	elif frlg and collision == Collision.DIRECTIONAL_STAIR_WARP:
+		face(direction)
+	elif collision != Collision.NONE:
+		if collision < Collision.STOP_SURFING or collision > Collision.ROTATING_GATE:
+			collision_sound(direction, requests)
+			set_anim(action(&"in_place_slow", direction), Copy.WALK)
+	elif flags & Flag.SURFING:
+		set_anim(action(&"walk_fast", direction), Copy.WALK)
+	elif (frlg or not flags & Flag.UNDERWATER) and held_keys & Gen3Bike.KEY_B \
+			and objects.events.flag_get(FLAG_SYS_B_DASH[objects.events.game]) \
+			and not _running_disallowed(player.current_behavior):
+		set_anim(action(&"run_slow" if on_rock_stairs(direction) else &"run", direction), Copy.WALK)
+		flags |= Flag.DASH
+	else:
+		set_anim(action(&"walk_slow" if on_rock_stairs(direction) else &"walk_normal", direction), Copy.WALK)
+
+
+## `IsRunningDisallowed`; Ruby's reads the indoor map type where the others read the header's running flag.
+func _running_disallowed(behavior: int) -> bool:
+	var header: Dictionary = objects.camera.header
+	if objects.events.game in [RomRegistry.RUBY, RomRegistry.SAPPHIRE]:
+		return running_disallowed_by_behavior(behavior) or int(header.get("map_type", 0)) == MAP_TYPE_INDOOR
+	return not header.get("allow_running", false) or running_disallowed_by_behavior(behavior)
+
+
+## `IsRunningDisallowedByMetatile` (FRLG's `MetatileBehaviorForbidsBiking`): Fortree's bridges only from below.
+func running_disallowed_by_behavior(behavior: int) -> bool:
+	if frlg:
+		return behavior == FRLG_NO_RUNNING
+	return behavior in HOENN_NO_RUNNING or (behavior == MB_FORTREE_BRIDGE and object().previous_elevation & 1 == 0)
+
+
+## FRLG's `PlayerIsMovingOnRockStairs`: up from a stair cell or down onto one.
+func on_rock_stairs(direction: int) -> bool:
+	if not frlg or direction not in [Gen3ObjectEvents.Direction.NORTH, Gen3ObjectEvents.Direction.SOUTH]:
+		return false
+	var at: Vector2i = object().current
+	if direction == Gen3ObjectEvents.Direction.SOUTH:
+		at += Gen3FieldCamera.DIRECTIONS[direction]
+	return objects.camera.grid.behavior_at(at.x, at.y) & 0xFF == MB_ROCK_STAIRS
+
+
+## Emerald's `IsPlayerCollidingWithFarawayIslandMew`: Mew stepping out of the cell ahead.
+func colliding_with_mew(direction: int) -> bool:
+	if objects.events.game != RomRegistry.EMERALD:
+		return false
+	var map: Vector2i = Gen3CutGrass.FARAWAY_ISLAND_INTERIOR
+	var mew: Gen3ObjectEvents.ObjectEvent = objects.by_identity(LOCALID_FARAWAY_ISLAND_MEW, map.y, map.x)
+	return mew != null and mew.current != mew.previous \
+		and mew.previous == object().current + Gen3FieldCamera.DIRECTIONS[direction]
+
+
+## `CheckForObjectEventCollision`'s effects: the ledge stat, the dismount and push tasks, a turned gate's request.
+func collide(result: Dictionary, direction: int, requests: Array) -> int:
+	for request: Dictionary in result["requests"]:
+		match request["kind"]:
+			"jumped_ledge":
+				objects.events.increment_stat(GAME_STAT_JUMPED_DOWN_LEDGES)
+			"stop_surfing":
+				_start_stop_surfing(direction, requests)
+			"push_boulder":
+				_boulder_id = int(request["object_id"])
+				_task_direction = direction
+				prevent_step = true
+				objects.events.controls_locked = true
+				task = Task.PUSH_WAIT
+			_:
+				requests.append(request)
+	return int(result["collision"])
+
+
+func _start_stop_surfing(direction: int, requests: Array) -> void:
+	_task_direction = direction
+	prevent_step = true
+	objects.events.controls_locked = true
+	flags = (flags & ~Flag.SURFING) | Flag.ON_FOOT
+	if frlg:
+		objects.freeze_except_player()
+	requests.append({"kind": "restore_field_music"})
+	task = Task.SURF_WAIT
+	_start_dismount(requests)
+
+
+## `PlayCollisionSoundIfNotFacingWarp`: silent from an arrow or FRLG stair warp, and into a door to the north.
+func collision_sound(direction: int, requests: Array) -> void:
+	var behavior: int = object().current_behavior
+	var arrows: Array = [[0x65], [0x64], [0x63], [0x62]] if frlg else HOENN_ARROW_WARPS
+	if behavior in arrows[direction - 1] or (frlg and behavior in FRLG_STAIR_WARPS.get(direction, [])):
+		return
+	if direction == Gen3ObjectEvents.Direction.NORTH:
+		var at: Vector2i = object().current + Gen3FieldCamera.DIRECTIONS[direction]
+		if objects.camera.grid.behavior_at(at.x, at.y) & 0xFF == MB_WARP_DOOR:
+			return
+	requests.append({"kind": "sound", "name": "wall_hit"})
+
+
+func action(family: StringName, direction: int) -> int:
+	return Gen3ObjectEvents.direction_action(int(ACTIONS[family][int(frlg)]), direction)
+
+
+func set_anim(action_id: int, copy: int) -> void:
+	if not Gen3ObjectEvents.movement_overridden(object()):
+		object().player_copyable_movement = copy
+		objects.set_held_movement(object(), action_id)
+
+
+func face(direction: int) -> void:
+	set_anim(action(&"face", direction), Copy.FACE)
+
+
+func jump_ledge(direction: int, requests: Array) -> void:
+	requests.append({"kind": "sound", "name": "ledge"})
+	set_anim(action(&"jump_2", direction), Copy.JUMP_2)
+
+
+## `DoPlayerMatJump` and `DoPlayerMatSpin`, whose tasks take their first turn at once.
+func _start_mat(spin: bool, requests: Array) -> void:
+	_mat_count = 0
+	task = Task.MAT_JUMP
+	if spin:
+		_task_direction = object().movement_direction
+		prevent_step = true
+		objects.events.controls_locked = true
+		requests.append({"kind": "sound", "name": "warp_in"})
+		task = Task.MAT_SPIN_TURN
+	_step_mat(requests)
+
+
+## The jump mat hops twice in place. The spin mat turns the player a lap at a time, pausing longer after each,
+## until the fourth lap faces it away; it then backs off the mat.
+func _step_mat(requests: Array) -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	if task == Task.MAT_JUMP:
+		prevent_step = true
+	if Gen3ObjectEvents.clear_held_movement_if_finished(player) == 0:
+		return
+	match task:
+		Task.MAT_JUMP:
 			requests.append({"kind": "sound", "name": "ledge"})
-			if not Gen3ObjectEvents.movement_overridden(object()):
-				object().player_copyable_movement = 8
-				objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0x14 if _frlg else 0x0C, direction))
-	result["requests"] = requests
-	return result
+			objects.set_held_movement(player, action(&"jump_in_place", player.facing))
+			_mat_count += 1
+			if _mat_count > 1:
+				prevent_step = false
+				_transition_flags |= Flag.CONTROLLABLE
+				task = Task.NONE
+		Task.MAT_SPIN_TURN:
+			var turned: int = MAT_SPIN_TURNS[player.movement_direction - 1]
+			objects.set_held_movement(player, action(&"face", turned))
+			if turned == _task_direction:
+				_mat_count += 1
+			task = Task.MAT_SPIN_DELAY
+			if _mat_count > 3 and turned == Gen3ObjectEvents.OPPOSITE[_task_direction]:
+				task = Task.MAT_SPIN_LEAVE
+		Task.MAT_SPIN_DELAY:
+			objects.set_held_movement(player, MAT_SPIN_DELAYS[_mat_count])
+			task = Task.MAT_SPIN_TURN
+		Task.MAT_SPIN_LEAVE:
+			objects.set_held_movement(player, action(&"walk_slow", Gen3ObjectEvents.OPPOSITE[_task_direction]))
+			objects.events.controls_locked = false
+			prevent_step = false
+			task = Task.NONE
 
 
-## `RunTasks` precedes `AnimateSprites`: call this once per field frame, after [method Gen3TrainerSee.run_tasks],
-## then [method Gen3ObjectEvents.step_movements]. The show-mon task, created after these, runs last.
+## `RunTasks` after [method step] and [method Gen3TrainerSee.run_tasks], then [method Gen3ObjectEvents.step_movements]
+## with the dash flag and `T_TILE_CENTER`; the show-mon task, created after these, runs last.
 func step_movement_tasks() -> Array:
 	var requests: Array = []
 	match task:
@@ -310,6 +654,8 @@ func step_movement_tasks() -> Array:
 			_step_field_move(requests)
 		Task.WATERFALL_SHOW_MON, Task.WATERFALL_WAIT, Task.WATERFALL_RIDE:
 			_step_waterfall()
+		Task.MAT_JUMP, Task.MAT_SPIN_TURN, Task.MAT_SPIN_DELAY, Task.MAT_SPIN_LEAVE:
+			_step_mat(requests)
 	objects.field_move_mon.run_task()
 	return requests
 
@@ -318,6 +664,7 @@ func step_movement_tasks() -> Array:
 func cancel_forced_movement() -> void:
 	if flags & Flag.FORCED_MOVE:
 		object().facing_locked = false
+		object().enable_anim = true
 		Gen3ObjectEvents.set_direction(object(), object().facing)
 		flags &= ~Flag.FORCED_MOVE
 
@@ -333,8 +680,8 @@ func _start_push(requests: Array) -> void:
 		return
 	Gen3ObjectEvents.clear_held_movement_if_finished(player)
 	Gen3ObjectEvents.clear_held_movement_if_finished(boulder)
-	objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x25 if _frlg else 0x1D, _task_direction))
-	objects.set_held_movement(boulder, Gen3ObjectEvents.direction_action(0x08 if _frlg else 0x04, _task_direction))
+	objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x25 if frlg else 0x1D, _task_direction))
+	objects.set_held_movement(boulder, Gen3ObjectEvents.direction_action(0x08 if frlg else 0x04, _task_direction))
 	objects.start_effect_sprite(boulder, _boulder_id, Gen3ObjectEvents.FLDEFF_DUST, -1, false, requests)
 	requests.append({"kind": "sound", "name": "strength"})
 	task = Task.PUSH_MOVE
@@ -358,7 +705,7 @@ func _start_dismount(requests: Array) -> void:
 			and Gen3ObjectEvents.clear_held_movement_if_finished(object()) == 0:
 		return
 	set_surf_bob(Gen3ObjectEvents.Bob.JUST_MON)
-	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0xA6 if _frlg else 0x3A, _task_direction))
+	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0xA6 if frlg else 0x3A, _task_direction))
 	task = Task.SURF_JUMP
 
 
@@ -369,7 +716,7 @@ func _finish_dismount(requests: Array) -> void:
 	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0, object().facing))
 	prevent_step = false
 	objects.events.controls_locked = false
-	if _frlg:
+	if frlg:
 		objects.unfreeze_all()
 		requests.append({"kind": "refresh_help_context"})
 	objects.destroy_effect_sprite(object().field_effect_sprite)
@@ -412,7 +759,7 @@ func _step_mount(requests: Array) -> void:
 				return
 			objects.set_graphics_id(player, graphics_for(State.SURFING))
 			Gen3ObjectEvents.clear_held_movement_if_finished(player)
-			objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x46 if _frlg else 0x3A,
+			objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x46 if frlg else 0x3A,
 				player.movement_direction))
 			player.field_effect_sprite = objects.start_surf_blob(object_id, _mount_cell)
 			task = Task.MOUNT_END
@@ -424,7 +771,7 @@ func _step_mount(requests: Array) -> void:
 func _start_pose() -> void:
 	objects.set_graphics_id(object(), graphics_for(State.FIELD_MOVE))
 	object().anim.start(0)
-	objects.set_held_movement(object(), 0x45 if _frlg else Gen3ObjectEvents.START_ANIM_IN_DIRECTION)
+	objects.set_held_movement(object(), 0x45 if frlg else Gen3ObjectEvents.START_ANIM_IN_DIRECTION)
 
 
 func _show_mon(no_ducking: bool) -> void:
@@ -534,7 +881,7 @@ func _step_waterfall() -> void:
 
 
 func _ride_up() -> void:
-	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0x08 if _frlg else 0x04,
+	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0x08 if frlg else 0x04,
 		Gen3ObjectEvents.Direction.NORTH))
 	task = Task.WATERFALL_RIDE
 
@@ -550,7 +897,7 @@ func _finish_mount(requests: Array) -> void:
 	objects.unfreeze_all()
 	objects.events.controls_locked = false
 	objects.task_effects.erase(FLDEFF_USE_SURF)
-	if _frlg:
+	if frlg:
 		requests.append({"kind": "refresh_help_context"})
 	task = Task.NONE
 
@@ -559,7 +906,7 @@ func _finish_mount(requests: Array) -> void:
 func load_rotating_gates(reset: bool = false) -> void:
 	_gate_map = "%d:%d" % [objects.camera.group, objects.camera.number]
 	_gates = []
-	if _frlg:
+	if frlg:
 		return
 	var configs: Dictionary = EMERALD_GATES if objects.events.game == RomRegistry.EMERALD else RS_GATES
 	_gates = configs.get(_gate_map, [])

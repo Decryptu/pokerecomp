@@ -115,8 +115,7 @@ static func _berries(rom: RomFile, layout: Dictionary, object_graphics: Dictiona
 	return out
 
 
-## `ObjectEventGraphicsInfo` except tile tags, keyed by dump offset. Animation tables retain following
-## sequence pointers as the cartridge reads them, and images as far as they index.
+## `ObjectEventGraphicsInfo` but tile tags, by offset; anim tables keep the pointers after them, images what they index.
 static func _object_graphics(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> Dictionary:
 	var tables: Dictionary = {}
 	var out: Dictionary = {"sprite_anims": tables, "sprite_images": {}, "subsprite_tables": {}, "affine_anims": {}}
@@ -319,8 +318,7 @@ static func _sprite_template(rom: RomFile, at: int, anim_count: int, image_count
 		"palette_tag": rom.u16le(at + 2)}
 
 
-## Weather palettes/sheets and drought tables: Emerald stores six raw tables; Ruby/Sapphire's six LZ deltas
-## are summed one per `LoadDroughtWeatherPalette` call. FireRed/LeafGreen have none.
+## Weather palettes, sheets and droughts: Emerald's six raw tables, Ruby's six LZ deltas summed per load; FRLG has none.
 static func _weather(rom: RomFile, layout: Dictionary, graphics: Dictionary) -> Dictionary:
 	if not layout.has("weather_palette") or not rom.in_bounds(int(layout["weather_palette"]), Gen3Layout.PALETTE_BYTES):
 		return {}
@@ -718,8 +716,7 @@ static func _encounters(rom: RomFile, layout: Dictionary, headers: Dictionary) -
 	return out
 
 
-## GetCurrentMapWildMonHeaderId adds the Altering Cave set to its first row. Every occurrence keeps its
-## ordinal even when a method is absent in that set.
+## `GetCurrentMapWildMonHeaderId` adds Altering Cave's set to its first row; each keeps its ordinal, absent methods too.
 static func _encounter_methods(rom: RomFile, layout: Dictionary, at: int, key: String, variant: int, out: Dictionary) -> bool:
 	var records: Dictionary = {}
 	for method: int in WILD_METHODS.size():
@@ -770,8 +767,7 @@ static func _wild_info(rom: RomFile, layout: Dictionary, pointer_at: int, method
 	return {"rate": rate, "slots": slots}
 
 
-## pret's metatiles.h/metatiles.inc places each attribute array immediately after its eight-word metatile
-## array. FRLG swaps callback/attributes in Tileset.
+## Attribute arrays follow their eight-word metatile arrays; FRLG's `Tileset` swaps their pointer and the callback.
 static func _graphics(rom: RomFile, headers: Dictionary) -> Dictionary:
 	var layouts: Dictionary = {}
 	var tilesets: Dictionary = {}
@@ -831,9 +827,8 @@ static func _tileset(rom: RomFile, at: int) -> Dictionary:
 	return out
 
 
-## The ROM after a metatile or attribute array, up to the bank's id space: `DrawMetatileAt` and
-## `GetMetatileAttributesById` index past the array for an id the tileset lacks, which a connection strip from
-## a map on another secondary tileset brings into the backup map.
+## The ROM after a metatile or attribute array, to the bank's id space: `DrawMetatileAt` and `GetMetatileAttributesById`
+## read past it for an id the tileset lacks, which a strip from a map on another secondary tileset brings in.
 static func _tail(rom: RomFile, at: int, length: int) -> PackedByteArray:
 	return rom.slice(at, clampi(rom.size() - at, 0, length))
 
