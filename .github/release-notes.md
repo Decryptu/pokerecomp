@@ -3,7 +3,7 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Export .sav on the save screen writes a Red, Blue, Yellow, Gold, Silver or Crystal slot into a cartridge save you choose, ready for an emulator or a flash cart. Gold, Silver and Crystal carry the trainer and party; Red, Blue and Yellow carry the full save.
+- Export .sav on the save screen writes a Red, Blue, Yellow, Gold, Silver or Crystal slot into a cartridge save you choose, ready for an emulator or a flash cart. Gold, Silver and Crystal carry the trainer and party. Red, Blue and Yellow also carry boxes, items, money, the Pokédex, position and story progress.
 
 ## Updating this release
 
