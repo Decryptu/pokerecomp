@@ -118,6 +118,7 @@ func _open_world(source: String) -> Node:
 	assert_true(Gen2ModHost.instance().select_view(&"native")["ok"])
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -132,6 +133,7 @@ func _open_world(source: String) -> Node:
 func _open_built_in_world() -> Gen2WorldRenderer:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -341,6 +343,7 @@ func test_a_registered_world_actor_is_driven_by_the_screen_and_drawn_by_the_view
 	assert_true(Gen2ModHost.instance().register_world_actor(&"follower", actor)["ok"])
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -399,6 +402,7 @@ func test_meeting_a_drawn_wild_carries_its_id_the_way_a_step_does() -> void:
 	)
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -438,6 +442,7 @@ func test_a_visible_encounter_provider_is_driven_validated_drawn_and_fought() ->
 	)
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -614,6 +619,7 @@ func test_a_visible_encounter_provider_is_driven_validated_drawn_and_fought() ->
 func test_the_transition_flash_is_the_background_s_order_and_not_the_sprites() -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -734,6 +740,7 @@ func test_an_actor_is_offered_the_press_and_the_host_spends_its_cry() -> void:
 	assert_true(Gen2ModHost.instance().register_world_actor(&"pet", actor)["ok"])
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -762,6 +769,7 @@ func test_an_actor_is_not_offered_a_press_a_cartridge_object_answered() -> void:
 	assert_true(Gen2ModHost.instance().register_world_actor(&"pet", actor)["ok"])
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -788,6 +796,7 @@ func test_a_mods_hidden_item_request_runs_the_maps_own_script_when_the_world_is_
 	_data = GameData.open_directory(Fixture.directory())
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -829,6 +838,7 @@ func test_a_mods_hidden_item_request_runs_the_maps_own_script_when_the_world_is_
 func test_a_mods_notice_raises_the_maps_own_banner_when_the_world_is_idle() -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -863,6 +873,7 @@ func test_a_mods_notice_raises_the_maps_own_banner_when_the_world_is_idle() -> v
 func test_a_mods_page_opens_from_the_start_menu_and_lists_what_it_answers() -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
