@@ -97,6 +97,7 @@ func _one_game() -> void:
 	_hot_springs()
 	_bubbles()
 	_tracks()
+	_surf_blob()
 	_reflections()
 	_weather()
 	_object_sprite_frames()
@@ -1017,6 +1018,12 @@ func _tracks() -> void:
 	var expected: String = "5fcec9973b219419bc633bffa6ebbde878c56af1" \
 		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "6a18411cd4ac7e29bae43940848eb35b73e9a04a"
 	_effect_graphics(rows, "gen3_tracks", expected)
+
+
+func _surf_blob() -> void:
+	var expected: String = "464310fcdc95b8b737906c1244f975fe26efd70e" \
+		if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else "2fe3315bafefd4a2dcbff52c40d8e05944b20f97"
+	_effect_graphics({8: _r.data.world_surf_blob_graphics()}, "gen3_surf_blob", expected)
 
 
 ## Digests come from pret's PNGs, palettes and anim tables, encoded independently in tile order.

@@ -44,14 +44,11 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var palettes: Dictionary = _object_palettes(rom, layout, object_graphics, graphics)
 	if scripts.is_empty() or movement_types.is_empty() or berries.is_empty() or palettes.is_empty():
 		return {}
-	if layout.has("shadow_templates") and not _shadow_templates(rom, layout, object_graphics, graphics):
-		return {}
-	if layout.has("icon_template") and not _icon_templates(rom, layout, object_graphics, graphics):
-		return {}
-	if layout.has("grass_palette") and not _ground_templates(rom, layout, object_graphics, graphics):
-		return {}
-	if layout.has("ash_palette") and not _ash_template(rom, layout, object_graphics, graphics):
-		return {}
+	for step: Array in [["shadow_templates", _shadow_templates], ["icon_template", _icon_templates],
+			["grass_palette", _ground_templates], ["ash_palette", _ash_template],
+			["shadow_templates", _surf_blob_template]]:
+		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
+			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
 	if layout.has("weather_palette") and weather.is_empty():
 		return {}
@@ -63,8 +60,7 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	return {"headers": headers, "encounters": encounters, "graphics": graphics, "scripts": scripts}
 
 
-## Per `MOVEMENT_TYPE_*`, whether `InitObjectEventStateFromTemplate` gives it a range of at least one, and the
-## direction an object of that type starts facing.
+## Per `MOVEMENT_TYPE_*`: whether `InitObjectEventStateFromTemplate` ranges it at least one, and its first facing.
 static func _movement_types(rom: RomFile, layout: Dictionary) -> Array:
 	var at: int = int(layout["movement_types"])
 	var count: int = int(layout["movement_type_count"])
@@ -202,6 +198,17 @@ static func _ash_template(rom: RomFile, layout: Dictionary, out: Dictionary, gra
 	graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
 	row["palette_offset"] = palette
 	out["ash_template"] = {"49": row}
+	return true
+
+
+## `FLDEFFOBJ_SURF_BLOB`: TAG_NONE tiles and palette, drawn with the player's palette slot.
+static func _surf_blob_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + 7 * 4, 24)
+	var images: int = 6 if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 3
+	var row: Dictionary = _sprite_template(rom, at, 4, images, Vector2i(32, 32), out, graphics)
+	if row.is_empty() or int(row["palette_tag"]) != 0xFFFF:
+		return false
+	out["surf_blob_template"] = {"8": row}
 	return true
 
 
@@ -471,8 +478,7 @@ static func _anim_table(rom: RomFile, at: int) -> Array:
 	return out
 
 
-## `union AnimCmd` words through `ANIMCMD_END` or `ANIMCMD_JUMP`; a frame keeps its top byte clear, so a run
-## of other data is not taken for one.
+## `union AnimCmd` words through `ANIMCMD_END` or `ANIMCMD_JUMP`; a frame's clear top byte keeps other data out.
 static func _anim_sequence(rom: RomFile, at: int) -> Array:
 	var out: Array = []
 	while out.size() < Gen3SpriteAnim.SEQUENCE_LIMIT and rom.in_bounds(at + out.size() * 4, 4):
@@ -800,8 +806,7 @@ static func primary_tile_count(id: StringName) -> int:
 	return 640 if id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 512
 
 
-## One metatile id's tiles and attributes. An id past the tileset's rows reads the ROM after the arrays, as
-## the cartridge does; one past that is empty.
+## One metatile id's tiles and attributes; past the rows it reads the ROM after the arrays, and past that nothing.
 static func metatile(tileset: Dictionary, number: int) -> Dictionary:
 	var row: Array = _metatile_row(tileset, number)
 	if row.is_empty():

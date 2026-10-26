@@ -947,6 +947,11 @@ func test_strength_landing_hides_boulder_reveals_floor_and_releases_occupancy() 
 		var avatar: Gen3PlayerAvatar = _boulder_avatar(id, 0x3C66)
 		var objects: Gen3ObjectEvents = avatar.objects
 		var boulder: Gen3ObjectEvents.ObjectEvent = objects.objects[1]
+		var data: GameData = objects.camera.data
+		data._sections["gba_graphics"] = true
+		data._world_tilesets = {"object_palettes": {"9": {"bytes": PackedByteArray([31, 0])}}}
+		data._world_scripts["map_effect_templates"] = {"10": {"width": 16, "height": 8, "images": 5,
+			"anims": [[0x10000, 0xFFFF]], "palette_tag": 0x1004, "palette_offset": 9}}
 		objects.events.flag_set(0x125)
 		assert_eq(boulder.trainer_type, 0x25)
 		assert_eq(avatar.begin_collision_movement(4)["collision"], Gen3PlayerAvatar.Collision.PUSHED_BOULDER)
@@ -959,6 +964,10 @@ func test_strength_landing_hides_boulder_reveals_floor_and_releases_occupancy() 
 			if frame == 0:
 				assert_eq(boulder.current, Vector2i(14, 12))
 				assert_eq(boulder.previous, Vector2i(13, 12))
+				var dust: Array = effects.filter(func(request: Dictionary) -> bool:
+					return request.get("effect_id") == Gen3ObjectEvents.FLDEFF_DUST)
+				assert_eq(dust.map(func(request: Dictionary) -> Vector2i: return request["at"]), [Vector2i(13, 12)],
+					"the dust rises from the cell the boulder leaves")
 				assert_eq(objects.collision_at(avatar.object(), 13, 12, 4), Gen3ObjectEvents.Collision.OBJECT_EVENT)
 		assert_false(avatar.prevent_step)
 		assert_false(avatar.controls_locked)
@@ -1964,6 +1973,76 @@ func test_tracks_mark_the_cell_left_and_fade_out() -> void:
 					objects.camera.grid.set_metatile_entry(13, 12, 0x3021)
 					objects.step_movements()
 					assert_false(objects.field_effect_active(35), "a jump in place leaves no tire track")
+
+
+## Hoenn's blob bobs the player with it, half as fast beside elevation 3; FRLG's never moves and lowers the
+## player on each anim's second frame. A dismount leaves it bobbing in place until the jump ends.
+func test_surf_blob_bobs_the_player_and_stays_behind_on_dismount() -> void:
+	for id: StringName in [RomRegistry.RUBY, RomRegistry.FIRERED, RomRegistry.EMERALD]:
+		var frlg: bool = id == RomRegistry.FIRERED
+		for shore: bool in [false, true]:
+			var avatar: Gen3PlayerAvatar = _surfing_avatar(id, shore)
+			var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+			var blob: Dictionary = player.field_effect_sprite
+			assert_eq([avatar.flags & 0x0F, player.graphics_id, blob["palette"], blob["subpriority"]],
+				[Gen3PlayerAvatar.Flag.SURFING, avatar.graphics_for(Gen3PlayerAvatar.State.SURFING), 0, 150])
+			assert_false(avatar.objects.field_effect_active(Gen3ObjectEvents.FLDEFF_SURF_BLOB),
+				"FldEff_SurfBlob leaves the active list")
+			var samples: Array = []
+			for frame: int in range(1, 99):
+				avatar.objects.step_movements()
+				if frame in ([49, 50, 97, 98] if frlg else ([7, 8, 16, 24, 32] if shore else [3, 4, 16, 20, 32])):
+					samples.append(player.jump_y)
+			var expected: Array = [0, -1, -2, -1, 0] if shore else [0, -1, -4, -3, 0]
+			assert_eq(samples, [0, 1, 1, 0] if frlg else expected, "%s shore %s" % [id, shore])
+			assert_eq(blob["position"], avatar.objects.camera.sprite_position(Vector2i(12, 12)) + Vector2i(8, 8))
+			Gen3ObjectEvents.set_direction(player, Gen3ObjectEvents.Direction.EAST)
+			avatar.objects.step_movements()
+			var anim: Gen3SpriteAnim = blob["anim"]
+			assert_eq([anim.anim_num, anim.h_flip], [3, true], "the blob faces the movement direction")
+		var dismount: Gen3PlayerAvatar = _surfing_avatar(id, true)
+		var blob: Dictionary = dismount.object().field_effect_sprite
+		var at: Vector2i = blob["position"]
+		var requests: Array = dismount.begin_collision_movement(Gen3ObjectEvents.Direction.SOUTH)["requests"]
+		for frame: int in 40:
+			requests.append_array(dismount.step_movement_tasks())
+			requests.append_array(dismount.objects.step_movements())
+			if not dismount.object().field_effect_sprite.is_empty():
+				assert_eq(blob["position"], at, "the blob stays on the water")
+		assert_eq(dismount.object().current, Vector2i(12, 13))
+		assert_true(dismount.object().field_effect_sprite.is_empty())
+		assert_false(blob in dismount.objects.sprites.effects, "the landed jump destroys the blob")
+		assert_false(requests.any(func(request: Dictionary) -> bool: return request["kind"] == "surf_bob"))
+	var diver: Gen3PlayerAvatar = _surfing_avatar(RomRegistry.EMERALD, false, Gen3PlayerAvatar.Flag.UNDERWATER)
+	var bobs: Array = []
+	for frame: int in range(1, 34):
+		diver.objects.step_movements()
+		if frame in [1, 4, 5, 13, 17, 29, 33]:
+			bobs.append(diver.object().jump_y)
+	assert_eq(bobs, [1, 1, 2, 4, 3, 0, 1], "the underwater dummy bobs the player from its first callback")
+
+
+func _surfing_avatar(id: StringName, shore: bool, flags: int = Gen3PlayerAvatar.Flag.SURFING) -> Gen3PlayerAvatar:
+	var objects: Gen3ObjectEvents = _grass_objects(id, 0x10)
+	objects.objects[0] = Gen3ObjectEvents.ObjectEvent.new()
+	var data: GameData = objects.camera.data
+	data._world_scripts["object_graphics"] = []
+	for graphics: int in 256:
+		data._world_scripts["object_graphics"].append({"width": 16, "height": 32, "anims": 0})
+	var hoenn: Array = [[0x10000, 0xFFFE], [0x10001, 0xFFFE], [0x10002, 0xFFFE], [0x410002, 0xFFFE]]
+	var frlg: Array = [[0x300000, 0x300001, 0xFFFE], [0x300002, 0x300003, 0xFFFE],
+		[0x300004, 0x300005, 0xFFFE], [0x700004, 0x700005, 0xFFFE]]
+	data._world_scripts["surf_blob_template"] = {"8": {"width": 32, "height": 32, "images": 5,
+		"anims": frlg if id == RomRegistry.FIRERED else hoenn, "palette_tag": 0xFFFF}}
+	var grid: Gen3MapGrid = objects.camera.grid
+	grid.blocks.fill(0x1010)
+	if shore:
+		grid.set_metatile_entry(12, 13, 0x3000)
+	var avatar: Gen3PlayerAvatar = Gen3PlayerAvatar.open(objects, Vector2i(12, 12), 1, 0)
+	avatar.object().current_elevation = 1
+	avatar.object().previous_elevation = 1
+	avatar.transition(flags)
+	return avatar
 
 
 func _landing_objects(id: StringName, behavior: int) -> Gen3ObjectEvents:

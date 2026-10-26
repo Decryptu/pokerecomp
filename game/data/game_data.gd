@@ -431,6 +431,10 @@ func world_ash_graphics() -> Dictionary:
 	return _world_effect_graphics("ash_template", 49)
 
 
+func world_surf_blob_graphics() -> Dictionary:
+	return _world_effect_graphics("surf_blob_template", 8)
+
+
 func world_icon_graphics(effect: int) -> Dictionary:
 	return _world_effect_graphics("icon_templates", effect)
 

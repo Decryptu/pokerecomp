@@ -309,7 +309,7 @@ func _map_effect_entry(objects: Gen3ObjectEvents, effect: Dictionary) -> Diction
 	var info: Dictionary = effect["info"]
 	var size := Vector2i(int(info["width"]), int(info["height"]))
 	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
-	var at: Vector2i = center - size / 2
+	var at: Vector2i = center - size / 2 + Vector2i(0, int(effect.get("y2", 0)))
 	var sub: int = int(effect.get("subpriority", 0))
 	var priority: int = int(effect["priority"])
 	return {"y": at.y & 0xFF, "key": (priority << 8) | sub,
@@ -360,8 +360,7 @@ func _update_linked_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> voi
 		int(request["map_number"]), int(request["map_group"]))
 	var height: int = int(objects.graphics_info(object.graphics_id).get("height", 0))
 	var offset: int = (height >> 1) - 8 if int(request["effect_id"]) == Gen3ObjectEvents.FLDEFF_HOT_SPRINGS_WATER else int(effect["y_offset"])
-	var position: Vector2i = object.pixel_position + Vector2i(8, 16 - (height >> 1) + offset) \
-		- objects.camera.screen_origin() - objects.camera.sprite_coord_offset()
+	var position: Vector2i = objects.linked_sprite_position(object) + Vector2i(0, offset)
 	effect["position"] = Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768))
 	if int(request["effect_id"]) == Gen3ObjectEvents.FLDEFF_SAND_PILE and effect["last_position"] != effect["position"]:
 		effect["last_position"] = effect["position"]
@@ -377,9 +376,7 @@ func _grass_subpriority(objects: Gen3ObjectEvents, center: Vector2i, size: Vecto
 		if not object.active:
 			continue
 		var height: int = int(objects.graphics_info(object.graphics_id).get("height", 0))
-		var linked: Vector2i = object.pixel_position + Vector2i(8, 16 - height / 2) \
-			- objects.camera.screen_origin() - objects.camera.sprite_coord_offset()
-		linked = Vector2i(wrapi(linked.x, -32768, 32768), wrapi(linked.y, -32768, 32768))
+		var linked: Vector2i = objects.linked_sprite_position(object)
 		var ylo: int = wrapi(center.y + size.y / 2, -32768, 32768)
 		var yhi: int = wrapi(ylo - height / 2, -32768, 32768)
 		var top: int = wrapi(linked.y - height / 2, -32768, 32768)

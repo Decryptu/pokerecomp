@@ -1,8 +1,8 @@
 class_name Gen3PlayerAvatar
 extends RefCounted
 
-## `field_player_avatar.c`: initialization, state queries and collision decisions, Strength, surf dismount
-## tasks and rotating-gate puzzles. Sprites are left to the field drawing host.
+## `field_player_avatar.c`: initialization, state transitions and queries, collision decisions, Strength, surf
+## dismount tasks and rotating-gate puzzles.
 
 enum Flag { ON_FOOT = 1, MACH_BIKE = 2, ACRO_BIKE = 4, SURFING = 8,
 	UNDERWATER = 16, CONTROLLABLE = 32, FORCED_MOVE = 64, DASH = 128 }
@@ -71,9 +71,8 @@ var _gate_map: String = ""
 var _gates: Array = []
 
 
-## `InitPlayerAvatar` takes backup coordinates. The slot is reserved before spawning map objects, as
-## `InitObjectEventsLocal` does. Null on a full pool or a duplicate player, rather than the cartridge's
-## out-of-bounds write.
+## `InitPlayerAvatar` at backup coordinates, its slot reserved before map objects as `InitObjectEventsLocal` does.
+## Null on a full pool or a duplicate player, rather than the cartridge's out-of-bounds write.
 static func open(field_objects: Gen3ObjectEvents, at: Vector2i, direction: int, player_gender: int) -> Gen3PlayerAvatar:
 	if player_gender not in [0, 1] or direction < 0 or direction > 4:
 		return null
@@ -112,6 +111,34 @@ func graphics_for(state: int) -> int:
 ## `SetPlayerAvatarStateMask` preserves control, forced movement and dash.
 func set_state_mask(mask: int) -> void:
 	flags = ((flags & (Flag.DASH | Flag.FORCED_MOVE | Flag.CONTROLLABLE)) | mask) & 0xFF
+
+
+## `SetPlayerAvatarTransitionFlags`, run by `InitObjectEventsLocal` after [method open]. The bikes' riding state and
+## the Acro Bike's bumpy-slope hop await the bike model; FRLG's surf transition skips a player already surfing.
+func transition(transition_flags: int) -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	for state: int in State.FIELD_MOVE + 1:
+		if not transition_flags & (1 << state):
+			continue
+		if state == State.FIELD_MOVE:
+			flags |= Flag.CONTROLLABLE
+			continue
+		var shown: int = State.MACH_BIKE if _frlg and state == State.ACRO_BIKE else state
+		if _frlg and (state == State.UNDERWATER or (state == State.SURFING and flags & Flag.SURFING)):
+			continue
+		objects.set_graphics_id(player, graphics_for(shown))
+		Gen3ObjectEvents.turn(player, player.movement_direction)
+		set_state_mask(STATE_FLAGS[shown])
+		if state == State.SURFING:
+			player.field_effect_sprite = objects.start_surf_blob(object_id)
+			set_surf_bob(Gen3ObjectEvents.Bob.PLAYER_AND_MON)
+		elif state == State.UNDERWATER:
+			player.field_effect_sprite = objects.start_underwater_bob(object_id)
+
+
+func set_surf_bob(state: int) -> void:
+	if not object().field_effect_sprite.is_empty():
+		object().field_effect_sprite["bob"] = state
 
 
 func graphics_by_current_state() -> int:
@@ -194,8 +221,7 @@ func _pushable_boulder(at: Vector2i, direction: int) -> int:
 	return -1
 
 
-## `IsPlayerFacingSurfableFishableWater`: FRLG reads terrain attributes; Hoenn reads the behavior predicates,
-## which exclude waterfalls.
+## `IsPlayerFacingSurfableFishableWater`: FRLG reads terrain attributes, Hoenn the behaviors, waterfalls excluded.
 func facing_fishable_water() -> bool:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	if player.facing < 1 or player.facing > 4:
@@ -250,9 +276,8 @@ func begin_collision_movement(direction: int) -> Dictionary:
 	return result
 
 
-## `RunTasks` precedes `AnimateSprites`: call this once per field frame, after [method
-## Gen3TrainerSee.run_tasks], then [method Gen3ObjectEvents.step_movements]. Presentation requests leave
-## flags, occupancy and held actions owned by these models.
+## `RunTasks` precedes `AnimateSprites`: call this once per field frame, after [method Gen3TrainerSee.run_tasks],
+## then [method Gen3ObjectEvents.step_movements].
 func step_movement_tasks() -> Array:
 	var requests: Array = []
 	match task:
@@ -275,8 +300,7 @@ func cancel_forced_movement() -> void:
 		flags &= ~Flag.FORCED_MOVE
 
 
-## Emerald's `PushBoulder_Move` clears finished holds before testing overrides; `DoBoulderDust` on
-## Ruby/Sapphire/FRLG does not, even for a finished hold.
+## Emerald's `PushBoulder_Move` clears finished holds before the override test; the others' `DoBoulderDust` does not.
 func _start_push(requests: Array) -> void:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	var boulder: Gen3ObjectEvents.ObjectEvent = objects.objects[_boulder_id]
@@ -289,7 +313,7 @@ func _start_push(requests: Array) -> void:
 	Gen3ObjectEvents.clear_held_movement_if_finished(boulder)
 	objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0x25 if _frlg else 0x1D, _task_direction))
 	objects.set_held_movement(boulder, Gen3ObjectEvents.direction_action(0x08 if _frlg else 0x04, _task_direction))
-	requests.append({"kind": "dust", "at": boulder.current, "elevation": boulder.previous_elevation})
+	objects.start_effect_sprite(boulder, _boulder_id, Gen3ObjectEvents.FLDEFF_DUST, -1, false, requests)
 	requests.append({"kind": "sound", "name": "strength"})
 	task = Task.PUSH_MOVE
 
@@ -311,7 +335,7 @@ func _start_dismount(requests: Array) -> void:
 	if Gen3ObjectEvents.movement_overridden(object()) \
 			and Gen3ObjectEvents.clear_held_movement_if_finished(object()) == 0:
 		return
-	requests.append({"kind": "surf_bob", "mode": "mon_only"})
+	set_surf_bob(Gen3ObjectEvents.Bob.JUST_MON)
 	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0xA6 if _frlg else 0x3A, _task_direction))
 	task = Task.SURF_JUMP
 
@@ -326,12 +350,12 @@ func _finish_dismount(requests: Array) -> void:
 	if _frlg:
 		objects.unfreeze_all()
 		requests.append({"kind": "refresh_help_context"})
-	requests.append({"kind": "destroy_surf_blob"})
+	objects.destroy_effect_sprite(object().field_effect_sprite)
+	object().field_effect_sprite = {}
 	task = Task.NONE
 
 
-## `RotatingGate_InitPuzzle` resets bytes in temp vars; graphics initialization reloads the config without
-## resetting it. The script/field host calls this.
+## `RotatingGate_InitPuzzle` resets bytes in temp vars; graphics initialization reloads without resetting them.
 func load_rotating_gates(reset: bool = false) -> void:
 	_gate_map = "%d:%d" % [objects.camera.group, objects.camera.number]
 	_gates = []
