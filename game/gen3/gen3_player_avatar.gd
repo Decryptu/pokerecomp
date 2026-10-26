@@ -16,6 +16,10 @@ enum Task { NONE, PUSH_WAIT, PUSH_MOVE, SURF_WAIT, SURF_JUMP, MOUNT_INIT, MOUNT_
 const FLDEFF_USE_SURF: int = 9
 ## The sounds of `StartCutTreeFieldEffect` and `FieldMove_RockSmash`, which then re-enable the script.
 const FIELD_MOVE_SOUNDS: Dictionary = {2: "cut", 37: "rock_smash"}
+## The `GAME_STAT_USED_*` each modeled `FldEff_Use*` counts.
+const FIELD_MOVE_STATS: Dictionary = {Gen3CutGrass.FLDEFF_USE_CUT_ON_GRASS: 18, Gen3CutGrass.FLDEFF_USE_CUT_ON_TREE: 18,
+	37: 19}
+const TERRAIN_WATER: int = 2
 const MAP_TYPE_UNDERWATER: int = 5
 const MOVEMENT_TYPE_PLAYER: int = 0xB
 ## `sPlayerAvatarGfxIds`; FRLG's graphics-state indices differ from Hoenn's.
@@ -67,7 +71,6 @@ var object_id: int = -1
 var gender: int = 0
 var flags: int = 0
 var prevent_step: bool = false
-var controls_locked: bool = false
 var task: Task = Task.NONE
 var _task_direction: int = 0
 var _boulder_id: int = -1
@@ -240,8 +243,7 @@ func facing_fishable_water() -> bool:
 		return false
 	var grid: Gen3MapGrid = objects.camera.grid
 	if _frlg:
-		var attributes: int = grid.attributes_at(at.x, at.y)
-		return attributes >= 0 and ((attributes >> 9) & 0x1F) == 2
+		return grid.terrain_at(at.x, at.y) == TERRAIN_WATER
 	return grid.behavior_at(at.x, at.y) in HOENN_FISHABLE
 
 
@@ -262,13 +264,13 @@ func begin_collision_movement(direction: int) -> Dictionary:
 			_boulder_id = int(result["requests"][0]["object_id"])
 			_task_direction = direction
 			prevent_step = true
-			controls_locked = true
+			objects.events.controls_locked = true
 			task = Task.PUSH_WAIT
 		Collision.STOP_SURFING:
 			requests.clear()
 			_task_direction = direction
 			prevent_step = true
-			controls_locked = true
+			objects.events.controls_locked = true
 			flags = (flags & ~Flag.SURFING) | Flag.ON_FOOT
 			if _frlg:
 				objects.freeze_except_player()
@@ -340,7 +342,7 @@ func _finish_push(requests: Array) -> void:
 	Gen3ObjectEvents.clear_held_movement_if_finished(boulder)
 	requests.append_array(objects.boulder_landing(boulder))
 	prevent_step = false
-	controls_locked = false
+	objects.events.controls_locked = false
 	task = Task.NONE
 
 
@@ -359,7 +361,7 @@ func _finish_dismount(requests: Array) -> void:
 	objects.set_graphics_id(object(), graphics_for(State.NORMAL))
 	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0, object().facing))
 	prevent_step = false
-	controls_locked = false
+	objects.events.controls_locked = false
 	if _frlg:
 		objects.unfreeze_all()
 		requests.append({"kind": "refresh_help_context"})
@@ -381,7 +383,7 @@ func _step_mount(requests: Array) -> void:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	match task:
 		Task.MOUNT_INIT:
-			controls_locked = true
+			objects.events.controls_locked = true
 			objects.freeze_except_player()
 			prevent_step = true
 			set_state_mask(Flag.SURFING)
@@ -425,8 +427,9 @@ func _show_mon(no_ducking: bool) -> void:
 
 ## `CreateFieldMoveTask` (FRLG's `CreateFieldEffectShowMon`); false for an effect whose move function is not modeled.
 func use_field_move(effect: int, species: int, personality: int, ot_id: int) -> bool:
-	if not FIELD_MOVE_SOUNDS.has(effect):
+	if not FIELD_MOVE_STATS.has(effect):
 		return false
+	objects.events.increment_stat(FIELD_MOVE_STATS[effect])
 	_field_move = effect
 	_shown_mon = [species, personality, ot_id]
 	task = Task.MOVE_INIT
@@ -439,7 +442,7 @@ func _step_field_move(requests: Array) -> void:
 	var player: Gen3ObjectEvents.ObjectEvent = object()
 	match task:
 		Task.MOVE_INIT:
-			controls_locked = true
+			objects.events.controls_locked = true
 			prevent_step = true
 			if Gen3ObjectEvents.movement_overridden(player) \
 					and Gen3ObjectEvents.clear_held_movement_if_finished(player) == 0:
@@ -462,9 +465,11 @@ func _step_field_move(requests: Array) -> void:
 				player.anim.start(player.facing - 1)
 			task = Task.MOVE_RUN
 		Task.MOVE_RUN:
-			requests.append({"kind": "sound", "name": FIELD_MOVE_SOUNDS[_field_move]})
 			objects.task_effects.erase(_field_move)
-			requests.append({"kind": "script_enable"})
+			if _field_move == Gen3CutGrass.FLDEFF_USE_CUT_ON_GRASS:
+				requests.append_array(objects.cut_grass.start(player))
+			else:
+				requests.append_array([{"kind": "sound", "name": FIELD_MOVE_SOUNDS[_field_move]}, {"kind": "script_enable"}])
 			prevent_step = false
 			task = Task.NONE
 
@@ -478,7 +483,7 @@ func _finish_mount(requests: Array) -> void:
 	objects.set_held_movement(player, Gen3ObjectEvents.direction_action(0, player.movement_direction))
 	set_surf_bob(Gen3ObjectEvents.Bob.PLAYER_AND_MON)
 	objects.unfreeze_all()
-	controls_locked = false
+	objects.events.controls_locked = false
 	objects.task_effects.erase(FLDEFF_USE_SURF)
 	if _frlg:
 		requests.append({"kind": "refresh_help_context"})

@@ -1,11 +1,9 @@
 class_name Gen3FieldWeather
 extends RefCounted
 
-## `field_weather.c`'s palette half over a [Gen3Palette]: `BuildColorMaps`' two map sets, the weather task
-## (`Task_WeatherInit`, `Task_WeatherMain`), the four palette states, `FadeScreen`, the drought cycle and the
-## BLDALPHA coefficients; the saved weather and its translation (`field_weather_effect.c`); and Emerald's
-## alternating Groudon/Kyogre weather. Each weather's colour-map target is modeled here and the sprite weathers'
-## sprites and blend ramps through [Gen3WeatherSprites].
+## `field_weather.c`'s palette half over a [Gen3Palette]: colour maps, the weather tasks and palette states,
+## `FadeScreen`, drought, BLDALPHA, the saved weather and Emerald's Groudon/Kyogre alternation. Sprite weathers'
+## sprites and blend ramps live in [Gen3WeatherSprites].
 
 enum Weather {
 	NONE, SUNNY_CLOUDS, SUNNY, RAIN, SNOW, RAIN_THUNDERSTORM, FOG_HORIZONTAL, VOLCANIC_ASH, SANDSTORM,

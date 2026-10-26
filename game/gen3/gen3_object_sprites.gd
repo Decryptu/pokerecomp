@@ -51,7 +51,7 @@ var effects: Array[Dictionary] = []
 var reflection_type: int = 0
 var special_tag: int = PALETTE_TAG_NONE
 var reflections: Array[Dictionary] = []
-## `CreateMonPicSprite` sprites: centre `position`, `priority`, `subpriority`, `palette` and 64x64 `tiles`.
+## Screen-fixed `CreateSprite` sprites: centre `position`, `size`, `priority`, `subpriority`, `palette` and `tiles`.
 var pics: Array[Dictionary] = []
 var _reflection_anim := Gen3AffineAnim.new()
 var _ruby: bool = false
@@ -282,11 +282,11 @@ func _shadow_entry(objects: Gen3ObjectEvents, shadow: Dictionary, origin: Vector
 
 
 func _pic_entry(pic: Dictionary) -> Dictionary:
-	var at: Vector2i = pic["position"] - Gen3FieldMoveMon.PIC_SIZE / 2
+	var at: Vector2i = pic["position"] - pic["size"] / 2
 	var priority: int = int(pic["priority"])
 	return {"y": at.y & 0xFF, "key": (priority << 8) | int(pic["subpriority"]),
 		"part": {"x": at.x & 0x1FF, "y": at.y & 0xFF, "flip": Vector2i.ZERO, "priority": priority,
-			"palette": int(pic["palette"]), "size": Gen3FieldMoveMon.PIC_SIZE, "tiles": pic["tiles"]}}
+			"palette": int(pic["palette"]), "size": pic["size"], "tiles": pic["tiles"]}}
 
 
 func load_effect_palette(info: Dictionary) -> int:
@@ -305,7 +305,7 @@ func load_effect_palette(info: Dictionary) -> int:
 
 func free_effect_palette(effect: Dictionary) -> void:
 	var slot: int = int(effect.get("palette", 0))
-	if effects.any(func(other: Dictionary) -> bool: return int(other.get("palette", 0)) == slot):
+	if (effects + pics).any(func(other: Dictionary) -> bool: return int(other.get("palette", 0)) == slot):
 		return
 	if weather != null:
 		for sprite: Gen3WeatherSprites.WeatherSprite in weather.sprites.all_sprites():

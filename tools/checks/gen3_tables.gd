@@ -98,6 +98,7 @@ func _one_game() -> void:
 	_bubbles()
 	_tracks()
 	_surf_blob()
+	_cut_grass()
 	_berry_sparkle()
 	_field_move_streaks()
 	_spinda_spots()
@@ -572,9 +573,8 @@ func _tileset_animations() -> void:
 	_r.digest_matches("gen3_tileset_animations", lines, ANIMATION_DIGESTS[data.id])
 
 
-## Each map's backup buffer, `MapGridGet*` and `GetMapBorderIdAt` from one cell outside it, the words
-## `DrawMetatileAt` reads for each id met, and the palettes `LoadMapTilesetPalettes` leaves, loading the maps
-## in cache order; Unicorn runs of the pret builds agree.
+## Each map's backup buffer, `MapGridGet*`/`GetMapBorderIdAt` from one cell outside, `DrawMetatileAt`'s words
+## and `LoadMapTilesetPalettes`' palettes, maps loaded in cache order; Unicorn runs of the pret builds agree.
 const GRID_DIGESTS: Dictionary = {
 	&"ruby": "73999b15622028930ea28c3ea77cb32c933ad07c",
 	&"sapphire": "73999b15622028930ea28c3ea77cb32c933ad07c",
@@ -623,11 +623,9 @@ func _map_grids() -> void:
 	_r.digest_matches("gen3_map_grids", lines, GRID_DIGESTS[data.id])
 
 
-## Per map, `GetMapConnectionAtPos` from one cell outside the backup map and `CanCameraMoveInDirection` from
-## the layout's edge cells; then every step, diagonals included, that `CameraMove` takes off that edge into
-## another map, from the map freshly loaded with its view rewritten through the `MapGridSet*`s (Ruby and
-## Sapphire lack the impassability one). Unicorn runs of the pret builds agree, `LoadMapFromCameraTransition`
-## reduced to `InitMapLayoutData`; `null` is a step whose connection the cartridge reads from address 0.
+## Per map, `GetMapConnectionAtPos` one cell outside the backup map, `CanCameraMoveInDirection` from its edge
+## cells and every `CameraMove` step (diagonals too) off them into a fresh map rewritten by the `MapGridSet*`s
+## (Ruby and Sapphire lack impassability). Unicorn runs agree; `null` reads its connection from address 0.
 const CAMERA_DIGESTS: Dictionary = {
 	&"ruby": "ec5ee5d414055c5028ec98dd9b5012c7c6f13ce5",
 	&"sapphire": "ec5ee5d414055c5028ec98dd9b5012c7c6f13ce5",
@@ -702,12 +700,10 @@ func _mark_view(camera: Gen3FieldCamera) -> void:
 	camera.grid.set_impassable(camera.pos.x + 7, camera.pos.y + 7, false)
 
 
-## Per map: a snake over every fourth layout position spawning and removing objects; `GetCollisionAtCoords`
-## and `ObjectEventUpdateElevation` for a probe varied by cell over the whole backup map, and for each object
-## left around it; every fourth straight crossing from a fresh spawn. Flags divisible by three below 0x900 are
-## set; graphics var v holds 7v + 1. Unicorn runs of the pret builds agree, spawning reduced to
-## `InitObjectEventStateFromTemplate` and the camera transition to the header, location, templates, temporary
-## clear and grid.
+## Per map: a snake over every fourth layout position spawning and removing objects, `GetCollisionAtCoords` and
+## `ObjectEventUpdateElevation` for a cell-varied probe over the backup map and around each object, and every
+## fourth straight crossing. Flags divisible by three below 0x900 are set; graphics var v holds 7v + 1. Unicorn
+## runs agree, spawning reduced to `InitObjectEventStateFromTemplate`, crossings to header and grid loads.
 const OBJECT_DIGESTS: Dictionary = {
 	&"ruby": "28e50c92a767aba32f76a40356e08d6f29690f93",
 	&"sapphire": "28e50c92a767aba32f76a40356e08d6f29690f93",
@@ -831,9 +827,8 @@ func _object_sweep(objects: Gen3ObjectEvents) -> PackedByteArray:
 	return out
 
 
-## `InitPlayerAvatar`, graphics/state queries and player collisions on every backup-map cell. The cartridge
-## oracle stubs sprite creation, movement tasks, statistics and rotating gates; it records the collision and
-## requested effect.
+## `InitPlayerAvatar`, graphics/state queries and collisions on every backup-map cell; the oracle stubs sprites,
+## tasks, statistics and rotating gates and records the collision and requested effect.
 const AVATAR_DIGESTS: Dictionary = {
 	&"ruby": "70c026c1da56b0013580db93ddbe0d392350c547",
 	&"sapphire": "70c026c1da56b0013580db93ddbe0d392350c547",
@@ -1029,6 +1024,11 @@ func _surf_blob() -> void:
 	_effect_graphics({8: _r.data.world_surf_blob_graphics()}, "gen3_surf_blob", expected)
 
 
+## pret's cut-grass PNG (identical in all three projects) and Emerald's cut_grass.pal, which Ruby's 06.pal matches.
+func _cut_grass() -> void:
+	_effect_graphics({58: _r.data.world_cut_grass_graphics()}, "gen3_cut_grass", "a71609eba89483bda583499bc461c183d4ec2133")
+
+
 func _berry_sparkle() -> void:
 	if _r.data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
 		_r.check(_r.data.world_map_effect_graphics(23).is_empty(), "FRLG's stubbed effect imports no sparkle")
@@ -1109,7 +1109,7 @@ func _icon_positions(objects: Gen3ObjectEvents) -> void:
 	object.local_id = 254
 	object.current = Vector2i(12, 12)
 	object.previous = object.current
-	object.ground_on_spawn = false
+	object.trigger_ground_effects = false
 	object.frozen = true
 	object.invisible = true
 	objects.objects[0] = object
@@ -1151,7 +1151,7 @@ func _shadows() -> void:
 	object.active = true
 	object.local_id = 254
 	object.has_shadow = true
-	object.ground_on_spawn = false
+	object.trigger_ground_effects = false
 	object.frozen = true
 	objects.objects[0] = object
 	for slot: int in range(1, Gen3ObjectEvents.COUNT):
@@ -1205,13 +1205,10 @@ func _reflections() -> void:
 	_r.digest_matches("gen3_reflection_palettes", lines, REFLECTION_DIGESTS[data.id])
 
 
-## The weather's sprite palette, the sprite weathers' palettes and sheets and the drought tables against pret's
-## `.pal`, `.png` and `.bin` files, then a stream: every weather from a map header through the warp's fade in, a
-## change of weather, a sprite palette load and a lightning-style ramp, preserved palettes, and fades out and back
-## in, with every raindrop, the thunder, the RNG, the sprite weathers' state and every weather sprite each frame
-## under a moving sprite offset. Original `field_weather.c`, `palette.c`, `trig.c`, every weather's
-## `field_weather_effect.c` callbacks and `sprite.c`'s anim interpreter, compiled in scratch, give the same stream
-## frame for frame.
+## Weather palettes, sheets and drought tables against pret's files, then each weather streamed from a header
+## through the warp fade-in, a change, a palette load, a lightning ramp, preserved palettes and fades, with the
+## rain, thunder, RNG and every weather sprite each frame under a moving offset. pret's weather, palette, trig
+## and sprite-anim C, compiled in scratch, give the same stream frame for frame.
 const WEATHER_DIGESTS: Dictionary = {
 	&"ruby": ["451db68862eb639d489c9ac4f325e5b0f76b4fe9", "f8880944a4e3d45540579cecb45847ae5c5c92be"],
 	&"sapphire": ["451db68862eb639d489c9ac4f325e5b0f76b4fe9", "f8880944a4e3d45540579cecb45847ae5c5c92be"],
@@ -1465,9 +1462,8 @@ func _held_movements() -> void:
 
 
 const STEP_END: int = 0xFE
-## Frame a hold finishes on, worked out from pret's anims, `sprite.c` and the action's steps: the bow's 8+32+8
-## cells end on 50, Rock Smash and Cut blink 32 frames after their cells, the head shake loops its 80 frames
-## once, a raised hand hops twice and holds 81. [action, graphics, frame, invisible at the end].
+## [action, graphics, finishing frame, invisible at the end] from pret's anims and steps: the bow ends on 50, Rock
+## Smash and Cut blink 32 frames past their cells, the head shake loops 80 once, a raised hand holds 81.
 const HOENN_HELD_FINISHES: Array = [[0x4F, 58, 50, false], [0x5A, 86, 67, true],
 	[0x5B, 82, 59, true], [0x39, 3, 26, false]]
 const FRLG_HELD_FINISHES: Array = [[0x5B, 64, 50, false], [0x68, 96, 67, true],
@@ -1497,9 +1493,8 @@ func _held_anim_finishes(objects: Gen3ObjectEvents) -> void:
 			"held action %02X on graphics %d finishes on frame %d (got %d)" % [int(row[0]), int(row[1]), int(row[2]), frame])
 
 
-## The actions the ARM held traces ran. Rows added after them (those with options, the obstacle and affine
-## kinds, the inanimate and reflection flags) and ground effects, whose routines those builds stubbed, stay
-## out of their streams.
+## The actions the ARM held traces ran; later rows (options, obstacle and affine kinds, inanimate and reflection
+## flags) and the ground effects those builds stubbed stay out of their streams.
 static func arm_traced(objects: Gen3ObjectEvents, action: int) -> bool:
 	var row: Array = objects._motions.get(action, [])
 	if row.is_empty() or (row.size() > 3 and row[3] is Dictionary):
@@ -1664,13 +1659,13 @@ func _graphics_hash(record: Dictionary) -> String:
 
 
 ## Exact bytecode streams from pret handlers, with operand boundaries checked by executing the matching ARM
-## builds; all map, standard and trainer roots.
+## builds; all map, standard, trainer and native roots.
 const SCRIPT_DIGESTS: Dictionary = {
 	&"ruby": "35573e1d144659df9b18056080b7d67609816c34",
 	&"sapphire": "33448c15566cb87985d2e473344feb23aced588d",
 	&"firered": "287f4afe8f34b99285d0765f3a0fd84d0a470e80",
 	&"leafgreen": "8ca3097b0433a71e9c2ad0176fa4e64de3aeba15",
-	&"emerald": "2e99da5402e4c038628af9648991935b786d6c09",
+	&"emerald": "46e46812eae1baea26a252013666d527f861e115",
 }
 
 
@@ -1721,7 +1716,7 @@ const SCRIPT_DATA_DIGESTS: Dictionary = {
 	&"sapphire": "cbf6d27dddc0ea9a396d63d1bafeeffc75d522ce",
 	&"firered": "2e0b76b0898635673fb7b72ba33036e9077a6b25",
 	&"leafgreen": "e313963370453f727d429f456889d46b7070d2d8",
-	&"emerald": "2dc9c549056906b3dffb7c1d921b817e915a5768",
+	&"emerald": "af983f0e20df5e19ce9bcab85d6d44631b6c1eb1",
 }
 
 
@@ -1993,10 +1988,9 @@ func _disguise_frames(objects: Gen3ObjectEvents, header: Dictionary, template: D
 const DISGUISE_REVEAL_DIGEST: String = "6ea54dfb378843c69af71ca7d3857b72b9d5cae4"
 
 
-## Every seeing trainer template, FRLG clones resolved. One with sight opens its script with `trainerbattle`,
-## sees the player two cells (or one) ahead, never one past its range, and not once beaten; its approach ends
-## beside the player with the script resumed. Sight 0 (Emerald's Space Center grunt runs `lock` first) never
-## sees. The uniform grid's elevation is the trainer's.
+## Every seeing trainer, FRLG clones resolved: its script opens with `trainerbattle`, it sees two cells (or one)
+## ahead but not past its range nor once beaten, and its approach ends beside the player with the script resumed.
+## Sight 0 (Emerald's Space Center grunt runs `lock` first) never sees; the grid's elevation is the trainer's.
 func _trainer_sight() -> void:
 	var data: GameData = _r.data
 	var objects: Gen3ObjectEvents = _movement_field(data)

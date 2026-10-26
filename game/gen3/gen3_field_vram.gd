@@ -56,11 +56,9 @@ func draw(grid: Gen3MapGrid, cells: Rect2i) -> Image:
 	return draw_screen(grid, cells.position * 16, cells.size * 16)
 
 
-## [param size] pixels from backup pixel [param origin]: BG3, BG2 and BG1 (priorities 3 to 1) and the
-## [Gen3ObjectSprites] [param oam]. The first entry with a pixel owns it, over each layer at its priority or
-## below. The field's BLDCNT (`gOverworldBackgroundLayerFlags[1..3]`, `BLDCNT_TGT2_OBJ`, alpha blend) names no
-## first target, so only a semi-transparent sprite's pixel blends, by [param bldalpha], with the BG layer under
-## it; over the backdrop it draws as it is. [param overlay] is [method Gen3FieldMoveMon.screen]'s BG0 and windows.
+## [param size] pixels from backup pixel [param origin]: BG3 to BG1 and [param oam], first pixel owning it at
+## its priority or below. The field's BLDCNT names no first target, so only semi-transparent sprites blend, by
+## [param bldalpha], with the BG under them. [param overlay] is [method Gen3FieldMoveMon.screen]'s BG0 and windows.
 func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array = [], bldalpha: int = 0,
 		overlay: Dictionary = {}) -> Image:
 	var layers: Array[PackedInt32Array] = []

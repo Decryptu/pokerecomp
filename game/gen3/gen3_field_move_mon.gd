@@ -130,7 +130,7 @@ func _start_sprite(number: int, personality: int, ot_id: int, no_ducking: bool) 
 			_sprites.palette.load(colors, Gen3Palette.OBJ_OFFSET + slot * 16)
 	if slot != 0xFF and _sprites.weather != null:
 		_sprites.weather.preserve_palette(slot + 16)
-	sprite = {"sprite_slot": _sprites.effect_slot(false), "position": Vector2i(320, 80), "priority": 0,
+	sprite = {"sprite_slot": _sprites.effect_slot(false), "position": Vector2i(320, 80), "size": PIC_SIZE, "priority": 0,
 		"subpriority": 0, "palette": slot & 0xF, "tiles": front_pic_tiles(_sprites.data, number, personality),
 		"slide": Slide.DUMMY, "timer": 0, "slid_offscreen": false, "species": number, "no_ducking": no_ducking}
 	_sprites.pics.append(sprite)

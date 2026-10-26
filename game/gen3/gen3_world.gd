@@ -13,6 +13,7 @@ const SLOT_CHANCES: Array = [
 const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5, 10]}
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
+const CUT_GRASS_PALETTE_TAG: int = 0x1000
 ## Effect id: `gFieldEffectObjectTemplatePointers` index, image count, anim count, frame height.
 const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5, 1, 16], 10: [9, 3, 1, 8], 13: [11, 2, 5, 16], 14: [12, 4, 1, 16],
 	15: [13, 2, 2, 8], 16: [14, 3, 1, 8], 24: [23, 2, 5, 16], 35: [27, 4, 9, 16], 39: [29, 3, 1, 8], 42: [31, 1, 1, 16],
@@ -47,7 +48,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	for step: Array in [["shadow_templates", _shadow_templates], ["icon_template", _icon_templates],
 			["grass_palette", _ground_templates], ["ash_palette", _ash_template],
 			["shadow_templates", _surf_blob_template], ["grass_palette", _sparkle_template],
-			["field_move_streaks", _field_move_streaks], ["spinda_spots", _spinda_spots]]:
+			["field_move_streaks", _field_move_streaks], ["spinda_spots", _spinda_spots],
+			["cut_grass_template", _cut_grass_template]]:
 		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
 			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
@@ -209,6 +211,20 @@ static func _surf_blob_template(rom: RomFile, layout: Dictionary, out: Dictionar
 	if row.is_empty() or int(row["palette_tag"]) != 0xFFFF:
 		return false
 	out["surf_blob_template"] = {"8": row}
+	return true
+
+
+## fldeff_cut.c's `sSpriteTemplate_CutGrass`, its `SpritePalette` (tag 0x1000) declared just before it.
+static func _cut_grass_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool:
+	var at: int = int(layout["cut_grass_template"])
+	var palette: int = Gen3Layout.read_pointer(rom, at - 8, Gen3Layout.PALETTE_BYTES, 2)
+	var row: Dictionary = _sprite_template(rom, at, 1, 1, Vector2i(8, 8), out, graphics)
+	if row.is_empty() or palette < 0 or int(row["palette_tag"]) != CUT_GRASS_PALETTE_TAG \
+			or rom.u16le(at - 4) != CUT_GRASS_PALETTE_TAG:
+		return false
+	graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
+	row["palette_offset"] = palette
+	out["cut_grass_template"] = {str(Gen3CutGrass.FLDEFF_CUT_GRASS): row}
 	return true
 
 
