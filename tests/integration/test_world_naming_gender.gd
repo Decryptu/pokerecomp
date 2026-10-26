@@ -30,7 +30,7 @@ func after_each() -> void:
 	Gen2ModHost.reset()
 
 
-func _open_world(seed_value: int = 0) -> void:
+func _open_world(seed_value: int = 1) -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
 	_world_screen.map_group = Fixture.MAP_GROUP

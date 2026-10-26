@@ -229,6 +229,7 @@ func _open_world(
 		_world_screen = null
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = cell

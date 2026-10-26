@@ -16,6 +16,7 @@ func before_each() -> void:
 	_data = GameData.open_directory(Fixture.directory())
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_screen = packed.instantiate() as Gen2WorldScreen
+	_screen.encounter_seed = 1
 	_screen.map_group = Fixture.MAP_GROUP
 	_screen.map_number = Fixture.MAP_NUMBER
 	_screen.start_cell = Vector2i(7, 6)
