@@ -3,17 +3,11 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Added
 
-- Generation 3 field effects: puddle splashes, feet in flowing water, sand piles in deep sand, hot-spring water, seaweed bubbles, footprints and bike tire tracks, and the berry-tree growth sparkle.
-- Generation 3 field moves: the field-move banner, Surf with its surf blob, Cut on trees and grass, Rock Smash, Strength (with Ruby and Sapphire's Desert Ruins braille door), Waterfall, Secret Power and Fly.
-- Generation 3 player movement: walking, running, ice, currents, slides, secret base mats and FireRed and LeafGreen's spin tiles, plus the Mach Bike, the Acro Bike and FireRed and LeafGreen's bike.
-
-## Changed
-
-- Generation 3 cartridges remain experimental and unplayable while field integration continues.
+- Export .sav on the save screen writes a Red, Blue, Yellow, Gold, Silver or Crystal slot into a cartridge save you choose, ready for an emulator or a flash cart. Gold, Silver and Crystal carry the trainer and party. Red, Blue and Yellow also carry boxes, items, money, the Pokédex, position and story progress.
 
 ## Updating this release
 
-- Cartridges must be reimported for the updated cache format. Saves are preserved.
+- No reimport is needed. Saves are preserved.
 
 ## Which file
 
