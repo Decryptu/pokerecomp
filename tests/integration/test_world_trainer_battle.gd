@@ -64,7 +64,7 @@ func after_each() -> void:
 ## hand: which rules a run is played under belongs to the slot, and the world is
 ## what reads them off it.
 func _open_world(
-	with_save: bool = false, seed_value: int = 0, challenge: StringName = &""
+	with_save: bool = false, seed_value: int = 1, challenge: StringName = &""
 ) -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen

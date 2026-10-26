@@ -70,6 +70,7 @@ func _open_world_with_renderer() -> Node:
 	assert_true(Gen2ModHost.instance().select_view(&"camera")["ok"])
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
@@ -227,6 +228,7 @@ func test_an_open_overlay_keeps_leftover_input_from_the_renderer() -> void:
 func test_a_renderer_without_the_hook_leaves_the_screen_unchanged() -> void:
 	var packed: PackedScene = load("res://game/world/world_screen.tscn")
 	_world_screen = packed.instantiate() as Gen2WorldScreen
+	_world_screen.encounter_seed = 1
 	_world_screen.map_group = Fixture.MAP_GROUP
 	_world_screen.map_number = Fixture.MAP_NUMBER
 	_world_screen.start_cell = Vector2i(7, 6)
