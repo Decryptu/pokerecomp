@@ -2,7 +2,7 @@ class_name Gen3PlayerAvatar
 extends RefCounted
 
 ## `field_player_avatar.c`: initialization, state transitions and queries, collision decisions, Strength, the surf
-## mount and dismount tasks and rotating-gate puzzles.
+## mount and dismount tasks and rotating-gate puzzles; `field_effect.c`'s field-move and Waterfall tasks.
 
 enum Flag { ON_FOOT = 1, MACH_BIKE = 2, ACRO_BIKE = 4, SURFING = 8,
 	UNDERWATER = 16, CONTROLLABLE = 32, FORCED_MOVE = 64, DASH = 128 }
@@ -12,13 +12,22 @@ enum Collision { NONE, OUTSIDE_RANGE, IMPASSABLE, ELEVATION_MISMATCH, OBJECT_EVE
 	ISOLATED_VERTICAL_RAIL, ISOLATED_HORIZONTAL_RAIL, VERTICAL_RAIL, HORIZONTAL_RAIL,
 	ROTATING_GATE = 8 }
 enum Task { NONE, PUSH_WAIT, PUSH_MOVE, SURF_WAIT, SURF_JUMP, MOUNT_INIT, MOUNT_POSE, MOUNT_SHOW_MON, MOUNT_JUMP,
-	MOUNT_END, MOVE_INIT, MOVE_POSE, MOVE_SHOW_MON, MOVE_RUN }
+	MOUNT_END, MOVE_INIT, MOVE_POSE, MOVE_SHOW_MON, MOVE_RUN, WATERFALL_SHOW_MON, WATERFALL_WAIT, WATERFALL_RIDE }
 const FLDEFF_USE_SURF: int = 9
+const FLDEFF_USE_STRENGTH: int = 40
+const FLDEFF_USE_WATERFALL: int = 43
 ## The sounds of `StartCutTreeFieldEffect` and `FieldMove_RockSmash`, which then re-enable the script.
 const FIELD_MOVE_SOUNDS: Dictionary = {2: "cut", 37: "rock_smash"}
-## The `GAME_STAT_USED_*` each modeled `FldEff_Use*` counts.
+## The modeled `CreateFieldMoveTask` effects and the `GAME_STAT_USED_*` their `FldEff_Use*` counts, or -1.
 const FIELD_MOVE_STATS: Dictionary = {Gen3CutGrass.FLDEFF_USE_CUT_ON_GRASS: 18, Gen3CutGrass.FLDEFF_USE_CUT_ON_TREE: 18,
-	37: 19}
+	37: 19, FLDEFF_USE_STRENGTH: -1}
+const MB_WATERFALL: int = 0x13
+## Ruby's `ShouldDoBrailleStrengthEffect` spots and `DoBrailleStrengthEffect`'s chamber entrance, in backup cells.
+const DESERT_RUINS: Vector2i = Vector2i(24, 6)
+const DESERT_RUINS_SPOTS: Array[Vector2i] = [Vector2i(16, 30), Vector2i(17, 30), Vector2i(18, 30)]
+const SEALED_CHAMBER_ENTRANCE: Dictionary = {Vector2i(14, 26): 0x22A, Vector2i(15, 26): 0x22B, Vector2i(16, 26): 0x22C,
+	Vector2i(14, 27): 0xE32, Vector2i(15, 27): 0x233, Vector2i(16, 27): 0xE34}
+const FLAG_SYS_BRAILLE_STRENGTH: int = 0x850
 const TERRAIN_WATER: int = 2
 const MAP_TYPE_UNDERWATER: int = 5
 const MOVEMENT_TYPE_PLAYER: int = 0xB
@@ -82,8 +91,7 @@ var _gate_map: String = ""
 var _gates: Array = []
 
 
-## `InitPlayerAvatar` at backup coordinates, its slot reserved before map objects as `InitObjectEventsLocal` does.
-## Null on a full pool or a duplicate player, rather than the cartridge's out-of-bounds write.
+## `InitPlayerAvatar`, reserved before map objects; null on a full pool or a duplicate, which the cartridge overruns.
 static func open(field_objects: Gen3ObjectEvents, at: Vector2i, direction: int, player_gender: int) -> Gen3PlayerAvatar:
 	if player_gender not in [0, 1] or direction < 0 or direction > 4:
 		return null
@@ -108,7 +116,6 @@ func object() -> Gen3ObjectEvents.ObjectEvent:
 	return objects.objects[object_id]
 
 
-## `SetCameraToTrackPlayer` follows initialization in `overworld.c`.
 func track_camera() -> void:
 	object().tracked_by_camera = true
 
@@ -119,7 +126,6 @@ func graphics_for(state: int) -> int:
 	return int(HOENN_GRAPHICS[state][gender]) if state >= 0 and state < HOENN_GRAPHICS.size() else -1
 
 
-## `SetPlayerAvatarStateMask` preserves control, forced movement and dash.
 func set_state_mask(mask: int) -> void:
 	flags = ((flags & (Flag.DASH | Flag.FORCED_MOVE | Flag.CONTROLLABLE)) | mask) & 0xFF
 
@@ -251,8 +257,7 @@ static func _result(collision: int, requests: Array = []) -> Dictionary:
 	return {"collision": collision, "requests": requests}
 
 
-## The collision branch of `PlayerNotOnBikeCollide`: query once, consume its effects and start the task
-## immediately. Tasks block further player steps; ordinary walks and stairs are left to the field input host.
+## `PlayerNotOnBikeCollide`'s collision branch starts its task at once; walks and stairs stay with the input host.
 func begin_collision_movement(direction: int) -> Dictionary:
 	if prevent_step:
 		return _result(Collision.IMPASSABLE)
@@ -303,6 +308,8 @@ func step_movement_tasks() -> Array:
 			_step_mount(requests)
 		Task.MOVE_INIT, Task.MOVE_POSE, Task.MOVE_SHOW_MON, Task.MOVE_RUN:
 			_step_field_move(requests)
+		Task.WATERFALL_SHOW_MON, Task.WATERFALL_WAIT, Task.WATERFALL_RIDE:
+			_step_waterfall()
 	objects.field_move_mon.run_task()
 	return requests
 
@@ -429,7 +436,8 @@ func _show_mon(no_ducking: bool) -> void:
 func use_field_move(effect: int, species: int, personality: int, ot_id: int) -> bool:
 	if not FIELD_MOVE_STATS.has(effect):
 		return false
-	objects.events.increment_stat(FIELD_MOVE_STATS[effect])
+	if FIELD_MOVE_STATS[effect] >= 0:
+		objects.events.increment_stat(FIELD_MOVE_STATS[effect])
 	_field_move = effect
 	_shown_mon = [species, personality, ot_id]
 	task = Task.MOVE_INIT
@@ -466,12 +474,69 @@ func _step_field_move(requests: Array) -> void:
 			task = Task.MOVE_RUN
 		Task.MOVE_RUN:
 			objects.task_effects.erase(_field_move)
-			if _field_move == Gen3CutGrass.FLDEFF_USE_CUT_ON_GRASS:
-				requests.append_array(objects.cut_grass.start(player))
-			else:
-				requests.append_array([{"kind": "sound", "name": FIELD_MOVE_SOUNDS[_field_move]}, {"kind": "script_enable"}])
+			match _field_move:
+				Gen3CutGrass.FLDEFF_USE_CUT_ON_GRASS:
+					requests.append_array(objects.cut_grass.start(player))
+				FLDEFF_USE_STRENGTH:
+					requests.append_array(_start_strength())
+				_:
+					requests.append_array([{"kind": "sound", "name": FIELD_MOVE_SOUNDS[_field_move]}, {"kind": "script_enable"}])
 			prevent_step = false
 			task = Task.NONE
+
+
+## `StartStrengthFieldEffect`; Ruby's braille branch opens the chamber and unlocks the field without the script.
+func _start_strength() -> Array:
+	var events: Gen3EventData = objects.events
+	if events.game not in [RomRegistry.RUBY, RomRegistry.SAPPHIRE] or events.flag_get(FLAG_SYS_BRAILLE_STRENGTH) \
+			or Vector2i(objects.camera.group, objects.camera.number) != DESERT_RUINS \
+			or object().current not in DESERT_RUINS_SPOTS:
+		return [{"kind": "script_enable"}]
+	for cell: Vector2i in SEALED_CHAMBER_ENTRANCE:
+		objects.camera.grid.set_metatile_id(cell.x, cell.y, SEALED_CHAMBER_ENTRANCE[cell])
+	events.flag_set(FLAG_SYS_BRAILLE_STRENGTH)
+	events.controls_locked = false
+	return [{"kind": "sound", "name": "bang"}]
+
+
+func use_waterfall(species: int, personality: int, ot_id: int) -> void:
+	_shown_mon = [species, personality, ot_id]
+	objects.events.controls_locked = true
+	prevent_step = true
+	task = Task.WATERFALL_SHOW_MON
+	objects.task_effects.append(FLDEFF_USE_WATERFALL)
+
+
+## `Task_UseWaterfall`, Init run by [method use_waterfall]: the banner unposed, then slow steps north over the falls.
+func _step_waterfall() -> void:
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	match task:
+		Task.WATERFALL_SHOW_MON:
+			objects.events.controls_locked = true
+			if Gen3ObjectEvents.movement_overridden(player):
+				return
+			Gen3ObjectEvents.clear_held_movement_if_finished(player)
+			_show_mon(false)
+			task = Task.WATERFALL_WAIT
+		Task.WATERFALL_WAIT:
+			if not objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FIELD_MOVE_SHOW_MON):
+				_ride_up()
+		Task.WATERFALL_RIDE:
+			if Gen3ObjectEvents.clear_held_movement_if_finished(player) == 0:
+				return
+			if player.current_behavior == MB_WATERFALL:
+				_ride_up()
+				return
+			objects.events.controls_locked = false
+			prevent_step = false
+			objects.task_effects.erase(FLDEFF_USE_WATERFALL)
+			task = Task.NONE
+
+
+func _ride_up() -> void:
+	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0x08 if _frlg else 0x04,
+		Gen3ObjectEvents.Direction.NORTH))
+	task = Task.WATERFALL_RIDE
 
 
 func _finish_mount(requests: Array) -> void:
