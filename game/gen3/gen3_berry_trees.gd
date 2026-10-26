@@ -1,8 +1,7 @@
 class_name Gen3BerryTrees
 extends RefCounted
 
-## `berry.c`: six-byte save records; Ruby's growthSparkle bit is Emerald's stopGrowth bit. The field host
-## supplies elapsed minutes; yields draw from [member random].
+## `berry.c`: six-byte records (Ruby's growthSparkle bit is Emerald's stopGrowth); yields draw from [member random].
 const COUNT: int = 128
 const RECORD_SIZE: int = 6
 enum Stage { EMPTY, PLANTED, SPROUTED, TALLER, FLOWERING, BERRIES }

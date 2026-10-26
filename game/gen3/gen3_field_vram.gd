@@ -1,10 +1,9 @@
 class_name Gen3FieldVram
 extends RefCounted
 
-## The field's background tiles and palettes: `CopyMapTilesetsToVram` and `LoadMapTilesetPalettes` for a map's
-## tileset pair into VRAM and [member palette], the copies `UpdateTilesetAnimations` queues each frame, and the
-## three background layers `DrawMetatile` fills, composed into pixels from the faded colours with the object
-## sprites between them.
+## The field's background tiles and palettes: `CopyMapTilesetsToVram` and `LoadMapTilesetPalettes` for a map's tileset
+## pair into VRAM and [member palette], the copies `UpdateTilesetAnimations` queues each frame, and the three background
+## layers `DrawMetatile` fills, composed into pixels from the faded colours with the object sprites between them.
 
 const TILE_COUNT: int = 1024
 const PALETTE_COUNT: int = 16

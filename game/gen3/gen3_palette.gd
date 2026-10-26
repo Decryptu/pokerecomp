@@ -73,8 +73,7 @@ func copy_unfaded(offset: int, count: int) -> void:
 		faded.encode_u16((offset + index) * 2, unfaded_color(offset + index))
 
 
-## `BlendPalette`: [param count] unfaded colours [param coeff]/16 of the way to [param color], into
-## [member faded]. The shift floors, so a darkening step can land one below the exact sixteenth.
+## `BlendPalette`: [param count] colours [param coeff]/16 toward [param color], into [member faded]; the shift floors.
 func blend(offset: int, count: int, coeff: int, color: int) -> void:
 	for index: int in count:
 		faded.encode_u16((offset + index) * 2, blend_color(unfaded_color(offset + index), coeff, color))

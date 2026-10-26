@@ -1,9 +1,8 @@
 class_name Gen3SpriteAnim
 extends RefCounted
 
-## One sprite's image animation in `sprite.c`: `StartSpriteAnim`, `SeekSpriteAnim` and `AnimateSprite`'s
-## `sAnimFuncs` over an imported `anims` table. Indices and the loop counter are u8 and the delay counter six
-## bits, as in `struct Sprite`.
+## `sprite.c`'s image animation: `StartSpriteAnim`, `SeekSpriteAnim` and `AnimateSprite`'s `sAnimFuncs` over an `anims`
+## table; indices and the loop counter are u8 and the delay counter six bits, as in `struct Sprite`.
 
 const SEQUENCE_LIMIT: int = 64
 ## `union AnimCmd` types in the low halfword; any other value is a frame's image.

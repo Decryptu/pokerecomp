@@ -112,8 +112,7 @@ const FIGURE_8_Y: Array[int] = [
 	0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, -1, 0, 0, -1, 0, 0, -1, 0, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1, -1, -1, -1, -2,
 ]
-## `GetObjectEventGraphicsInfo` reads these past the table: Ruby's LITTLE_BOY_1, FRLG's LITTLE_BOY and
-## Emerald's NINJA_BOY. Emerald's bard reads the current Mauville man.
+## `GetObjectEventGraphicsInfo` past the table: Ruby's LITTLE_BOY_1, FRLG's LITTLE_BOY, Emerald's NINJA_BOY.
 const GRAPHICS_FALLBACK: Dictionary = {&"ruby": 5, &"sapphire": 5, &"firered": 16, &"leafgreen": 16, &"emerald": 5}
 const OBJ_EVENT_GFX_BARD: int = 69
 const VAR_FARAWAY_ISLAND_STEP_COUNTER: int = 0x403A
@@ -420,8 +419,7 @@ func _clone_target(clone: Dictionary) -> Dictionary:
 	return rows[int(clone["target_local_id"]) - 1]
 
 
-## `UpdateObjectEventsForCameraUpdate` after [method Gen3FieldCamera.move]; a crossing first loads the new
-## templates, runs `ClearTempFieldEventData` and shifts every object by `gCamera`.
+## `UpdateObjectEventsForCameraUpdate`: a crossing loads templates, clears temp data and shifts objects by `gCamera`.
 func follow_camera() -> void:
 	if camera.crossed:
 		load_templates()
@@ -528,8 +526,7 @@ func _update_visibility(object: ObjectEvent) -> void:
 	object.sprite_invisible = object.invisible or object.off_screen
 
 
-## `InitObjectEventStateFromTemplate`: the slot, or -1 when out or full. A FireRed or LeafGreen clone spawns
-## as its target, identity included, at the clone's position.
+## `InitObjectEventStateFromTemplate`: the slot, -1 if out or full; an FRLG clone spawns as its target at its own cell.
 func spawn(template: Dictionary, number: int, group: int) -> int:
 	var at := Vector2i(int(template["x"]), int(template["y"]))
 	var clone: bool = _frlg and int(template["kind"]) == OBJ_KIND_CLONE
@@ -1071,8 +1068,7 @@ func destroy_effect_sprite(sprite: Dictionary) -> void:
 		_effect_sprites.remove_at(index)
 
 
-## `UpdateSurfBlobFieldEffect`; a cell beside elevation 3 halves the rate. FRLG's blob starts still, and its
-## second anim frames lower the player a pixel.
+## `UpdateSurfBlobFieldEffect`: elevation 3 beside halves the rate; FRLG's starts still, 2nd frames lower the player.
 func _update_surf_blob(sprite: Dictionary) -> void:
 	var player: ObjectEvent = objects[int(sprite["request"]["object_id"])]
 	var anim: Gen3SpriteAnim = sprite["anim"]
@@ -2087,7 +2083,7 @@ func _step_berry(object: ObjectEvent, slot: int, requests: Array) -> void:
 					object.berry_sparkling = false
 
 
-## `MovementType_CopyPlayer*` latches the entry facing once; the field input host supplies T_TILE_CENTER.
+## `MovementType_CopyPlayer*` latches the entry facing once; [Gen3PlayerAvatar] supplies T_TILE_CENTER.
 func _step_copy_player(object: ObjectEvent, slot: int, requests: Array) -> void:
 	var player: ObjectEvent = _player_event()
 	if player == null and object.movement_state != 2:

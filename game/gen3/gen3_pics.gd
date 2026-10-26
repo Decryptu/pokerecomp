@@ -1,8 +1,7 @@
 class_name Gen3Pics
 extends RefCounted
 
-## pret's pokemon_graphics tables: CompressedSpriteSheet/Palette are eight bytes, MonCoords four. Every
-## picture frame is an 8x8 tile canvas, regardless of coords.
+## pokemon_graphics: `CompressedSpriteSheet`/`Palette` eight bytes, `MonCoords` four; frames are 8x8-tile canvases.
 const TABLES: Array[String] = ["front_pics", "back_pics", "normal_palettes", "shiny_palettes"]
 
 

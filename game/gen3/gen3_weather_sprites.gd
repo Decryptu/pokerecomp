@@ -611,8 +611,7 @@ func _init_movement(drop: Raindrop, frames: int) -> void:
 		drop.waiting = true
 
 
-## Each weather sprite's callback then its anim, by slot; [param offset] is `gSpriteCoordOffsetX`/`Y`. A bubble
-## that ends in its callback is not animated.
+## Each sprite's callback then anim, by slot, [param offset] `gSpriteCoordOffsetX`/`Y`; a bubble it ends skips its anim.
 func animate(offset: Vector2i) -> void:
 	coord_offset = offset
 	for sprite: WeatherSprite in all_sprites():
@@ -1058,8 +1057,7 @@ func _sandstorm_init_vars(weather: Gen3FieldWeather) -> void:
 		weather.set_blend_coeffs(0, 16)
 
 
-## `UpdateSandstormMovement` then `UpdateSandstormWaveIndex`: the wind's sine pushes left four times as hard as
-## up, its angle a step every six frames.
+## `UpdateSandstormMovement`, `UpdateSandstormWaveIndex`: the wind pushes left 4x as hard as up, turning every 6 frames.
 func _blow_sandstorm() -> void:
 	var sine: int = Gen3ObjectEvents.SINE[sandstorm_wave_index]
 	sandstorm_x_offset = (sandstorm_x_offset - sine * 4) & 0xFFFFFFFF

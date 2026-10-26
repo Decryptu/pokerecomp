@@ -3,8 +3,7 @@ extends RefCounted
 
 ## pret's English `charmap.txt`, the same on all five; a code with no glyph stays bracketed hex.
 
-## Tile runs that draw one word, spelled like Generation 2's `<PKMN>`: `PKMN` is $53 $54 and `POKEBLOCK`, in
-## the berry descriptions, $55 to $59.
+## One-word tile runs spelled like Generation 2's `<PKMN>`: `PKMN` is $53 $54, the berries' `POKEBLOCK` $55 to $59.
 const WORD_TILES: Dictionary = {
 	"<PKMN>": [0x53, 0x54],
 	"<POKEBLOCK>": [0x55, 0x56, 0x57, 0x58, 0x59],
@@ -40,8 +39,7 @@ const PLACEHOLDERS: Array[String] = [
 ]
 const HOENN_PLACEHOLDERS: Array[String] = ["MAGMA", "AQUA", "MAXIE", "ARCHIE", "GROUDON", "KYOGRE"]
 const SWAPPED_PLACEHOLDERS: Array[String] = ["AQUA", "MAGMA", "ARCHIE", "MAXIE", "KYOGRE", "GROUDON"]
-## FireRed, LeafGreen and Emerald's RenderText reads one argument after each of these; Ruby and Sapphire's
-## PrintNextChar draws them as glyphs.
+## FRLG and Emerald's `RenderText` reads an argument after each of these; Ruby's `PrintNextChar` draws glyphs.
 const ARGUMENT_CHARACTERS: Dictionary = {0xF7: "DYNAMIC", 0xF8: "KEYPAD_ICON", 0xF9: "EXTRA_SYMBOL"}
 
 const CHARACTERS: Dictionary = {

@@ -1,9 +1,8 @@
 class_name Gen3MapGrid
 extends RefCounted
 
-## The field's backup map (`fieldmap.c`): the layout's blocks inside a ring of [constant MAP_OFFSET] cells
-## that the connected maps' edges fill, and the border pattern past it. Coordinates are the cartridge's
-## backup-map ones, so the layout's own (0, 0) is ([constant MAP_OFFSET], [constant MAP_OFFSET]).
+## The field's backup map (`fieldmap.c`): the layout inside a ring of [constant MAP_OFFSET] cells the connected maps'
+## edges fill, the border past it. Coordinates are backup-map ones; the layout's (0, 0) is (`MAP_OFFSET`, `MAP_OFFSET`).
 
 const MAP_OFFSET: int = 7
 const OFFSET_W: int = MAP_OFFSET * 2 + 1
@@ -36,9 +35,8 @@ var _behaviors := PackedInt32Array()
 var _layer_types := PackedInt32Array()
 
 
-## `InitMapLayoutData` for one map, or null when the cache lacks it. No map reaches `MAX_MAP_DATA_SIZE`.
-## Emerald returns before clearing the connection flags for a map with no connections, so they stay [param
-## previous]'s, which only [method border_id_at] past the buffer reads.
+## `InitMapLayoutData`, null when uncached; no map reaches `MAX_MAP_DATA_SIZE`. Emerald keeps [param previous]'s
+## connection flags for a map with none, which only [method border_id_at] past the buffer reads.
 static func open(data: GameData, group: int, number: int, previous: Gen3MapGrid = null) -> Gen3MapGrid:
 	var header: Dictionary = data.world_map_header(group, number)
 	var layout: Dictionary = data.world_map_layout(group, number)

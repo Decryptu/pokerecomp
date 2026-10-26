@@ -101,8 +101,7 @@ const TRAINER_PARTY_LIMIT: int = 6
 const ABILITY_COUNT: int = 78
 const ABILITY_NAME_SIZE: int = 13
 
-## `gPokedexEntries` from `NATIONAL_DEX_NONE`. Emerald drops Ruby's second page pointer, which FireRed and
-## LeafGreen keep for an empty `unusedDescription`.
+## `gPokedexEntries` from `NATIONAL_DEX_NONE`; Emerald drops the second page pointer FRLG keep for `unusedDescription`.
 const DEX_ENTRY_CATEGORY_SIZE: int = 12
 const DEX_ENTRY_HEIGHT: int = 0x0C
 const DEX_ENTRY_WEIGHT: int = 0x0E
@@ -125,8 +124,7 @@ const EVOLUTION_PARAMETER: int = 2
 const EVOLUTION_TARGET: int = 4
 const EVOLUTION_METHOD_LAST: int = 15  # EVO_BEAUTY
 
-## Map and wild pointers are located from exact layout/slot bytes, then swept against pret's map_groups and
-## wild_encounters JSON, including version guards.
+## Map and wild pointers found by exact layout and slot bytes, swept against pret's map and wild JSON, guards included.
 const RS_MAP_GROUP_SIZES: Array[int] = [
 	54, 5, 5, 6, 7, 7, 8, 7, 7, 13, 8, 17, 10, 24, 13, 13,
 	14, 2, 2, 2, 3, 1, 1, 1, 86, 44, 12, 2, 1, 13, 1, 1,
