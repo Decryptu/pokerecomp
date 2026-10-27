@@ -3,8 +3,8 @@ the release changes is standing guidance with a {VERSION} placeholder. -->
 
 ## Fixed
 
-- Export and Export .sav on iPhone and iPad now open the system's Save to Files sheet, so the save can go to iCloud Drive, On My iPhone or another app. Before, the save dialog was taller than the screen and its Save button could not be reached.
-- File dialogs are now sized to the screen on every platform. On a screen too narrow for one, the launcher's own file browser opens instead, with a Save here button.
+- Export .sav now explains its two steps before the first file picker opens: choose your cartridge save for this game, then choose where to save the new file. On Android and iOS the first picker has no title and no Save button, so it looked like a save dialog that could not be finished.
+- A cartridge save that cannot be written into is now reported as soon as it is chosen, before you are asked where to save.
 
 ## Updating this release
 
