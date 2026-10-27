@@ -161,31 +161,58 @@ func import_sav_path(path: String, slot: int = -1) -> bool:
 	return true
 
 
+func _request_sav_export() -> void:
+	_confirm(
+		"Export slot %d as a .sav" % (_selected_slot + 1),
+		"First choose your cartridge save for this game: the .sav your emulator or flash cart uses. "
+			+ "This slot is written into a copy of it, and the original is not changed. "
+			+ "Then choose where to save the new file.",
+		"Choose cartridge save",
+		func() -> void: _sav_base_dialog.show_picker(Vector2i(900, 600)),
+	)
+
+
+func _on_sav_base_chosen(path: String) -> void:
+	if _patched_sav(path).is_empty():
+		return
+	_pending_sav_base = path
+	_set_status(&"info", "Now choose where to save the new .sav.", path.get_file())
+	_sav_export_dialog.current_file = export_file_name().get_basename() + ".sav"
+	_sav_export_dialog.show_picker(Vector2i(900, 600))
+
+
 ## The selected slot patched into a copy of the cartridge save at [param base_path]; a refusal writes nothing.
 func export_sav_path(base_path: String, path: String) -> bool:
-	if _data == null:
-		_set_status(&"error", "Save export unavailable.", "No imported cartridge cache is selected.")
-		return false
-	var loaded: Dictionary = Gen2SaveStore.load_result(_data.id, _data.sha1, _selected_slot, _data)
-	if not loaded["ok"]:
-		_set_status(&"error", "The save was not exported.", String(loaded["message"]))
-		return false
-	var raw: PackedByteArray = FileAccess.get_file_as_bytes(base_path)
-	if raw.is_empty():
-		_set_status(&"error", "The save was not exported.", "The cartridge save to start from could not be read.")
-		return false
-	var exported: Dictionary = Gen2SramAdapter.export_bytes(loaded["save"], raw, _data)
-	if not exported["ok"]:
-		_set_status(&"error", "The save was not exported.", String(exported["message"]))
+	var patched: PackedByteArray = _patched_sav(base_path)
+	if patched.is_empty():
 		return false
 	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		_set_status(&"error", "The save was not exported.", "The file could not be written.")
 		return false
-	file.store_buffer(exported["raw"])
+	file.store_buffer(patched)
 	file.close()
 	_set_status(&"success", "Exported slot %d as a cartridge save." % (_selected_slot + 1), path)
 	return true
+
+
+func _patched_sav(base_path: String) -> PackedByteArray:
+	if _data == null:
+		_set_status(&"error", "Save export unavailable.", "No imported cartridge cache is selected.")
+		return PackedByteArray()
+	var loaded: Dictionary = Gen2SaveStore.load_result(_data.id, _data.sha1, _selected_slot, _data)
+	if not loaded["ok"]:
+		_set_status(&"error", "The save was not exported.", String(loaded["message"]))
+		return PackedByteArray()
+	var raw: PackedByteArray = FileAccess.get_file_as_bytes(base_path)
+	if raw.is_empty():
+		_set_status(&"error", "The save was not exported.", "The cartridge save to start from could not be read.")
+		return PackedByteArray()
+	var exported: Dictionary = Gen2SramAdapter.export_bytes(loaded["save"], raw, _data)
+	if not exported["ok"]:
+		_set_status(&"error", "The save was not exported.", String(exported["message"]))
+		return PackedByteArray()
+	return exported["raw"]
 
 
 func save_screen_snapshot() -> Dictionary:
@@ -277,11 +304,7 @@ func _build_ui() -> void:
 		FileDialog.FILE_MODE_OPEN_FILE,
 		PackedStringArray(["*.sav; Cartridge save", "*; All files"]),
 	)
-	_sav_base_dialog.file_selected.connect(func(path: String) -> void:
-		_pending_sav_base = path
-		_sav_export_dialog.current_file = export_file_name().get_basename() + ".sav"
-		_sav_export_dialog.show_picker(Vector2i(900, 600))
-	)
+	_sav_base_dialog.file_selected.connect(_on_sav_base_chosen)
 	_sav_export_dialog = _picker(
 		"Export this slot as a cartridge save",
 		FileDialog.FILE_MODE_SAVE_FILE,
@@ -478,9 +501,7 @@ func _add_slot_management(body: VBoxContainer) -> void:
 		_slot_import_dialog.show_picker(Vector2i(900, 600))
 	))
 	if _data != null and RomRegistry.generation_for(_data.id) != RomRegistry.GEN3:
-		file_row.add_child(_action("Export .sav", Gen2LauncherButton.Variant.NEUTRAL, &"", func() -> void:
-			_sav_base_dialog.show_picker(Vector2i(900, 600))
-		))
+		file_row.add_child(_action("Export .sav", Gen2LauncherButton.Variant.NEUTRAL, &"", _request_sav_export))
 	file_row.add_child(_action("Delete", Gen2LauncherButton.Variant.DANGER, &"trash", _request_delete))
 
 
