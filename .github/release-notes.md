@@ -1,9 +1,10 @@
 <!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
-## Added
+## Fixed
 
-- Export .sav on the save screen writes a Red, Blue, Yellow, Gold, Silver or Crystal slot into a cartridge save you choose, ready for an emulator or a flash cart. Gold, Silver and Crystal carry the trainer and party. Red, Blue and Yellow also carry boxes, items, money, the Pokédex, position and story progress.
+- Export and Export .sav on iPhone and iPad now open the system's Save to Files sheet, so the save can go to iCloud Drive, On My iPhone or another app. Before, the save dialog was taller than the screen and its Save button could not be reached.
+- File dialogs are now sized to the screen on every platform. On a screen too narrow for one, the launcher's own file browser opens instead, with a Save here button.
 
 ## Updating this release
 
