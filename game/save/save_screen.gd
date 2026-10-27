@@ -265,6 +265,7 @@ func _build_ui() -> void:
 		PackedStringArray(["*.json; pokerecomp save"]),
 	)
 	_export_dialog.file_selected.connect(_export_selected_slot)
+	_export_dialog.handed_off.connect(_on_export_handed_off)
 	_slot_import_dialog = _picker(
 		"Import a pokerecomp save",
 		FileDialog.FILE_MODE_OPEN_FILE,
@@ -289,6 +290,7 @@ func _build_ui() -> void:
 	_sav_export_dialog.file_selected.connect(func(path: String) -> void:
 		export_sav_path(_pending_sav_base, path)
 	)
+	_sav_export_dialog.handed_off.connect(_on_export_handed_off)
 
 
 func _picker(
@@ -561,6 +563,13 @@ func _export_selected_slot(path: String) -> void:
 		_set_status(&"error", "The save was not exported.", String(result["message"]))
 		return
 	_set_status(&"success", "Exported slot %d." % (_selected_slot + 1), path)
+
+
+func _on_export_handed_off(destination: String) -> void:
+	if destination.is_empty():
+		_set_status(&"error", "The save was not exported.", "No place to save it was chosen.")
+		return
+	_set_status(&"success", _status_title, destination)
 
 
 func _import_slot_file(path: String) -> void:

@@ -18,6 +18,9 @@
 static NSString *const kImportsDirectory = @"picked";
 
 @interface GodotDocumentPicker : NSObject <UIDocumentPickerDelegate>
+// Whether the picker on screen is the export sheet, whose answer is where a copy
+// went rather than a file to take in.
+@property(nonatomic) BOOL exporting;
 + (void)cancel;
 + (void)sweep;
 @end
@@ -48,13 +51,31 @@ static NSString *const kImportsDirectory = @"picked";
 	return controller;
 }
 
-- (void)presentWithTypes:(NSArray<UTType *> *)types {
-	dispatch_async(dispatch_get_main_queue(), ^{
-		UIViewController *root = [self topController];
-		if (!root) {
+// Presents once nothing is mid-transition. Export .sav opens a picker straight
+// from the previous one's answer, while that one is still sliding away, and
+// UIKit drops a presentation made then without a word.
+- (void)present:(UIViewController *)picker attempts:(int)attempts {
+	UIViewController *root = [self topController];
+	if (!root) {
+		[GodotDocumentPicker cancel];
+		return;
+	}
+	if (root.isBeingDismissed || root.isBeingPresented) {
+		if (attempts <= 0) {
 			[GodotDocumentPicker cancel];
 			return;
 		}
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{
+					[self present:picker attempts:attempts - 1];
+				});
+		return;
+	}
+	[root presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)presentWithTypes:(NSArray<UTType *> *)types {
+	dispatch_async(dispatch_get_main_queue(), ^{
 		// asCopy leaves iOS to hand over a file the app already owns, in its own
 		// temporary directory. Without it the URL is security scoped, has to be
 		// opened and released around every read, and may still be in iCloud.
@@ -63,7 +84,20 @@ static NSString *const kImportsDirectory = @"picked";
 																			asCopy:YES];
 		picker.delegate = self;
 		picker.allowsMultipleSelection = NO;
-		[root presentViewController:picker animated:YES completion:nil];
+		self.exporting = NO;
+		[self present:picker attempts:30];
+	});
+}
+
+- (void)presentExportOf:(NSURL *)file {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		// asCopy leaves the app's own file in place, for the app to delete.
+		UIDocumentPickerViewController *picker =
+				[[UIDocumentPickerViewController alloc] initForExportingURLs:@[ file ]
+																	  asCopy:YES];
+		picker.delegate = self;
+		self.exporting = YES;
+		[self present:picker attempts:30];
 	});
 }
 
@@ -93,6 +127,13 @@ static NSString *const kImportsDirectory = @"picked";
 		return;
 	}
 	NSURL *picked = urls.firstObject;
+	if (self.exporting) {
+		NativeFilePicker *picker = NativeFilePicker::get_singleton();
+		if (picker) {
+			picker->_deliver_file(String::utf8(picked.path.UTF8String));
+		}
+		return;
+	}
 	NSURL *destination = [[self freshImportsDirectory] URLByAppendingPathComponent:picked.lastPathComponent];
 	NSError *error = nil;
 	// A move rather than a copy: the source is the app's own temporary copy, and
@@ -152,6 +193,15 @@ Error NativeFilePicker::open_file(const String &p_title, const PackedStringArray
 	return OK;
 }
 
+Error NativeFilePicker::export_file(const String &p_path) {
+	NSURL *file = [NSURL fileURLWithPath:[NSString stringWithUTF8String:p_path.utf8().get_data()]];
+	if (![[NSFileManager defaultManager] fileExistsAtPath:file.path]) {
+		return ERR_FILE_NOT_FOUND;
+	}
+	[(GodotDocumentPicker *)delegate presentExportOf:file];
+	return OK;
+}
+
 void NativeFilePicker::_deliver_file(const String &p_path) {
 	// Deferred rather than emitted here: this is a UIKit callback, and the
 	// launcher rebuilds itself out of the signal.
@@ -164,6 +214,7 @@ void NativeFilePicker::_deliver_cancelled() {
 
 void NativeFilePicker::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("open_file", "title", "extensions"), &NativeFilePicker::open_file);
+	ClassDB::bind_method(D_METHOD("export_file", "path"), &NativeFilePicker::export_file);
 
 	// Named for FileDialog's own, so the one seam that opens a picker can treat
 	// the two the same way round.

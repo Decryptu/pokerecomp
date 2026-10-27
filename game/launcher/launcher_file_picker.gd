@@ -6,10 +6,15 @@ extends FileDialog
 ## preference: the engine's native dialog (Windows, macOS, Linux, Android, whose
 ## grant covers the one file chosen); the `NativeFilePicker` singleton for iOS,
 ## where `DisplayServerIOS` implements no `file_dialog_show`; [Gen2BrowseSheet]
-## wherever there is no pointer; the engine's own browser for the rest.
+## wherever there is no pointer or room; the engine's own browser for the rest.
+
+## Where iOS's export sheet copied a save the app wrote; empty if it was closed.
+signal handed_off(destination: String)
 
 ## The plugin's singleton, present only on a build that carries it.
 const NATIVE_SINGLETON: StringName = &"NativeFilePicker"
+const EXPORT_DIR: String = "user://exporting"
+const SCREEN_MARGIN: int = 8
 
 var _native: Object = null
 var _palette: Gen2LauncherTheme = null
@@ -30,11 +35,12 @@ static func create(
 	dialog.title = title_text
 	dialog.use_native_dialog = true
 	dialog.theme = palette.control_theme()
-	# The plugin opens files; naming one that does not exist yet is a different
-	# controller and a different flow, so a save keeps the engine's own path.
-	if picker_mode == FileDialog.FILE_MODE_OPEN_FILE \
-		and Engine.has_singleton(NATIVE_SINGLETON):
-		dialog._native = Engine.get_singleton(NATIVE_SINGLETON)
+	if Engine.has_singleton(NATIVE_SINGLETON):
+		var native: Object = Engine.get_singleton(NATIVE_SINGLETON)
+		# A plugin built before export_file existed can still open, never save.
+		if picker_mode == FileDialog.FILE_MODE_OPEN_FILE \
+			or (picker_mode == FileDialog.FILE_MODE_SAVE_FILE and native.has_method(&"export_file")):
+			dialog._native = native
 	dialog.access = (
 		FileDialog.ACCESS_FILESYSTEM if dialog._can_browse_freely() else FileDialog.ACCESS_USERDATA
 	)
@@ -53,21 +59,72 @@ func _can_browse_freely() -> bool:
 ## [signal FileDialog.canceled] the refusal, whichever of the four presented it.
 func show_picker(fallback_size: Vector2i) -> void:
 	if _native == null:
-		if uses_browse_sheet():
+		if uses_browse_sheet() or not _popup_on_screen(fallback_size):
 			show_browse_sheet()
-		else:
-			popup_centered(fallback_size)
 		return
-	# One singleton serves every picker on screen, and a request left outstanding
-	# by a backgrounded app would otherwise still be listening when the next one
-	# is answered. Only the picker being shown is connected to it.
+	if file_mode == FileDialog.FILE_MODE_SAVE_FILE:
+		_export_natively()
+		return
+	_listen_to_native()
+	_native.open_file(title, extensions())
+
+
+## The engine's browser fitted to the screen; false, unshown, when it cannot fit.
+func _popup_on_screen(wanted: Vector2i) -> bool:
+	if not is_embedded():
+		popup_centered_clamped(wanted, 0.9)
+		return true
+	var room: Rect2i = Rect2i(get_parent().get_viewport().get_visible_rect())
+	var title_height: int = get_theme_constant(&"title_height")
+	var fitted := Vector2i(
+		mini(wanted.x, room.size.x - 2 * SCREEN_MARGIN),
+		mini(wanted.y, room.size.y - title_height - 2 * SCREEN_MARGIN),
+	)
+	popup(Rect2i(
+		room.position + Vector2i(
+			(room.size.x - fitted.x) / 2,
+			title_height + (room.size.y - title_height - fitted.y) / 2,
+		),
+		fitted,
+	))
+	if size.x <= room.size.x and position.y + size.y <= room.end.y:
+		return true
+	hide()
+	return false
+
+
+## A caller that refused writes nothing and has already said why.
+func _export_natively() -> void:
+	_clear_exports()
+	DirAccess.make_dir_recursive_absolute(EXPORT_DIR)
+	var staged: String = EXPORT_DIR.path_join(
+		current_file.get_file() if not current_file.get_file().is_empty() else "export"
+	)
+	file_selected.emit(staged)
+	if not FileAccess.file_exists(staged):
+		_clear_exports()
+		return
+	_listen_to_native()
+	if _native.export_file(ProjectSettings.globalize_path(staged)) != OK:
+		_on_native_cancelled()
+
+
+static func _clear_exports() -> void:
+	if not DirAccess.dir_exists_absolute(EXPORT_DIR):
+		return
+	for entry: String in DirAccess.get_files_at(EXPORT_DIR):
+		DirAccess.remove_absolute(EXPORT_DIR.path_join(entry))
+	DirAccess.remove_absolute(EXPORT_DIR)
+
+
+# One singleton serves every picker, so only the one on screen listens to it.
+func _listen_to_native() -> void:
 	for connection: Dictionary in _native.file_selected.get_connections():
 		_native.file_selected.disconnect(connection["callable"])
 	for connection: Dictionary in _native.canceled.get_connections():
 		_native.canceled.disconnect(connection["callable"])
 	_native.file_selected.connect(_on_native_selected)
 	_native.canceled.connect(_on_native_cancelled)
-	_native.open_file(title, extensions())
 
 
 ## The bare extensions in [member FileDialog.filters], whose entries look like
@@ -86,12 +143,20 @@ func extensions() -> PackedStringArray:
 # only while its own request is outstanding.
 func _on_native_selected(path: String) -> void:
 	_release_native()
-	file_selected.emit(path)
+	if file_mode == FileDialog.FILE_MODE_SAVE_FILE:
+		_clear_exports()
+		handed_off.emit(path)
+	else:
+		file_selected.emit(path)
 
 
 func _on_native_cancelled() -> void:
 	_release_native()
-	canceled.emit()
+	if file_mode == FileDialog.FILE_MODE_SAVE_FILE:
+		_clear_exports()
+		handed_off.emit("")
+	else:
+		canceled.emit()
 
 
 func _release_native() -> void:
@@ -125,7 +190,10 @@ func show_browse_sheet(dir: String = "") -> void:
 		canceled.emit()
 		return
 	if _last_dir.is_empty():
-		_last_dir = Gen2BrowseSheet.start_dir()
+		_last_dir = (
+			OS.get_user_data_dir() if access == FileDialog.ACCESS_USERDATA
+			else Gen2BrowseSheet.start_dir()
+		)
 	var sheet: Gen2BrowseSheet = Gen2BrowseSheet.browse(
 		_palette, title, _last_dir, extensions(), current_file
 	)
