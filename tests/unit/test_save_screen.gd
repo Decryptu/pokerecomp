@@ -253,16 +253,25 @@ func test_save_screen_rejects_an_invalid_sram_without_creating_a_slot() -> void:
 	DirAccess.remove_absolute(path)
 
 
-## A cartridge save the adapter refuses leaves the chosen path untouched rather than a partial file.
+## Export .sav says what its first picker is for before opening it: Android and
+## iOS show no picker title, and that picker has no Save button. A cartridge save
+## the adapter refuses is reported before any destination is asked for, and
+## leaves the chosen path untouched rather than a partial file.
 func test_a_refused_cartridge_export_writes_no_file() -> void:
 	assert_true(Gen2SaveStore.save(_save(), _data)["ok"])
 	await _open_save_screen()
 	assert_true(_screen.select_slot(1))
+	_find_button(_screen, "Export .sav").pressed.emit()
+	var sheet: Gen2LauncherSheet = _screen.find_children("*", "Gen2LauncherSheet", true, false)[0]
+	assert_not_null(_find_button(sheet, "Choose cartridge save"))
+	sheet.close()
 	var base: String = "user://save-screen-base.sav"
 	var target: String = "user://save-screen-export.sav"
 	var file: FileAccess = FileAccess.open(base, FileAccess.WRITE)
 	file.store_buffer(PackedByteArray([0x01, 0x02, 0x03]))
 	file.close()
+	_screen._on_sav_base_chosen(base)
+	assert_eq(_screen.save_screen_snapshot()["status"], "The save was not exported.")
 	assert_false(_screen.export_sav_path(base, target))
 	assert_eq(_screen.save_screen_snapshot()["status"], "The save was not exported.")
 	assert_false(FileAccess.file_exists(target))
