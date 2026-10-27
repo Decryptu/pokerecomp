@@ -20,7 +20,7 @@ typedef void GodotDocumentPicker;
 // platform: DisplayServerIOS implements no file_dialog_show, so FileDialog
 // falls back to browsing a sandbox the app is then refused every read of.
 //
-// One call, two answers. The file is handed over already copied into the app's
+// One call to open, one to save, the same two answers. The file is handed over already copied into the app's
 // own storage, so the caller reads an ordinary path and nothing has to be told
 // when to let go of it.
 class NativeFilePicker : public Object {
@@ -38,6 +38,9 @@ public:
 	// Opens the picker. p_extensions are bare extensions ("gbc", "zip"); an
 	// empty list offers every file.
 	Error open_file(const String &p_title, const PackedStringArray &p_extensions);
+	// Offers the file at the absolute p_path to the system's export sheet, which
+	// copies it wherever the player picks. The answer is the destination's path.
+	Error export_file(const String &p_path);
 
 	// Called by the Objective-C delegate, on the main thread.
 	void _deliver_file(const String &p_path);
