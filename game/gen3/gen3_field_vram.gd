@@ -14,6 +14,7 @@ const LAYER_TYPES: int = 3
 
 var tiles := PackedByteArray()
 var palette: Gen3Palette
+var door_cells: Dictionary = {} # `DrawDoorMetatileAt`'s bottom-layer words by backup cell; [Gen3FieldDoor] owns them.
 var _frames: Array = []
 var _animation: Dictionary = {}
 
@@ -49,6 +50,10 @@ func step() -> void:
 			_copy(tiles, int(copy["tile"]) * GbaTiles.TILE_BYTES, bytes)
 
 
+func write_tiles(tile: int, bytes: PackedByteArray) -> void:
+	_copy(tiles, tile * GbaTiles.TILE_BYTES, bytes)
+
+
 ## Every cell of [param cells] (backup-map coordinates) as pixels, 16 per cell.
 func draw(grid: Gen3MapGrid, cells: Rect2i) -> Image:
 	return draw_screen(grid, cells.position * 16, cells.size * 16)
@@ -70,7 +75,9 @@ func draw_screen(grid: Gen3MapGrid, origin: Vector2i, size: Vector2i, oam: Array
 	for y: int in range(first.y, last.y + 1):
 		for x: int in range(first.x, last.x + 1):
 			var layer_type: int = grid.layer_type_at(x, y)
-			if layer_type < LAYER_TYPES:
+			if door_cells.has(Vector2i(x, y)):
+				_draw_door(layers, size, Vector2i(x, y) * 16 - origin, door_cells[Vector2i(x, y)])
+			elif layer_type < LAYER_TYPES:
 				_draw_metatile(layers, size, Vector2i(x, y) * 16 - origin,
 					grid.metatile(grid.metatile_id_at(x, y)), layer_type)
 	if overlay.has("bg0_map"):
@@ -184,6 +191,11 @@ func _draw_metatile(layers: Array[PackedInt32Array], size: Vector2i, origin: Vec
 		var words: Array = [[NORMAL_UNDERLAY, bottom, top], [bottom, top, 0], [bottom, 0, top]][layer_type]
 		for layer: int in 3:
 			_draw_tile(layers[layer], size, at, words[layer])
+
+
+func _draw_door(layers: Array[PackedInt32Array], size: Vector2i, origin: Vector2i, words: PackedInt32Array) -> void: # `METATILE_LAYER_TYPE_COVERED`, whose top layer is tile 0.
+	for slot: int in 4:
+		_draw_tile(layers[0], size, origin + Vector2i(slot % 2, slot / 2) * 8, words[slot])
 
 
 ## A metatile slot as the tilemap word it is on the cartridge.

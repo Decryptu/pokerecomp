@@ -127,6 +127,64 @@ static func decode_fixed(id: StringName, data: PackedByteArray, offset: int, len
 	return out
 
 
+static func encode(text: String) -> PackedByteArray: # [method decode_fixed]'s text back into cartridge bytes, with EOS; an unknown token is dropped.
+	var out := PackedByteArray()
+	var at: int = 0
+	while at < text.length():
+		var close: int = text.find(">", at) if text[at] == "<" else -1
+		var token: PackedByteArray = _token(text.substr(at, close - at + 1)) if close > at else PackedByteArray()
+		if not token.is_empty() or close > at and not _is_character(text[at]):
+			out.append_array(token)
+			at = close + 1
+		else:
+			out.append(_code(text[at]))
+			at += 1
+	out.append(EOS)
+	return out
+
+
+static func _is_character(character_text: String) -> bool:
+	return _code(character_text) != 0 or character_text == " "
+
+
+static func _code(text: String) -> int:
+	var unicode: int = text.unicode_at(0)
+	if unicode >= 0x41 and unicode <= 0x5A:
+		return UPPER_A + unicode - 0x41
+	if unicode >= 0x61 and unicode <= 0x7A:
+		return LOWER_A + unicode - 0x61
+	if unicode >= 0x30 and unicode <= 0x39:
+		return DIGIT_0 + unicode - 0x30
+	for code: int in CHARACTERS:
+		if CHARACTERS[code] == text:
+			return code
+	return 0
+
+
+static func _token(token: String) -> PackedByteArray:
+	if WORD_TILES.has(token):
+		return PackedByteArray(WORD_TILES[token])
+	var code: int = _code(token)
+	if code != 0:
+		return PackedByteArray([code])
+	var parts: PackedStringArray = token.trim_prefix("<").trim_suffix(">").split(" ")
+	if parts[0].begins_with("$") and parts[0].length() == 3:
+		return PackedByteArray([parts[0].substr(1).hex_to_int()])
+	for character_code: int in ARGUMENT_CHARACTERS:
+		if ARGUMENT_CHARACTERS[character_code] == parts[0] and parts.size() == 2:
+			return PackedByteArray([character_code, int(parts[1])])
+	for index: int in EXT_CTRL_CODES.size():
+		if EXT_CTRL_CODES[index][0] == parts[0]:
+			var out := PackedByteArray([EXT_CTRL_CODE, index])
+			for argument: int in range(1, parts.size()):
+				if index in WORD_ARGUMENT_CODES:
+					out.append_array(PackedByteArray([int(parts[argument]) & 0xFF, int(parts[argument]) >> 8]))
+				else:
+					out.append(int(parts[argument]))
+			return out
+	return PackedByteArray()
+
+
 static func expand_placeholders(text: String, values: Dictionary) -> String: # `StringExpandPlaceholders` on decoded tokens; put buffers first, their text may hold placeholders.
 	for key: String in values:
 		text = text.replace("<%s>" % key, values[key])

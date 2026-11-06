@@ -1876,8 +1876,7 @@ func _preview_gba(data: GameData, args: PackedStringArray) -> void:
 			vram.step()
 		image = vram.draw(grid, Rect2i(0, 0, grid.width, grid.height))
 	else:
-		image = _preview_gba_screen(data, group, number, vram, frames, at, options[3], options[4], maxi(options[5], 0),
-			options[6])
+		image = _preview_gba_screen(data, group, number, frames, at, options[3], options[4], maxi(options[5], 0), options[6])
 	var error: int = image.save_png(path) if image != null else ERR_CANT_CREATE
 	if error != OK:
 		push_error("Could not write %s (error %d)." % [path, error])
@@ -1886,45 +1885,18 @@ func _preview_gba(data: GameData, args: PackedStringArray) -> void:
 
 ## The field screen [param frames] frames after the player spawns on layout cell [param at], under the map's
 ## weather or, when not negative, [param override].
-func _preview_gba_screen(data: GameData, group: int, number: int, vram: Gen3FieldVram, frames: int,
-		at: Vector2i, override: int, action: int, avatar_flags: int, species: int) -> Image:
-	var camera: Gen3FieldCamera = Gen3FieldCamera.open(data, group, number, at)
-	var events := Gen3EventData.new(data.id)
-	var objects := Gen3ObjectEvents.new(camera, events, vram.palette)
-	var weather := Gen3FieldWeather.new(data, vram.palette, events)
-	objects.sprites.weather = weather
-	weather.sprites.camera = camera
-	if override < 0:
-		weather.set_saved_from_header(camera.header)
-	else:
-		weather.set_saved(override)
-	weather.start()
-	weather.resume_paused()
-	var avatar := Gen3PlayerAvatar.open(objects, at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET, 1, 0)
-	if avatar == null:
+func _preview_gba_screen(data: GameData, group: int, number: int, frames: int, at: Vector2i, override: int,
+		action: int, avatar_flags: int, species: int) -> Image:
+	var screen: Gen3FieldScreen = Gen3FieldScreen.open(data, group, number, at, 1, 0,
+		avatar_flags if avatar_flags > 0 else Gen3PlayerAvatar.Flag.ON_FOOT, override)
+	if screen == null:
 		push_error("The player could not be placed at %s." % at)
 		return null
-	avatar.transition(avatar_flags)
-	avatar.track_camera()
-	objects.spawn_in_view()
-	# WarpFadeInScreen: FillPalBufferBlack, then FadeScreen(FADE_FROM_BLACK, 0).
-	vram.palette.faded.fill(0)
-	weather.fade_screen(Gen3FieldWeather.Fade.FROM_BLACK, 0)
 	for frame: int in frames:
-		weather.run_tasks()
 		if frame == 120 and action >= 0:
-			objects.set_held_movement(avatar.object(), action)
+			screen.host.objects.set_held_movement(screen.host.avatar.object(), action)
 		if frame == 120 and species > 0:
-			objects.field_move_mon.start(species, 0, 0xFF0000,
-				int(camera.header["map_type"]) in Gen3ObjectEvents.OUTDOOR_MAP_TYPES)
-		avatar.step_movement_tasks()
-		var previous: Vector2i = avatar.object().pixel_position
-		objects.step_movements()
-		if camera.update(avatar.object().pixel_position - previous) != Vector2i.ZERO:
-			objects.follow_camera()
-		weather.sprites.animate(camera.sprite_coord_offset())
-		vram.palette.update_fade()
-		vram.step()
-		vram.palette.transfer()
-	return vram.draw_screen(camera.grid, camera.screen_origin(), Vector2i(240, 160),
-		objects.sprites.oam(objects, camera.screen_origin()), weather.bldalpha, objects.field_move_mon.screen())
+			screen.host.objects.field_move_mon.start(species, 0, 0xFF0000,
+				int(screen.host.objects.camera.header["map_type"]) in Gen3ObjectEvents.OUTDOOR_MAP_TYPES)
+		screen.frame()
+	return screen.picture()

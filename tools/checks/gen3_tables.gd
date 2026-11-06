@@ -54,6 +54,11 @@ const BULBASAUR_SCALES: Dictionary = {
 const DEX_PAGES: Dictionary = {
 	&"ruby": 2, &"sapphire": 2, &"firered": 1, &"leafgreen": 1, &"emerald": 1,
 }
+const DOOR_ROWS: Dictionary = {&"ruby": 34, &"sapphire": 34, &"firered": 32, &"leafgreen": 32, &"emerald": 53}
+const DOOR_WALKS: Dictionary = { # The cell below Littleroot's or Pallet's door, and where it leads.
+	&"ruby": [0, 9, 5, 9, 1, 0], &"sapphire": [0, 9, 5, 9, 1, 0], &"firered": [3, 0, 6, 8, 4, 0],
+	&"leafgreen": [3, 0, 6, 8, 4, 0], &"emerald": [0, 9, 5, 9, 1, 0]}
+const DOOR_WALK_FRAMES: int = 200
 const TYPE_NAMES: Array = [
 	"NORMAL", "FIGHT", "FLYING", "POISON", "GROUND", "ROCK", "BUG", "GHOST", "STEEL",
 	"???", "FIRE", "WATER", "GRASS", "ELECTR", "PSYCHC", "ICE", "DRAGON", "DARK",
@@ -79,6 +84,7 @@ func _one_game() -> void:
 	_world_headers()
 	_world_events()
 	_world_graphics()
+	_door_walk()
 	_tileset_animations()
 	_map_grids()
 	_field_camera()
@@ -426,6 +432,29 @@ const HEADER_FIELDS: Array[String] = [
 	"battle_scene", "show_map_name", "flags", "escape_rope", "allow_cycling",
 	"allow_escaping", "allow_running", "floor_number",
 ]
+
+
+func _door_walk() -> void: # Up into a door, through its fade, out on the mat with the controls returned.
+	var data: GameData = _r.data
+	_r.check(data._scripts()["doors"].size() == DOOR_ROWS[data.id], "Door table read a wrong row count.")
+	for font: Dictionary in data.world_text_box()["fonts"]:
+		for code: int in range(Gen3Text.DIGIT_0, Gen3Text.LOWER_A + Gen3Text.LETTERS):
+			if Gen3Text.character(code).length() == 1 and not (font["widths"] as PackedByteArray)[code]:
+				_r.fail("Font width of %s is zero." % Gen3Text.character(code))
+	var walk: Array = DOOR_WALKS[data.id]
+	var screen: Gen3FieldScreen = Gen3FieldScreen.open(data, walk[0], walk[1], Vector2i(walk[2], walk[3]), Gen3ObjectEvents.Direction.NORTH)
+	for frame: int in DOOR_WALK_FRAMES:
+		var held: Array[int] = []
+		var pressed: Array[int] = []
+		if frame > 30 and frame < 40:
+			held.append(PokeButton.UP)
+		if frame == 31:
+			pressed.append(PokeButton.UP)
+		screen.frame(held, pressed)
+	var camera: Gen3FieldCamera = screen.host.objects.camera
+	_r.check(Vector2i(camera.group, camera.number) == Vector2i(walk[4], walk[5]), "The door walk did not arrive.")
+	_r.check(not screen.warp.active() and not screen.host.objects.events.controls_locked, "The door walk kept the controls.")
+	_r.check(not screen.host.avatar.object().invisible, "The door walk left the player invisible.")
 
 
 func _world_headers() -> void:

@@ -17,8 +17,11 @@ const VAR_0X8005: int = 0x8005
 const VAR_0X8006: int = 0x8006
 const VAR_FACING: int = 0x800C
 const VAR_LAST_TALKED: int = 0x800F
+const VAR_TEXT_COLOR: int = 0x8012
+const TEXT_COLOR_DEFAULT: int = 0xFF
+const TEXT_COLOR_NEUTRAL: int = 3
 const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
-	&"ruby": {0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech", 53: "ShowTrainerCantBattleSpeech",
+	&"ruby": {31: "NoOp", 148: "GetPlayerBigGuyGirlString", 0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech", 53: "ShowTrainerCantBattleSpeech",
 		54: "GetTrainerFlag", 55: "DoTrainerApproach", 56: "PlayTrainerEncounterMusic",
 		57: "ShouldTryRematchBattle", 58: "IsTrainerReadyForRematch",
 		61: "HasEnoughMonsForDoubleBattle", 131: "CalculatePlayerPartyCount",
@@ -28,13 +31,13 @@ const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
 		205: "EnterSafariMode", 206: "ExitSafariMode", 214: "DoPCTurnOnEffect", 215: "DoPCTurnOffEffect",
 		249: "BedroomPC", 250: "PlayerPC", 251: "FieldShowRegionMap", 262: "ScriptMenu_CreatePCMultichoice",
 		263: "AccessHallOfFamePC", 319: "DoFallWarp", 332: "Script_FadeOutMapMusic"},
-	&"firered": {0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech",
+	&"firered": {31: "NoOp", 148: "GetPlayerBigGuyGirlString", 295: "Script_FacePlayer", 296: "Script_ClearHeldMovement", 0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech",
 		53: "ShowTrainerCantBattleSpeech", 54: "GetTrainerFlag", 55: "DoTrainerApproach",
 		56: "PlayTrainerEncounterMusic", 57: "ShouldTryRematchBattle", 58: "IsTrainerReadyForRematch",
 		59: "BattleSetup_StartRematchBattle", 61: "HasEnoughMonsForDoubleBattle", 131: "CalculatePlayerPartyCount",
 		132: "CountPartyNonEggMons", 142: "DrawWholeMapView",
 		180: "GetBattleOutcome", 314: "SetTrainerFacingDirection", 388: "QuestLogNoOp", 391: "QuestLogNoOp",
-		392: "QuestLogNoOp", 399: "SetBattledTrainerFlag", 408: "QuestLogNoOp", 409: "QuestLogNoOp",
+		392: "QuestLogNoOp", 361: "QuestLogNoOp", 399: "SetBattledTrainerFlag", 408: "QuestLogNoOp", 409: "QuestLogNoOp",
 		60: "ShowPokemonStorageSystemPC", 95: "ShowEasyChatScreen", 150: "SetHiddenItemFlag",
 		196: "ShowLinkBattleRecords", 199: "TryFieldPoisonWhiteOut", 200: "SetCB2WhiteOut", 205: "EnterSafariMode",
 		206: "ExitSafariMode", 214: "DoPCTurnOnEffect", 215: "DoPCTurnOffEffect", 249: "BedroomPC", 250: "PlayerPC",
@@ -42,7 +45,8 @@ const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
 		319: "DoFallWarp", 332: "Script_FadeOutMapMusic", 346: "DoPicboxCancel", 350: "CheckAddCoins",
 		362: "IsWirelessAdapterConnected", 366: "ShowWirelessCommunicationScreen", 369: "DisableMsgBoxWalkaway",
 		381: "NoOp", 382: "NoOp", 383: "NoOp", 400: "NoOp", 406: "BufferTMHMMoveName"},
-	&"emerald": {0: "HealPlayerParty", 54: "GetTrainerBattleMode", 55: "ShowTrainerIntroSpeech",
+	&"emerald": {32: "NoOp", 151: "GetPlayerBigGuyGirlString", 297: "Script_FacePlayer", 298: "Script_ClearHeldMovement",
+		473: "CountPlayerTrainerStars", 0: "HealPlayerParty", 54: "GetTrainerBattleMode", 55: "ShowTrainerIntroSpeech",
 		56: "ShowTrainerCantBattleSpeech", 57: "GetTrainerFlag", 58: "DoTrainerApproach",
 		59: "PlayTrainerEncounterMusic", 60: "ShouldTryRematchBattle", 61: "IsTrainerReadyForRematch",
 		62: "BattleSetup_StartRematchBattle", 64: "HasEnoughMonsForDoubleBattle", 134: "CalculatePlayerPartyCount",
@@ -70,6 +74,7 @@ const HANDLERS: Dictionary = {
 var input: Gen3FieldInput
 var warps := Gen3Warp.new()
 var warp_pending: bool = false
+var field_tasks := Callable() # The screen's half of `RunTasks`: given the script's requests, it returns those it left.
 var _warp_reset_avatar: bool = false
 var context: Gen3ScriptContext
 var avatar: Gen3PlayerAvatar
@@ -79,6 +84,7 @@ var battle: Gen3TrainerBattle
 var trainers: Gen3TrainerSee
 var selected_slot: int = -1
 var message_visible: bool = false
+var signpost: bool = false # script.c's `sMsgIsSignpost`, which picks FRLG's frame.
 var message_running: bool = false
 var _wait: String = ""
 var _lock_task: bool = false
@@ -213,6 +219,8 @@ func step(held: Array[int] = [], pressed: Array[int] = []) -> Array: # overworld
 		requests.append_array(avatar.step(Gen3Bike.dpad_direction(held_keys), new_keys, held_keys))
 	var button: int = PokeButton.A if PokeButton.A in pressed else (PokeButton.B if PokeButton.B in pressed else PokeButton.NONE)
 	requests.append_array(tick(button))
+	if field_tasks.is_valid():
+		requests = field_tasks.call(requests)
 	requests.append_array(avatar.step_movement_tasks())
 	requests.append_array(objects.step_movements(avatar.flags & Gen3PlayerAvatar.Flag.DASH != 0,
 		avatar.tile_state == Gen3PlayerAvatar.Tile.CENTER))
@@ -228,6 +236,8 @@ func step(held: Array[int] = [], pressed: Array[int] = []) -> Array: # overworld
 func _process_input(held: int, pressed: int, requests: Array) -> bool: # field_control_avatar.c::ProcessPlayerFieldInput.
 	objects.events.var_set(VAR_LAST_TALKED, 0)
 	selected_slot = -1
+	objects.events.var_set(VAR_TEXT_COLOR, TEXT_COLOR_DEFAULT) # ResetFacingNpcOrSignpostVars.
+	signpost = false
 	if _try_trainers() or try_frame_script():
 		return true
 	var buttons: bool = avatar.accepts_field_buttons()
@@ -434,7 +444,9 @@ func _try_coord_event(requests: Array) -> bool: # field_control_avatar.c::TryRun
 		var trigger: int = int(row["variable"])
 		if at == 0:
 			var weather: Dictionary = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 9, 8: 7, 9: 8, 10: 11, 11: 12, 20: 20, 21: 21}
-			if weather.has(trigger):
+			if weather.has(trigger) and objects.sprites.weather != null:
+				objects.sprites.weather.set_weather(weather[trigger])
+			elif weather.has(trigger):
 				requests.append({"kind": "weather", "weather": weather[trigger]})
 		elif trigger == 0:
 			_output = []
@@ -470,7 +482,7 @@ func interact(requests: Array = []) -> bool: # TryStartInteractionScript, each s
 	if not _interaction_is_silent(at, key):
 		requests.append({"kind": "sound", "name": "select"})
 	if avatar.frlg and slot < 0 and (behavior == Gen3FieldInput.FRLG_SIGNPOST or not input.sign_script(behavior, direction).is_empty()):
-		requests.append({"kind": "signpost"}) # MsgSetSignpost.
+		signpost = true
 	start(at, slot)
 	return true
 
@@ -546,7 +558,7 @@ func _try_walk_into_sign(held: int, requests: Array) -> bool: # TrySetUpWalkInto
 	start(at)
 	_sign_inhibit = Gen3FieldInput.SIGN_INHIBIT_FRAMES
 	_sign_cancelable = true
-	requests.append({"kind": "signpost"})
+	signpost = true
 	return true
 
 
@@ -619,9 +631,7 @@ func _command(event: Dictionary) -> void:
 		"waitmessage", "waitbuttonpress": _wait = command
 		"lock", "lockall", "lockfortrainer": _lock(command != "lockall")
 		"release", "releaseall": _release(command == "release")
-		"faceplayer":
-			if _selected() != null:
-				objects.set_held_movement(_selected(), avatar.action(&"face", Gen3ObjectEvents.OPPOSITE[avatar.object().facing]))
+		"faceplayer": _face_player()
 		"turnobject":
 			var target: Gen3ObjectEvents.ObjectEvent = _movement_object(objects.events.var_get(int(operands[0])) & 0xFF, Vector2i(objects.camera.group, objects.camera.number))
 			if target != null:
@@ -636,6 +646,11 @@ func _command(event: Dictionary) -> void:
 				_moving_id = local_id
 			_wait_map = _command_map(operands, 1)
 			_wait = "movement"
+
+
+func _face_player() -> void:
+	if _selected() != null:
+		objects.set_held_movement(_selected(), avatar.action(&"face", Gen3ObjectEvents.OPPOSITE[avatar.object().facing]))
 
 
 func _route(command: String, event: Dictionary) -> bool:
@@ -665,9 +680,29 @@ func _present(event: Dictionary) -> void:
 	if command == "setmaplayoutindex":
 		_layout_id = int(operands[0])
 		return
+	if command == "textcolor":
+		objects.events.var_set(VAR_TEXT_COLOR + 1, objects.events.var_get(VAR_TEXT_COLOR))
+		objects.events.var_set(VAR_TEXT_COLOR, int(operands[0]))
+		return
+	if command in ["signmsg", "normalmsg"]:
+		signpost = command == "signmsg"
+		return
+	if command in ["setweather", "resetweather", "doweather"] and _weather_command(command, operands):
+		return
 	if command in Gen3ScriptContext.HOST_WAITS:
 		_wait = "host"
 	_output.append({"kind": command, "operands": operands})
+
+
+func _weather_command(command: String, operands: Array) -> bool: # False without a field weather, leaving it to the caller.
+	var weather: Gen3FieldWeather = objects.sprites.weather
+	if weather == null:
+		return false
+	match command:
+		"setweather": weather.set_saved(int(operands[0]))
+		"resetweather": weather.set_saved_from_header(objects.camera.header)
+		"doweather": weather.do_current()
+	return true
 
 
 func _menu_command(event: Dictionary) -> void:
@@ -682,7 +717,7 @@ func _menu_command(event: Dictionary) -> void:
 		request["choices"] = objects.camera.data.world_multichoice(int(operands[2]))
 		request["default"] = int(operands[3]) if command == "multichoicedefault" else 0
 		request["columns"] = int(operands[3]) if command == "multichoicegrid" else 1
-		request["ignore_b"] = int(operands.back()) != 0
+		request["ignore_b"] = int(operands.back()) & 1 != 0 # FRLG's bit 1 only lets a quest log show the menu.
 	_output.append(request)
 
 
@@ -801,8 +836,20 @@ func _field_special(name: String) -> int: # The specials field_control_avatar.c'
 		"ResetSSTidalFlag": events.flag_clear(input.flags["cruise"])
 		"DisableMsgBoxWalkaway": _walkaway_disabled = true
 		"IsWirelessAdapterConnected": return 0 # No wireless adapter; the script says so.
-		"NoOp": pass
+		"NoOp", "QuestLogNoOp": pass
 		"SetCB2WhiteOut": _output.append({"kind": "white_out"})
+		_: return _player_special(name)
+	return 0
+
+
+func _player_special(name: String) -> int:
+	match name:
+		"GetPlayerBigGuyGirlString": services.strings[0] = "BIG GIRL" if avatar.gender else "BIG GUY"
+		"Script_FacePlayer": _face_player()
+		"Script_ClearHeldMovement":
+			if _selected() != null and _selected().held_movement_active:
+				Gen3ObjectEvents.clear_held_movement(_selected())
+		"CountPlayerTrainerStars": return int(objects.events.stats.get(Gen3FieldInput.GAME_STAT_ENTERED_HOF, 0) != 0) # Pokedex, paintings and symbols have no models.
 		_: _screen_special(name)
 	return 0
 
@@ -931,9 +978,10 @@ func complete_warp() -> Array[Dictionary]:
 		return [{"kind": "script_error", "reason": "missing_warp_map", "destination": warps.destination.duplicate()}]
 	var events: Gen3EventData = objects.events
 	var gender: int = avatar.gender
-	var direction: int = Gen3ObjectEvents.Direction.SOUTH if _warp_reset_avatar else avatar.object().facing
-	var state_mask: int = Gen3PlayerAvatar.Flag.ON_FOOT if _warp_reset_avatar else avatar.flags
+	var stored_direction: int = Gen3ObjectEvents.Direction.SOUTH if _warp_reset_avatar else avatar.object().facing
+	var stored_flags: int = Gen3PlayerAvatar.Flag.ON_FOOT if _warp_reset_avatar else avatar.initial_flags()
 	var palettes: Gen3Palette = objects.sprites.palette
+	var weather: Gen3FieldWeather = objects.sprites.weather
 	warps.location["x"] = avatar.object().current.x - Gen3MapGrid.MAP_OFFSET
 	warps.location["y"] = avatar.object().current.y - Gen3MapGrid.MAP_OFFSET
 	warps.commit()
@@ -952,6 +1000,8 @@ func complete_warp() -> Array[Dictionary]:
 	message_running = false
 	_layout_id = 0
 	var previous_grid: Gen3MapGrid = camera.grid
+	if weather != null:
+		weather.set_saved_from_header(camera.header)
 	var output: Array[Dictionary] = run_map_script(3)
 	camera.grid = next_grid # overworld.c::LoadMapFromWarp runs ON_TRANSITION before InitMap/ON_LOAD.
 	if _layout_id != 0:
@@ -961,13 +1011,22 @@ func complete_warp() -> Array[Dictionary]:
 	var templates: Array = objects.templates
 	objects = Gen3ObjectEvents.new(camera, events, palettes)
 	objects.templates = templates
-	avatar = Gen3PlayerAvatar.open(objects, at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET, direction, gender)
-	avatar.transition(state_mask & (Gen3PlayerAvatar.Flag.ON_FOOT | Gen3PlayerAvatar.Flag.MACH_BIKE | Gen3PlayerAvatar.Flag.ACRO_BIKE | Gen3PlayerAvatar.Flag.SURFING | Gen3PlayerAvatar.Flag.UNDERWATER))
+	objects.sprites.weather = weather
+	if weather != null: # ResumeMap: after InitObjectEventPalettes, whose reset would free the weather's slots.
+		weather.start()
+		weather.resume_paused()
+	output.append_array(run_map_script(5)) # ResumeMap comes before InitObjectEventsLocal, so these scripts only change what spawns.
+	var cell: Vector2i = at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET
+	var behavior: int = camera.grid.behavior_at(cell.x, cell.y) & 0xFF
+	var map := Vector2i(camera.group, camera.number)
+	var initial: int = input.initial_flags(stored_flags, map, camera.header, data.world_surfable(behavior))
+	var direction: int = input.initial_direction(stored_direction, stored_flags, initial, behavior, int(camera.header.get("map_type", 0)))
+	avatar = Gen3PlayerAvatar.open(objects, cell, direction, gender)
+	avatar.transition(initial)
 	avatar.track_camera()
 	objects.spawn_in_view()
 	trainers = Gen3TrainerSee.new(objects, avatar)
 	output.append_array(run_map_script(4))
-	output.append_array(run_map_script(5))
 	warp_pending = false
 	events.controls_locked = false
 	output.append({"kind": "map_loaded", "group": camera.group, "number": camera.number, "position": at})
@@ -991,8 +1050,22 @@ func _show_message(event: Dictionary) -> void:
 	if event["command"] != "messageinstant":
 		message_running = true
 	var text: String = Gen3Text.decode_fixed(objects.events.game, bytes, 0, bytes.size())
-	_output.append({"kind": "message", "mode": event["command"], "bytes": bytes,
+	_output.append({"kind": "message", "mode": event["command"], "bytes": bytes, "color": _text_color(),
 		"text": Gen3Text.expand_placeholders(text, services.placeholders())})
+
+
+func _text_color() -> int: # field_specials.c::ContextNpcGetTextColor, which only FRLG has.
+	var color: int = objects.events.var_get(VAR_TEXT_COLOR)
+	if not avatar.frlg:
+		return TEXT_COLOR_NEUTRAL
+	if color != TEXT_COLOR_DEFAULT:
+		return color
+	var selected: Gen3ObjectEvents.ObjectEvent = _selected()
+	if selected == null:
+		return TEXT_COLOR_NEUTRAL
+	var table: PackedByteArray = objects.camera.data.world_text_box().get("colors", PackedByteArray())
+	var at: int = selected.graphics_id >> 1
+	return (table[at] >> ((selected.graphics_id & 1) << 2)) & 15 if at < table.size() else TEXT_COLOR_NEUTRAL
 
 
 func _close_message() -> void:
