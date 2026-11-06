@@ -35,14 +35,16 @@ const CAVE_TOGGLE_FRAME: int = 20
 var sprite: Dictionary = {}
 var active: bool = false
 
-var _objects: Gen3ObjectEvents
+var _objects_ref: WeakRef
+var _objects: Gen3ObjectEvents:
+	get: return _objects_ref.get_ref()
 var _player: Gen3ObjectEvents.ObjectEvent
 ## `gFieldEffectArguments[7]`, which only a tree spot sets.
 var _tree_anim: int = 0
 
 
 func _init(objects: Gen3ObjectEvents) -> void:
-	_objects = objects
+	_objects_ref = weakref(objects)
 
 
 ## The script `gPostMenuFieldCallback` starts; -1 when the player owns a base or faces no spot to the north.

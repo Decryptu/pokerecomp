@@ -20,8 +20,12 @@ const WITH_PLAYER_AFFINE: Array = [[[24, 24, 0, 1], [Gen3AffineAnim.JUMP, 0]],
 var step: int = Step.NONE
 var bird: Dictionary = {}
 
-var _objects: Gen3ObjectEvents
-var _avatar: Gen3PlayerAvatar
+var _objects_ref: WeakRef
+var _objects: Gen3ObjectEvents:
+	get: return _objects_ref.get_ref()
+var _avatar_ref: WeakRef
+var _avatar: Gen3PlayerAvatar:
+	get: return _avatar_ref.get_ref() if _avatar_ref != null else null
 var _flags: int = 0
 var _timer: int = 0
 var _mon: Array = []
@@ -29,7 +33,7 @@ var _fade: int = 0
 
 
 func _init(objects: Gen3ObjectEvents) -> void:
-	_objects = objects
+	_objects_ref = weakref(objects)
 
 
 func _frlg() -> bool:
@@ -38,7 +42,7 @@ func _frlg() -> bool:
 
 ## `FldEff_UseFly` after `Task_UseFly`'s fade-in; [param fade] is `WarpFadeOutScreen`'s fade for the destination.
 func fly_out(avatar: Gen3PlayerAvatar, species: int, personality: int, ot_id: int, fade: int) -> void:
-	_avatar = avatar
+	_avatar_ref = weakref(avatar)
 	_mon = [species, personality, ot_id]
 	_fade = fade
 	step = Step.OUT_POSE
@@ -46,7 +50,7 @@ func fly_out(avatar: Gen3PlayerAvatar, species: int, personality: int, ot_id: in
 
 
 func fly_in(avatar: Gen3PlayerAvatar) -> void:
-	_avatar = avatar
+	_avatar_ref = weakref(avatar)
 	step = Step.IN_SWOOP
 	_objects.task_effects.append(FLDEFF_FLY_IN)
 

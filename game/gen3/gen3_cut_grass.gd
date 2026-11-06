@@ -44,7 +44,9 @@ const FLAG_HIDE_MEW: int = 0x2CE
 var blades: Array[Dictionary] = []
 var active: bool = false
 
-var _objects: Gen3ObjectEvents
+var _objects_ref: WeakRef
+var _objects: Gen3ObjectEvents:
+	get: return _objects_ref.get_ref()
 var _game: StringName
 ## `sCutSquareSide`, the `sTileCountFromPlayer` reach and Emerald's `sHyperCutTiles`.
 var _side: int = 3
@@ -56,7 +58,7 @@ var _player: Gen3ObjectEvents.ObjectEvent
 
 
 func _init(objects: Gen3ObjectEvents) -> void:
-	_objects = objects
+	_objects_ref = weakref(objects)
 	_game = objects.camera.data.id
 	_tiles.resize(25)
 

@@ -27,7 +27,9 @@ const COLLISION_COUNT: int = 14
 const JUMP_TIMER: int = 4
 const TURN_JUMPS: Array[int] = [0x4B, 0x4A, 0x4D, 0x4C]
 
-var avatar: Gen3PlayerAvatar
+var _avatar_ref: WeakRef
+var avatar: Gen3PlayerAvatar:
+	get: return _avatar_ref.get_ref()
 var state: int = Acro.NORMAL
 var new_direction: int = 0
 var frame_counter: int = 0
@@ -45,7 +47,7 @@ var _wheelie_base: int = 0x64
 
 
 func _init(owner: Gen3PlayerAvatar, game: StringName) -> void:
-	avatar = owner
+	_avatar_ref = weakref(owner)
 	_wheelie_base = 0x62 if game in [RomRegistry.RUBY, RomRegistry.SAPPHIRE] else 0x64
 
 

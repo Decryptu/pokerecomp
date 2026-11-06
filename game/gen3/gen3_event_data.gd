@@ -32,6 +32,7 @@ var secret_bases: Array[int] = []
 var current_secret_base: int = 0
 ## script.c's `sLockFieldControls`.
 var controls_locked: bool = false
+var script_delay: int = 0 # scrcmd.c::sPauseCounter is shared by foreground and immediate contexts.
 var _flags: Dictionary = {}
 var _vars: Dictionary = {}
 
