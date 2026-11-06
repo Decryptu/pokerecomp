@@ -19,9 +19,11 @@ const VAR_FACING: int = 0x800C
 const VAR_LAST_TALKED: int = 0x800F
 const VAR_TEXT_COLOR: int = 0x8012
 const TEXT_COLOR_DEFAULT: int = 0xFF
+const TRAINER_TOWER_LOBBY := Vector2i(2, 10)
+const TRAINER_HILL_ENTRANCE := Vector2i(26, 60)
 const TEXT_COLOR_NEUTRAL: int = 3
 const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
-	&"ruby": {31: "NoOp", 148: "GetPlayerBigGuyGirlString", 0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech", 53: "ShowTrainerCantBattleSpeech",
+	&"ruby": {308: "IsPokerusInParty", 31: "NoOp", 148: "GetPlayerBigGuyGirlString", 0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech", 53: "ShowTrainerCantBattleSpeech",
 		54: "GetTrainerFlag", 55: "DoTrainerApproach", 56: "PlayTrainerEncounterMusic",
 		57: "ShouldTryRematchBattle", 58: "IsTrainerReadyForRematch",
 		61: "HasEnoughMonsForDoubleBattle", 131: "CalculatePlayerPartyCount",
@@ -37,7 +39,7 @@ const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
 		59: "BattleSetup_StartRematchBattle", 61: "HasEnoughMonsForDoubleBattle", 131: "CalculatePlayerPartyCount",
 		132: "CountPartyNonEggMons", 142: "DrawWholeMapView",
 		180: "GetBattleOutcome", 314: "SetTrainerFacingDirection", 388: "QuestLogNoOp", 391: "QuestLogNoOp",
-		392: "QuestLogNoOp", 361: "QuestLogNoOp", 399: "SetBattledTrainerFlag", 408: "QuestLogNoOp", 409: "QuestLogNoOp",
+		392: "QuestLogNoOp", 361: "QuestLogNoOp", 308: "IsPokerusInParty", 433: "PlayerNotAtFacilityLobby", 387: "NoOp", 399: "SetBattledTrainerFlag", 408: "QuestLogNoOp", 409: "QuestLogNoOp",
 		60: "ShowPokemonStorageSystemPC", 95: "ShowEasyChatScreen", 150: "SetHiddenItemFlag",
 		196: "ShowLinkBattleRecords", 199: "TryFieldPoisonWhiteOut", 200: "SetCB2WhiteOut", 205: "EnterSafariMode",
 		206: "ExitSafariMode", 214: "DoPCTurnOnEffect", 215: "DoPCTurnOffEffect", 249: "BedroomPC", 250: "PlayerPC",
@@ -46,7 +48,7 @@ const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
 		362: "IsWirelessAdapterConnected", 366: "ShowWirelessCommunicationScreen", 369: "DisableMsgBoxWalkaway",
 		381: "NoOp", 382: "NoOp", 383: "NoOp", 400: "NoOp", 406: "BufferTMHMMoveName"},
 	&"emerald": {32: "NoOp", 151: "GetPlayerBigGuyGirlString", 297: "Script_FacePlayer", 298: "Script_ClearHeldMovement",
-		473: "CountPlayerTrainerStars", 0: "HealPlayerParty", 54: "GetTrainerBattleMode", 55: "ShowTrainerIntroSpeech",
+		473: "CountPlayerTrainerStars", 310: "IsPokerusInParty", 515: "PlayerNotAtFacilityLobby", 421: "NoOp", 0: "HealPlayerParty", 54: "GetTrainerBattleMode", 55: "ShowTrainerIntroSpeech",
 		56: "ShowTrainerCantBattleSpeech", 57: "GetTrainerFlag", 58: "DoTrainerApproach",
 		59: "PlayTrainerEncounterMusic", 60: "ShouldTryRematchBattle", 61: "IsTrainerReadyForRematch",
 		62: "BattleSetup_StartRematchBattle", 64: "HasEnoughMonsForDoubleBattle", 134: "CalculatePlayerPartyCount",
@@ -844,6 +846,8 @@ func _field_special(name: String) -> int: # The specials field_control_avatar.c'
 
 func _player_special(name: String) -> int:
 	match name:
+		"PlayerNotAtFacilityLobby": return int(Vector2i(objects.camera.group, objects.camera.number) != (TRAINER_TOWER_LOBBY if avatar.frlg else TRAINER_HILL_ENTRANCE))
+		"IsPokerusInParty": return int(objects.events.party.any(func(mon: Dictionary) -> bool: return int(mon.get("pokerus", 0)) & 15 != 0))
 		"GetPlayerBigGuyGirlString": services.strings[0] = "BIG GIRL" if avatar.gender else "BIG GUY"
 		"Script_FacePlayer": _face_player()
 		"Script_ClearHeldMovement":

@@ -668,6 +668,8 @@ func test_frlg_quest_log_specials_are_no_screens_and_its_menu_flag_is_not_ignore
 	var host: Gen3ScriptHost = _field_host(RomRegistry.FIRERED)
 	host._executing = host.context
 	assert_eq(host._special("QuestLogNoOp"), 0)
+	host.objects.events.party = [{"pokerus": 0x12}]
+	assert_eq(host._special("IsPokerusInParty"), 1, "The nurse's last question must not stop the script either.")
 	assert_eq(host.context.state, Gen3ScriptContext.State.STOPPED, "A quest log special must not stop the script for a screen.")
 	host.objects.camera.data._world_scripts["multichoice"] = []
 	host._menu_command({"command": "multichoice", "operands": [19, 8, 20, 2]})
