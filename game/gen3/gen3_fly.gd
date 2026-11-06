@@ -5,8 +5,9 @@ extends RefCounted
 
 enum Step { NONE, OUT_POSE, OUT_SHOW_MON, OUT_LEAVE_BALL, OUT_WAIT_LEAVE, OUT_SWOOP, OUT_JUMP_ON, OUT_FLY_OFF,
 	OUT_WAIT_FLY_OFF, OUT_END, IN_SWOOP, IN_WITH_BIRD, IN_JUMP_OFF, IN_POSE, IN_RETURN, IN_WAIT_RETURN, IN_END }
-enum Callback { LEAVE_BALL, SWOOP, RETURN_TO_BALL, WITH_PLAYER }
+enum Callback { LEAVE_BALL, SWOOP, RETURN_TO_BALL, WITH_PLAYER, NPC_FLY_OUT }
 
+const FLDEFF_NPCFLY_OUT: int = 30
 const FLDEFF_USE_FLY: int = 31
 const FLDEFF_FLY_IN: int = 32
 const FLDEFFOBJ_BIRD: int = 26
@@ -53,6 +54,13 @@ func fly_in(avatar: Gen3PlayerAvatar) -> void:
 	_avatar_ref = weakref(avatar)
 	step = Step.IN_SWOOP
 	_objects.task_effects.append(FLDEFF_FLY_IN)
+
+
+func npc_fly_out() -> Array: # `FldEff_NPCFlyOut`: the bird crosses alone, since no script sets the `data[0]` that would carry the NPC's sprite.
+	_create_bird()
+	bird.merge({"callback": Callback.NPC_FLY_OUT, "x": 120, "y": 0}, true)
+	_objects.task_effects.append(FLDEFF_NPCFLY_OUT)
+	return [{"kind": "sound", "name": "m_fly"}]
 
 
 func run_task(requests: Array) -> void:
@@ -284,6 +292,9 @@ func animate() -> void:
 			_circle(data, 180, 2)
 		Callback.RETURN_TO_BALL:
 			_return_to_ball(data)
+		Callback.NPC_FLY_OUT:
+			if _npc_fly_out(data):
+				return
 	bird["data"] = data
 	var anim: Gen3SpriteAnim = bird["anim"]
 	anim.animate()
@@ -297,6 +308,18 @@ func animate() -> void:
 		bird["matrix"] = affine.matrix()
 	else:
 		bird.erase("matrix")
+
+
+func _npc_fly_out(data: PackedInt32Array) -> bool: # `SpriteCB_NPCFlyOut`; true once the bird is gone.
+	bird["x2"] = _cos(data[2], 0x8C)
+	bird["y2"] = _sin(data[2], 0x48)
+	data[2] = (data[2] + 4) & 0xFF
+	if data[2] < 0x80:
+		return false
+	_objects.sprites.pics.erase(bird)
+	bird = {}
+	_objects.task_effects.erase(FLDEFF_NPCFLY_OUT)
+	return true
 
 
 func _leave_ball(data: PackedInt32Array) -> void:

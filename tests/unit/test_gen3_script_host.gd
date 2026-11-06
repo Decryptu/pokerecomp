@@ -674,3 +674,15 @@ func test_frlg_quest_log_specials_are_no_screens_and_its_menu_flag_is_not_ignore
 	host.objects.camera.data._world_scripts["multichoice"] = []
 	host._menu_command({"command": "multichoice", "operands": [19, 8, 20, 2]})
 	assert_false(host._output.back()["ignore_b"], "FALSE | TRUE << 1 still lets B cancel.")
+
+
+## `setfieldeffectargument` picks the party slot the model shows, and an effect with no model stays a request.
+func test_dofieldeffect_starts_the_model_for_the_argument_mon() -> void:
+	var host: Gen3ScriptHost = _host(PackedByteArray([0, 0x9D, 0, 1, 0, 0x9C, 9, 0, 0x9C, 65, 0, 2]), RomRegistry.EMERALD, 0)
+	host.objects.events.party = [{"species": 1}, {"species": 25, "personality": 7, "ot_id": 9}] as Array[Dictionary]
+	host.start(1)
+	var requests: Array[Dictionary] = host.tick()
+	assert_eq(host.avatar.task, Gen3PlayerAvatar.Task.MOUNT_INIT)
+	assert_eq(host.avatar._shown_mon, [25, 7, 9])
+	assert_eq(requests.map(func(row: Dictionary) -> String: return row["kind"]), ["surf_music", "dofieldeffect"])
+	assert_eq(requests[1]["effect"], 65)

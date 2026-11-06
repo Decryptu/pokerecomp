@@ -69,6 +69,7 @@ const FLDEFF_BIKE_TIRE_TRACKS: int = 35
 const FLDEFF_SAND_PILE: int = 39
 const FLDEFF_HOT_SPRINGS_WATER: int = 42
 const FLDEFF_BUBBLES: int = 53
+const FLDEFF_SPARKLE: int = 54
 const LINKED_EFFECTS: Array[int] = [15, FLDEFF_FEET_IN_FLOWING_WATER, FLDEFF_SAND_PILE, FLDEFF_HOT_SPRINGS_WATER]
 const TRACK_EFFECTS: Array[int] = [FLDEFF_SAND_FOOTPRINTS, FLDEFF_DEEP_SAND_FOOTPRINTS, FLDEFF_BIKE_TIRE_TRACKS]
 ## `bikeTireTracks_Transitions`; a step's `SetObjectEventDirection` keeps its row index in range.
@@ -355,6 +356,7 @@ var field_move_mon: Gen3FieldMoveMon
 var cut_grass: Gen3CutGrass
 var secret_power: Gen3SecretPower
 var fly: Gen3Fly
+var heal_machine: Gen3HealMachine
 ## Task effects in `sActiveList` until their task calls `FieldEffectActiveListRemove`.
 var task_effects: Array[int] = []
 var objects: Array[ObjectEvent] = []
@@ -404,6 +406,7 @@ func _init(field_camera: Gen3FieldCamera, event_data: Gen3EventData, palettes: G
 	cut_grass = Gen3CutGrass.new(self)
 	secret_power = Gen3SecretPower.new(self)
 	fly = Gen3Fly.new(self)
+	heal_machine = Gen3HealMachine.new(self)
 	load_templates()
 
 
@@ -955,6 +958,7 @@ func step_movements(player_dashing: bool = false, player_tile_center: bool = fal
 	requests.append_array(field_move_mon.animate())
 	requests.append_array(cut_grass.animate())
 	requests.append_array(secret_power.animate())
+	requests.append_array(heal_machine.animate())
 	fly.animate()
 	sprites.step_reflections(self)
 	return requests
@@ -1043,6 +1047,24 @@ func _start_map_effect(object: ObjectEvent, slot: int, effect: int, requests: Ar
 	requests.append(request)
 	_effect_sprites.append(sprite)
 	return sprite
+
+
+func start_sparkle(at: Vector2i, priority: int, requests: Array) -> void: # `FldEff_Sparkle`, at the script's map coordinates with its OAM priority.
+	var info: Dictionary = camera.data.world_map_effect_graphics(FLDEFF_SPARKLE)
+	var sprite_slot: int = sprites.effect_slot()
+	if info.is_empty() or sprite_slot < 0:
+		return
+	var anim := Gen3SpriteAnim.new()
+	anim.anims = info["anims"]
+	anim.images = info["images"]
+	var position: Vector2i = camera.sprite_position(at + Vector2i.ONE * Gen3MapGrid.MAP_OFFSET) + Vector2i(8, 8)
+	var request: Dictionary = {"kind": "field_effect", "effect_id": FLDEFF_SPARKLE, "object_id": -1, "local_id": -1,
+		"map_number": -1, "map_group": -1}
+	requests.append(request)
+	_effect_sprites.append({"request": request, "sprite_slot": sprite_slot, "anim": anim, "passes": 0, "end": -1,
+		"follow": false, "map_effect": true, "info": info, "priority": priority, "subpriority": 82,
+		"position": Vector2i(wrapi(position.x, -32768, 32768), wrapi(position.y, -32768, 32768)),
+		"palette": sprites.load_effect_palette(info)})
 
 
 func _init_linked_map_effect(object: ObjectEvent, sprite: Dictionary, requests: Array) -> void:
@@ -1192,6 +1214,8 @@ func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 		return false
 	if int(sprite["request"]["effect_id"]) in TRACK_EFFECTS:
 		return _fade_tracks(sprite)
+	if int(sprite["request"]["effect_id"]) == FLDEFF_SPARKLE:
+		return _sparkle_finished(sprite)
 	if int(sprite["request"]["effect_id"]) == FLDEFF_BUBBLES and sprites.field_effect_off_screen(self, sprite):
 		return true
 	if int(sprite["request"]["effect_id"]) == FLDEFF_FEET_IN_FLOWING_WATER:
@@ -1203,6 +1227,14 @@ func _effect_finished(sprite: Dictionary, object: ObjectEvent) -> bool:
 	if sprite.has("anim") and not (sprite["anim"] as Gen3SpriteAnim).anims.is_empty():
 		return (sprite["anim"] as Gen3SpriteAnim).ended
 	return int(sprite["end"]) >= 0 and int(sprite["passes"]) >= int(sprite["end"])
+
+
+func _sparkle_finished(sprite: Dictionary) -> bool: # `UpdateSparkleFieldEffect`: unseen for 35 frames after its animation.
+	if not (sprite["anim"] as Gen3SpriteAnim).ended:
+		return false
+	sprite["invisible"] = true
+	sprite["timer"] = int(sprite.get("timer", 0)) + 1
+	return int(sprite["timer"]) > 34
 
 
 func _fade_tracks(sprite: Dictionary) -> bool:

@@ -62,5 +62,5 @@ func _settle(row: Dictionary) -> void:
 			screen.host.finish_battle(Gen3TrainerBattle.Outcome.WON)
 		"wild_battle":
 			screen.host.finish_wild_battle(Gen3TrainerBattle.Outcome.WON)
-		"mart", "field_special", "dofieldeffect":
+		"mart", "field_special":
 			screen.host.finish_wait()

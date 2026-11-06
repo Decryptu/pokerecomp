@@ -360,7 +360,7 @@ func update_field_effect(objects: Gen3ObjectEvents, effect: Dictionary) -> void:
 	var info: Dictionary = effect["info"]
 	var size := Vector2i(int(info["width"]), int(info["height"]))
 	var center: Vector2i = effect["position"] + objects.camera.sprite_coord_offset()
-	var hidden: bool = (id == 41 or id in Gen3ObjectEvents.TRACK_EFFECTS) and effect.get("invisible", false)
+	var hidden: bool = (id in [41, Gen3ObjectEvents.FLDEFF_SPARKLE] or id in Gen3ObjectEvents.TRACK_EFFECTS) and effect.get("invisible", false)
 	effect["invisible"] = hidden or field_effect_off_screen(objects, effect)
 	if not effect.has("elevation") or id == 41:
 		return

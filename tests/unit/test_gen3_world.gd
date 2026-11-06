@@ -2139,6 +2139,65 @@ func test_surf_mount_poses_shows_the_mon_then_jumps_onto_the_blob() -> void:
 		assert_false(objects.field_effect_active(Gen3PlayerAvatar.FLDEFF_USE_SURF))
 
 
+## `Task_PokecenterHeal`: a ball every 25 frames from the first, 32 frames to the fanfare, three rising flashes, the
+## falling one and the 30-frame hold; the machine's picture is gone when the script's `waitfieldeffect` ends.
+func test_heal_machine_places_balls_flashes_and_clears_its_sprites() -> void:
+	for id: StringName in [RomRegistry.EMERALD, RomRegistry.FIRERED]:
+		var avatar: Gen3PlayerAvatar = _surfing_avatar(id, false, 0)
+		var objects: Gen3ObjectEvents = avatar.objects
+		_heal_art(objects.camera.data)
+		objects.events.party = [{}, {}] as Array[Dictionary]
+		objects.heal_machine.start(Gen3HealMachine.FLDEFF_POKECENTER_HEAL)
+		assert_true(objects.field_effect_active(Gen3HealMachine.FLDEFF_POKECENTER_HEAL))
+		var marks: Array = []
+		var lit: int = -1
+		for frame: int in range(1, 230):
+			for request: Dictionary in avatar.step_movement_tasks() + objects.step_movements():
+				if request["kind"] in ["sound", "fanfare"]:
+					marks.append([frame, request["name"]])
+			if frame == 62:
+				lit = objects.sprites.palette.faded_color(Gen3Palette.OBJ_OFFSET
+					+ objects.sprites.palette.sprite_index(Gen3HealMachine.GLOW_PALETTE_TAG) * 16 + 5)
+			if not objects.field_effect_active(Gen3HealMachine.FLDEFF_POKECENTER_HEAL):
+				marks.append([frame, "done"])
+				break
+		assert_eq(marks, [[1, "ball"], [26, "ball"], [58, "mus_heal"], [211, "done"]], str(id))
+		assert_eq(lit & 31, 31, "colour 5 starts at the full level, 16 sixteenths toward white")
+		assert_true(objects.sprites.pics.is_empty(), "the balls and monitor free themselves")
+
+
+## `Task_UseDive`: the banner without a pose, then the warp.
+func test_dive_shows_the_mon_then_requests_the_warp() -> void:
+	var avatar: Gen3PlayerAvatar = _surfing_avatar(RomRegistry.EMERALD, false, 0)
+	var objects: Gen3ObjectEvents = avatar.objects
+	_streak_runs(objects.camera.data)
+	objects.camera.header["map_type"] = 3
+	avatar.use_dive(25, 0, 0xFF0000)
+	assert_true(objects.field_effect_active(Gen3PlayerAvatar.FLDEFF_USE_DIVE))
+	var warped: bool = false
+	for frame: int in 120:
+		warped = warped or (avatar.step_movement_tasks() + objects.step_movements()) \
+			.any(func(request: Dictionary) -> bool: return request["kind"] == "dive_warp")
+	assert_true(warped)
+	assert_false(objects.field_effect_active(Gen3PlayerAvatar.FLDEFF_USE_DIVE))
+
+
+## `FldEff_Sparkle` hides after its animation and stops 35 frames later.
+func test_sparkle_hides_then_stops() -> void:
+	var avatar: Gen3PlayerAvatar = _surfing_avatar(RomRegistry.EMERALD, false, 0)
+	var objects: Gen3ObjectEvents = avatar.objects
+	objects.camera.data._world_scripts["map_effect_templates"] = {"54": {"width": 16, "height": 16, "images": 5,
+		"anims": [[0x30000, 0x50001, 0x50000, 0xFFFF]], "palette_tag": 0x100F}}
+	var requests: Array = []
+	objects.start_sparkle(Vector2i(5, 5), 0, requests)
+	assert_eq(requests[0]["effect_id"], Gen3ObjectEvents.FLDEFF_SPARKLE)
+	var frames: int = 0
+	while objects.field_effect_active(Gen3ObjectEvents.FLDEFF_SPARKLE) and frames < 90:
+		frames += 1
+		objects.step_movements()
+	assert_eq(frames, 49, "14 animating, then 35 hidden")
+
+
 ## `Task_DoFieldMove_*` for Rock Smash: pose, the banner once the pose's anim wait finishes, face again, then the
 ## sound and the script. Underwater the banner starts at once.
 func test_field_move_task_poses_shows_the_mon_then_runs_the_move() -> void:
@@ -2567,6 +2626,14 @@ func test_surf_blob_bobs_the_player_and_stays_behind_on_dismount() -> void:
 		if frame in [1, 4, 5, 13, 17, 29, 33]:
 			bobs.append(diver.object().jump_y)
 	assert_eq(bobs, [1, 1, 2, 4, 3, 0, 1], "the underwater dummy bobs the player from its first callback")
+
+
+static func _heal_art(data: GameData) -> void:
+	var anims: Array = [[0x10000, 0xFFFE], [0x100000, 0x100001, 0xFFFF]]
+	data._world_scripts["heal_templates"] = {}
+	for art: int in Gen3HealMachine.Art.values():
+		data._world_scripts["heal_templates"][str(art)] = {"width": 8, "height": 8, "images": 5, "anims": anims,
+			"palette_tag": Gen3HealMachine.GLOW_PALETTE_TAG}
 
 
 func _surfing_avatar(id: StringName, shore: bool, flags: int = Gen3PlayerAvatar.Flag.SURFING) -> Gen3PlayerAvatar:
