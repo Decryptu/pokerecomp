@@ -1,6 +1,8 @@
 class_name Gen3Importer
 extends RefCounted
 
+const TMHM_COUNT: int = 58 # `sTMHMMoves`' TMs and HMs.
+
 ## The `GAME_CODE` and `GAME_REVISION` each pret Makefile hands `gbafix`.
 const HEADERS: Dictionary = {
 	RomRegistry.RUBY: ["AXVE", 2],
@@ -369,7 +371,11 @@ static func import_rom(rom: RomFile, on_progress: Callable = Callable()) -> Dict
 	var items: Array = _import_items(rom, layout)
 	var abilities: Array = _import_abilities(rom, layout)
 	var world: Dictionary = Gen3World.read(rom, layout)
+	var tmhm_moves: Array = []
+	for index: int in TMHM_COUNT:
+		tmhm_moves.append(rom.u16le(int(layout["tmhm_moves"]) + index * 2))
 	var sections: Dictionary = {
+		RomCache.tmhm_moves_path(directory): tmhm_moves,
 		RomCache.species_path(directory): species,
 		RomCache.moves_path(directory): moves,
 		RomCache.types_path(directory): types,

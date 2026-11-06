@@ -105,6 +105,13 @@ func _buffer(command: String, operands: Array) -> bool:
 	return true
 
 
+func buffer_tm_move(item: int) -> int: # `BufferTMHMMoveName`: true for an item in `ITEM_TM01` to `ITEM_HM08`, with `gStringVar2` set.
+	if item < Gen3Bag.TM01 or item > Gen3Bag.HM08:
+		return 0
+	strings[1] = String(_data.move(_data.tmhm_move(item - Gen3Bag.TM01 + 1)).get("name", ""))
+	return 1
+
+
 func _item_name(item: int) -> String:
 	return String(_data.item(item).get("name", ""))
 

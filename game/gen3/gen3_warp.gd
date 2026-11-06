@@ -57,6 +57,8 @@ func fall_destination(at: Vector2i) -> Dictionary: # overworld.c::SetWarpDestina
 	return record(int(hole["group"]), int(hole["number"]), -1, at.x, at.y)
 
 
-func commit() -> void:
+func commit() -> void: # overworld.c::ApplyCurrentWarp.
 	last = location.duplicate()
 	location = destination.duplicate()
+	dive = {}
+	hole = {}

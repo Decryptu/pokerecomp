@@ -42,7 +42,6 @@ const FRLG_FORCED: Dictionary = {0x48: [Forced.SLIP, 0], 0x23: [Forced.SLIP, 0],
 	0x47: [Forced.SLIDE, 1], 0x46: [Forced.SLIDE, 2], 0x45: [Forced.SLIDE, 3], 0x44: [Forced.SLIDE, 4],
 	0x13: [Forced.CURRENT, 1]}
 const MB_STOP_SPINNING: int = 0x58
-const HOENN_ARROW_WARPS: Array = [[0x65, 0x6D, 0x1C], [0x64, 0x1B], [0x63], [0x62]]
 const MB_WARP_DOOR: int = 0x69
 const FRLG_STAIR_WARPS: Dictionary = {3: [0x6D, 0x6F], 4: [0x6C, 0x6E]}
 ## `PlayerAvatar_SecretBaseMatSpinStep1`'s turns by movement direction and `Step2`'s delays by completed laps.
@@ -174,7 +173,7 @@ func track_camera() -> void:
 
 
 func accepts_field_buttons() -> bool: # field_control_avatar.c::FieldGetPlayerInput and metatile_behavior.c::MetatileBehavior_IsForcedMovementTile.
-	if tile_state == Tile.TRANSITION or bike.player_speed() == Gen3Bike.Speed.FASTEST:
+	if tile_state == Tile.TRANSITION or bike.player_speed() == Gen3Bike.Speed.FASTEST or frlg and flags & Flag.FORCED_MOVE:
 		return false
 	if tile_state == Tile.NOT_MOVING:
 		return true
@@ -598,7 +597,7 @@ func _start_stop_surfing(direction: int, requests: Array) -> void:
 ## `PlayCollisionSoundIfNotFacingWarp`: silent from an arrow or FRLG stair warp, and into a door to the north.
 func collision_sound(direction: int, requests: Array) -> void:
 	var behavior: int = object().current_behavior
-	var arrows: Array = [[0x65], [0x64], [0x63], [0x62]] if frlg else HOENN_ARROW_WARPS
+	var arrows: Array = Gen3FieldInput.FRLG_ARROW_WARPS if frlg else Gen3FieldInput.HOENN_ARROW_WARPS
 	if behavior in arrows[direction - 1] or (frlg and behavior in FRLG_STAIR_WARPS.get(direction, [])):
 		return
 	if direction == Gen3ObjectEvents.Direction.NORTH:

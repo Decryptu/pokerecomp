@@ -274,7 +274,10 @@ func _undecoded_text() -> void:
 		texts.append(data.move(move)["name"])
 	for trainer: int in range(1, data.trainer_count() + 1):
 		texts.append_array([data.trainer(trainer)["name"], data.trainer(trainer)["class_name"]])
+	var signpost: Dictionary = data.world_script_instruction(data.world_native_script_offset("test_signpost"))
 	for offset: int in data.world_script_offsets("texts"):
+		if signpost["command"] == "loadword" and offset == Gen3Layout.rom_offset(int(signpost["operands"][1])):
+			continue # Null-script signposts show pret's untranslated test line.
 		var bytes: PackedByteArray = data.world_script_data("texts", offset)["bytes"]
 		texts.append(Gen3Text.decode_fixed(data.id, bytes, 0, bytes.size()))
 	var undecoded: Array = texts.filter(func(text: String) -> bool: return text.contains("<$"))
@@ -875,8 +878,8 @@ const MOVEMENT_ORIGIN := Vector2i(256, 256)
 const MOVEMENT_DIGESTS: Dictionary = {
 	&"ruby": "a8839e8a87ce4510556789871dc4eec714ff61fc",
 	&"sapphire": "0e2662533b908e0fa5ee3fdc4c75e8c7e359cb46",
-	&"firered": "fd7c7771dd96cce0fc2158812ce8d027afb91502",
-	&"leafgreen": "1573c5dd5f93bc7f277431e660e99c2adb9d1f7c",
+	&"firered": "48bf0522c519a3a1031b63c72901b22b06825e9f",
+	&"leafgreen": "6b84c7edd6fc00863435ec4717b476062b9cca2f",
 	&"emerald": "eee953c8504dcf0dc8f7b0c1b60d61a3d37db09b",
 }
 
@@ -1681,11 +1684,11 @@ func _graphics_hash(record: Dictionary) -> String:
 ## Exact bytecode streams from pret handlers, with operand boundaries checked by executing the matching ARM
 ## builds; all map, standard, trainer and native roots.
 const SCRIPT_DIGESTS: Dictionary = {
-	&"ruby": "a30be6d61afe4432643eb0d089e49cc69879888c",
-	&"sapphire": "ee454b3a5901ae73be33626ba3520f531c7f0b84",
-	&"firered": "9413e12f6e2c4310b0bc55e38fb09c094db4de46",
-	&"leafgreen": "cb062f14e07ce5f6db116bfb77f74bd1d0039ca8",
-	&"emerald": "71b45f908365c3970c6fae0d781e9a2c847f03a7",
+	&"ruby": "381b03e7076a75b575b7a6bbcb42730d0ce839ce",
+	&"sapphire": "24b67aabe04e502ade328fdf2f55e1edecadff05",
+	&"firered": "e67e7474e2d96ff78da8f62b58f5c6c27dd03c80",
+	&"leafgreen": "82e81791e78167c477e972813006e1bc69ea387f",
+	&"emerald": "e260a7a62196378b4da8fd38ad7cdde3d9931f18",
 }
 
 
@@ -1709,6 +1712,14 @@ func _menu_tables() -> void:
 	_r.check(not data.world_std_string(sizes[1] - 1).is_empty() and data.world_std_string(sizes[1]).is_empty(),
 		"the standard strings end at %d." % sizes[1])
 	_r.check(data.world_std_string(0).to_upper() == "COOL", "the first standard string is %s." % data.world_std_string(0))
+	var natives: Dictionary = Gen3Layout.for_id(data.id)["native_scripts"]
+	for key: String in natives:
+		_r.check(not data.world_script_instruction(int(natives[key])).is_empty(), "native script %s did not decode." % key)
+	for table: Dictionary in [Gen3FieldInput.HOENN_METATILES, Gen3FieldInput.FRLG_METATILES]:
+		if (table == Gen3FieldInput.FRLG_METATILES) == (data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]):
+			for key: String in table.values():
+				_r.check(natives.has(key), "the %s metatile has no script." % key)
+	_r.check(data.tmhm_move(1) == 264 and data.tmhm_move(58) == 291, "the TM moves read %d and %d." % [data.tmhm_move(1), data.tmhm_move(58)])
 	var approach: Dictionary = data.world_script_instruction(data.world_native_script_offset("trainer_approach"))
 	_r.check(String(approach.get("command", "")) in ["lock", "selectapproachingtrainer"],
 		"the trainer approach starts with %s." % approach.get("command", "nothing"))
@@ -1735,6 +1746,9 @@ func _world_scripts() -> void:
 		lines.append("%d,%d,%s,%d,%d;%s;%s;%s" % [offset, row["opcode"], row["command"],
 			row["next_offset"], int(row["fallthrough"]), _script_numbers(row["operands"]),
 			_script_numbers(row["script_offsets"]), bytes.hex_encode()])
+		if row["command"] == "setmaplayoutindex":
+			_r.check(not data.world_layout_row(int(row["operands"][0])).is_empty(),
+				"script %d names layout %d, which did not decode." % [offset, row["operands"][0]])
 		_script_data_operands(data, offset, row)
 	_r.digest_matches("gen3_scripts", lines, SCRIPT_DIGESTS[data.id])
 
@@ -1750,11 +1764,11 @@ func _script_data_operands(data: GameData, offset: int, row: Dictionary) -> void
 ## Every record starts on a label of the byte-matching pret build and ends where its source list or string
 ## does; movements and marts reassembled from source.
 const SCRIPT_DATA_DIGESTS: Dictionary = {
-	&"ruby": "fb39b2bf2b615188d7da52398663229abb3c6f61",
-	&"sapphire": "6727102aae1c65ce5ec81d54e4093c96ab1b2ac9",
-	&"firered": "2e0b76b0898635673fb7b72ba33036e9077a6b25",
-	&"leafgreen": "e313963370453f727d429f456889d46b7070d2d8",
-	&"emerald": "ff7d2c7b894f085267e197e47ffce75af9faa419",
+	&"ruby": "460890bfd76f6380c6b751b819472513a6b1763d",
+	&"sapphire": "d161d54d5e1568e61bf3068b23c792ff4b24dd7a",
+	&"firered": "40728908e7a9c4a38bd364053b6452cc24f20c05",
+	&"leafgreen": "0d628e71b784f2263322186f938e888fb66993a1",
+	&"emerald": "dbe6af1bb86c31bd5ded37c764be170fcd6568b2",
 }
 
 

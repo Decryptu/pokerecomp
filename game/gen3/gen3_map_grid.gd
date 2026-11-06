@@ -37,21 +37,22 @@ var _layer_types := PackedInt32Array()
 
 ## `InitMapLayoutData`, null when uncached; no map reaches `MAX_MAP_DATA_SIZE`. Emerald keeps [param previous]'s
 ## connection flags for a map with none, which only [method border_id_at] past the buffer reads.
-static func open(data: GameData, group: int, number: int, previous: Gen3MapGrid = null) -> Gen3MapGrid:
+static func open(data: GameData, group: int, number: int, previous: Gen3MapGrid = null, layout_id: int = 0) -> Gen3MapGrid: # [param layout_id] is `setmaplayoutindex`'s swap; connections stay the header's.
 	var header: Dictionary = data.world_map_header(group, number)
-	var layout: Dictionary = data.world_map_layout(group, number)
+	var shape: Dictionary = data.world_layout_row(layout_id) if layout_id != 0 else header
+	var layout: Dictionary = data.world_layout(int(shape.get("layout_offset", -1)))
 	if header.is_empty() or layout.is_empty():
 		return null
 	var grid := Gen3MapGrid.new()
 	grid._sized_border = data.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
 	grid._split = Gen3World.primary_tile_count(data.id)
-	grid.primary = data.world_map_tileset(group, number)
-	grid.secondary = data.world_map_tileset(group, number, true)
-	grid.layout_width = int(header["width"])
-	grid.layout_height = int(header["height"])
+	grid.primary = data.world_gba_tileset(int(shape["primary_tileset_offset"]))
+	grid.secondary = data.world_gba_tileset(int(shape["secondary_tileset_offset"]))
+	grid.layout_width = int(shape["width"])
+	grid.layout_height = int(shape["height"])
 	grid._border = layout["border"]["bytes"]
-	grid._border_width = int(header["border_width"])
-	grid._border_height = int(header["border_height"])
+	grid._border_width = int(shape["border_width"])
+	grid._border_height = int(shape["border_height"])
 	var connections: Array = header.get("connections", [])
 	grid._read_attributes()
 	grid.width = grid.layout_width + OFFSET_W

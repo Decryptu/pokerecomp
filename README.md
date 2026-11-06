@@ -84,7 +84,7 @@ Caches use Godot's `user://`; reimport after format updates. Saves survive; `--v
 
 Generation 3 is experimental and **not playable**. Enable Settings > Advanced > Dev cartridges (`--dev` for CLI imports). [Script hosts](game/gen3/gen3_script_host.gd)
 use `start(offset)` or `run_map_script(type)`; call `step(held, pressed)` per frame with `PokeButton` lists and handle returned events.
-After each screen task call `finish_message()`, `finish_wait()`, `choose(value)`, `finish_battle(outcome)`, `complete_warp()` or `resume()`.
+After each screen task call `finish_message()`, `finish_wait()`, `choose(value)`, `finish_battle(outcome)`, `complete_warp()`, `finish_dive()`, `end_field_menu()` or `resume()`.
 Unsupported commands emit `script_error` and stop.
 
 ## Playing
