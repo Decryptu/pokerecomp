@@ -3,6 +3,42 @@ extends RefCounted
 
 const FRAME_TABLE: int = 2
 const KEY_BITS: Array[int] = [0, 64, 128, 32, 16, 1, 2, 8, 4] # PokeButton id to GBA joypad bit.
+const MOVEMENT_STEP_END: int = 0xFE
+const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
+	&"ruby": {0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech", 53: "ShowTrainerCantBattleSpeech",
+		54: "GetTrainerFlag", 55: "DoTrainerApproach", 56: "PlayTrainerEncounterMusic",
+		57: "ShouldTryRematchBattle", 58: "IsTrainerReadyForRematch",
+		61: "HasEnoughMonsForDoubleBattle", 131: "CalculatePlayerPartyCount",
+		142: "DrawWholeMapView", 180: "GetBattleOutcome", 314: "SetTrainerFacingDirection"},
+	&"firered": {0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech",
+		53: "ShowTrainerCantBattleSpeech", 54: "GetTrainerFlag", 55: "DoTrainerApproach",
+		56: "PlayTrainerEncounterMusic", 57: "ShouldTryRematchBattle", 58: "IsTrainerReadyForRematch",
+		59: "BattleSetup_StartRematchBattle", 61: "HasEnoughMonsForDoubleBattle", 131: "CalculatePlayerPartyCount",
+		132: "CountPartyNonEggMons", 142: "DrawWholeMapView",
+		180: "GetBattleOutcome", 314: "SetTrainerFacingDirection", 388: "QuestLogNoOp", 391: "QuestLogNoOp",
+		392: "QuestLogNoOp", 399: "SetBattledTrainerFlag", 408: "QuestLogNoOp", 409: "QuestLogNoOp"},
+	&"emerald": {0: "HealPlayerParty", 54: "GetTrainerBattleMode", 55: "ShowTrainerIntroSpeech",
+		56: "ShowTrainerCantBattleSpeech", 57: "GetTrainerFlag", 58: "DoTrainerApproach",
+		59: "PlayTrainerEncounterMusic", 60: "ShouldTryRematchBattle", 61: "IsTrainerReadyForRematch",
+		62: "BattleSetup_StartRematchBattle", 64: "HasEnoughMonsForDoubleBattle", 134: "CalculatePlayerPartyCount",
+		135: "CountPartyNonEggMons", 145: "DrawWholeMapView",
+		183: "GetBattleOutcome", 316: "SetTrainerFacingDirection", 519: "PlayerFaceTrainerAfterBattle",
+		523: "TryPrepareSecondApproachingTrainer"},
+}
+const SPECIAL_ENGINES: Dictionary = {
+	RomRegistry.RUBY: &"ruby", RomRegistry.SAPPHIRE: &"ruby", RomRegistry.FIRERED: &"firered",
+	RomRegistry.LEAFGREEN: &"firered", RomRegistry.EMERALD: &"emerald",
+}
+const HANDLERS: Dictionary = {
+	"special": &"_special_command", "specialvar": &"_special_command",
+	"yesnobox": &"_menu_command", "multichoice": &"_menu_command", "multichoicedefault": &"_menu_command",
+	"multichoicegrid": &"_menu_command", "pokemart": &"_mart_command", "pokemartdecoration": &"_mart_command",
+	"pokemartdecoration2": &"_mart_command", "braillemessage": &"_braille_command",
+	"setfieldeffectargument": &"_field_effect_command", "dofieldeffect": &"_field_effect_command",
+	"trainerbattle": &"_trainer_command", "dotrainerbattle": &"_trainer_command",
+	"trainerbattlebegin": &"_trainer_command", "gotopostbattlescript": &"_trainer_command",
+	"gotobeatenscript": &"_trainer_command", "selectapproachingtrainer": &"_trainer_command",
+}
 
 var warps := Gen3Warp.new()
 var warp_pending: bool = false
@@ -10,6 +46,9 @@ var _warp_reset_avatar: bool = false
 var context: Gen3ScriptContext
 var avatar: Gen3PlayerAvatar
 var objects: Gen3ObjectEvents
+var services: Gen3ScriptServices
+var battle: Gen3TrainerBattle
+var trainers: Gen3TrainerSee
 var selected_slot: int = -1
 var message_visible: bool = false
 var message_running: bool = false
@@ -23,12 +62,18 @@ var _movements: Dictionary = {}
 var _output: Array[Dictionary] = []
 var _foreground_active: bool = false
 var _executing: Gen3ScriptContext
+var _field_arguments: Dictionary = {}
+var _approached_slots: Array[int] = []
 
 
 func _init(player: Gen3PlayerAvatar) -> void:
 	avatar = player
 	objects = player.objects
 	context = Gen3ScriptContext.new(objects.camera.data, objects.events)
+	services = Gen3ScriptServices.new(objects.camera.data, objects.events)
+	services.gender = avatar.gender
+	battle = Gen3TrainerBattle.new(objects.events.game)
+	trainers = Gen3TrainerSee.new(objects, avatar)
 	warps.location = Gen3Warp.record(objects.camera.group, objects.camera.number, -1,
 		avatar.object().current.x - Gen3MapGrid.MAP_OFFSET, avatar.object().current.y - Gen3MapGrid.MAP_OFFSET)
 
@@ -49,6 +94,24 @@ func resume() -> void:
 
 func finish_message() -> void:
 	message_running = false
+
+
+func finish_wait() -> void: # Ends a `Gen3ScriptContext.HOST_WAITS` command once the screen's sound, fade, door or effect is over.
+	if _wait == "host":
+		_wait = "done"
+
+
+func choose(value: int) -> void: # The player's answer to a `yesnobox` or `multichoice`: `VAR_RESULT`, 127 for B in a multichoice.
+	objects.events.var_set(Gen3ScriptServices.VAR_RESULT, value)
+	resume()
+
+
+func finish_battle(outcome: int) -> Array[Dictionary]: # `CB2_EndTrainerBattle`, with a [enum Gen3TrainerBattle.Outcome]: a loss emits `white_out` and leaves the script stopped.
+	objects.events.battle_outcome = outcome
+	if not battle.finish(outcome, objects.events):
+		return [{"kind": "white_out"}]
+	resume()
+	return []
 
 
 func try_frame_script() -> bool:
@@ -105,6 +168,7 @@ func tick(pressed: int = PokeButton.NONE) -> Array[Dictionary]:
 func step(held: Array[int] = [], pressed: Array[int] = []) -> Array: # overworld.c::DoCB1_Overworld then OverworldBasic.
 	var requests: Array = []
 	avatar.update_tile_state()
+	requests.append_array(trainers.run_tasks())
 	var interacting: bool = false
 	if not objects.events.controls_locked and not _try_field_event(requests):
 		var held_keys: int = _keys(held)
@@ -132,7 +196,7 @@ func step(held: Array[int] = [], pressed: Array[int] = []) -> Array: # overworld
 func _try_field_event(requests: Array) -> bool:
 	objects.events.var_set(0x800F, 0)
 	selected_slot = -1
-	if try_frame_script():
+	if _try_trainers() or try_frame_script():
 		return true
 	if avatar.tile_state != Gen3PlayerAvatar.Tile.CENTER or avatar.running_state != Gen3PlayerAvatar.Running.MOVING or avatar.on_forced_tile():
 		return false
@@ -143,6 +207,28 @@ func _try_field_event(requests: Array) -> bool:
 	if behavior in [0x60, 0x61, 0x69, 0x6A, 0x6B]:
 		return _try_warp(player.current, player.previous_elevation, "escalator" if behavior in [0x6A, 0x6B] else "warp", requests)
 	return false
+
+
+func _try_trainers() -> bool: # trainer_see.c::CheckForTrainersWantingBattle and its ConfigureAndSetUp callers.
+	if not trainers.check_trainers(services.usable_mons() >= 2):
+		return false
+	var data: GameData = objects.camera.data
+	battle.reset_opponents()
+	for index: int in trainers.approaching.size():
+		trainers.approaching_id = index
+		var row: Dictionary = data.world_script_instruction(int(trainers.approaching[index]["script_offset"]))
+		if row.is_empty() or row["command"] != "trainerbattle":
+			continue
+		_select_trainer(int(trainers.approaching[index]["slot"]))
+		battle.configure(row["operands"], int(row["next_offset"]), index)
+	trainers.approaching_id = 0
+	start(data.world_native_script_offset("trainer_approach"), selected_slot)
+	return true
+
+
+func _select_trainer(slot: int) -> void:
+	selected_slot = slot
+	objects.events.var_set(0x800F, objects.objects[slot].local_id)
 
 
 func _front_elevation() -> int:
@@ -282,22 +368,19 @@ func _collect(events: Array[Dictionary]) -> void:
 
 func _command(event: Dictionary) -> void:
 	var command: String = event["command"]
-	if _executing != context and (command in Gen3ScriptContext.NATIVE_COMMANDS or command in Gen3ScriptContext.WARP_COMMANDS):
+	if _executing != context and (command in Gen3ScriptContext.NATIVE_COMMANDS or command in Gen3ScriptContext.WARP_COMMANDS
+			or command in Gen3ScriptContext.HOST_WAITS or command in Gen3ScriptContext.STOPPING_COMMANDS):
 		_executing.fail(int(event["offset"]), "immediate_script_wait", event)
 		return
+	if _route(command, event):
+		return
 	var operands: Array = event["operands"]
-	if command in Gen3ScriptContext.WARP_COMMANDS or command.begins_with("set") and command.ends_with("warp"):
-		_warp_command(event)
-		return
-	if command in Gen3ScriptContext.OBJECT_COMMANDS:
-		_object_command(command, operands)
-		return
 	match command:
 		"message", "messageautoscroll", "messageinstant", "pokenavcall":
 			_show_message(event)
 		"closemessage": _close_message()
 		"waitmessage", "waitbuttonpress": _wait = command
-		"lock", "lockall": _lock(command == "lock")
+		"lock", "lockall", "lockfortrainer": _lock(command != "lockall")
 		"release", "releaseall": _release(command == "release")
 		"faceplayer":
 			if _selected() != null:
@@ -316,6 +399,171 @@ func _command(event: Dictionary) -> void:
 				_moving_id = local_id
 			_wait_map = _command_map(operands, 1)
 			_wait = "movement"
+
+
+func _route(command: String, event: Dictionary) -> bool:
+	if command in Gen3ScriptContext.WARP_COMMANDS or command.begins_with("set") and command.ends_with("warp"):
+		_warp_command(event)
+	elif command in Gen3ScriptContext.OBJECT_COMMANDS:
+		_object_command(command, event["operands"])
+	elif HANDLERS.has(command):
+		call(HANDLERS[command], event)
+	elif command in Gen3ScriptServices.COMMANDS:
+		if not services.run(command, event["operands"], _executing):
+			_executing.fail(int(event["offset"]), "unsupported_command", event)
+	elif command in Gen3ScriptContext.PRESENTATION or command in Gen3ScriptContext.HOST_WAITS \
+			or command in Gen3ScriptContext.STOPPING_COMMANDS:
+		_present(event)
+	else:
+		return false
+	return true
+
+
+func _present(event: Dictionary) -> void:
+	var command: String = event["command"]
+	var operands: Array = event["operands"].duplicate()
+	var through_vars: Array = Gen3ScriptContext.PRESENTATION.get(command, Gen3ScriptContext.HOST_WAITS.get(command, []))
+	for index: int in through_vars:
+		operands[index] = objects.events.var_get(int(operands[index]))
+	if command in Gen3ScriptContext.HOST_WAITS:
+		_wait = "host"
+	_output.append({"kind": command, "operands": operands})
+
+
+func _menu_command(event: Dictionary) -> void:
+	var command: String = event["command"]
+	var operands: Array = event["operands"]
+	var request: Dictionary = {"kind": "menu", "left": int(operands[0]), "top": int(operands[1])}
+	objects.events.var_set(Gen3ScriptServices.VAR_RESULT, 0xFF)
+	if command == "yesnobox":
+		request["choices"] = ["YES", "NO"]
+		request["yes_no"] = true
+	else:
+		request["choices"] = objects.camera.data.world_multichoice(int(operands[2]))
+		request["default"] = int(operands[3]) if command == "multichoicedefault" else 0
+		request["columns"] = int(operands[3]) if command == "multichoicegrid" else 1
+		request["ignore_b"] = int(operands.back()) != 0
+	_output.append(request)
+
+
+func _mart_command(event: Dictionary) -> void:
+	var command: String = event["command"]
+	var table: String = "marts" if command == "pokemart" else "decoration_marts"
+	var row: Dictionary = objects.camera.data.world_script_data(table, Gen3Layout.rom_offset(int(event["operands"][0])))
+	if row.is_empty():
+		_executing.fail(int(event["offset"]), "missing_mart", event)
+		return
+	_output.append({"kind": "mart", "mode": command, "items": row["entries"]})
+
+
+func _braille_command(event: Dictionary) -> void:
+	var row: Dictionary = objects.camera.data.world_script_data("braille", Gen3Layout.rom_offset(int(event["operands"][0])))
+	if row.is_empty():
+		_executing.fail(int(event["offset"]), "missing_text", event)
+		return
+	_output.append({"kind": "braillemessage", "bytes": PackedByteArray(row["bytes"])})
+
+
+func _field_effect_command(event: Dictionary) -> void:
+	var operands: Array = event["operands"]
+	if event["command"] == "setfieldeffectargument":
+		var value: int = objects.events.var_get(int(operands[1]))
+		_field_arguments[int(operands[0])] = (value ^ 0x8000) - 0x8000 # gFieldEffectArguments holds (s16)VarGet.
+		return
+	_output.append({"kind": "dofieldeffect", "effect": objects.events.var_get(int(operands[0])),
+		"arguments": _field_arguments.duplicate()})
+
+
+func _trainer_command(event: Dictionary) -> void:
+	match String(event["command"]):
+		"trainerbattle": _configure_battle(event)
+		"selectapproachingtrainer":
+			selected_slot = int(trainers.approaching[trainers.approaching_id]["slot"])
+		"dotrainerbattle", "trainerbattlebegin":
+			_approached_slots.assign(trainers.approaching.map(func(row: Dictionary) -> int: return int(row["slot"])))
+			_output.append(battle.begin(trainers.approaching.size()))
+			trainers.approaching.clear() # gNoOfApproachingTrainers ends here, unlike gTrainerApproachedPlayer.
+		"gotopostbattlescript": _executing.offset = battle.end_script
+		"gotobeatenscript":
+			var script: int = battle.beaten_script()
+			if script < 0:
+				_release(false)
+			_executing.offset = script
+
+
+func _configure_battle(event: Dictionary) -> void:
+	var at: int = _executing.offset
+	if not battle.configure(event["operands"], at, trainers.approaching_id):
+		_executing.fail(int(event["offset"]), "unsupported_command", event)
+		return
+	if battle.sets_map_vars(trainers.approaching_id) and battle.local_id != 0:
+		objects.events.var_set(0x800F, battle.local_id)
+		var object: Gen3ObjectEvents.ObjectEvent = objects.by_identity(battle.local_id, objects.camera.number, objects.camera.group)
+		selected_slot = objects.objects.find(object)
+	if battle.mode in [Gen3TrainerBattle.Mode.SET_TRAINER_A, Gen3TrainerBattle.Mode.SET_TRAINER_B]:
+		_executing.offset = -1
+		return
+	var frlg: bool = objects.events.game in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	_executing.offset = objects.camera.data.world_trainer_battle_script(Gen3Script.trainer_script_index(battle.mode, frlg))
+
+
+func _special_command(event: Dictionary) -> void:
+	var operands: Array = event["operands"]
+	var table: Dictionary = SPECIALS[SPECIAL_ENGINES[objects.events.game]]
+	var name: String = table.get(int(operands.back()), "")
+	if name.is_empty():
+		_executing.fail(int(event["offset"]), "unsupported_special", event)
+		return
+	var value: int = _special(name)
+	if event["command"] == "specialvar":
+		objects.events.var_set(int(operands[0]), value)
+
+
+func _special(name: String) -> int: # One row of [constant SPECIALS]: its return value, which `specialvar` stores.
+	var events: Gen3EventData = objects.events
+	match name:
+		"GetTrainerFlag": return int(battle.flag_set(events))
+		"GetTrainerBattleMode": return battle.mode
+		"PlayTrainerEncounterMusic":
+			_trainer_music()
+		"SetTrainerFacingDirection":
+			if _selected() != null:
+				Gen3ObjectEvents.set_trainer_movement_type(_selected(), Gen3ObjectEvents.TRAINER_FACING_TYPES[_selected().facing])
+		"ShowTrainerIntroSpeech": _show_trainer_speech(battle.intro_speech(trainers.approaching_id))
+		"ShowTrainerCantBattleSpeech": _show_trainer_speech(battle.cannot_speech)
+		"HasEnoughMonsForDoubleBattle": events.var_set(Gen3ScriptServices.VAR_RESULT, services.doubles_state())
+		"TryPrepareSecondApproachingTrainer":
+			events.var_set(Gen3ScriptServices.VAR_RESULT, int(trainers.prepare_second_trainer()))
+		"DoTrainerApproach": _output.append_array(trainers.start_approach())
+		"ShouldTryRematchBattle", "IsTrainerReadyForRematch": return 0 # Nothing fills trainerRematches yet.
+		"PlayerFaceTrainerAfterBattle": _face_trainer_after_battle()
+		"GetBattleOutcome": return events.battle_outcome
+		"CalculatePlayerPartyCount": return events.party.size()
+		"CountPartyNonEggMons": return events.party.filter(func(mon: Dictionary) -> bool: return not bool(mon["egg"])).size()
+		"SetBattledTrainerFlag": events.flag_set(Gen3TrainerBattle.TRAINER_FLAGS_START + battle.opponent_a)
+		"HealPlayerParty": _output.append({"kind": "heal_party"})
+		"DrawWholeMapView": _output.append({"kind": "redraw_map"})
+	return 0
+
+
+func _trainer_music() -> void:
+	if battle.mode not in Gen3TrainerBattle.NO_MUSIC_MODES:
+		var id: int = battle.opponent_b if trainers.approaching_id != 0 else battle.opponent_a
+		_output.append({"kind": "trainer_music", "trainer": id})
+
+
+func _show_trainer_speech(pointer: int) -> void:
+	_show_message({"command": "message", "operands": [pointer], "offset": _executing.offset})
+
+
+func _face_trainer_after_battle() -> void: # `PlayerFaceTrainerAfterBattle`: the trainer who spotted the player, else the way the player already faces.
+	var player: Gen3ObjectEvents.ObjectEvent = avatar.object()
+	var direction: int = player.facing
+	if trainers.approached_player and battle.face_index < _approached_slots.size():
+		direction = Gen3ObjectEvents.OPPOSITE[objects.objects[_approached_slots[battle.face_index]].facing]
+	var bytes := PackedByteArray([avatar.action(&"face", direction), MOVEMENT_STEP_END])
+	_movements[objects.objects.find(player)] = {"bytes": bytes, "at": 0, "finished": false}
+	_moving_id = Gen3ObjectEvents.LOCALID_PLAYER
 
 
 func _map_coords(operands: Array, at: int) -> Vector2i:
@@ -433,6 +681,7 @@ func complete_warp() -> Array[Dictionary]:
 	avatar.transition(state_mask & (Gen3PlayerAvatar.Flag.ON_FOOT | Gen3PlayerAvatar.Flag.MACH_BIKE | Gen3PlayerAvatar.Flag.ACRO_BIKE | Gen3PlayerAvatar.Flag.SURFING | Gen3PlayerAvatar.Flag.UNDERWATER))
 	avatar.track_camera()
 	objects.spawn_in_view()
+	trainers = Gen3TrainerSee.new(objects, avatar)
 	output.append_array(run_map_script(4))
 	output.append_array(run_map_script(5))
 	warp_pending = false
@@ -457,8 +706,9 @@ func _show_message(event: Dictionary) -> void:
 	message_visible = true
 	if event["command"] != "messageinstant":
 		message_running = true
+	var text: String = Gen3Text.decode_fixed(objects.events.game, bytes, 0, bytes.size())
 	_output.append({"kind": "message", "mode": event["command"], "bytes": bytes,
-		"text": Gen3Text.decode_fixed(objects.events.game, bytes, 0, bytes.size())})
+		"text": Gen3Text.expand_placeholders(text, services.placeholders())})
 
 
 func _close_message() -> void:
@@ -519,6 +769,7 @@ func _native_complete(pressed: int) -> bool:
 		"waitmessage": return not message_running
 		"waitbuttonpress": return pressed in [PokeButton.A, PokeButton.B]
 		"movement": return movement_finished(_moving_id, _wait_map)
+		"done": return true
 		"lock":
 			if not _lock_task:
 				avatar.stop_for_script()

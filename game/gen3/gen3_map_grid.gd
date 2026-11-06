@@ -127,8 +127,8 @@ func block_at(x: int, y: int) -> int:
 func border_block_at(x: int, y: int) -> int:
 	var index: int = ((x + 1) & 1) + (((y + 1) & 1) << 1)
 	if _sized_border:
-		index = (x - MAP_OFFSET + 8 * _border_width) % _border_width \
-			+ (y - MAP_OFFSET + 8 * _border_height) % _border_height * _border_width
+		index = posmod(x - MAP_OFFSET, _border_width) \
+			+ posmod(y - MAP_OFFSET, _border_height) * _border_width # GetBorderBlockAt adds 8 rows, which covers play.
 	return _border.decode_u16(index * 2) | COLLISION_MASK
 
 

@@ -325,3 +325,133 @@ func test_object_commands_keep_live_movement_and_saved_templates_separate() -> v
 	assert_true(npc.invisible)
 	assert_true(host.objects.events.flag_get(100))
 	assert_eq(host.objects.template_by_id(1, 0, 0)["x"], 6)
+
+
+func _op(name: String) -> int:
+	for opcode: int in Gen3Script.COMMANDS.size():
+		if Gen3Script.COMMANDS[opcode].begins_with(name + ":"):
+			return opcode
+	return -1
+
+
+func _services_host(bytes: PackedByteArray, data_rows: Dictionary = {}) -> Gen3ScriptHost:
+	var host: Gen3ScriptHost = _host(bytes, RomRegistry.EMERALD, 0)
+	var data: GameData = host.objects.camera.data
+	data._items = [{"number": 1, "name": "POTION", "pocket": 1}]
+	data._world_scripts.merge({"std_strings": ["ITEMS"], "multichoice": [["ONE", "TWO"]]})
+	data._world_scripts.merge(data_rows, true)
+	host.start(1, 1)
+	return host
+
+
+func test_item_and_string_commands_fill_the_results_a_message_expands() -> void:
+	var host: Gen3ScriptHost = _services_host(PackedByteArray([0,
+		_op("additem"), 1, 0, 2, 0, _op("bufferitemname"), 1, 1, 0, _op("bufferstdstring"), 2, 0, 0,
+		_op("message"), 0x40, 0, 0, 8, 2]), {"texts": {"64": {"bytes": [0xFD, 3, 0, 0xFD, 4, 0xFF]}}})
+	var events: Array[Dictionary] = host.tick()
+	assert_eq(host.objects.events.var_get(Gen3ScriptServices.VAR_RESULT), 1)
+	assert_true(host.objects.events.bag.has(1, 2))
+	assert_eq(events[0]["text"], "POTION ITEMS")
+
+
+func test_bag_rules_follow_each_engine_and_refuse_an_overflow_whole() -> void:
+	var data := GameData.new()
+	data.generation = RomRegistry.GEN3
+	data._items = [{"number": 1, "pocket": 1}, {"number": 2, "pocket": 4}, {"number": 3, "pocket": 5}]
+	var split := Gen3Bag.new(data, Gen3EventData.new(RomRegistry.EMERALD))
+	assert_true(split.add(1, 90))
+	assert_true(split.add(1, 20))
+	assert_true(split.has(1, 110))
+	assert_true(split.add(2, 99))
+	assert_false(split.add(2, 1))
+	assert_false(split.has_space(2, 1))
+	assert_true(split.remove(1, 100))
+	assert_false(split.has(1, 11))
+	var events := Gen3EventData.new(RomRegistry.FIRERED)
+	var one_stack := Gen3Bag.new(data, events)
+	assert_true(one_stack.add(1, 500))
+	assert_false(one_stack.add(1, 500))
+	assert_true(one_stack.has(1, 500))
+	assert_true(one_stack.add(3, 1))
+	assert_true(events.flag_get(Gen3Bag.GOT_BERRY_POUCH_FLAG))
+
+
+func test_a_menu_stops_the_script_until_the_answer_lands_in_var_result() -> void:
+	var host: Gen3ScriptHost = _services_host(PackedByteArray([0, _op("multichoice"), 1, 2, 0, 0,
+		_op("compare_var_to_value"), 0x0D, 0x80, 1, 0, 2]))
+	assert_eq(host.tick(), [{"kind": "menu", "left": 1, "top": 2, "choices": ["ONE", "TWO"], "default": 0,
+		"columns": 1, "ignore_b": false}])
+	assert_eq(host.objects.events.var_get(Gen3ScriptServices.VAR_RESULT), 0xFF)
+	host.tick()
+	assert_eq(host.context.state, Gen3ScriptContext.State.WAITING)
+	host.choose(1)
+	host.tick()
+	assert_eq(host.context.state, Gen3ScriptContext.State.STOPPED)
+	assert_eq(host.context.comparison, 1)
+
+
+func test_presentation_reads_vars_and_a_host_wait_lasts_until_the_screen_finishes() -> void:
+	var host: Gen3ScriptHost = _services_host(PackedByteArray([0, 0x16, 0, 0x40, 9, 0,
+		_op("playmoncry"), 0, 0x40, 2, 0, _op("waitse"), _op("setflag"), 1, 0, 2]))
+	assert_eq(host.tick(), [{"kind": "playmoncry", "operands": [9, 2]}, {"kind": "waitse", "operands": []}])
+	host.tick()
+	assert_false(host.objects.events.flag_get(1))
+	host.finish_wait()
+	host.tick()
+	host.tick()
+	assert_true(host.objects.events.flag_get(1))
+
+
+## A talked-to trainer: the mode's words after `trainerbattle`, then `dotrainerbattle` and `gotobeatenscript` as its
+## battle script, and `setflag 2`, `end` as what either return path reaches.
+func _trainer_host(mode: int, words: Array) -> Gen3ScriptHost:
+	var bytes := PackedByteArray([0, 0x5C, mode, 7, 0, 1, 0])
+	for word: int in words:
+		bytes.resize(bytes.size() + 4)
+		bytes.encode_u32(bytes.size() - 4, word)
+	var battle_at: int = bytes.size()
+	bytes.append_array([_op("dotrainerbattle"), _op("gotobeatenscript"), _op("setflag"), 2, 0, 2])
+	return _services_host(bytes, {"trainer_battle": [battle_at, 0, 0, 0, 0]})
+
+
+func test_a_won_battle_marks_the_trainer_and_runs_the_beaten_path() -> void:
+	var host: Gen3ScriptHost = _trainer_host(0, [0x08000040, 0x08000040])
+	var events: Array[Dictionary] = host.tick()
+	assert_eq(events[0]["kind"], "trainer_battle")
+	assert_eq(events[0]["opponent_a"], 7)
+	assert_eq(host.selected_slot, 1)
+	assert_eq(host.finish_battle(Gen3TrainerBattle.Outcome.WON), [])
+	host.tick()
+	assert_true(host.objects.events.flag_get(Gen3TrainerBattle.TRAINER_FLAGS_START + 7))
+	assert_eq(host.context.state, Gen3ScriptContext.State.STOPPED)
+	assert_false(host.objects.events.flag_get(2))
+
+
+func test_a_lost_battle_whites_out_and_a_continuation_returns_to_its_script() -> void:
+	var lost: Gen3ScriptHost = _trainer_host(0, [0x08000040, 0x08000040])
+	lost.tick()
+	assert_eq(lost.finish_battle(Gen3TrainerBattle.Outcome.LOST), [{"kind": "white_out"}])
+	assert_false(lost.objects.events.flag_get(Gen3TrainerBattle.TRAINER_FLAGS_START + 7))
+	var won: Gen3ScriptHost = _trainer_host(2, [0x08000040, 0x08000040, 0x08000000 + 21])
+	won.tick()
+	won.finish_battle(Gen3TrainerBattle.Outcome.WON)
+	won.tick()
+	assert_true(won.objects.events.flag_get(2))
+
+
+func test_a_trainer_that_sees_the_player_starts_its_approach_with_the_battle_configured() -> void:
+	var bytes := PackedByteArray([0, 0x5C, 0, 7, 0, 0, 0, 0x40, 0, 0, 8, 0x40, 0, 0, 8, 2,
+		_op("selectapproachingtrainer"), 2])
+	var host: Gen3ScriptHost = _host(bytes, RomRegistry.EMERALD, 0)
+	host.objects.camera.data._world_scripts["native"] = {"trainer_approach": 16}
+	var template: Dictionary = Gen3ObjectEvents.EMPTY_TEMPLATE.duplicate()
+	template.merge({"local_id": 2, "x": 3, "y": 1, "trainer_type": 1, "trainer_sight_or_berry_tree_id": 5,
+		"script_offset": 1}, true)
+	host.objects.templates.append(template)
+	host.objects.spawn(template, 0, 0)
+	var trainer: Gen3ObjectEvents.ObjectEvent = host.objects.by_identity(2, 0, 0)
+	Gen3ObjectEvents.turn(trainer, Gen3ObjectEvents.Direction.SOUTH)
+	host.step()
+	assert_eq(host.battle.opponent_a, 7)
+	assert_eq(host.objects.events.var_get(0x800F), 2)
+	assert_eq(host.selected_slot, host.objects.objects.find(trainer))

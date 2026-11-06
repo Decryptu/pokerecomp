@@ -118,6 +118,7 @@ func _one_game() -> void:
 	_boulder_landings()
 	_rotating_gates()
 	_world_scripts()
+	_menu_tables()
 	_world_script_data()
 	_wild_encounters()
 	_undecoded_text()
@@ -1680,11 +1681,11 @@ func _graphics_hash(record: Dictionary) -> String:
 ## Exact bytecode streams from pret handlers, with operand boundaries checked by executing the matching ARM
 ## builds; all map, standard, trainer and native roots.
 const SCRIPT_DIGESTS: Dictionary = {
-	&"ruby": "6bbf6c8cc6929bf87aa304c8b51a3fd48fe36a99",
-	&"sapphire": "4b8ed0dc774e75004154b11bcd5273d83ebfe110",
-	&"firered": "287f4afe8f34b99285d0765f3a0fd84d0a470e80",
-	&"leafgreen": "8ca3097b0433a71e9c2ad0176fa4e64de3aeba15",
-	&"emerald": "4aaaad2c416dba158bb26318fb0a848a09f12d25",
+	&"ruby": "a30be6d61afe4432643eb0d089e49cc69879888c",
+	&"sapphire": "ee454b3a5901ae73be33626ba3520f531c7f0b84",
+	&"firered": "9413e12f6e2c4310b0bc55e38fb09c094db4de46",
+	&"leafgreen": "cb062f14e07ce5f6db116bfb77f74bd1d0039ca8",
+	&"emerald": "71b45f908365c3970c6fae0d781e9a2c847f03a7",
 }
 
 
@@ -1693,6 +1694,24 @@ func _script_numbers(values: Array) -> String:
 	for value: Variant in values:
 		out.append(str(int(value)))
 	return ",".join(out)
+
+
+const MENU_TABLE_SIZES: Dictionary = { # `sMultichoiceLists` and `gStdStrings` rows.
+	&"ruby": [73, 19], &"sapphire": [73, 19], &"firered": [65, 29], &"leafgreen": [65, 29], &"emerald": [114, 30],
+}
+
+
+func _menu_tables() -> void:
+	var data: GameData = _r.data
+	var sizes: Array = MENU_TABLE_SIZES[data.id]
+	_r.check(data.world_multichoice(sizes[0] - 1).size() > 0 and data.world_multichoice(sizes[0]).is_empty(),
+		"the multichoice table ends at %d." % sizes[0])
+	_r.check(not data.world_std_string(sizes[1] - 1).is_empty() and data.world_std_string(sizes[1]).is_empty(),
+		"the standard strings end at %d." % sizes[1])
+	_r.check(data.world_std_string(0).to_upper() == "COOL", "the first standard string is %s." % data.world_std_string(0))
+	var approach: Dictionary = data.world_script_instruction(data.world_native_script_offset("trainer_approach"))
+	_r.check(String(approach.get("command", "")) in ["lock", "selectapproachingtrainer"],
+		"the trainer approach starts with %s." % approach.get("command", "nothing"))
 
 
 func _world_scripts() -> void:

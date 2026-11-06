@@ -30,8 +30,13 @@ var stats: Dictionary = {}
 ## `gSaveBlock1Ptr->secretBases[].secretBaseId`, the player's first, and secret_base.c's `sCurSecretBaseId`.
 var secret_bases: Array[int] = []
 var current_secret_base: int = 0
-## script.c's `sLockFieldControls`.
-var controls_locked: bool = false
+var bag: Gen3Bag # `gSaveBlock1Ptr`'s items, money and coins; hosts create it, since it reads item pockets.
+var party: Array[Dictionary] = [] # `gPlayerParty`: `species`, `nickname`, `moves`, `egg` and `hp`, with no empty rows.
+var player_name: String = ""
+var rival_name: String = "" # FireRed and LeafGreen's `gSaveBlock1Ptr->rivalName`.
+var respawn: int = 0 # `gSaveBlock1Ptr->lastHealLocation`'s `HEAL_LOCATION_*`.
+var battle_outcome: int = 0 # `gBattleOutcome`.
+var controls_locked: bool = false # script.c's `sLockFieldControls`.
 var script_delay: int = 0 # scrcmd.c::sPauseCounter is shared by foreground and immediate contexts.
 var _flags: Dictionary = {}
 var _vars: Dictionary = {}
@@ -64,8 +69,7 @@ func var_set(id: int, value: int) -> void:
 		_vars[id & 0xFFFF] = value & 0xFFFF
 
 
-## `ClearTempFieldEventData`, run on every map load.
-func clear_temp() -> void:
+func clear_temp() -> void: # `ClearTempFieldEventData`, run on every map load.
 	for id: int in TEMP_FLAGS_COUNT:
 		_flags.erase(id)
 	for id: int in TEMP_VARS_COUNT:
@@ -74,6 +78,5 @@ func clear_temp() -> void:
 		_flags.erase(id)
 
 
-## `IncrementGameStat`: counters stop at 0xFFFFFF.
-func increment_stat(id: int) -> void:
+func increment_stat(id: int) -> void: # `IncrementGameStat`: counters stop at 0xFFFFFF.
 	stats[id] = mini(int(stats.get(id, 0)) + 1, 0xFFFFFF)

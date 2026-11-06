@@ -368,6 +368,27 @@ func world_standard_script_offset(index: int) -> int:
 	return int(offsets[index]) if index < offsets.size() else -1
 
 
+func world_std_string(index: int) -> String: # `gStdStrings[index]`, empty past the table.
+	if generation != RomRegistry.GEN3 or index < 0:
+		return ""
+	var rows: Array = _scripts().get("std_strings", [])
+	return String(rows[index]) if index < rows.size() else ""
+
+
+func world_multichoice(index: int) -> Array: # The row labels of `sMultichoiceLists[index]`, empty past the table.
+	if generation != RomRegistry.GEN3 or index < 0:
+		return []
+	var rows: Array = _scripts().get("multichoice", [])
+	return rows[index] if index < rows.size() else []
+
+
+func world_trainer_battle_script(index: int) -> int: # One of `trainer_battle_scripts`, as [method Gen3Script.trainer_script_index] numbers them.
+	if generation != RomRegistry.GEN3 or index < 0:
+		return -1
+	var offsets: Array = _scripts().get("trainer_battle", [])
+	return int(offsets[index]) if index < offsets.size() else -1
+
+
 ## A script C code starts by its pret label, from [code]native_scripts[/code] in [Gen3Layout]; -1 when absent.
 func world_native_script_offset(name: String) -> int:
 	if generation != RomRegistry.GEN3:

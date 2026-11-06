@@ -12,12 +12,32 @@ const OBJECT_COMMANDS: Array[String] = ["removeobject", "removeobjectat", "remov
 const HOST_COMMANDS: Array[String] = [
 	"message", "messageautoscroll", "messageinstant", "pokenavcall",
 	"waitmessage", "closemessage", "waitbuttonpress",
-	"lock", "lockall", "release", "releaseall", "faceplayer", "turnobject",
+	"lock", "lockall", "lockfortrainer", "release", "releaseall", "faceplayer", "turnobject",
 	"applymovement", "applymovementat", "applymovement_at",
 	"waitmovement", "waitmovementat", "waitmovement_at",
 	"setwarp", "setdynamicwarp", "setdivewarp", "setholewarp", "setescapewarp",
+	"special", "specialvar", "selectapproachingtrainer", "trainerbattle", "gotopostbattlescript", "gotobeatenscript",
+	"yesnobox", "multichoice", "multichoicedefault", "multichoicegrid",
+	"braillemessage", "pokemart", "pokemartdecoration", "pokemartdecoration2",
+	"dofieldeffect", "setfieldeffectargument", "dotrainerbattle", "trainerbattlebegin",
 ]
-const NATIVE_COMMANDS: Array[String] = ["waitmessage", "waitbuttonpress", "lock", "lockall",
+const PRESENTATION: Dictionary = { # Emitted as `{kind: command, operands}`; these operands go through `VarGet`.
+	"playse": [], "playfanfare": [], "playbgm": [], "savebgm": [], "fadedefaultbgm": [], "fadenewbgm": [],
+	"fadeinbgm": [], "playmoncry": [0, 1], "showmonpic": [0], "opendoor": [0, 1], "closedoor": [0, 1],
+	"setdooropen": [0, 1], "setdoorclosed": [0, 1], "setweather": [0], "resetweather": [], "doweather": [],
+	"setflashlevel": [0], "setstepcallback": [], "dotimebasedevents": [], "setmaplayoutindex": [0],
+	"showmoneybox": [], "hidemoneybox": [], "updatemoneybox": [], "showcoinsbox": [], "hidecoinsbox": [],
+	"updatecoinsbox": [], "drawbox": [], "erasebox": [], "drawboxtext": [], "closebraillemessage": [],
+	"textcolor": [], "signmsg": [], "normalmsg": [], "unloadhelp": [],
+}
+const HOST_WAITS: Dictionary = { # Presentation that holds the script until `finish_wait`.
+	"waitse": [], "waitfanfare": [], "waitmoncry": [], "fadescreen": [], "fadescreenspeed": [],
+	"fadescreenswapbuffers": [], "waitdooranim": [], "fadeoutbgm": [], "hidemonpic": [], "waitfieldeffect": [0],
+}
+const STOPPING_COMMANDS: Array[String] = ["yesnobox", "multichoice", "multichoicedefault", "multichoicegrid", # `ScriptContext_Stop`.
+	"pokemart", "pokemartdecoration", "pokemartdecoration2", "animateflash", "playslotmachine",
+	"dotrainerbattle", "trainerbattlebegin"]
+const NATIVE_COMMANDS: Array[String] = ["waitmessage", "waitbuttonpress", "lock", "lockall", "lockfortrainer",
 	"waitmovement", "waitmovementat", "waitmovement_at"] # scrcmd.c::SetupNativeScript callers.
 const CONDITIONS: Array = [[0], [1], [2], [0, 1], [1, 2], [0, 2]]
 
@@ -93,7 +113,8 @@ func tick(budget: int = 10000, native_complete: bool = false, command_handler: C
 		if not _execute(row, at, command_handler):
 			return fail(at, "unsupported_command", row)
 		if state == State.WAITING:
-			_output.append({"type": "waitstate", "offset": at})
+			if row["command"] == "waitstate":
+				_output.append({"type": "waitstate", "offset": at})
 			return _output
 		if state != State.RUNNING or String(row["command"]) in WARP_COMMANDS:
 			return _output
@@ -110,7 +131,7 @@ func fail(at: int, reason: String, row: Dictionary = {}) -> Array[Dictionary]:
 func _execute(row: Dictionary, at: int, command_handler: Callable) -> bool:
 	var command: String = row["command"]
 	var args: Array = row["operands"]
-	if command in HOST_COMMANDS or command in WARP_COMMANDS or command in OBJECT_COMMANDS:
+	if _host_owns(command):
 		return _host_command(row, at, command_handler)
 	if command in ["nop", "nop1"]:
 		return true
@@ -134,6 +155,12 @@ func _execute(row: Dictionary, at: int, command_handler: Callable) -> bool:
 	return _value_command(command, args)
 
 
+static func _host_owns(command: String) -> bool:
+	return command in HOST_COMMANDS or command in WARP_COMMANDS or command in OBJECT_COMMANDS \
+		or command in PRESENTATION or command in HOST_WAITS or command in STOPPING_COMMANDS \
+		or command in Gen3ScriptServices.COMMANDS
+
+
 func _host_command(row: Dictionary, at: int, command_handler: Callable) -> bool:
 	var command: String = row["command"]
 	var operands: Array = row["operands"].duplicate()
@@ -142,8 +169,10 @@ func _host_command(row: Dictionary, at: int, command_handler: Callable) -> bool:
 	var event: Dictionary = {"type": "script_command", "command": command,
 		"operands": operands, "offset": at}
 	_output.append(event)
-	if command in NATIVE_COMMANDS:
+	if command in NATIVE_COMMANDS or command in HOST_WAITS:
 		state = State.NATIVE_WAIT
+	elif command in STOPPING_COMMANDS:
+		state = State.WAITING
 	if command_handler.is_valid():
 		command_handler.call(event)
 	return true

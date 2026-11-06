@@ -87,11 +87,11 @@ func test_zero_delay_wraps_the_halfword_timer() -> void:
 
 
 func test_unimplemented_commands_and_non_yielding_loops_stop_with_evidence() -> void:
-	var context: Gen3ScriptContext = _context(PackedByteArray([0, 0x25, 1, 0, 2]))
+	var context: Gen3ScriptContext = _context(PackedByteArray([0, 0x2C, 1, 0, 2, 0, 2]))
 	var events: Array[Dictionary] = context.tick()
 	assert_eq(events[0]["reason"], "unsupported_command")
 	assert_eq(events[0]["offset"], 1)
-	assert_eq(events[0]["instruction"]["command"], "special")
+	assert_eq(events[0]["instruction"]["command"], "initclock")
 	assert_eq(context.tick(), [])
 	var loop: Gen3ScriptContext = _context(PackedByteArray([0, 5, 1, 0, 0, 8]))
 	assert_eq(loop.tick(3)[0]["reason"], "instruction_budget")
@@ -153,14 +153,14 @@ func test_dialogue_events_preserve_order_and_native_wait_completion_ticks() -> v
 
 
 func test_host_events_survive_a_later_fault_and_restart_clears_native_wait() -> void:
-	var context: Gen3ScriptContext = _context(PackedByteArray([0, 0x68, 0x25, 1, 0, 0x69, 2]))
+	var context: Gen3ScriptContext = _context(PackedByteArray([0, 0x68, 0x2E, 0x69, 2]))
 	var events: Array[Dictionary] = context.tick()
 	assert_eq(events.size(), 2)
 	assert_eq(events[0]["command"], "closemessage")
 	assert_eq(events[1]["reason"], "unsupported_command")
-	context.start(5)
+	context.start(3)
 	assert_eq(context.tick()[0]["command"], "lockall")
-	context.start(6)
+	context.start(4)
 	assert_eq(context.tick(), [])
 	assert_eq(context.state, Gen3ScriptContext.State.STOPPED)
 
