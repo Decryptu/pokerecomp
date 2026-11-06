@@ -85,9 +85,9 @@ imports through its file picker or by dropping a dump onto a cartridge bay.
 Caches live in Godot's `user://`. A format update requires reimporting the same
 dump; saves are separate and survive. `--verify` checks an import without writing.
 
-Generation 3 is experimental and **not playable**. Settings > Advanced > Dev
-cartridges exposes Ruby, Sapphire, FireRed, LeafGreen and Emerald; command-line
-imports require `--dev`. See [current work](game/gen3/) for the implementation.
+Generation 3 is experimental and **not playable**. Enable Settings > Advanced > Dev cartridges for Ruby, Sapphire, FireRed, LeafGreen and Emerald; CLI imports require `--dev`.
+[Script contexts](game/gen3/gen3_script_context.gd) run cached bytecode with `start(offset)` and one `tick()` per frame.
+`waitstate` needs `resume()`; unsupported commands emit `script_error` and stop.
 
 ## Playing
 
