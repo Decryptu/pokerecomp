@@ -382,6 +382,10 @@ func world_multichoice(index: int) -> Array: # The row labels of `sMultichoiceLi
 	return rows[index] if index < rows.size() else []
 
 
+func world_start_menu() -> Dictionary: # `sStartMenuItems`' labels under `labels`, and FRLG's `sStartMenuDescPointers` under `help`.
+	return _scripts().get("start_menu", {}) if generation == RomRegistry.GEN3 else {}
+
+
 func world_trainer_battle_script(index: int) -> int: # One of `trainer_battle_scripts`, as [method Gen3Script.trainer_script_index] numbers them.
 	if generation != RomRegistry.GEN3 or index < 0:
 		return -1
@@ -430,9 +434,17 @@ func world_object_graphics(index: int, mauville: bool = false) -> Dictionary:
 
 
 func world_surfable(behavior: int) -> bool:
+	return _behavior_listed("surfable_behaviors", behavior)
+
+
+func world_encounter_tile(behavior: int) -> bool: # `MetatileBehavior_IsEncounterTile`.
+	return _behavior_listed("encounter_behaviors", behavior)
+
+
+func _behavior_listed(key: String, behavior: int) -> bool: # A loop, since `in` tells JSON's floats from the int.
 	if generation != RomRegistry.GEN3:
 		return false
-	for value: int in _scripts().get("surfable_behaviors", []):
+	for value: int in _scripts().get(key, []):
 		if value == behavior:
 			return true
 	return false
@@ -490,10 +502,10 @@ func world_text_box() -> Dictionary: # By [Gen3FieldMessage]'s names, bytes wher
 	var out: Dictionary = {"fonts": []}
 	for font: Array in row["fonts"]:
 		out["fonts"].append({"glyphs": _text_box_bytes(font[0]), "widths": _text_box_bytes(font[1])})
-	for key: String in ["frame", "signpost", "arrow", "std_frame"]:
+	for key: String in ["frame", "signpost", "arrow", "std_frame", "help"]:
 		if row.has(key):
 			out[key] = _text_box_bytes(row[key][0])
-	for key: String in ["frame_palette", "signpost_palette", "std_frame_palette", "colors"]:
+	for key: String in ["frame_palette", "signpost_palette", "std_frame_palette", "help_palette", "colors"]:
 		if row.has(key):
 			out[key] = _text_box_bytes(row[key])
 	return out

@@ -233,6 +233,8 @@ const STAGED_FRAMES_BY_KIND: Dictionary = {
 const BOX_REVEAL_FRAMES: int = 120
 const CUP_MENU_FRAME_CAP: int = 1200
 
+const GBA_LIVE_CELL := Vector2i(5, 8)
+const GBA_LIVE_SCALE: int = 3
 const PREVIEW_BATTLE_SPECIES: int = 16 ## `preview_battle_request`'s PIDGEY.
 const SPLASH_MOVE: int = 150
 const LOSS_PRESSES: int = 8
@@ -269,6 +271,9 @@ func _initialize() -> void:
 		if data == null:
 			push_error("No cache for %s. Run tools/import_rom.gd first." % args[0])
 			quit(1)
+			return
+		if data.generation == RomRegistry.GEN3:
+			_open_gba_live(data, args)
 			return
 		_output_path = args[3]
 		if not _read_live_options(args):
@@ -1853,6 +1858,17 @@ func _draw_marker(image: Image, cell_x: int, cell_y: int, color: Color) -> void:
 		for x: int in 8:
 			if pixel_x + x < image.get_width() and pixel_y + y < image.get_height():
 				image.set_pixel(pixel_x + x, pixel_y + y, color)
+
+
+func _open_gba_live(data: GameData, args: PackedStringArray) -> void: # `<game> <group> <map> <output.png> live <x> <y>` walks the field in a window from layout cell x, y.
+	var at := Vector2i(int(args[5]), int(args[6])) if args.size() >= 7 else GBA_LIVE_CELL
+	var view: Gen3FieldView = Gen3FieldView.open(data, int(args[1]), int(args[2]), at)
+	if view == null:
+		push_error("The player could not be placed at %s." % at)
+		quit(1)
+		return
+	DisplayServer.window_set_size(Gen3FieldScreen.SIZE * GBA_LIVE_SCALE)
+	root.add_child(view)
 
 
 func _preview_gba(data: GameData, args: PackedStringArray) -> void:

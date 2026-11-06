@@ -82,6 +82,7 @@ var context: Gen3ScriptContext
 var avatar: Gen3PlayerAvatar
 var objects: Gen3ObjectEvents
 var services: Gen3ScriptServices
+var wild: Gen3WildEncounter
 var battle: Gen3TrainerBattle
 var trainers: Gen3TrainerSee
 var selected_slot: int = -1
@@ -113,6 +114,7 @@ func _init(player: Gen3PlayerAvatar) -> void:
 	input = Gen3FieldInput.new(objects.events)
 	services = Gen3ScriptServices.new(objects.camera.data, objects.events)
 	services.gender = avatar.gender
+	wild = Gen3WildEncounter.new(objects.camera.data, objects.events, input.engine)
 	battle = Gen3TrainerBattle.new(objects.events.game)
 	trainers = Gen3TrainerSee.new(objects, avatar)
 	warps.location = Gen3Warp.record(objects.camera.group, objects.camera.number, -1,
@@ -154,6 +156,15 @@ func finish_battle(outcome: int) -> Array[Dictionary]: # `CB2_EndTrainerBattle`,
 	if not battle.finish(outcome, objects.events):
 		return [{"kind": "white_out"}]
 	resume()
+	return []
+
+
+func finish_wild_battle(outcome: int) -> Array[Dictionary]: # CB2_EndWildBattle; a lost or drawn battle emits `white_out`.
+	objects.events.battle_outcome = outcome
+	wild.restart_immunity()
+	if outcome in [Gen3TrainerBattle.Outcome.LOST, Gen3TrainerBattle.Outcome.DREW]:
+		return [{"kind": "white_out"}]
+	unfreeze_field()
 	return []
 
 
@@ -259,6 +270,8 @@ func _process_input(held: int, pressed: int, requests: Array) -> bool: # field_c
 func _process_settled(held: int, requests: Array) -> bool: # The tookStep block and FireRed's first sign test.
 	if avatar.running_state == Gen3PlayerAvatar.Running.MOVING and _on_step(requests):
 		return true
+	if _check_wild(requests):
+		return true
 	return Gen3Bike.dpad_direction(held) in [0, avatar.object().facing] and _try_walk_into_sign(held, requests)
 
 
@@ -295,6 +308,18 @@ func end_field_menu() -> void: # The START menu or a registered item has given t
 	objects.events.controls_locked = false
 
 
+func freeze_for_menu() -> void: # ShowStartMenu's FreezeObjectEvents, PlayerFreeze and StopPlayerAvatar.
+	objects.freeze_except_player()
+	avatar.freeze_for_script()
+	avatar.stop_for_script()
+
+
+func unfreeze_field() -> void: # HideStartMenu's ScriptUnfreezeObjectEvents and UnlockPlayerFieldControls.
+	Gen3ObjectEvents.clear_held_movement_if_finished(avatar.object())
+	objects.unfreeze_all()
+	end_field_menu()
+
+
 func _start_native(key: String, selected: int = -1) -> bool:
 	var at: int = objects.camera.data.world_native_script_offset(key)
 	if at < 0:
@@ -319,6 +344,20 @@ func _on_step(requests: Array) -> bool: # The tookStep block and TryStartStepBas
 	if key.is_empty():
 		key = input.repel_script(forced)
 	return not key.is_empty() and _start_native(key)
+
+
+func _check_wild(requests: Array) -> bool: # CheckStandardWildEncounter, then BattleSetup_StartWildBattle's freezes.
+	var at: Vector2i = avatar.object().current
+	var grid: Gen3MapGrid = objects.camera.grid
+	var mon: Dictionary = wild.check(Vector2i(objects.camera.group, objects.camera.number), grid.behavior_at(at.x, at.y) & 0xFF,
+		grid.attributes_at(at.x, at.y), avatar.flags)
+	if mon.is_empty():
+		return false
+	freeze_for_menu()
+	objects.events.controls_locked = true
+	mon["kind"] = "wild_battle"
+	requests.append(mon)
+	return true
 
 
 func _try_dive(emerge: bool) -> bool: # TrySetupDiveEmergeScript and TrySetupDiveDownScript.
@@ -975,6 +1014,7 @@ func _begin_warp(mode: String, reset_avatar: bool, behavior: int = 0) -> void:
 func complete_warp() -> Array[Dictionary]:
 	if not warp_pending:
 		return []
+	wild.restart_immunity()
 	var data: GameData = objects.camera.data
 	var at: Vector2i = warps.position(data)
 	var camera: Gen3FieldCamera = Gen3FieldCamera.open(data, int(warps.destination["group"]), int(warps.destination["number"]), at)

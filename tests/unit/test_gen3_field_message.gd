@@ -88,3 +88,44 @@ func test_a_menu_wraps_only_past_three_rows_and_b_answers_as_the_script_expects(
 	for frame: int in Gen3FieldMenu.YES_NO_DELAY:
 		menu.step([], requests)
 	assert_eq(menu.step(a, requests), 1, "The first row is YES, which reads 1.")
+
+
+func _start_menu(engine: StringName, events: Gen3EventData) -> Gen3FieldStartMenu:
+	var labels: Array = ["A", "A", "A", "A", "A", "A", "A", "A", "A"]
+	var message := Gen3FieldMessage.new(_config(), engine, Gen3Palette.new())
+	var menu := Gen3FieldStartMenu.new(message, engine, {"labels": labels, "help": []}, func() -> Dictionary: return {})
+	menu.open(events)
+	return menu
+
+
+func _idle(menu: Gen3FieldStartMenu, frames: int) -> void:
+	for frame: int in frames:
+		menu.step([], [], false)
+
+
+## The list follows the flags, a hidden row keeps the cursor honest, and the callbacks leave as the cartridge's do.
+func test_start_menu_rows_cursor_wrap_and_the_three_ways_out() -> void:
+	var events := Gen3EventData.new(RomRegistry.EMERALD)
+	var menu: Gen3FieldStartMenu = _start_menu(&"emerald", events)
+	assert_eq(menu._actions, ["bag", "player", "save", "option", "exit"] as Array[String])
+	var early: Array = []
+	menu.step([PokeButton.DOWN], early, false)
+	assert_eq(early, [], "The window builds over frames before the task reads input.")
+	_idle(menu, 8)
+	var requests: Array = []
+	menu.step([PokeButton.UP], requests, false)
+	assert_eq(requests, [{"kind": "sound", "name": "select"}])
+	assert_eq(menu._actions[menu._cursor], "exit", "Menu_MoveCursor wraps.")
+	assert_eq(menu.step([PokeButton.A], [], false), "", "EXIT does not fade.")
+	assert_eq(menu.step([], [], false), Gen3FieldStartMenu.CLOSE)
+	assert_false(menu.active)
+	menu.open(events)
+	_idle(menu, 9)
+	assert_eq(menu.step([PokeButton.DOWN], [], false), "")
+	assert_eq(menu._cursor, 0, "The closed menu remembers EXIT, and DOWN from it wraps to the top.")
+	assert_eq(menu.step([PokeButton.A], [], false), Gen3FieldStartMenu.FADE)
+	assert_eq(menu.step([], [], true), "", "The callback waits out the fade.")
+	assert_eq(menu.step([], [], false), "bag")
+	events.flag_set(int(Gen3FieldInput.FLAGS[&"emerald"]["safari"]))
+	menu.open(events)
+	assert_eq(menu._actions[0], Gen3FieldStartMenu.RETIRE)

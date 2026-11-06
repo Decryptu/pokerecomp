@@ -14,6 +14,7 @@ var doors: Gen3FieldDoor
 var warp: Gen3FieldWarp
 var message: Gen3FieldMessage
 var menu: Gen3FieldMenu
+var start_menu: Gen3FieldStartMenu
 var _keys_held: bool = false
 var _keys_pressed: bool = false
 var _pressed: Array[int] = []
@@ -51,6 +52,8 @@ static func open(game: GameData, group: int, number: int, at: Vector2i, directio
 	screen.warp = Gen3FieldWarp.new(screen)
 	screen.message = Gen3FieldMessage.new(game.world_text_box(), screen.host.input.engine, screen.vram.palette)
 	screen.menu = Gen3FieldMenu.new(screen.message, screen.host.input.engine)
+	screen.start_menu = Gen3FieldStartMenu.new(screen.message, screen.host.input.engine, game.world_start_menu(),
+		screen.host.services.placeholders)
 	screen.doors = Gen3FieldDoor.new(camera, screen.vram, screen.host.input, events)
 	screen.vram.palette.faded.fill(0) # FieldCB_FadeTryShowMapPopup's FadeInFromBlack.
 	screen.weather.fade_screen(Gen3FieldWeather.Fade.FROM_BLACK, 0)
@@ -86,6 +89,12 @@ func picture() -> Image:
 		overlay if not overlay.is_empty() else message.overlay())
 
 
+func return_to_start_menu(faded: bool = true) -> void: # CB2_ReturnToFieldWithOpenMenu from a `start_menu_action`'s screen; a declined save never left the field.
+	start_menu.open(host.objects.events)
+	if faded:
+		weather.fade_screen(Gen3FieldWeather.Fade.FROM_BLACK, 0)
+
+
 func request(row: Dictionary) -> void: # A task's request for the next [method frame]'s return.
 	_requests.append(row)
 
@@ -115,9 +124,22 @@ func _run_tasks(requests: Array) -> Array:
 	var choice: int = menu.step(_pressed, out)
 	if choice != Gen3FieldMenu.NOTHING:
 		host.choose(choice)
+	_step_start_menu(out)
 	doors.step()
 	weather.run_tasks()
 	return out
+
+
+func _step_start_menu(out: Array) -> void:
+	var action: String = start_menu.step(_pressed, out, vram.palette.fade_active)
+	match action:
+		"": pass
+		Gen3FieldStartMenu.FADE: weather.fade_screen(Gen3FieldWeather.Fade.TO_BLACK, 0)
+		Gen3FieldStartMenu.CLOSE: host.unfreeze_field()
+		_:
+			if action == Gen3FieldStartMenu.RETIRE:
+				host.unfreeze_field()
+			out.append({"kind": "start_menu_action", "action": action})
 
 
 func _cross_connection() -> void: # New tilesets and the door cells, which are BG tilemap writes the crossing's redraw replaces.
@@ -154,6 +176,9 @@ func _answered(row: Dictionary) -> bool:
 		message.hide()
 	elif kind == "menu":
 		menu.open(row)
+	elif kind == "start_menu":
+		host.freeze_for_menu()
+		start_menu.open(host.objects.events)
 	elif kind == "waitdooranim":
 		_waiting = func() -> bool: return not doors.running
 	elif kind == "waitfieldeffect":
