@@ -127,6 +127,12 @@ static func decode_fixed(id: StringName, data: PackedByteArray, offset: int, len
 	return out
 
 
+static func expand_placeholders(text: String, values: Dictionary) -> String: # `StringExpandPlaceholders` on decoded tokens; put buffers first, their text may hold placeholders.
+	for key: String in values:
+		text = text.replace("<%s>" % key, values[key])
+	return text
+
+
 static func _control(id: StringName, data: PackedByteArray, at: int, width: int) -> String:
 	var code: int = data[at]
 	if code in ARGUMENT_CHARACTERS:

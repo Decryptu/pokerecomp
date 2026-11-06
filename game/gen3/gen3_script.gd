@@ -311,6 +311,7 @@ const MOVEMENT_ACTIONS: Dictionary = {
 	RomRegistry.FIRERED: 170, RomRegistry.LEAFGREEN: 170, RomRegistry.EMERALD: 158,
 }
 const MOVEMENT_STEP_END: int = 0xFE
+const MENU_TEXT_LIMIT: int = 64
 ## brailleformat's window bytes precede the six-dot cells except on FireRed and LeafGreen.
 const BRAILLE_FORMAT_SIZE: int = 6
 const BRAILLE_CELLS: int = 0x40
@@ -398,7 +399,42 @@ static func read(rom: RomFile, layout: Dictionary, headers: Dictionary) -> Dicti
 	var out: Dictionary = {"instructions": instructions, "standard": standard, "trainer_battle": trainers,
 		"native": native}
 	out.merge(data)
-	return out
+	return out if _read_menu_text(rom, layout, out) else {}
+
+
+static func _read_menu_text(rom: RomFile, layout: Dictionary, out: Dictionary) -> bool: # `gStdStrings` (FireRed's `gStdStringPtrs`) and `sMultichoiceLists`, whose `MenuAction` rows pair a text and a callback.
+	if not layout.has("std_strings"):
+		return true
+	var strings: Array = []
+	var table: Array = layout["std_strings"]
+	for index: int in int(table[1]):
+		if not _append_text(rom, int(table[0]) + index * 4, strings):
+			return false
+	var lists: Array = []
+	table = layout["multichoice_lists"]
+	for index: int in int(table[1]):
+		var at: int = int(table[0]) + index * 8
+		var rows: Array = []
+		for row: int in rom.u8(at + 4):
+			if not _append_text(rom, Gen3Layout.rom_offset(rom.u32le(at)) + row * 8, rows):
+				return false
+		lists.append(rows)
+	out["std_strings"] = strings
+	out["multichoice"] = lists
+	return true
+
+
+static func _append_text(rom: RomFile, at: int, rows: Array) -> bool: # FireRed and Emerald keep a few empty labels, so an empty string is a row, not a failure.
+	if not rom.in_bounds(at, 4):
+		return false
+	var text: int = Gen3Layout.rom_offset(rom.u32le(at))
+	if not rom.in_bounds(text, MENU_TEXT_LIMIT):
+		return false
+	var bytes: PackedByteArray = rom.slice(text, MENU_TEXT_LIMIT)
+	if Gen3Text.EOS not in bytes:
+		return false
+	rows.append(Gen3Text.decode_fixed(rom.id, bytes, 0, bytes.size()))
+	return true
 
 
 ## Instructions share no byte with each other or data; a movement label inside another list ends with it.
@@ -567,20 +603,22 @@ static func _flow(rom: RomFile, row: Dictionary, standard: Array[int], trainers:
 	return true
 
 
+static func trainer_script_index(mode: int, frlg: bool) -> int: # A mode's `trainer_battle_scripts` entry: normal, double, no-intro, rematch, double rematch.
+	if mode == 3 or (mode == 9 and frlg):
+		return 2
+	if mode in [4, 6, 8]:
+		return 1
+	if mode == 5:
+		return 3
+	return 4 if mode == 7 else 0
+
+
 static func _trainer_targets(rom: RomFile, row: Dictionary, trainers: Array) -> Array[int]:
 	var operands: Array = row["operands"]
 	var mode: int = int(operands[0])
 	if rom.id == RomRegistry.EMERALD and mode in [10, 11]:
 		return []
-	var helper: int = 0
-	if mode == 3 or (mode == 9 and _frlg(rom.id)):
-		helper = 2
-	elif mode in [4, 6, 8]:
-		helper = 1
-	elif mode == 5:
-		helper = 3
-	elif mode == 7:
-		helper = 4
+	var helper: int = trainer_script_index(mode, _frlg(rom.id))
 	var out: Array[int] = [int(trainers[helper]), int(row["next_offset"])]
 	if mode in CONTINUATION_MODES:
 		var continuation: int = Gen3Layout.rom_offset(int(operands.back()))
