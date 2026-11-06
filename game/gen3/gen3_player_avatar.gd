@@ -13,7 +13,7 @@ enum Collision { NONE, OUTSIDE_RANGE, IMPASSABLE, ELEVATION_MISMATCH, OBJECT_EVE
 	ROTATING_GATE = 8 }
 enum Task { NONE, PUSH_WAIT, PUSH_MOVE, SURF_WAIT, SURF_JUMP, MOUNT_INIT, MOUNT_POSE, MOUNT_SHOW_MON, MOUNT_JUMP,
 	MOUNT_END, MOVE_INIT, MOVE_POSE, MOVE_SHOW_MON, MOVE_RUN, WATERFALL_SHOW_MON, WATERFALL_WAIT, WATERFALL_RIDE,
-	MAT_JUMP, MAT_SPIN_TURN, MAT_SPIN_DELAY, MAT_SPIN_LEAVE }
+	MAT_JUMP, MAT_SPIN_TURN, MAT_SPIN_DELAY, MAT_SPIN_LEAVE, DIVE_SHOW_MON, DIVE_WAIT }
 enum Running { NOT_MOVING, TURN_DIRECTION, MOVING }
 enum Tile { NOT_MOVING, TRANSITION, CENTER }
 enum Copy { NONE, FACE, WALK, SPIN, JUMP_2 = 8 }
@@ -60,6 +60,7 @@ const LOCALID_FARAWAY_ISLAND_MEW: int = 1
 const FLDEFF_USE_SURF: int = 9
 const FLDEFF_USE_STRENGTH: int = 40
 const FLDEFF_USE_WATERFALL: int = 43
+const FLDEFF_USE_DIVE: int = 44
 ## The sounds of `StartCutTreeFieldEffect` and `FieldMove_RockSmash`, which then re-enable the script.
 const FIELD_MOVE_SOUNDS: Dictionary = {2: "m_cut", 37: "m_rock_throw"}
 ## The modeled `CreateFieldMoveTask` effects and the `GAME_STAT_USED_*` their `FldEff_Use*` counts, or -1.
@@ -701,7 +702,17 @@ func step_movement_tasks() -> Array:
 			_step_waterfall()
 		Task.MAT_JUMP, Task.MAT_SPIN_TURN, Task.MAT_SPIN_DELAY, Task.MAT_SPIN_LEAVE:
 			_step_mat(requests)
+		Task.DIVE_SHOW_MON:
+			objects.events.controls_locked = true
+			_show_mon(false)
+			task = Task.DIVE_WAIT
+		Task.DIVE_WAIT:
+			if not objects.field_effect_active(Gen3ObjectEvents.FLDEFF_FIELD_MOVE_SHOW_MON):
+				objects.task_effects.erase(FLDEFF_USE_DIVE)
+				task = Task.NONE
+				requests.append({"kind": "dive_warp"})
 	objects.fly.run_task(requests)
+	objects.heal_machine.run_task()
 	objects.field_move_mon.run_task()
 	return requests
 
@@ -932,6 +943,13 @@ func _ride_up() -> void:
 	objects.set_held_movement(object(), Gen3ObjectEvents.direction_action(0x08 if frlg else 0x04,
 		Gen3ObjectEvents.Direction.NORTH))
 	task = Task.WATERFALL_RIDE
+
+
+func use_dive(species: int, personality: int, ot_id: int) -> void: # `Task_UseDive`: the banner unposed, then the warp the screen fades out for.
+	_shown_mon = [species, personality, ot_id]
+	prevent_step = true
+	task = Task.DIVE_SHOW_MON
+	objects.task_effects.append(FLDEFF_USE_DIVE)
 
 
 func _finish_mount(requests: Array) -> void:

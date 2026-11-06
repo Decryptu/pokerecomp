@@ -483,6 +483,10 @@ func world_fly_bird_graphics() -> Dictionary:
 	return _world_effect_graphics("fly_bird_template", Gen3Fly.FLDEFFOBJ_BIRD)
 
 
+func world_heal_graphics(art: int) -> Dictionary:
+	return _world_effect_graphics("heal_templates", art)
+
+
 func world_secret_power_graphics(effect: int) -> Dictionary:
 	return _world_effect_graphics("secret_power_templates", effect)
 

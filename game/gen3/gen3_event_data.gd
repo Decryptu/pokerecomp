@@ -31,7 +31,7 @@ var stats: Dictionary = {}
 var secret_bases: Array[int] = []
 var current_secret_base: int = 0
 var bag: Gen3Bag # `gSaveBlock1Ptr`'s items, money and coins; hosts create it, since it reads item pockets.
-var party: Array[Dictionary] = [] # `gPlayerParty`: `species`, `nickname`, `moves`, `egg` and `hp`, with no empty rows.
+var party: Array[Dictionary] = [] # `gPlayerParty`: `species`, `nickname`, `moves`, `egg`, `hp`, `personality` and `ot_id`, with no empty rows.
 var player_name: String = ""
 var rival_name: String = "" # FireRed and LeafGreen's `gSaveBlock1Ptr->rivalName`.
 var registered_item: int = 0 # `gSaveBlock1Ptr->registeredItem`.

@@ -87,6 +87,16 @@ static func blend_color(from: int, coeff: int, color: int) -> int:
 	return out & 0xFFFF
 
 
+func multiply_inverted(index: int, red: int, green: int, blue: int) -> void: # `MultiplyInvertedPaletteRGBComponents`: unfaded channels moved toward 31 by sixteenths.
+	var color: int = unfaded_color(index)
+	var out: int = 0
+	var levels: Array[int] = [red, green, blue]
+	for channel: int in 3:
+		var value: int = (color >> (channel * 5)) & 31
+		out |= (value + ((31 - value) * levels[channel] >> 4)) << (channel * 5)
+	faded.encode_u16(index * 2, out)
+
+
 ## `BeginNormalPaletteFade`, refused while a fade runs. A negative [param delay] speeds the step instead.
 func begin_fade(selected: int, delay: int, start_y: int, target_y: int, color: int) -> bool:
 	if fade_active:

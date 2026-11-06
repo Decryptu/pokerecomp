@@ -22,6 +22,9 @@ const TEXT_COLOR_DEFAULT: int = 0xFF
 const TRAINER_TOWER_LOBBY := Vector2i(2, 10)
 const TRAINER_HILL_ENTRANCE := Vector2i(26, 60)
 const TEXT_COLOR_NEUTRAL: int = 3
+const FLDEFF_SMILEY_FACE_ICON: int = 64
+const FLDEFF_PHOTO_FLASH: int = 69
+const COLOR_WHITE: int = 0x7FFF
 const SPECIALS: Dictionary = { # `data/specials.inc` rows under Emerald's names.
 	&"ruby": {308: "IsPokerusInParty", 31: "NoOp", 148: "GetPlayerBigGuyGirlString", 0: "HealPlayerParty", 51: "GetTrainerBattleMode", 52: "ShowTrainerIntroSpeech", 53: "ShowTrainerCantBattleSpeech",
 		54: "GetTrainerFlag", 55: "DoTrainerApproach", 56: "PlayTrainerEncounterMusic",
@@ -242,6 +245,7 @@ func step(held: Array[int] = [], pressed: Array[int] = []) -> Array: # overworld
 		match String(request["kind"]):
 			"script_enable": resume()
 			"script": start(int(request["offset"]), selected_slot)
+			"dive_warp": output.append_array(finish_dive())
 			_: output.append(request)
 	return output
 
@@ -786,8 +790,44 @@ func _field_effect_command(event: Dictionary) -> void:
 		var value: int = objects.events.var_get(int(operands[1]))
 		_field_arguments[int(operands[0])] = (value ^ 0x8000) - 0x8000 # gFieldEffectArguments holds (s16)VarGet.
 		return
-	_output.append({"kind": "dofieldeffect", "effect": objects.events.var_get(int(operands[0])),
-		"arguments": _field_arguments.duplicate()})
+	_start_field_effect(objects.events.var_get(int(operands[0])))
+
+
+func _start_field_effect(effect: int) -> void: # FieldEffectStart for what scripts run; `dofieldeffect` leaves what has no model.
+	match effect:
+		Gen3PlayerAvatar.FLDEFF_USE_SURF: _output.append_array(avatar.callv("use_surf", _field_mon()))
+		Gen3PlayerAvatar.FLDEFF_USE_WATERFALL: avatar.callv("use_waterfall", _field_mon())
+		Gen3PlayerAvatar.FLDEFF_USE_DIVE: avatar.callv("use_dive", _field_mon())
+		Gen3Fly.FLDEFF_NPCFLY_OUT: _output.append_array(objects.fly.npc_fly_out())
+		Gen3HealMachine.FLDEFF_POKECENTER_HEAL, Gen3HealMachine.FLDEFF_HALL_OF_FAME_RECORD: objects.heal_machine.start(effect)
+		Gen3ObjectEvents.FLDEFF_SPARKLE:
+			objects.start_sparkle(Vector2i(int(_field_arguments.get(0, 0)), int(_field_arguments.get(1, 0))),
+				int(_field_arguments.get(2, 0)), _output)
+		_:
+			if not (avatar.frlg and _start_frlg_effect(effect)) \
+					and not avatar.callv("use_field_move", [effect] + _field_mon()):
+				_output.append({"kind": "dofieldeffect", "effect": effect, "arguments": _field_arguments.duplicate()})
+
+
+func _start_frlg_effect(effect: int) -> bool:
+	match effect:
+		FLDEFF_SMILEY_FACE_ICON: # SetIconSpriteData's lookup always finds the player, the only caller.
+			objects.start_effect_sprite(avatar.object(), avatar.object_id, effect, Gen3ObjectEvents.ICON_PASSES, true, _output)
+		FLDEFF_PHOTO_FLASH:
+			var palette: Gen3Palette = objects.sprites.palette
+			palette.blend(0, Gen3Palette.COLORS, 16, COLOR_WHITE)
+			palette.begin_fade(Gen3Palette.ALL, -1, 15, 0, COLOR_WHITE)
+		_:
+			return false
+	return true
+
+
+func _field_mon() -> Array: # gPlayerParty[gFieldEffectArguments[0]]'s species, personality and OT id.
+	var party: Array[Dictionary] = objects.events.party
+	var slot: int = int(_field_arguments.get(0, 0))
+	if slot < 0 or slot >= party.size():
+		return [0, 0, 0]
+	return [int(party[slot]["species"]), int(party[slot].get("personality", 0)), int(party[slot].get("ot_id", 0))]
 
 
 func _trainer_command(event: Dictionary) -> void:

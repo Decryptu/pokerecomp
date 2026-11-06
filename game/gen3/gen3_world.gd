@@ -22,6 +22,7 @@ const TEXT_COLOR_BYTES: int = 0x4A # FRLG's `sTextColorTable`, a nibble for each
 const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5, 1, 16], 10: [9, 3, 1, 8], 13: [11, 2, 5, 16], 14: [12, 4, 1, 16],
 	15: [13, 2, 2, 8], 16: [14, 3, 1, 8], 24: [23, 2, 5, 16], 35: [27, 4, 9, 16], 39: [29, 3, 1, 8], 42: [31, 1, 1, 16],
 	53: [34, 8, 1, 32]}
+const SMALL_SPARKLE_PALETTE_TAG: int = 0x100F
 const GRASS_TEMPLATES: Dictionary = {4: [4, 5, 1, 16], 12: [10, 4, 1, 8], 17: [15, 4, 1, 16], 18: [16, 6, 1, 16],
 	41: [30, 2, 1, 16]}
 
@@ -54,7 +55,8 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 			["shadow_templates", _surf_blob_template], ["grass_palette", _sparkle_template],
 			["field_move_streaks", _field_move_streaks], ["spinda_spots", _spinda_spots],
 			["cut_grass_template", _cut_grass_template], ["secret_power_templates", _secret_power_templates],
-			["shadow_templates", _fly_bird_template], ["door_graphics", _door_graphics], ["text_box", _text_box]]:
+			["shadow_templates", _fly_bird_template], ["heal_templates", _heal_templates], ["door_graphics", _door_graphics],
+			["text_box", _text_box]]:
 		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
 			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
@@ -266,6 +268,38 @@ static func _fly_bird_template(rom: RomFile, layout: Dictionary, out: Dictionary
 	return true
 
 
+static func _heal_templates(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool: # `sSpriteTemplate_PokeballGlow` and the monitors after it; Hoenn's draw wider than their OAM through subsprites.
+	const Art := Gen3HealMachine.Art
+	var at: int = int(layout["heal_templates"])
+	var sprite_palettes: int = int(layout["heal_palettes"])
+	var glow: int = Gen3Layout.read_pointer(rom, sprite_palettes, Gen3Layout.PALETTE_BYTES, 2)
+	var hof: int = Gen3Layout.read_pointer(rom, sprite_palettes + 8, Gen3Layout.PALETTE_BYTES, 2)
+	if glow < 0 or hof < 0 or rom.u16le(sprite_palettes + 4) != Gen3HealMachine.GLOW_PALETTE_TAG \
+			or rom.u16le(sprite_palettes + 12) != Gen3HealMachine.HOF_PALETTE_TAG:
+		return false
+	var specs: Array = [[Art.GLOW, 2, 1, Vector2i(8, 8), Vector2i(8, 8), Gen3HealMachine.GLOW_PALETTE_TAG, glow]]
+	if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]:
+		specs.append([Art.MONITOR, 2, 4, Vector2i(32, 16), Vector2i(32, 16), Gen3HealMachine.GLOW_PALETTE_TAG, glow])
+		specs.append([Art.HOF_BIG, 1, 4, Vector2i(16, 16), Vector2i(16, 16), Gen3HealMachine.HOF_PALETTE_TAG, hof])
+	else:
+		specs.append([Art.MONITOR, 2, 2, Vector2i(16, 16), Vector2i(24, 16), Gen3HealMachine.GENERAL_PALETTE_TAG,
+			int(layout["general_palette"])])
+		specs.append([Art.HOF_BIG, 1, 1, Vector2i(16, 16), Vector2i(64, 16), Gen3HealMachine.HOF_PALETTE_TAG, hof])
+		specs.append([Art.HOF_SMALL, 1, 1, Vector2i(32, 16), Vector2i(32, 16), Gen3HealMachine.HOF_PALETTE_TAG, hof])
+	var rows: Dictionary = {}
+	for index: int in specs.size():
+		var spec: Array = specs[index]
+		var row: Dictionary = _sprite_template(rom, at + index * 24, int(spec[1]), int(spec[2]), spec[3], out, graphics)
+		if row.is_empty() or int(row["palette_tag"]) != int(spec[5]) \
+				or not rom.in_bounds(int(spec[6]), Gen3Layout.PALETTE_BYTES):
+			return false
+		graphics["object_palettes"][str(spec[6])] = {"bytes": Array(rom.slice(int(spec[6]), Gen3Layout.PALETTE_BYTES))}
+		row.merge({"width": spec[4].x, "height": spec[4].y, "palette_offset": spec[6]}, true)
+		rows[str(spec[0])] = row
+	out["heal_templates"] = rows
+	return true
+
+
 static func _text_box(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool: # Fonts, frames and arrow, keyed by offset under `text_box`.
 	var table: Dictionary = layout["text_box"]
 	var row: Dictionary = {"fonts": []}
@@ -330,6 +364,20 @@ static func _sparkle_template(rom: RomFile, layout: Dictionary, out: Dictionary,
 		return false
 	row["palette"] = 5
 	out["map_effect_templates"]["23"] = row
+	return _small_sparkle_template(rom, layout, out, graphics)
+
+
+static func _small_sparkle_template(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool: # `FLDEFFOBJ_SMALL_SPARKLE`, which `FldEff_Sparkle` draws for Hoenn's scripts.
+	var sprite_palette: int = int(layout["small_sparkle_palette"])
+	var palette: int = Gen3Layout.read_pointer(rom, sprite_palette, Gen3Layout.PALETTE_BYTES, 2)
+	var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + 35 * 4, 24)
+	var row: Dictionary = _sprite_template(rom, at, 1, 2, Vector2i(16, 16), out, graphics)
+	if row.is_empty() or palette < 0 or int(row["palette_tag"]) != SMALL_SPARKLE_PALETTE_TAG \
+			or rom.u16le(sprite_palette + 4) != SMALL_SPARKLE_PALETTE_TAG:
+		return false
+	graphics["object_palettes"][str(palette)] = {"bytes": Array(rom.slice(palette, Gen3Layout.PALETTE_BYTES))}
+	row["palette_offset"] = palette
+	out["map_effect_templates"][str(Gen3ObjectEvents.FLDEFF_SPARKLE)] = row
 	return true
 
 

@@ -149,7 +149,7 @@ const EMERALD_MAP_GROUP_SIZES: Array[int] = [
 ## template through their tiled PNGs and pointer runs, surfability (240 bytes, keeping its ROM tail), weather
 ## palettes, sheets and drought tables, general/grass/ash palettes (Ruby's 00-02.pal), the field-move streaks,
 ## Spinda's spots, the template with `sOamData_CutGrass`'s 0x1401, the Secret Power templates followed by their
-## 0x1003 and 0x1008 palettes. `native_scripts` (only C starts them) and `map_layouts` come from nm on the matching builds.
+## 0x1003 and 0x1008 palettes, `sSpriteTemplate_PokeballGlow`, its 0x1007 and 0x1010 `SpritePalette`s and the 0x100F one. `native_scripts` (only C starts them) and `map_layouts` come from nm on the matching builds.
 const RUBY: Dictionary = {
 	"movement_types": 0x36DBD4,
 	"object_palettes": 0x373794, "object_palette_tags": 0x3739B4,
@@ -157,6 +157,7 @@ const RUBY: Dictionary = {
 	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8, "icon_template": 0x39B528,
 	"spinda_spots": 0x1FCB9C, "field_move_streaks": 0x39E92C, "field_move_streaks_indoors": 0x39EDCC,
 	"cut_grass_template": 0x3C161C, "secret_power_templates": 0x3D2630,
+	"heal_templates": 0x39F220, "heal_palettes": 0x39F158, "small_sparkle_palette": 0x37521C,
 	"text_box": {"fonts": [[0xEA2C44, 0x1E65AC]], "frame": [0xEA0108, 0x1C0], "frame_palette": 0x1E66CA, "arrow": [0x1E5F08, 0xC0], "std_frame": [0xE9ADDC, 0x120], "std_frame_palette": 0xE9AEFC},
 	"door_graphics": 0x30F9CC, "tmhm_moves": 0x37651C,
 	"map_layouts": [0x304F30, 332],
@@ -230,6 +231,7 @@ const SAPPHIRE: Dictionary = {
 	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68, "icon_template": 0x39B370,
 	"spinda_spots": 0x1FCB2C, "field_move_streaks": 0x39E774, "field_move_streaks_indoors": 0x39EC14,
 	"cut_grass_template": 0x3C1678, "secret_power_templates": 0x3D268C,
+	"heal_templates": 0x39F068, "heal_palettes": 0x39EFA0, "small_sparkle_palette": 0x3751AC,
 	"text_box": {"fonts": [[0xEA2DF0, 0x1E653C]], "frame": [0xEA02B4, 0x1C0], "frame_palette": 0x1E665A, "arrow": [0x1E5E98, 0xC0], "std_frame": [0xE9ADDC, 0x120], "std_frame_palette": 0xE9AEFC},
 	"door_graphics": 0x30F95C, "tmhm_moves": 0x3764AC,
 	"map_layouts": [0x304EC0, 332],
@@ -303,6 +305,7 @@ const FIRERED: Dictionary = {
 	"surfable_behaviors": 0x352FE8, "shadow_templates": 0x3A0080, "icon_template": 0x3C73F8,
 	"spinda_spots": 0x2526CC, "field_move_streaks": 0x3CB660, "field_move_streaks_indoors": 0x3CBB00,
 	"cut_grass_template": 0x3D41BC,
+	"heal_templates": 0x3CBFF8, "heal_palettes": 0x3CBF0C,
 	"general_palette": 0x399018, "ash_palette": 0x39C5F8, "grass_palette": 0x399038,
 	"weather_palette": 0x3C2D50, "weather_sheets": 0x3C2D70,
 	"object_graphics": 0x39FE20, "object_graphics_count": 152, "step_anims": 0x3A3708,
@@ -378,6 +381,7 @@ const LEAFGREEN: Dictionary = {
 	"surfable_behaviors": 0x352FC8, "shadow_templates": 0x3A0060, "icon_template": 0x3C7234,
 	"spinda_spots": 0x2526A8, "field_move_streaks": 0x3CB49C, "field_move_streaks_indoors": 0x3CB93C,
 	"cut_grass_template": 0x3D3FF8,
+	"heal_templates": 0x3CBE34, "heal_palettes": 0x3CBD48,
 	"general_palette": 0x398FF8, "ash_palette": 0x39C5D8, "grass_palette": 0x399018,
 	"weather_palette": 0x3C2B8C, "weather_sheets": 0x3C2BAC,
 	"object_graphics": 0x39FE00, "object_graphics_count": 152, "step_anims": 0x3A36E8,
@@ -453,6 +457,7 @@ const EMERALD: Dictionary = {
 	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8, "icon_template": 0x5507B4,
 	"spinda_spots": 0x31E2F0, "field_move_streaks": 0x55AE50, "field_move_streaks_indoors": 0x55B2F0,
 	"cut_grass_template": 0x57C66C, "secret_power_templates": 0x58E600,
+	"heal_templates": 0x55C304, "heal_palettes": 0x55C25C, "small_sparkle_palette": 0x50D6A0,
 	"text_box": {"fonts": [[0x64C2E4, 0x6542E4]], "frame": [0xDDD748, 0x1C0], "frame_palette": 0xDDD728, "arrow": [0x2E968C, 0xC0], "std_frame": [0x50E87C, 0x120], "std_frame_palette": 0x50FEFC},
 	"door_graphics": 0x497174, "tmhm_moves": 0x616040,
 	"map_layouts": [0x481DD4, 441],
