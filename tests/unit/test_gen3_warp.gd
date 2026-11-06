@@ -34,3 +34,22 @@ func test_applying_a_warp_clears_the_fixed_dive_and_hole_warps() -> void:
 	warps.commit()
 	assert_true(warps.dive.is_empty())
 	assert_true(warps.hole.is_empty())
+
+
+func test_arrival_takes_the_destination_tile_and_map_over_the_stored_state() -> void:
+	var events := Gen3EventData.new(RomRegistry.EMERALD)
+	var input := Gen3FieldInput.new(events)
+	var flag: Dictionary = Gen3PlayerAvatar.Flag
+	var outdoors: Dictionary = {"map_type": 3, "allow_cycling": true}
+	assert_eq(input.initial_flags(flag.MACH_BIKE, Vector2i(0, 1), outdoors, false), flag.MACH_BIKE)
+	assert_eq(input.initial_flags(flag.MACH_BIKE, Vector2i(0, 1), {"map_type": 8}, false), flag.ON_FOOT)
+	assert_eq(input.initial_flags(flag.ON_FOOT, Vector2i(0, 1), outdoors, true), flag.SURFING)
+	assert_eq(input.initial_flags(flag.SURFING, Vector2i(0, 1), {"map_type": 5}, false), flag.UNDERWATER)
+	var direction: Dictionary = Gen3ObjectEvents.Direction
+	assert_eq(input.initial_direction(direction.WEST, flag.ON_FOOT, flag.ON_FOOT, 0x69, 8), direction.SOUTH)
+	assert_eq(input.initial_direction(direction.WEST, flag.ON_FOOT, flag.ON_FOOT, 0x65, 8), direction.NORTH, "The mat inside a door.")
+	assert_eq(input.initial_direction(direction.WEST, flag.ON_FOOT, flag.ON_FOOT, 0x61, 8), direction.WEST, "A ladder keeps it.")
+	assert_eq(input.initial_direction(direction.WEST, flag.SURFING, flag.UNDERWATER, 0, 5), direction.WEST, "So does a dive.")
+	assert_eq(input.initial_direction(direction.WEST, flag.ON_FOOT, flag.ON_FOOT, 0, 3), direction.SOUTH)
+	assert_true(Gen3FieldInput.new(Gen3EventData.new(RomRegistry.RUBY)).biking_allowed(Vector2i(29, 11), {"map_type": 8}),
+		"Ruby's cycling road gates are indoors.")

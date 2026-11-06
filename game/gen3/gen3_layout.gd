@@ -157,7 +157,8 @@ const RUBY: Dictionary = {
 	"surfable_behaviors": 0x308E44, "shadow_templates": 0x36DFD8, "icon_template": 0x39B528,
 	"spinda_spots": 0x1FCB9C, "field_move_streaks": 0x39E92C, "field_move_streaks_indoors": 0x39EDCC,
 	"cut_grass_template": 0x3C161C, "secret_power_templates": 0x3D2630,
-	"tmhm_moves": 0x37651C,
+	"text_box": {"fonts": [[0xEA2C44, 0x1E65AC]], "frame": [0xEA0108, 0x1C0], "frame_palette": 0x1E66CA, "arrow": [0x1E5F08, 0xC0], "std_frame": [0xE9ADDC, 0x120], "std_frame_palette": 0xE9AEFC},
+	"door_graphics": 0x30F9CC, "tmhm_moves": 0x37651C,
 	"map_layouts": [0x304F30, 332],
 	"native_scripts": {
 		"trainer_approach": 0x19F82B, "cave_use_secret_power": 0x1A2D06, "tree_use_secret_power": 0x1A2D5E,
@@ -229,7 +230,8 @@ const SAPPHIRE: Dictionary = {
 	"surfable_behaviors": 0x308DD4, "shadow_templates": 0x36DF68, "icon_template": 0x39B370,
 	"spinda_spots": 0x1FCB2C, "field_move_streaks": 0x39E774, "field_move_streaks_indoors": 0x39EC14,
 	"cut_grass_template": 0x3C1678, "secret_power_templates": 0x3D268C,
-	"tmhm_moves": 0x3764AC,
+	"text_box": {"fonts": [[0xEA2DF0, 0x1E653C]], "frame": [0xEA02B4, 0x1C0], "frame_palette": 0x1E665A, "arrow": [0x1E5E98, 0xC0], "std_frame": [0xE9ADDC, 0x120], "std_frame_palette": 0xE9AEFC},
+	"door_graphics": 0x30F95C, "tmhm_moves": 0x3764AC,
 	"map_layouts": [0x304EC0, 332],
 	"native_scripts": {
 		"trainer_approach": 0x19F7BB, "cave_use_secret_power": 0x1A2C96, "tree_use_secret_power": 0x1A2CEE,
@@ -308,7 +310,9 @@ const FIRERED: Dictionary = {
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604C8,
 	"standard_script_count": 10,
-	"tmhm_moves": 0x45A86C,
+	"text_box": {"fonts": [[0x1FF370, 0x207370], [0x20F688, 0x217688], [0x21F9A0, 0x2279A0]], "frame": [0x41F238, 0x280],
+		"frame_palette": 0x471E4C, "signpost": [0x470B6C, 0x280], "signpost_palette": 0x471E6C, "arrow": [0x1EA1BC, 0x500], "std_frame": [0x470DCC, 0x120], "std_frame_palette": 0x47196C, "colors": 0x464360},
+	"door_graphics": 0x35B648, "tmhm_moves": 0x45A86C,
 	"map_layouts": [0x34EBFC, 383],
 	"native_scripts": {
 		"cancel_message_box": 0x1A7B53,
@@ -381,7 +385,9 @@ const LEAFGREEN: Dictionary = {
 	"movement_type_count": 81,
 	"standard_scripts": 0x1604A4,
 	"standard_script_count": 10,
-	"tmhm_moves": 0x45A29C,
+	"text_box": {"fonts": [[0x1FF34C, 0x20734C], [0x20F664, 0x217664], [0x21F97C, 0x22797C]], "frame": [0x41F074, 0x280],
+		"frame_palette": 0x471738, "signpost": [0x470458, 0x280], "signpost_palette": 0x471758, "arrow": [0x1EA198, 0x500], "std_frame": [0x4706B8, 0x120], "std_frame_palette": 0x471258, "colors": 0x463D90},
+	"door_graphics": 0x35B628, "tmhm_moves": 0x45A29C,
 	"map_layouts": [0x34EBDC, 383],
 	"native_scripts": {
 		"cancel_message_box": 0x1A7B2F,
@@ -447,7 +453,8 @@ const EMERALD: Dictionary = {
 	"surfable_behaviors": 0x486EFC, "shadow_templates": 0x5059F8, "icon_template": 0x5507B4,
 	"spinda_spots": 0x31E2F0, "field_move_streaks": 0x55AE50, "field_move_streaks_indoors": 0x55B2F0,
 	"cut_grass_template": 0x57C66C, "secret_power_templates": 0x58E600,
-	"tmhm_moves": 0x616040,
+	"text_box": {"fonts": [[0x64C2E4, 0x6542E4]], "frame": [0xDDD748, 0x1C0], "frame_palette": 0xDDD728, "arrow": [0x2E968C, 0xC0], "std_frame": [0x50E87C, 0x120], "std_frame_palette": 0x50FEFC},
+	"door_graphics": 0x497174, "tmhm_moves": 0x616040,
 	"map_layouts": [0x481DD4, 441],
 	"native_scripts": {
 		"trainer_approach": 0x271354, "hide_mew_when_grass_cut": 0x267EDB, "cave_use_secret_power": 0x275A86,

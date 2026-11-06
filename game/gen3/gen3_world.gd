@@ -14,6 +14,10 @@ const RODS: Dictionary = {"old_rod": [0, 2], "good_rod": [2, 5], "super_rod": [5
 const RUBY_STEP_POSITIONS: Array = [1, 3, 0, 2]
 const STEP_ANIMS_LIMIT: int = 16
 const CUT_GRASS_PALETTE_TAG: int = 0x1000
+const GLYPH_BYTES: int = 0x8000 # `gFontNormalLatinGlyphs`' 512 cells; Ruby's cells are the same size.
+const WIDTH_BYTES: int = 0x200
+const RUBY_WIDTH_BYTES: int = 0x100
+const TEXT_COLOR_BYTES: int = 0x4A # FRLG's `sTextColorTable`, a nibble for each of 148 graphics.
 ## Effect id: `gFieldEffectObjectTemplatePointers` index, image count, anim count, frame height.
 const MAP_EFFECT_TEMPLATES: Dictionary = {5: [5, 5, 1, 16], 10: [9, 3, 1, 8], 13: [11, 2, 5, 16], 14: [12, 4, 1, 16],
 	15: [13, 2, 2, 8], 16: [14, 3, 1, 8], 24: [23, 2, 5, 16], 35: [27, 4, 9, 16], 39: [29, 3, 1, 8], 42: [31, 1, 1, 16],
@@ -50,7 +54,7 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 			["shadow_templates", _surf_blob_template], ["grass_palette", _sparkle_template],
 			["field_move_streaks", _field_move_streaks], ["spinda_spots", _spinda_spots],
 			["cut_grass_template", _cut_grass_template], ["secret_power_templates", _secret_power_templates],
-			["shadow_templates", _fly_bird_template]]:
+			["shadow_templates", _fly_bird_template], ["door_graphics", _door_graphics], ["text_box", _text_box]]:
 		if layout.has(step[0]) and not (step[1] as Callable).call(rom, layout, object_graphics, graphics):
 			return {}
 	var weather: Dictionary = _weather(rom, layout, graphics)
@@ -257,6 +261,60 @@ static func _fly_bird_template(rom: RomFile, layout: Dictionary, out: Dictionary
 		return false
 	out["fly_bird_template"] = {str(Gen3Fly.FLDEFFOBJ_BIRD): row}
 	return true
+
+
+static func _text_box(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool: # Fonts, frames and arrow, keyed by offset under `text_box`.
+	var table: Dictionary = layout["text_box"]
+	var row: Dictionary = {"fonts": []}
+	graphics["text_box"] = {}
+	var ruby: bool = rom.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE]
+	for font: Array in table["fonts"]:
+		if not _keep(rom, graphics, int(font[0]), GLYPH_BYTES) or not _keep(rom, graphics, int(font[1]), RUBY_WIDTH_BYTES if ruby else WIDTH_BYTES):
+			return false
+		row["fonts"].append(font)
+	for key: String in ["frame", "signpost", "arrow", "std_frame"]:
+		if table.has(key):
+			if not _keep(rom, graphics, int(table[key][0]), int(table[key][1])):
+				return false
+			row[key] = table[key]
+	for key: String in ["frame_palette", "signpost_palette", "std_frame_palette"]:
+		if table.has(key):
+			if not _keep(rom, graphics, int(table[key]), Gen3Layout.PALETTE_BYTES):
+				return false
+			row[key] = table[key]
+	if table.has("colors"):
+		if not _keep(rom, graphics, int(table["colors"]), TEXT_COLOR_BYTES):
+			return false
+		row["colors"] = table["colors"]
+	out["text_box"] = row
+	return true
+
+
+static func _keep(rom: RomFile, graphics: Dictionary, at: int, bytes: int) -> bool:
+	if not rom.in_bounds(at, bytes):
+		return false
+	graphics["text_box"][str(at)] = {"bytes": Array(rom.slice(at, bytes))}
+	return true
+
+
+static func _door_graphics(rom: RomFile, layout: Dictionary, out: Dictionary, graphics: Dictionary) -> bool: # `DoorGraphics` to its null tiles pointer; Ruby's `size` byte is padding.
+	var frlg: bool = rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	var ruby: bool = rom.id in [RomRegistry.RUBY, RomRegistry.SAPPHIRE]
+	var at: int = int(layout["door_graphics"])
+	graphics["doors"] = {}
+	out["doors"] = []
+	while rom.in_bounds(at, Gen3FieldDoor.ROW_BYTES) and rom.u32le(at + 4) != 0:
+		var big: bool = not ruby and rom.u8(at + 3) == (1 if frlg else 2)
+		var bytes: int = Gen3FieldDoor.FRAME_COUNT * (2 if big else 1) * Gen3FieldDoor.FRAME_TILES[int(frlg)] * GbaTiles.TILE_BYTES
+		var tiles: int = Gen3Layout.read_pointer(rom, at + 4, bytes, 1)
+		var palettes: int = Gen3Layout.read_pointer(rom, at + 8, Gen3FieldDoor.PALETTE_BYTES, 1)
+		if tiles < 0 or palettes < 0:
+			return false
+		graphics["doors"][str(tiles)] = {"bytes": Array(rom.slice(tiles, bytes))}
+		out["doors"].append({"metatile": rom.u16le(at), "sound": rom.u8(at + 2), "big": big, "tiles": tiles,
+			"palettes": Array(rom.slice(palettes, Gen3FieldDoor.PALETTE_BYTES))})
+		at += Gen3FieldDoor.ROW_BYTES
+	return not out["doors"].is_empty()
 
 
 ## `FLDEFFOBJ_SPARKLE`, which only Hoenn's `FldEff_BerryTreeGrowthSparkle` draws, in palette slot 5.

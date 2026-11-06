@@ -168,6 +168,13 @@ func object() -> Gen3ObjectEvents.ObjectEvent:
 	return objects.objects[object_id]
 
 
+func initial_flags() -> int: # StoreInitialPlayerAvatarState's one flag.
+	for flag: int in [Flag.MACH_BIKE, Flag.ACRO_BIKE, Flag.SURFING, Flag.UNDERWATER]:
+		if flags & flag:
+			return flag
+	return Flag.ON_FOOT
+
+
 func track_camera() -> void:
 	object().tracked_by_camera = true
 

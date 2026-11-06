@@ -417,7 +417,7 @@ func test_firered_signs_read_on_walking_in_and_walking_away_cancels_them() -> vo
 	Gen3ObjectEvents.set_direction(player, Gen3ObjectEvents.Direction.NORTH)
 	_set_cell(host, player.current + Vector2i.UP, 0x87)
 	var requests: Array = host.step([PokeButton.UP])
-	assert_true(requests.has({"kind": "signpost"}))
+	assert_true(host.signpost)
 	assert_true(host.objects.events.controls_locked)
 	host.context.state = Gen3ScriptContext.State.NATIVE_WAIT
 	host._sign_inhibit = 0
@@ -507,7 +507,7 @@ func test_door_input_uses_dynamic_return_and_ignores_a_warp_on_ordinary_ground()
 	assert_true(requests.any(func(event: Dictionary) -> bool: return event["kind"] == "warp" and event["mode"] == "door"))
 	assert_eq(host.warps.dynamic["warp_id"], 0)
 	host.complete_warp()
-	assert_eq(host.avatar.object().facing, Gen3ObjectEvents.Direction.NORTH)
+	assert_eq(host.avatar.object().facing, Gen3ObjectEvents.Direction.SOUTH)
 	assert_false(host.warps.from_event(host.objects.camera.data, 0, 1, 1, Vector2i(2, 3)))
 	assert_true(host.warps.from_event(host.objects.camera.data, 0, 1, 0, Vector2i(2, 3)))
 	assert_eq(host.warps.destination["number"], 0)
@@ -662,3 +662,15 @@ func test_a_trainer_that_sees_the_player_starts_its_approach_with_the_battle_con
 	assert_eq(host.battle.opponent_a, 7)
 	assert_eq(host.objects.events.var_get(0x800F), 2)
 	assert_eq(host.selected_slot, host.objects.objects.find(trainer))
+
+
+func test_frlg_quest_log_specials_are_no_screens_and_its_menu_flag_is_not_ignore_b() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.FIRERED)
+	host._executing = host.context
+	assert_eq(host._special("QuestLogNoOp"), 0)
+	host.objects.events.party = [{"pokerus": 0x12}]
+	assert_eq(host._special("IsPokerusInParty"), 1, "The nurse's last question must not stop the script either.")
+	assert_eq(host.context.state, Gen3ScriptContext.State.STOPPED, "A quest log special must not stop the script for a screen.")
+	host.objects.camera.data._world_scripts["multichoice"] = []
+	host._menu_command({"command": "multichoice", "operands": [19, 8, 20, 2]})
+	assert_false(host._output.back()["ignore_b"], "FALSE | TRUE << 1 still lets B cancel.")

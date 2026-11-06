@@ -16,6 +16,7 @@ const MAP_TYPE_UNDERWATER: int = 5
 const MAP_TYPE_SECRET_BASE: int = 9
 const CALL_MAP_TYPES: Array[int] = [1, 2, 3, 6] # Town, city, route, ocean route.
 const GAME_STAT_STEPS: int = 5
+const GAME_STAT_ENTERED_HOF: int = 10
 const STATUS_POISONED: int = 0x88 # STATUS1_POISON | STATUS1_TOXIC_POISON.
 const SIGN_INHIBIT_FRAMES: int = 6 # script.c::SetWalkingIntoSignVars.
 const HIDDEN_ITEM_KINDS: Array[int] = [5, 6, 7]
@@ -56,8 +57,20 @@ const HOENN_WARPS: Dictionary = { # A warp presentation, or `script:` a native s
 const EMERALD_WARPS: Dictionary = {0x0E: "mossdeep_gym", 0x70: "spin_exit"}
 const FRLG_WARPS: Dictionary = {0x60: "warp", 0x61: "warp", 0x69: "warp", 0x6A: "escalator", 0x6B: "escalator",
 	0x68: "lavaridge_1f", 0x67: "teleport", 0x66: "script:fall_warp", 0x71: "union_room"}
+const DOORS: Dictionary = {&"ruby": [0x69, 0x8D], &"firered": [0x69], &"emerald": [0x69, 0x8D]} # `MetatileBehavior_IsDoor`.
+const NON_ANIM_DOORS: Dictionary = {&"ruby": [0x60, 0x6C, 0x6E], &"firered": [0x60], &"emerald": [0x60, 0x6C, 0x6E]}
+const DEEP_SOUTH_WARP: int = 0x6E
+const LADDER: int = 0x61
+const MAP_TYPE_INDOOR: int = 8
+const MAP_TYPES_ABOVE_CAVES: Array[int] = [1, 2, 3, 5, 6, 7, 8, 9] # fldeff_flash.c's `sTransitionTypes`: all but underground.
+const MAP_TYPE_OCEAN_ROUTE: int = 6
+const RUBY_CYCLING_ENTRANCES: Array[Vector2i] = [Vector2i(29, 11), Vector2i(29, 12)] # Route 110's, which are indoors.
+const RUBY_NO_CYCLING: Array[Vector2i] = [Vector2i(24, 36), Vector2i(24, 42)] # Seafloor Cavern Room 9, Cave of Origin B4F.
+const RUBY_NO_CYCLING_TYPES: Array[int] = [MAP_TYPE_INDOOR, MAP_TYPE_UNDERWATER, MAP_TYPE_SECRET_BASE]
+const FRLG_SEAFOAM_ON_FOOT: Array[Vector2i] = [Vector2i(1, 86), Vector2i(1, 87)] # B3F and B4F's currents.
 const HOENN_DIVEABLE: Array[int] = [0x11, 0x12, 0x14]
 const HOENN_UNABLE_TO_EMERGE: Array[int] = [0x19, 0x2A]
+const FRLG_STAIR_EXITS: Dictionary = {0x6C: 3, 0x6E: 3, 0x6D: 4, 0x6F: 4} # Up/down-right face west, up/down-left east.
 const HOENN_ARROW_WARPS: Array = [[0x65, 0x6D, 0x1C], [0x64, 0x1B], [0x63], [0x62]]
 const FRLG_ARROW_WARPS: Array = [[0x65], [0x64], [0x63], [0x62]]
 const STORY_CALLS: Array = [ # field_specials.c's `ShouldDo*Call`: flag, step counter var, steps, script.
@@ -78,6 +91,55 @@ func _init(events: Gen3EventData) -> void:
 
 func arrow_warps(direction: int) -> Array:
 	return (FRLG_ARROW_WARPS if engine == &"firered" else HOENN_ARROW_WARPS)[direction - 1]
+
+
+func is_door(behavior: int) -> bool:
+	return behavior in DOORS[engine]
+
+
+func is_non_anim_door(behavior: int) -> bool:
+	return behavior in NON_ANIM_DOORS[engine]
+
+
+func biking_allowed(map: Vector2i, header: Dictionary) -> bool: # Overworld_IsBikingAllowed.
+	if engine != &"ruby":
+		return bool(header.get("allow_cycling", false))
+	if map in RUBY_CYCLING_ENTRANCES:
+		return true
+	return int(header.get("map_type", 0)) not in RUBY_NO_CYCLING_TYPES and map not in RUBY_NO_CYCLING
+
+
+func initial_flags(stored: int, map: Vector2i, header: Dictionary, surfable: bool) -> int: # GetAdjustedInitialTransitionFlags over [param stored], one flag as `StoreInitialPlayerAvatarState` keeps it.
+	var map_type: int = int(header.get("map_type", 0))
+	if map_type != MAP_TYPE_INDOOR and _events.flag_get(flags["cruise"]):
+		return Gen3PlayerAvatar.Flag.ON_FOOT
+	if map_type == MAP_TYPE_UNDERWATER:
+		return Gen3PlayerAvatar.Flag.UNDERWATER
+	if surfable and engine == &"firered" and map in FRLG_SEAFOAM_ON_FOOT:
+		return Gen3PlayerAvatar.Flag.ON_FOOT
+	if surfable:
+		return Gen3PlayerAvatar.Flag.SURFING
+	if not biking_allowed(map, header) or stored not in [Gen3PlayerAvatar.Flag.MACH_BIKE, Gen3PlayerAvatar.Flag.ACRO_BIKE]:
+		return Gen3PlayerAvatar.Flag.ON_FOOT
+	return stored
+
+
+func initial_direction(stored_direction: int, stored_flags: int, initial: int, behavior: int, map_type: int) -> int: # GetAdjustedInitialDirection, [param initial] being what [method initial_flags] returned.
+	if map_type == MAP_TYPE_OCEAN_ROUTE and _events.flag_get(flags["cruise"]):
+		return Gen3ObjectEvents.Direction.EAST
+	if engine != &"firered" and behavior == DEEP_SOUTH_WARP:
+		return Gen3ObjectEvents.Direction.NORTH
+	if is_non_anim_door(behavior) or is_door(behavior):
+		return Gen3ObjectEvents.Direction.SOUTH
+	for direction: int in range(Gen3ObjectEvents.Direction.SOUTH, Gen3ObjectEvents.Direction.EAST + 1):
+		if behavior in arrow_warps(direction):
+			return Gen3ObjectEvents.OPPOSITE[direction]
+	if engine == &"firered" and FRLG_STAIR_EXITS.has(behavior):
+		return FRLG_STAIR_EXITS[behavior]
+	var water: Array[int] = [Gen3PlayerAvatar.Flag.SURFING, Gen3PlayerAvatar.Flag.UNDERWATER]
+	if stored_flags in water and initial in water and stored_flags != initial or behavior == LADDER:
+		return stored_direction
+	return Gen3ObjectEvents.Direction.SOUTH
 
 
 func warp_mode(behavior: int) -> String:

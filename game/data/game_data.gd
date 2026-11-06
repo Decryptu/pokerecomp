@@ -483,6 +483,37 @@ func world_field_move_streaks(outdoors: bool) -> PackedByteArray:
 	return _gba_graphics_record("field_move_streaks", int(offsets[int(outdoors)])).get("bytes", PackedByteArray())
 
 
+func world_text_box() -> Dictionary: # By [Gen3FieldMessage]'s names, bytes where [Gen3Layout] has offsets.
+	var row: Dictionary = _scripts().get("text_box", {}) if generation == RomRegistry.GEN3 else {}
+	if row.is_empty():
+		return {}
+	var out: Dictionary = {"fonts": []}
+	for font: Array in row["fonts"]:
+		out["fonts"].append({"glyphs": _text_box_bytes(font[0]), "widths": _text_box_bytes(font[1])})
+	for key: String in ["frame", "signpost", "arrow", "std_frame"]:
+		if row.has(key):
+			out[key] = _text_box_bytes(row[key][0])
+	for key: String in ["frame_palette", "signpost_palette", "std_frame_palette", "colors"]:
+		if row.has(key):
+			out[key] = _text_box_bytes(row[key])
+	return out
+
+
+func _text_box_bytes(offset: Variant) -> PackedByteArray:
+	return _gba_graphics_record("text_box", int(offset)).get("bytes", PackedByteArray())
+
+
+func world_door(metatile: int) -> Dictionary: # The `DoorGraphics` row, its frames in `bytes`; empty off a door.
+	if generation != RomRegistry.GEN3:
+		return {}
+	for row: Dictionary in _scripts().get("doors", []):
+		if int(row["metatile"]) == metatile:
+			var out: Dictionary = row.duplicate()
+			out["bytes"] = _gba_graphics_record("doors", int(row["tiles"])).get("bytes", PackedByteArray())
+			return out
+	return {}
+
+
 func world_spinda_spots() -> PackedByteArray:
 	var at: int = int(_scripts().get("spinda_spots", -1)) if generation == RomRegistry.GEN3 else -1
 	return _gba_graphics_record("spinda_spots", at).get("bytes", PackedByteArray())
