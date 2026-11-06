@@ -153,10 +153,13 @@ static func _shadow_templates(rom: RomFile, layout: Dictionary, out: Dictionary,
 	if not rom.in_bounds(surfable, 256):
 		return false
 	out["surfable_behaviors"] = []
-	var mask: int = 1 if rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN] else 2
+	out["encounter_behaviors"] = [] # `TILE_FLAG_HAS_ENCOUNTERS`; FRLG keeps a metatile attribute instead.
+	var frlg: bool = rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
 	for tile_behavior: int in 256:
-		if rom.u8(surfable + tile_behavior) & mask:
+		if rom.u8(surfable + tile_behavior) & (1 if frlg else 2):
 			out["surfable_behaviors"].append(tile_behavior)
+		if not frlg and rom.u8(surfable + tile_behavior) & 1:
+			out["encounter_behaviors"].append(tile_behavior)
 	var rows: Array = []
 	for index: int in 4:
 		var at: int = Gen3Layout.read_pointer(rom, int(layout["shadow_templates"]) + index * 4, 24)
@@ -272,12 +275,12 @@ static func _text_box(rom: RomFile, layout: Dictionary, out: Dictionary, graphic
 		if not _keep(rom, graphics, int(font[0]), GLYPH_BYTES) or not _keep(rom, graphics, int(font[1]), RUBY_WIDTH_BYTES if ruby else WIDTH_BYTES):
 			return false
 		row["fonts"].append(font)
-	for key: String in ["frame", "signpost", "arrow", "std_frame"]:
+	for key: String in ["frame", "signpost", "arrow", "std_frame", "help"]:
 		if table.has(key):
 			if not _keep(rom, graphics, int(table[key][0]), int(table[key][1])):
 				return false
 			row[key] = table[key]
-	for key: String in ["frame_palette", "signpost_palette", "std_frame_palette"]:
+	for key: String in ["frame_palette", "signpost_palette", "std_frame_palette", "help_palette"]:
 		if table.has(key):
 			if not _keep(rom, graphics, int(table[key]), Gen3Layout.PALETTE_BYTES):
 				return false

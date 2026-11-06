@@ -311,6 +311,7 @@ const MOVEMENT_ACTIONS: Dictionary = {
 	RomRegistry.FIRERED: 170, RomRegistry.LEAFGREEN: 170, RomRegistry.EMERALD: 158,
 }
 const MOVEMENT_STEP_END: int = 0xFE
+const HELP_TEXT_LIMIT: int = 96
 const MENU_TEXT_LIMIT: int = 64
 ## brailleformat's window bytes precede the six-dot cells except on FireRed and LeafGreen.
 const BRAILLE_FORMAT_SIZE: int = 6
@@ -421,16 +422,26 @@ static func _read_menu_text(rom: RomFile, layout: Dictionary, out: Dictionary) -
 		lists.append(rows)
 	out["std_strings"] = strings
 	out["multichoice"] = lists
+	var labels: Array = []
+	table = layout["start_menu"]
+	for index: int in int(table[1]):
+		if not _append_text(rom, int(table[0]) + index * 8, labels):
+			return false
+	var help: Array = []
+	for index: int in Gen3FieldStartMenu.HELP_ROWS if layout.has("start_menu_help") else 0:
+		if not _append_text(rom, int(layout["start_menu_help"]) + index * 4, help, HELP_TEXT_LIMIT):
+			return false
+	out["start_menu"] = {"labels": labels, "help": help}
 	return true
 
 
-static func _append_text(rom: RomFile, at: int, rows: Array) -> bool: # FireRed and Emerald keep a few empty labels, so an empty string is a row, not a failure.
+static func _append_text(rom: RomFile, at: int, rows: Array, limit: int = MENU_TEXT_LIMIT) -> bool: # FireRed and Emerald keep a few empty labels, so an empty string is a row, not a failure.
 	if not rom.in_bounds(at, 4):
 		return false
 	var text: int = Gen3Layout.rom_offset(rom.u32le(at))
-	if not rom.in_bounds(text, MENU_TEXT_LIMIT):
+	if not rom.in_bounds(text, limit):
 		return false
-	var bytes: PackedByteArray = rom.slice(text, MENU_TEXT_LIMIT)
+	var bytes: PackedByteArray = rom.slice(text, limit)
 	if Gen3Text.EOS not in bytes:
 		return false
 	rows.append(Gen3Text.decode_fixed(rom.id, bytes, 0, bytes.size()))

@@ -84,8 +84,8 @@ Caches use Godot's `user://`; reimport after format updates. Saves survive; `--v
 
 Generation 3 is experimental and **not playable**. Enable Settings > Advanced > Dev cartridges (`--dev` for CLI imports). [Script hosts](game/gen3/gen3_script_host.gd)
 use `start(offset)` or `run_map_script(type)`; call `step(held, pressed)` per frame with `PokeButton` lists and handle returned events.
-After each screen task call `finish_message()`, `finish_wait()`, `choose(value)`, `finish_battle(outcome)`, `complete_warp()`, `finish_dive()`, `end_field_menu()` or `resume()`.
-[`Gen3FieldScreen`](game/gen3/gen3_field_screen.gd) does that for the field: `open()`, then `frame(held, pressed)` and `picture()` per frame. It answers warps, doors, fades, weather, messages and menus, and returns the rest.
+After each screen task call `finish_message()`, `finish_wait()`, `choose(value)`, `finish_battle(outcome)`, `finish_wild_battle(outcome)`, `complete_warp()`, `finish_dive()`, `end_field_menu()` or `resume()`.
+[`Gen3FieldScreen`](game/gen3/gen3_field_screen.gd) does that for the field: `open()`, then `frame(held, pressed)` and `picture()` per frame. It answers warps, doors, fades, weather, messages and menus, and returns the rest. `tools/preview_world.gd -- <game> <group> <map> <output.png> live <x> <y>` walks it in a window.
 Unsupported commands emit `script_error` and stop.
 
 ## Playing

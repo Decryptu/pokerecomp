@@ -12,6 +12,12 @@ const STD_TILE: int = 0x214
 const STD_TILES: int = 9
 const STD_PALETTE: int = 14
 const MENU_TILE: int = 0x220
+const HELP_TILE: int = 0x300
+const HELP_AREA := Rect2i(0, 15, 30, 5) # sHelpMessageWindowTemplate.
+const HELP_ROWS: Array[int] = [0, 5, 14] # DrawHelpMessageWindowTilesById's top, middle and bottom tiles of msg_window.
+const HELP_COLORS: Array = [10, CLEAR, 2] # sHelpMessageTextColors: a transparent background keeps the bar's tiles.
+const HELP_TEXT_AT := Vector2i(2, 5)
+const CLEAR: int = -1
 const TILE_COUNT: int = 0x480
 const PALETTE: int = 15
 const SPEED_MID: int = 1
@@ -151,6 +157,7 @@ func text_width(text: PackedByteArray) -> int: # The width [method Gen3Text] [pa
 
 
 func draw_window(area: Rect2i, tile: int) -> void: # `AddTextPrinterParameterized` at once on a window: [param area] is its cells and [param tile] its first.
+	_load_frame() # LoadMessageBoxAndBorderGfx: the window's text palette is the box's, and no box need have shown first.
 	_load_std_frame()
 	var at: Vector2i = area.position
 	var size: Vector2i = area.size
@@ -175,6 +182,30 @@ func print_on(tile: int, size: Vector2i, at: Vector2i, text: PackedByteArray) ->
 
 func clear_rect_on(tile: int, size: Vector2i, area: Rect2i) -> void:
 	_on_surface(tile, size, _clear_rect.bind(area))
+
+
+func outline_on(tile: int, size: Vector2i, area: Rect2i) -> void: # R/S's box cursor, drawn in the text's colour.
+	_on_surface(tile, size, _outline.bind(area))
+
+
+func draw_help(text: PackedByteArray) -> void: # DrawHelpMessageWindowWithText, or PrintTextOnHelpMessageWindow over a bar already up.
+	_palette.load(_config.get("help_palette", PackedByteArray()), PALETTE * 16)
+	var bytes: PackedByteArray = _config.get("help", PackedByteArray())
+	var size: Vector2i = HELP_AREA.size
+	for y: int in size.y:
+		var row: int = HELP_ROWS[0 if y == 0 else (2 if y == size.y - 1 else 1)] * GbaTiles.TILE_BYTES
+		for x: int in size.x:
+			var at: int = (HELP_TILE + y * size.x + x) * GbaTiles.TILE_BYTES
+			for offset: int in GbaTiles.TILE_BYTES:
+				_tiles[at + offset] = bytes[row + offset]
+			_word(x, HELP_AREA.position.y + y, HELP_TILE + y * size.x + x)
+	_on_surface(HELP_TILE, size, _print_help.bind(text))
+
+
+func erase_help() -> void: # DestroyHelpMessageWindow.
+	for y: int in HELP_AREA.size.y:
+		for x: int in HELP_AREA.size.x:
+			_map[(HELP_AREA.position.y + y) * 32 + x] = 0
 
 
 func erase_window(area: Rect2i) -> void: # ClearToTransparentAndRemoveWindow, frame included.
@@ -205,6 +236,30 @@ func _print_all(at: Vector2i, text: PackedByteArray) -> void:
 		if code == Gen3Text.EOS:
 			return
 		_draw_glyph(code)
+
+
+func _print_help(text: PackedByteArray) -> void: # PrintHelpMessageText: one pixel between letters, and the box's line height.
+	_colors = HELP_COLORS
+	_x = HELP_TEXT_AT.x
+	_y = HELP_TEXT_AT.y
+	for code: int in text:
+		if code == Gen3Text.EOS:
+			return
+		if code == Gen3Text.NEWLINE:
+			_x = HELP_TEXT_AT.x
+			_y += int(_engine["line"])
+		else:
+			_draw_glyph(code)
+			_x += 1
+
+
+func _outline(area: Rect2i) -> void:
+	for x: int in range(area.position.x, area.end.x):
+		_put(x, area.position.y, _colors[0])
+		_put(x, area.end.y - 1, _colors[0])
+	for y: int in range(area.position.y, area.end.y):
+		_put(area.position.x, y, _colors[0])
+		_put(area.end.x - 1, y, _colors[0])
 
 
 func _clear_rect(area: Rect2i) -> void:
@@ -547,7 +602,7 @@ func _fill() -> void:
 
 func _put(x: int, y: int, color: int) -> void:
 	var size: Vector2i = _surface_size * 8
-	if x < 0 or y < 0 or x >= size.x or y >= size.y:
+	if x < 0 or y < 0 or x >= size.x or y >= size.y or color == CLEAR:
 		return
 	var at: int = (_surface_tile + (y >> 3) * _surface_size.x + (x >> 3)) * GbaTiles.TILE_BYTES + (y & 7) * 4 + ((x & 7) >> 1)
 	var shift: int = (x & 1) * 4

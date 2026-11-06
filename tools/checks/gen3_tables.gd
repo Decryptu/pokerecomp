@@ -1741,6 +1741,13 @@ func _menu_tables() -> void:
 	_r.check(not data.world_std_string(sizes[1] - 1).is_empty() and data.world_std_string(sizes[1]).is_empty(),
 		"the standard strings end at %d." % sizes[1])
 	_r.check(data.world_std_string(0).to_upper() == "COOL", "the first standard string is %s." % data.world_std_string(0))
+	var labels: Dictionary = Gen3FieldStartMenu.LABELS[Gen3FieldInput.ENGINES[data.id]]
+	var menu: Dictionary = data.world_start_menu()
+	var names: Array = menu["labels"].map(func(label: String) -> String: return label.to_upper())
+	for key: String in labels:
+		_r.check(key == "player" or key in ["pokedex", "pokemon", "pokenav"] or names[labels[key]] == key.to_upper(),
+			"START row %d is %s, not %s." % [labels[key], names[labels[key]], key])
+	_r.check(menu["help"].size() == (Gen3FieldStartMenu.HELP_ROWS if not labels.has("pokenav") else 0), "the START help rows.")
 	var natives: Dictionary = Gen3Layout.for_id(data.id)["native_scripts"]
 	for key: String in natives:
 		_r.check(not data.world_script_instruction(int(natives[key])).is_empty(), "native script %s did not decode." % key)

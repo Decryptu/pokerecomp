@@ -25,11 +25,11 @@ const SS_TIDAL_MAX_STEPS: int = 205
 const POISON_PERIOD: Dictionary = {&"ruby": 4, &"firered": 5, &"emerald": 4}
 
 const FLAGS: Dictionary = { # `FLAG_HIDDEN_ITEMS_START`, badges, `FLAG_SYS_*` and step-counter `VAR_*`.
-	&"ruby": {"hidden": 0x258, "surf": 0x80B, "waterfall": 0x80E, "dive": 0x80D, "safari": 0x82C, "cruise": 0x82D,
+	&"ruby": {"hidden": 0x258, "pokemon": 0x800, "pokedex": 0x801, "pokenav": 0x802, "surf": 0x80B, "waterfall": 0x80E, "dive": 0x80D, "safari": 0x82C, "cruise": 0x82D,
 		"repel": 0x4021, "friendship": 0x402A, "poison": 0x402B, "cruise_steps": 0x404A},
-	&"firered": {"hidden": 0x3E8, "surf": 0x824, "waterfall": 0x826, "safari": 0x800, "cruise": 0x802,
+	&"firered": {"hidden": 0x3E8, "pokemon": 0x828, "pokedex": 0x829, "surf": 0x824, "waterfall": 0x826, "safari": 0x800, "cruise": 0x802,
 		"repel": 0x4020, "friendship": 0x4021, "poison": 0x4022},
-	&"emerald": {"hidden": 0x1F4, "surf": 0x86B, "waterfall": 0x86E, "dive": 0x86D, "safari": 0x88C, "cruise": 0x88D,
+	&"emerald": {"hidden": 0x1F4, "pokemon": 0x860, "pokedex": 0x861, "pokenav": 0x862, "surf": 0x86B, "waterfall": 0x86E, "dive": 0x86D, "safari": 0x88C, "cruise": 0x88D,
 		"repel": 0x4021, "friendship": 0x402A, "poison": 0x402B, "cruise_steps": 0x404A},
 }
 const HOENN_METATILES: Dictionary = {0x86: "tv", 0x83: "pc", 0x8B: "closed_sootopolis_door", 0x84: "cable_box_results",
