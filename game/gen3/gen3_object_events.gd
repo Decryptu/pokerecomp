@@ -778,7 +778,7 @@ static func direction_action(base: int, direction: int) -> int:
 func set_held_movement(object: ObjectEvent, action: int) -> bool:
 	if not object.active or movement_overridden(object) or not _motions.has(action):
 		return true
-	_unfreeze(object)
+	unfreeze(object)
 	object.movement_action = action
 	object.held_movement_active = true
 	object.held_movement_finished = false
@@ -817,22 +817,28 @@ static func movement_overridden(object: ObjectEvent) -> bool:
 func freeze_except_player(except_slot: int = -1) -> void:
 	for slot: int in COUNT:
 		var object: ObjectEvent = objects[slot]
-		if slot != except_slot and object.active and not object.is_player \
-				and not object.held_movement_active and not object.frozen:
-			object.frozen = true
-			object.anim_paused_backup = object.anim.paused
-			object.affine_anim_paused_backup = object.affine_anim_paused
-			object.anim.paused = true
-			object.affine_anim_paused = true
+		if slot != except_slot and object.active and not object.is_player:
+			freeze(object)
+
+
+static func freeze(object: ObjectEvent) -> bool: # event_object_movement.c::FreezeObjectEvent.
+	if object.held_movement_active or object.frozen:
+		return true
+	object.frozen = true
+	object.anim_paused_backup = object.anim.paused
+	object.affine_anim_paused_backup = object.affine_anim_paused
+	object.anim.paused = true
+	object.affine_anim_paused = true
+	return false
 
 
 func unfreeze_all() -> void:
 	for object: ObjectEvent in objects:
 		if object.active:
-			_unfreeze(object)
+			unfreeze(object)
 
 
-static func _unfreeze(object: ObjectEvent) -> void:
+static func unfreeze(object: ObjectEvent) -> void:
 	if object.frozen:
 		object.frozen = false
 		object.anim.paused = object.anim_paused_backup
@@ -1235,25 +1241,26 @@ static func set_trainer_movement_type(object: ObjectEvent, type: int) -> void:
 ## `OverrideMovementTypeForObjectEvent` (Emerald's `TryOverrideTemplateCoordsForObjectEvent`) and
 ## `OverrideTemplateCoordsForObjectEvent` write the current map's saved template.
 func override_template_movement_type(object: ObjectEvent, type: int) -> void:
-	var template: Dictionary = _base_template(object)
+	if object.map_number == camera.number and object.map_group == camera.group:
+		set_template_movement_type(object.local_id, type)
+
+
+func set_template_movement_type(local_id: int, type: int) -> void:
+	var template: Dictionary = template_by_id(local_id, camera.number, camera.group)
 	if not template.is_empty():
 		template["movement_type"] = type
 
 
 func override_template_coords(object: ObjectEvent) -> void:
-	var template: Dictionary = _base_template(object)
+	if object.map_number == camera.number and object.map_group == camera.group:
+		set_template_coords(object.local_id, object.current - Vector2i.ONE * Gen3MapGrid.MAP_OFFSET)
+
+
+func set_template_coords(local_id: int, at: Vector2i) -> void:
+	var template: Dictionary = template_by_id(local_id, camera.number, camera.group)
 	if not template.is_empty():
-		template["x"] = object.current.x - Gen3MapGrid.MAP_OFFSET
-		template["y"] = object.current.y - Gen3MapGrid.MAP_OFFSET
-
-
-func _base_template(object: ObjectEvent) -> Dictionary:
-	if object.map_number != camera.number or object.map_group != camera.group:
-		return {}
-	for template: Dictionary in templates:
-		if int(template["local_id"]) == object.local_id:
-			return template
-	return {}
+		template["x"] = at.x
+		template["y"] = at.y
 
 
 func _advance_motion(object: ObjectEvent, slot: int, requests: Array) -> bool:

@@ -173,6 +173,48 @@ func track_camera() -> void:
 	object().tracked_by_camera = true
 
 
+func accepts_field_buttons() -> bool: # field_control_avatar.c::FieldGetPlayerInput and metatile_behavior.c::MetatileBehavior_IsForcedMovementTile.
+	if tile_state == Tile.TRANSITION or bike.player_speed() == Gen3Bike.Speed.FASTEST:
+		return false
+	if tile_state == Tile.NOT_MOVING:
+		return true
+	return not on_forced_tile()
+
+
+func on_forced_tile() -> bool:
+	var behavior: int = objects.camera.grid.behavior_at(object().current.x, object().current.y) & 0xFF
+	if behavior >= 0x40 and behavior <= 0x48 or behavior >= 0x50 and behavior <= 0x53 or behavior == 0x13:
+		return true
+	if frlg:
+		return behavior == 0x23 or behavior >= 0x54 and behavior <= 0x57
+	return behavior in [0x20, 0xBB, 0xBC, 0xD0, 0xD2]
+
+
+func freeze_for_script() -> void: # field_player_avatar.c::PlayerFreeze.
+	if tile_state == Tile.TRANSITION:
+		return
+	var player: Gen3ObjectEvents.ObjectEvent = object()
+	if flags & Flag.ACRO_BIKE and player.current_behavior == Gen3Bike.MB_BUMPY_SLOPE:
+		return
+	Gen3ObjectEvents.clear_held_movement(player)
+	objects.set_held_movement(player, action(&"face", player.facing))
+
+
+func stop_for_script() -> void: # field_player_avatar.c::StopPlayerAvatar.
+	_clear_movement_flags()
+	Gen3ObjectEvents.set_direction(object(), object().facing)
+	if flags & (Flag.MACH_BIKE | Flag.ACRO_BIKE):
+		bike.handle_bumpy_slope_jump()
+		bike.update_counter_speed(0)
+
+
+func _clear_movement_flags() -> void:
+	object().inanimate = false
+	object().disable_anim = false
+	object().facing_locked = false
+	flags &= ~Flag.DASH
+
+
 func graphics_for(state: int) -> int:
 	if frlg:
 		return int(FRLG_GRAPHICS[state][gender]) if FRLG_GRAPHICS.has(state) else -1
@@ -351,10 +393,7 @@ func step(direction: int, new_keys: int, held_keys: int) -> Array:
 		bike.update_history(held_keys)
 	if _special_anim_holds(player, direction):
 		return requests
-	player.inanimate = false
-	player.disable_anim = false
-	player.facing_locked = false
-	flags &= ~Flag.DASH
+	_clear_movement_flags()
 	_do_transition()
 	if _forced_movement(requests):
 		return requests

@@ -78,16 +78,16 @@ godot --headless --path . -s res://tools/import_rom.gd
 godot --path .
 ```
 
-Identity is checked by SHA-1 against [RomRegistry](game/rom/rom_registry.gd),
-never by filename. Unknown revisions are refused. The launcher also accepts
-imports through its file picker or by dropping a dump onto a cartridge bay.
+The launcher also imports through its file picker or a dump dropped onto a bay.
 
-Caches live in Godot's `user://`. A format update requires reimporting the same
-dump; saves are separate and survive. `--verify` checks an import without writing.
+Caches use Godot's `user://`; reimport after format updates. Saves survive; `--verify` checks without writing.
 
-Generation 3 is experimental and **not playable**. Enable Settings > Advanced > Dev cartridges for Ruby, Sapphire, FireRed, LeafGreen and Emerald; CLI imports require `--dev`.
-[Script contexts](game/gen3/gen3_script_context.gd) run cached bytecode with `start(offset)` and one `tick()` per frame.
-`waitstate` needs `resume()`; unsupported commands emit `script_error` and stop.
+Generation 3 is experimental and **not playable**. Enable Settings > Advanced >
+Dev cartridges (`--dev` for CLI imports). [Script hosts](game/gen3/gen3_script_host.gd)
+use `start(offset)` or `run_map_script(type)`; call `step(held, pressed)` per frame.
+Pass `PokeButton` lists and handle returned events. Call `finish_message()` after
+printing, `complete_warp()` after a warp transition, and `resume()` for `waitstate`.
+Unsupported commands emit `script_error` and stop.
 
 ## Playing
 
