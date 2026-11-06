@@ -2,7 +2,7 @@ class_name PokeAppVersion
 extends RefCounted
 
 ## Release metadata and export versions must agree.
-const VERSION: String = "0.1.86"
+const VERSION: String = "0.1.87"
 const CHANNEL: String = "alpha"
 
 const REPOSITORY: String = "https://github.com/Decryptu/pokerecomp"

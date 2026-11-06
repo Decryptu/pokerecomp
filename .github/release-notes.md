@@ -1,10 +1,13 @@
 <!-- Rewrite from the first release heading, `## Added`, `## Changed` or `## Fixed`, for each release. The text below
 the release changes is standing guidance with a {VERSION} placeholder. -->
 
+## Added
+
+- Experimental Generation 3 script execution and field integration: NPC dialogue, signs, coordinate triggers, scripted movement, object locks and ordinary map warps. Generation 3 is still not playable.
+
 ## Fixed
 
-- Export .sav now explains its two steps before the first file picker opens: choose your cartridge save for this game, then choose where to save the new file. On Android and iOS the first picker has no title and no Save button, so it looked like a save dialog that could not be finished.
-- A cartridge save that cannot be written into is now reported as soon as it is chosen, before you are asked where to save.
+- Generation 3 map transitions now release the previous map's field models instead of retaining them through reference cycles.
 
 ## Updating this release
 
