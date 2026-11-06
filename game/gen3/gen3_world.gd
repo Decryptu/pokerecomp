@@ -35,7 +35,7 @@ static func read(rom: RomFile, layout: Dictionary) -> Dictionary:
 	var encounters: Dictionary = _encounters(rom, layout, headers)
 	if encounters.is_empty():
 		return {}
-	var graphics: Dictionary = _graphics(rom, headers)
+	var graphics: Dictionary = _graphics(rom, layout, headers)
 	if graphics.is_empty():
 		return {}
 	var scripts: Dictionary = Gen3Script.read(rom, layout, headers)
@@ -801,24 +801,41 @@ static func _wild_info(rom: RomFile, layout: Dictionary, pointer_at: int, method
 
 
 ## Attribute arrays follow their eight-word metatile arrays; FRLG's `Tileset` swaps their pointer and the callback.
-static func _graphics(rom: RomFile, headers: Dictionary) -> Dictionary:
-	var layouts: Dictionary = {}
-	var tilesets: Dictionary = {}
+static func _graphics(rom: RomFile, layout: Dictionary, headers: Dictionary) -> Dictionary:
+	var graphics: Dictionary = {"layouts": {}, "tilesets": {}, "layout_table": []}
 	for header: Dictionary in headers.values():
-		var key: String = str(header["layout_offset"])
-		if not layouts.has(key):
-			layouts[key] = {
-				"blocks": {"bytes": Array(rom.slice(header["blocks_offset"], header["width"] * header["height"] * 2))},
-				"border": {"bytes": Array(rom.slice(header["border_offset"], header["border_width"] * header["border_height"] * 2))},
-			}
-		for field: String in ["primary_tileset_offset", "secondary_tileset_offset"]:
-			key = str(header[field])
-			if not tilesets.has(key):
-				tilesets[key] = _tileset(rom, int(header[field]))
-			var record: Dictionary = tilesets[key]
-			if record.is_empty() or bool(record["secondary"]) != (field == "secondary_tileset_offset"):
+		if not _read_layout(rom, header, graphics):
+			return {}
+	var table: Array = layout.get("map_layouts", [0, 0])
+	var frlg: bool = rom.id in [RomRegistry.FIRERED, RomRegistry.LEAFGREEN]
+	for index: int in int(table[1]):
+		var at: int = Gen3Layout.rom_offset(rom.u32le(int(table[0]) + index * 4))
+		var row: Dictionary = _layout(rom, at, frlg) if rom.in_bounds(at, 28) else {}
+		if not row.is_empty(): # NULL and unfinished rows stay empty; no script names one, which gen3_tables checks.
+			row["layout_offset"] = at
+			if not _read_layout(rom, row, graphics):
 				return {}
-	return {"layouts": layouts, "tilesets": tilesets}
+		graphics["layout_table"].append(row)
+	return graphics
+
+
+static func _read_layout(rom: RomFile, shape: Dictionary, graphics: Dictionary) -> bool: # Both tables, by offset, from a header or a `gMapLayouts` row.
+	var layouts: Dictionary = graphics["layouts"]
+	var tilesets: Dictionary = graphics["tilesets"]
+	var key: String = str(shape["layout_offset"])
+	if not layouts.has(key):
+		layouts[key] = {
+			"blocks": {"bytes": Array(rom.slice(shape["blocks_offset"], shape["width"] * shape["height"] * 2))},
+			"border": {"bytes": Array(rom.slice(shape["border_offset"], shape["border_width"] * shape["border_height"] * 2))},
+		}
+	for field: String in ["primary_tileset_offset", "secondary_tileset_offset"]:
+		key = str(shape[field])
+		if not tilesets.has(key):
+			tilesets[key] = _tileset(rom, int(shape[field]))
+		var record: Dictionary = tilesets[key]
+		if record.is_empty() or bool(record["secondary"]) != (field == "secondary_tileset_offset"):
+			return false
+	return true
 
 
 static func _tileset(rom: RomFile, at: int) -> Dictionary:

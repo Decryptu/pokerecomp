@@ -24,3 +24,13 @@ func test_a_dummy_fixed_hole_uses_the_last_map_but_a_fixed_map_keeps_the_fall_co
 	assert_eq(warps.fall_destination(Vector2i(6, 7)), warps.last)
 	warps.hole = Gen3Warp.record(2, 3, 4, 10, 11)
 	assert_eq(warps.fall_destination(Vector2i(6, 7)), Gen3Warp.record(2, 3, -1, 6, 7))
+
+
+func test_applying_a_warp_clears_the_fixed_dive_and_hole_warps() -> void:
+	var warps := Gen3Warp.new()
+	warps.dive = Gen3Warp.record(1, 2, 3)
+	warps.hole = Gen3Warp.record(1, 2, 3)
+	warps.destination = Gen3Warp.record(4, 5, 6)
+	warps.commit()
+	assert_true(warps.dive.is_empty())
+	assert_true(warps.hole.is_empty())

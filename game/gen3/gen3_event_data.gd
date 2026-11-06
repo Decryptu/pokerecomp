@@ -34,6 +34,7 @@ var bag: Gen3Bag # `gSaveBlock1Ptr`'s items, money and coins; hosts create it, s
 var party: Array[Dictionary] = [] # `gPlayerParty`: `species`, `nickname`, `moves`, `egg` and `hp`, with no empty rows.
 var player_name: String = ""
 var rival_name: String = "" # FireRed and LeafGreen's `gSaveBlock1Ptr->rivalName`.
+var registered_item: int = 0 # `gSaveBlock1Ptr->registeredItem`.
 var respawn: int = 0 # `gSaveBlock1Ptr->lastHealLocation`'s `HEAL_LOCATION_*`.
 var battle_outcome: int = 0 # `gBattleOutcome`.
 var controls_locked: bool = false # script.c's `sLockFieldControls`.

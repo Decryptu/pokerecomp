@@ -230,6 +230,213 @@ func test_background_events_use_original_front_cell_and_first_matching_elevation
 	assert_eq(host.selected_slot, -1)
 	assert_eq(host.objects.events.var_get(0x800F), 0)
 	assert_eq(host.objects.events.var_get(0x800C), Gen3ObjectEvents.Direction.SOUTH)
+	host.objects.events.controls_locked = false
+	host.objects.camera.data._world_scripts["native"] = {"test_signpost": 1}
+	host.objects.camera.data._world_headers["0:0"]["events"]["backgrounds"] = [
+		{"x": 3, "y": 4, "elevation": 0, "kind": 0, "script_offset": 0}]
+	assert_true(host.interact(), "a null script runs EventScript_TestSignpostMsg")
+
+
+func _field_host(id: StringName, natives: Dictionary = {}) -> Gen3ScriptHost:
+	var host: Gen3ScriptHost = _host(PackedByteArray([0, 0x27, 2]), id, 0)
+	host.objects.camera.data._world_scripts["native"] = natives
+	host.objects.camera.header = host.objects.camera.data._world_headers["0:0"]
+	return host
+
+
+func _set_cell(host: Gen3ScriptHost, at: Vector2i, behavior: int) -> void:
+	host.objects.camera.grid.blocks[at.y * 32 + at.x] = 0x3001
+	host.objects.camera.grid._behaviors[1] = behavior
+
+
+func _walk_onto(host: Gen3ScriptHost, behavior: int) -> Array:
+	_set_cell(host, host.avatar.object().current + Vector2i.DOWN, behavior)
+	var output: Array = []
+	for frame: int in 24:
+		output.append_array(host.step([PokeButton.DOWN]))
+		if host.warp_pending or host.context.state != Gen3ScriptContext.State.STOPPED:
+			break
+	return output
+
+
+func test_hidden_items_read_each_engines_packing_and_a_taken_item_is_not_a_script() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.EMERALD, {"hidden_item": 1})
+	var row: Dictionary = {"x": 3, "y": 4, "elevation": 0, "kind": 7, "item": 13, "hidden_item_id": 2}
+	host.objects.camera.data._world_headers["0:0"]["events"]["backgrounds"] = [row]
+	assert_true(host.interact())
+	assert_eq(host.objects.events.var_get(0x8004), 0x1F6)
+	assert_eq(host.objects.events.var_get(0x8005), 13)
+	host.objects.events.controls_locked = false
+	host._field_special("SetHiddenItemFlag")
+	assert_false(host.interact())
+	var frlg: Gen3ScriptHost = _field_host(RomRegistry.FIRERED, {"hidden_item": 1})
+	row.merge({"quantity": 3, "underfoot": false}, true)
+	frlg.objects.camera.data._world_headers["0:0"]["events"]["backgrounds"] = [row]
+	assert_true(frlg.interact())
+	assert_eq(frlg.objects.events.var_get(0x8004), 0x3EA)
+	assert_eq(frlg.objects.events.var_get(0x8006), 3)
+
+
+func test_metatiles_answer_by_engine_and_only_the_pcs_are_silent() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.EMERALD, {"pc": 1, "tv": 1, "region_map": 1})
+	var front: Vector2i = host.avatar.object().current + Vector2i.DOWN
+	_set_cell(host, front, 0x86)
+	assert_false(host.interact(), "a television only answers from the south")
+	var requests: Array = []
+	_set_cell(host, front, 0x83)
+	assert_true(host.interact(requests))
+	assert_eq(requests, [])
+	host.objects.events.controls_locked = false
+	_set_cell(host, front, 0x85)
+	assert_true(host.interact(requests))
+	assert_eq(requests, [{"kind": "sound", "name": "select"}])
+	var frlg: Gen3ScriptHost = _field_host(RomRegistry.FIRERED, {"book_shelf": 1})
+	_set_cell(frlg, frlg.avatar.object().current + Vector2i.DOWN, 0x81)
+	assert_true(frlg.interact(), "0x81 is an unused row in Hoenn and FireRed's bookshelf")
+
+
+func test_surf_and_waterfall_prompts_need_the_move_and_their_engines_badge() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.FIRERED, {"cannot_use_waterfall": 1, "current_too_fast": 1})
+	var front: Vector2i = host.avatar.object().current + Vector2i.DOWN
+	_set_cell(host, front, 0x13)
+	assert_true(host.interact())
+	assert_eq(host.context.offset, 1)
+	host.objects.events.controls_locked = false
+	_set_cell(host, front, 0x11)
+	assert_false(host.interact())
+	host.objects.events.party = [{"species": 1, "nickname": "A", "moves": [57], "egg": false, "hp": 1}]
+	assert_true(host.interact())
+
+
+func test_step_warp_tiles_take_each_engines_presentation() -> void:
+	for row: Array in [[RomRegistry.EMERALD, 0x67, "teleport"], [RomRegistry.EMERALD, 0x0E, "mossdeep_gym"],
+			[RomRegistry.RUBY, 0x29, "lavaridge_b1f"], [RomRegistry.FIRERED, 0x67, "teleport"]]:
+		var host: Gen3ScriptHost = _field_host(row[0])
+		_warp_map(host)
+		var cell: Vector2i = host.avatar.object().current + Vector2i.DOWN - Vector2i.ONE * 7
+		host.objects.camera.data._world_headers["0:0"]["events"]["warps"] = [
+			{"x": cell.x, "y": cell.y, "elevation": 0, "group": 0, "number": 1, "warp_id": 0}]
+		var output: Array = _walk_onto(host, row[1])
+		assert_true(host.warp_pending, "%s %x" % [row[0], row[1]])
+		assert_true(output.any(func(event: Dictionary) -> bool: return event["kind"] == "warp" and event["mode"] == row[2]))
+
+
+func test_a_hole_starts_its_script_after_setup_and_an_ordinary_floor_hole_needs_no_warp_row() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.FIRERED, {"fall_warp": 1})
+	_warp_map(host)
+	var cell: Vector2i = host.avatar.object().current + Vector2i.DOWN - Vector2i.ONE * 7
+	host.objects.camera.data._world_headers["0:0"]["events"]["warps"] = [
+		{"x": cell.x, "y": cell.y, "elevation": 0, "group": 0, "number": 1, "warp_id": 0}]
+	_walk_onto(host, 0x66)
+	assert_false(host.warp_pending)
+	assert_eq(host.warps.destination["number"], 1)
+	assert_eq(host.objects.events.stats[Gen3FieldInput.GAME_STAT_STEPS], 1)
+	var hoenn: Gen3ScriptHost = _field_host(RomRegistry.RUBY, {"fall_down_hole": 1})
+	_walk_onto(hoenn, 0x66)
+	assert_true(hoenn.objects.events.controls_locked)
+
+
+func test_directional_stairs_warp_on_foot_with_the_bike_delay() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.FIRERED)
+	_warp_map(host)
+	var player: Gen3ObjectEvents.ObjectEvent = host.avatar.object()
+	Gen3ObjectEvents.set_direction(player, Gen3ObjectEvents.Direction.EAST)
+	var cell: Vector2i = player.current - Vector2i.ONE * 7
+	host.objects.camera.data._world_headers["0:0"]["events"]["warps"] = [
+		{"x": cell.x, "y": cell.y, "elevation": 0, "group": 0, "number": 1, "warp_id": 0}]
+	_set_cell(host, player.current, 0x6C)
+	host.avatar.flags = Gen3PlayerAvatar.Flag.MACH_BIKE
+	var requests: Array = host.step([PokeButton.RIGHT])
+	var warp: Array = requests.filter(func(event: Dictionary) -> bool: return event["kind"] == "warp")
+	assert_eq(warp[0]["mode"], "stairs")
+	assert_eq(warp[0]["delay"], 12)
+	assert_true(host.avatar.flags & Gen3PlayerAvatar.Flag.ON_FOOT != 0)
+
+
+func test_step_counters_end_repel_and_poison_each_engines_period() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.FIRERED, {"repel_wore_off": 1, "field_poison": 1})
+	var events: Gen3EventData = host.objects.events
+	events.party = [{"species": 1, "nickname": "A", "moves": [], "egg": false, "hp": 1, "status": 8}]
+	events.var_set(0x4020, 1)
+	var requests: Array = []
+	host._on_step(requests)
+	assert_eq(events.var_get(0x4020), 0)
+	assert_eq(host.context.offset, 1, "the repel script")
+	assert_eq(requests, [])
+	for step: int in 3:
+		host._on_step(requests)
+	assert_eq(int(events.party[0]["hp"]), 1, "FireRed's poison ticks every fifth step")
+	host.context.offset = -1
+	host._on_step(requests)
+	assert_eq(int(events.party[0]["hp"]), 0)
+	assert_eq(requests, [{"kind": "poison_flash"}])
+	assert_eq(host.context.offset, 1, "the poison script")
+	host._executing = host.context
+	host._field_poison_white_out()
+	assert_eq(events.var_get(Gen3ScriptServices.VAR_RESULT), 1)
+	assert_eq(int(events.party[0]["status"]), 0)
+
+
+func test_diving_needs_its_badge_and_prefers_a_connection_to_the_map_script() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.EMERALD, {"use_dive": 1})
+	_warp_map(host)
+	var player: Gen3ObjectEvents.ObjectEvent = host.avatar.object()
+	_set_cell(host, player.current, 0x12)
+	host.objects.camera.header["connections"] = [{"direction": Gen3FieldInput.CONNECTION_DIVE, "group": 0, "number": 1, "offset": 0}]
+	host.step([], [PokeButton.A])
+	assert_eq(host.context.state, Gen3ScriptContext.State.STOPPED)
+	host.objects.events.controls_locked = false
+	host.objects.events.flag_set(host.input.flags["dive"])
+	host.step([], [PokeButton.A])
+	assert_true(host.objects.events.controls_locked)
+	assert_eq(host.warps.destination["number"], 1)
+	var requests: Array[Dictionary] = host.finish_dive()
+	assert_eq(requests[0]["mode"], "dive")
+
+
+func test_a_transition_script_swaps_the_layout_the_grid_is_built_from() -> void:
+	var host: Gen3ScriptHost = _host(PackedByteArray([0, 0xA7, 2, 0, 2]), RomRegistry.EMERALD, 0)
+	_warp_map(host)
+	var data: GameData = host.objects.camera.data
+	var blocks := PackedByteArray()
+	blocks.resize(32)
+	data._world_tilesets["layouts"]["7"] = {"blocks": {"bytes": blocks}, "border": {"bytes": blocks.slice(0, 8)}}
+	data._world_tilesets["layout_table"] = [{}, {"width": 2, "height": 8, "border_width": 2, "border_height": 2,
+		"layout_offset": 7, "primary_tileset_offset": 1, "secondary_tileset_offset": 2}]
+	data._world_headers["0:1"]["map_scripts"] = [{"type": 3, "script_offset": 1}]
+	host.warps.destination = Gen3Warp.record(0, 1, -1, 1, 1)
+	host._begin_warp("warp", true)
+	host.complete_warp()
+	assert_eq(host.objects.camera.grid.layout_width, 2)
+	assert_eq(int(host.objects.camera.header["layout_id"]), 2)
+
+
+func test_firered_signs_read_on_walking_in_and_walking_away_cancels_them() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.FIRERED, {"pokecenter_sign": 1, "cancel_message_box": 1})
+	var player: Gen3ObjectEvents.ObjectEvent = host.avatar.object()
+	Gen3ObjectEvents.set_direction(player, Gen3ObjectEvents.Direction.NORTH)
+	_set_cell(host, player.current + Vector2i.UP, 0x87)
+	var requests: Array = host.step([PokeButton.UP])
+	assert_true(requests.has({"kind": "signpost"}))
+	assert_true(host.objects.events.controls_locked)
+	host.context.state = Gen3ScriptContext.State.NATIVE_WAIT
+	host._sign_inhibit = 0
+	host.objects.camera.data._world_scripts["native"]["cancel_message_box"] = 1
+	var cancel: int = host.context.offset
+	host.step([PokeButton.LEFT])
+	assert_eq(host.context.offset, cancel, "the cancel script restarts the context")
+	assert_false(host._sign_cancelable)
+
+
+func test_start_and_a_registered_item_lock_the_field_until_the_menu_returns_it() -> void:
+	var host: Gen3ScriptHost = _field_host(RomRegistry.EMERALD, {"select_without_item": 1})
+	assert_true(host.step([], [PokeButton.START]).has({"kind": "start_menu"}))
+	assert_true(host.objects.events.controls_locked)
+	host.end_field_menu()
+	host.objects.events.registered_item = 13
+	host.step([], [PokeButton.SELECT])
+	assert_eq(host.objects.events.registered_item, 0, "an item no longer in the bag unregisters")
+	assert_true(host.objects.events.controls_locked)
 
 
 func _warp_map(host: Gen3ScriptHost) -> void:

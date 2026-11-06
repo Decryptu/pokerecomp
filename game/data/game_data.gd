@@ -550,14 +550,30 @@ func world_object_palette_sets() -> Dictionary:
 
 
 func world_map_layout(group: int, number: int) -> Dictionary:
-	var header: Dictionary = world_map_header(group, number)
-	return _gba_graphics_record("layouts", int(header.get("layout_offset", -1)))
+	return world_layout(int(world_map_header(group, number).get("layout_offset", -1)))
 
 
 func world_map_tileset(group: int, number: int, secondary: bool = false) -> Dictionary:
 	var header: Dictionary = world_map_header(group, number)
 	var field: String = "secondary_tileset_offset" if secondary else "primary_tileset_offset"
-	return _gba_graphics_record("tilesets", int(header.get(field, -1)))
+	return world_gba_tileset(int(header.get(field, -1)))
+
+
+func world_layout(offset: int) -> Dictionary:
+	return _gba_graphics_record("layouts", offset)
+
+
+func world_gba_tileset(offset: int) -> Dictionary:
+	return _gba_graphics_record("tilesets", offset)
+
+
+func world_layout_row(id: int) -> Dictionary: # `gMapLayouts[id - 1]`'s shape and offsets, empty for a row no script names.
+	if generation != RomRegistry.GEN3 or id < 1:
+		return {}
+	if _claim_section("gba_graphics"):
+		_world_tilesets = _read_section(RomCache.world_tilesets_path(directory), false)
+	var rows: Array = _world_tilesets.get("layout_table", [])
+	return _coerce_service_dictionary(rows[id - 1]) if id <= rows.size() else {}
 
 
 func world_metatile(group: int, number: int, metatile_id: int) -> Dictionary:
